@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="wavevis.aolabs.io">
+  <rect width="128" height="128" rx="28" fill="#f4efe7"/>
+  <path d="M28 47h72M28 81h72" stroke="#25221e" stroke-width="9" stroke-linecap="round"/>
+  <path d="M39 48l25 33 25-33" fill="none" stroke="#ff8a2a" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="39" cy="48" r="7" fill="#25221e"/>
+  <circle cx="89" cy="48" r="7" fill="#25221e"/>
+  <circle cx="64" cy="81" r="7" fill="#25221e"/>
+</svg>
