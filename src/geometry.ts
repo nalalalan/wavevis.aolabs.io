@@ -49,9 +49,9 @@ const CELL_STATE_SEQUENCE = [
 ] as const
 
 export const DEFAULT_PARAM_SEED = {
-  hOff: 3,
+  hOff: 2.5,
   hOn: 1,
-  linkLength: 1.55,
+  linkLength: 1.3,
   plateSize: 1.5,
   connectorLength: 0,
   rotationXStiffness: 0,
@@ -130,7 +130,7 @@ export function defaultCellPitch(params: Pick<CellParams, 'hOff' | 'linkLength' 
 
 export const DEFAULT_PARAMS: CellParams = {
   ...DEFAULT_PARAM_SEED,
-  cellPitch: defaultCellPitch(DEFAULT_PARAM_SEED),
+  cellPitch: 2.28,
 }
 
 export function createGrid(rows: number, columns: number, fill: CellState = CELL_STATES.OFF): CellGrid {
@@ -163,7 +163,9 @@ export function sanitizeParams(params: CellParams): CellParams {
     hOff,
     hOn,
     plateSize,
-    linkLength: clampNumber(params.linkLength, hOff / 2 + 0.05, 8),
+    // If the requested leg is shorter than half the ideal layer height, the
+    // layout relaxes resultant height later instead of stretching the leg.
+    linkLength: clampNumber(params.linkLength, 0.25, 8),
     cellPitch: clampNumber(params.cellPitch, plateSize, 16),
     connectorLength: clampNumber(params.connectorLength, 0, 3),
     rotationXStiffness: clampNumber(params.rotationXStiffness, 0, 100),
