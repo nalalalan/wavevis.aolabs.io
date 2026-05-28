@@ -86,7 +86,7 @@ button {
 
 .panel-resize-handle:hover,
 .panel-resize-handle:focus-visible {
-  background: rgba(255, 198, 214, 0.32);
+  background: rgba(255, 159, 186, 0.34);
   outline: none;
 }
 

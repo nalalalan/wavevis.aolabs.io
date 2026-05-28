@@ -1,4 +1,4 @@
-export const linkageColor = '#ffd6e2'
+export const linkageColor = '#ff9fba'
 export const emOffColor = '#b8b2aa'
 
 export function octagonHalfLegSide(plateSize: number, octagonFaceRatio: number): number {
