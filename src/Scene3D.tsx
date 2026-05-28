@@ -28,7 +28,7 @@ export default function Scene3D({ grid, params }: Scene3DProps) {
   const cameraDistance = Math.max(maxSpan, maxHeight)
   const overhangScene = isOverhangScene(grid, params)
   const cameraPosition: Vec3 = overhangScene
-    ? [bounds.center[0], bounds.center[1] - cameraDistance * 1.5, bounds.center[2] + cameraDistance * 0.22]
+    ? [bounds.center[0] - cameraDistance * 0.12, bounds.center[1] - cameraDistance * 1.62, bounds.center[2] + cameraDistance * 0.16]
     : [cameraDistance * 1.25, -cameraDistance * 1.45, cameraDistance * 1.25]
   const cameraTarget: Vec3 = overhangScene
     ? [bounds.center[0], bounds.center[1], bounds.center[2] * 0.62]
@@ -41,7 +41,7 @@ export default function Scene3D({ grid, params }: Scene3DProps) {
           makeDefault
           position={cameraPosition}
           up={[0, 0, 1]}
-          fov={overhangScene ? 46 : 38}
+          fov={overhangScene ? 50 : 38}
         />
         <color attach="background" args={['#f7f3ed']} />
         <ambientLight intensity={0.65} />
@@ -104,8 +104,8 @@ function SurfaceSkin({ grid, params, bounds }: { grid: CellGrid; params: CellPar
     const widthX = Math.max(bounds.span[0] * 0.92, params.cellPitch * Math.max(gridColumns - 1, 1))
     const widthY = Math.max(bounds.span[1] * 0.78, params.cellPitch * Math.max(grid.length - 1, 1))
     const baseZ = params.hOff * 2 + 0.22
-    const waveHeight = widthX * 0.25 * active.strength
-    const curlDepth = widthX * 0.44 * active.strength
+    const waveHeight = widthX * 0.32 * active.strength
+    const curlDepth = widthX * 0.78 * active.strength
     const vertices: number[] = []
     const indices: number[] = []
 
@@ -119,11 +119,11 @@ function SurfaceSkin({ grid, params, bounds }: { grid: CellGrid; params: CellPar
         const baseX = (u - 0.5) * widthX
         const activeEnvelope = smoothStep(activeStart - 0.04, activeStart + 0.12, u) * (1 - smoothStep(activeEnd - 0.12, activeEnd + 0.04, u))
         const localU = clampNumber((u - activeStart) / Math.max(activeEnd - activeStart, 0.0001), 0, 1)
-        const rise = smoothStep(0.02, 0.52, localU)
-        const lip = smoothStep(0.48, 0.9, localU)
-        const fall = smoothStep(0.76, 1, localU)
+        const rise = smoothStep(0.02, 0.48, localU)
+        const lip = smoothStep(0.34, 0.86, localU)
+        const fall = smoothStep(0.62, 1, localU)
         const curledX = baseX - curlDepth * lip * activeEnvelope
-        const curledZ = baseZ + waveHeight * (rise - fall * 0.62) * activeEnvelope
+        const curledZ = baseZ + waveHeight * (rise - fall * 0.92) * activeEnvelope
         const x = baseX + (curledX - baseX) * widthEnvelope
         const z = baseZ + (curledZ - baseZ) * widthEnvelope
         vertices.push(x, y, z)
@@ -148,9 +148,14 @@ function SurfaceSkin({ grid, params, bounds }: { grid: CellGrid; params: CellPar
   }, [bounds.span, grid, params.cellPitch, params.hOff])
 
   return (
-    <mesh geometry={geometry}>
-      <meshStandardMaterial color="#f8b8c9" side={THREE.DoubleSide} transparent opacity={0.32} roughness={0.66} metalness={0.02} depthWrite={false} />
-    </mesh>
+    <group>
+      <mesh geometry={geometry}>
+        <meshStandardMaterial color="#ffc0d2" side={THREE.FrontSide} transparent opacity={0.34} roughness={0.62} metalness={0.02} depthWrite={false} />
+      </mesh>
+      <mesh geometry={geometry}>
+        <meshStandardMaterial color="#be6f89" side={THREE.BackSide} transparent opacity={0.58} roughness={0.72} metalness={0.02} depthWrite={false} />
+      </mesh>
+    </group>
   )
 }
 
