@@ -96,6 +96,7 @@ function stateKey(params: CellParams, grid: CellState[][]): string {
     params.angleFlex,
     params.showLabels,
     params.animate,
+    params.constrainPerimeter,
     grid.map((row) => row.join(',')).join(';'),
   ].join('|')
 }

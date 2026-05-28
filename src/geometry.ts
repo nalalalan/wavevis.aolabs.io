@@ -53,11 +53,12 @@ export const DEFAULT_PARAM_SEED = {
   hOn: 1,
   linkLength: 1.55,
   plateSize: 1.5,
-  connectorLength: 0.15,
-  zRotationFlex: 60,
+  connectorLength: 0,
+  zRotationFlex: 0,
   angleFlex: 0.85,
   showLabels: false,
   animate: false,
+  constrainPerimeter: false,
 }
 
 export const DEFAULT_ROWS = 1
@@ -95,6 +96,10 @@ type CellPose = {
   upperHeight: number
   yaw: number
   yawTarget: number
+  locked: boolean
+  lockedLowerCenter: Vec3
+  lockedUpperCenter: Vec3
+  lockedYaw: number
 }
 
 type ConnectorConstraint = {
@@ -160,6 +165,7 @@ export function sanitizeParams(params: CellParams): CellParams {
     angleFlex: clampNumber(params.angleFlex, 0, 1),
     showLabels: params.showLabels,
     animate: params.animate,
+    constrainPerimeter: params.constrainPerimeter,
   }
 }
 
@@ -189,7 +195,7 @@ export function layerHeight(state: CellState, layer: LayerName, params: CellPara
   // The animation changes layer height, then recomputes side-node offset from the
   // same link-length equation. That keeps the two links visually constant length.
   const pulse = 0.5 + 0.5 * Math.sin(time * 2.2)
-  return baseHeight + (params.hOff - baseHeight) * pulse * 0.2
+  return params.hOff + (baseHeight - params.hOff) * pulse
 }
 
 export function layerStack(state: CellState, params: CellParams, time = 0) {
@@ -239,19 +245,27 @@ function buildInitialPoses(grid: CellGrid, params: CellParams, time: number): Ce
       const centerDy = upperY[row][col] - lowerY[row][col]
       const centerDz = Math.sqrt(Math.max(centerSpan ** 2 - centerDx ** 2 - centerDy ** 2, 0))
       const axis = normalize([centerDx, centerDy, centerDz])
+      const lowerCenter: Vec3 = [lowerX[row][col], lowerY[row][col], axis[2] * lowerTarget * 0.5]
+      const upperCenter: Vec3 = [
+        lowerX[row][col] + axis[0] * centerSpan,
+        lowerY[row][col] + axis[1] * centerSpan,
+        axis[2] * (lowerTarget * 0.5 + centerSpan),
+      ]
+      const locked = params.constrainPerimeter && isPerimeterCell(row, col, rows, columns)
+
       return {
-        lowerCenter: [lowerX[row][col], lowerY[row][col], axis[2] * lowerTarget * 0.5],
-        upperCenter: [
-          lowerX[row][col] + axis[0] * centerSpan,
-          lowerY[row][col] + axis[1] * centerSpan,
-          axis[2] * (lowerTarget * 0.5 + centerSpan),
-        ],
+        lowerCenter,
+        upperCenter,
         lowerTarget,
         upperTarget,
         lowerHeight: lowerTarget,
         upperHeight: upperTarget,
         yaw: 0,
         yawTarget: 0,
+        locked,
+        lockedLowerCenter: [...lowerCenter],
+        lockedUpperCenter: [...upperCenter],
+        lockedYaw: 0,
       }
     }),
   )
@@ -277,8 +291,8 @@ function buildLayoutFromPoses(grid: CellGrid, params: CellParams, poses: CellPos
       const bottomH = actualTotal * lowerRatio
       const topH = actualTotal * upperRatio
       const lowerCenter = pose.lowerCenter
-      const upperCenter = add(lowerCenter, scale(axis, actualTotal * 0.5))
-      pose.upperCenter = upperCenter
+      const upperCenter = pose.locked ? pose.upperCenter : add(lowerCenter, scale(axis, actualTotal * 0.5))
+      if (!pose.locked) pose.upperCenter = upperCenter
       const bottom = subtract(lowerCenter, scale(axis, bottomH * 0.5))
       const middle = add(lowerCenter, scale(axis, bottomH * 0.5))
       const top = add(upperCenter, scale(axis, topH * 0.5))
@@ -562,6 +576,7 @@ function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose
     poses.forEach((row) =>
       row.forEach((pose) => {
         projectPoseSpan(pose, params)
+        relaxPoseYaw(pose, 0.08)
       }),
     )
   }
@@ -571,6 +586,11 @@ function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose
     constraints.forEach((constraint) => {
       projectConnectorConstraint(poses, layout, constraint, params, 0.62)
     })
+    poses.forEach((row) =>
+      row.forEach((pose) => {
+        relaxPoseYaw(pose, 0.02)
+      }),
+    )
   }
 }
 
@@ -611,20 +631,27 @@ function projectConnectorConstraint(
   const end = sideNodePositionFromLayout(bLayout, constraint.layer, constraint.bSide)
   const delta = subtract(end, start)
   const currentLength = vectorLength(delta)
-  if (currentLength <= 0.0001) return
+  if (currentLength <= 0.000001) return
 
   const direction = scale(delta, 1 / currentLength)
   const correctionLength = clampNumber((currentLength - params.connectorLength) * 0.5 * strength, -0.08, 0.08)
   const correction = scale(direction, correctionLength)
-  movePoseLayer(aPose, constraint.layer, correction)
-  movePoseLayer(bPose, constraint.layer, scale(correction, -1))
+  const aCanMove = !aPose.locked
+  const bCanMove = !bPose.locked
+  const aScale = aCanMove && bCanMove ? 1 : aCanMove ? 2 : 0
+  const bScale = aCanMove && bCanMove ? 1 : bCanMove ? 2 : 0
+
+  movePoseLayer(aPose, constraint.layer, scale(correction, aScale))
+  movePoseLayer(bPose, constraint.layer, scale(correction, -bScale))
   relaxPoseLayerHeight(aPose, constraint.layer, currentLength - params.connectorLength, params, strength)
   relaxPoseLayerHeight(bPose, constraint.layer, currentLength - params.connectorLength, params, strength)
-  rotatePoseTowardNodeMove(aPose, aLayout, constraint.layer, constraint.aSide, correction, params, strength)
-  rotatePoseTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -1), params, strength)
+  rotatePoseTowardNodeMove(aPose, aLayout, constraint.layer, constraint.aSide, scale(correction, aScale), params, strength)
+  rotatePoseTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -bScale), params, strength)
 }
 
 function movePoseLayer(pose: CellPose, layer: LayerName, correction: Vec3): void {
+  if (pose.locked) return
+
   if (layer === 'lower') {
     pose.lowerCenter = add(pose.lowerCenter, correction)
   } else {
@@ -652,7 +679,7 @@ function rotatePoseTowardNodeMove(
   params: CellParams,
   strength: number,
 ): void {
-  if (params.zRotationFlex <= 0) return
+  if (params.zRotationFlex <= 0 || params.connectorLength <= 0.0001 || pose.locked) return
 
   const center = layer === 'upper' ? layout.upperCenter : layout.lowerCenter
   const radius = subtract(sideNodePositionFromLayout(layout, layer, side), center)
@@ -662,12 +689,26 @@ function rotatePoseTowardNodeMove(
   pose.yaw = clampNumber(pose.yaw + yawDelta, pose.yawTarget - degreesToRadians(params.zRotationFlex), pose.yawTarget + degreesToRadians(params.zRotationFlex))
 }
 
+function relaxPoseYaw(pose: CellPose, strength: number): void {
+  if (pose.locked) {
+    restoreLockedPose(pose)
+    return
+  }
+
+  pose.yaw += (pose.yawTarget - pose.yaw) * strength
+}
+
 function projectPoseSpan(pose: CellPose, params: CellParams): void {
+  if (pose.locked) {
+    restoreLockedPose(pose)
+    return
+  }
+
   const delta = subtract(pose.upperCenter, pose.lowerCenter)
   const currentLength = vectorLength(delta)
   if (currentLength <= 0.0001) return
 
-  const targetStrength = ((1 - params.angleFlex) ** 2) * 0.02
+  const targetStrength = params.connectorLength <= 0.0001 ? 0 : ((1 - params.angleFlex) ** 2) * 0.02
   const direction = scale(delta, 1 / currentLength)
   pose.lowerHeight += (pose.lowerTarget - pose.lowerHeight) * targetStrength
   pose.upperHeight += (pose.upperTarget - pose.upperHeight) * targetStrength
@@ -702,6 +743,16 @@ function maxTotalSpan(params: Pick<CellParams, 'linkLength'>, lowerRatio: number
 
 function clampLayerHeight(height: number, params: Pick<CellParams, 'linkLength'>): number {
   return clampNumber(height, 0.15, params.linkLength * 2 - 0.02)
+}
+
+function restoreLockedPose(pose: CellPose): void {
+  pose.lowerCenter = [...pose.lockedLowerCenter]
+  pose.upperCenter = [...pose.lockedUpperCenter]
+  pose.yaw = pose.lockedYaw
+}
+
+function isPerimeterCell(row: number, col: number, rows: number, columns: number): boolean {
+  return row === 0 || col === 0 || row === rows - 1 || col === columns - 1
 }
 
 function degreesToRadians(degrees: number): number {

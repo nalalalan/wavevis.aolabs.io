@@ -12,6 +12,7 @@ import {
   sideNodePositionFromLayout,
   stateMeta,
 } from './geometry'
+import { linkageColor, linkageWidth } from './renderStyle'
 
 type DoubleLayerCellProps = {
   row: number
@@ -40,13 +41,13 @@ type PlankSegmentProps = {
 }
 
 const plateMaterial = new THREE.MeshStandardMaterial({
-  color: '#f5f1e8',
+  color: linkageColor,
   roughness: 0.7,
   metalness: 0.05,
 })
 
 const middlePlateMaterial = new THREE.MeshStandardMaterial({
-  color: '#d7ddd4',
+  color: linkageColor,
   roughness: 0.75,
   metalness: 0.04,
 })
@@ -56,8 +57,6 @@ const nodeMaterial = new THREE.MeshStandardMaterial({
   roughness: 0.55,
   metalness: 0.1,
 })
-
-const linkageColor = '#d99a9b'
 
 export function CylinderSegment({ start, end, radius = 0.026, color, opacity = 1 }: SegmentProps) {
   const { midpoint, length, quaternion } = useMemo(() => {
@@ -89,7 +88,7 @@ export function CylinderSegment({ start, end, radius = 0.026, color, opacity = 1
   )
 }
 
-function PlankSegment({ start, end, width, thickness = 0.045, color, opacity = 1, widthHint }: PlankSegmentProps) {
+export function PlankSegment({ start, end, width, thickness = 0.045, color, opacity = 1, widthHint }: PlankSegmentProps) {
   const { midpoint, length, quaternion } = useMemo(() => {
     const startVector = new THREE.Vector3(...start)
     const endVector = new THREE.Vector3(...end)
@@ -151,8 +150,8 @@ export default function DoubleLayerCell({ row, col, state, params, layout }: Dou
       />
       <Plate center={layout.top} normal={plateNormal(layout, 'top')} xAxis={plateXAxis} size={params.plateSize} thickness={plateThickness} material={plateMaterial} />
 
-      <LayerLinks layer="lower" lowCenter={layout.bottom} highCenter={layout.middle} layout={layout} plateHalf={plateHalf} plankWidth={legSideLength(params.plateSize)} />
-      <LayerLinks layer="upper" lowCenter={layout.middle} highCenter={layout.top} layout={layout} plateHalf={plateHalf} plankWidth={legSideLength(params.plateSize)} />
+      <LayerLinks layer="lower" lowCenter={layout.bottom} highCenter={layout.middle} layout={layout} plateHalf={plateHalf} plankWidth={linkageWidth(params.plateSize)} />
+      <LayerLinks layer="upper" lowCenter={layout.middle} highCenter={layout.top} layout={layout} plateHalf={plateHalf} plankWidth={linkageWidth(params.plateSize)} />
 
       <CylinderSegment start={layout.bottom} end={layout.middle} radius={0.052} color={lowerOn ? '#ff8a2a' : '#85827b'} />
       <CylinderSegment start={layout.middle} end={layout.top} radius={0.052} color={upperOn ? '#ff8a2a' : '#85827b'} />
@@ -266,7 +265,7 @@ function LayerLinks({
 
 function makeOctagonalPlateGeometry(size: number, thickness: number): THREE.ExtrudeGeometry {
   const apothem = size / 2
-  const halfLegSide = legSideLength(size) / 2
+  const halfLegSide = linkageWidth(size) / 2
   const inset = apothem - halfLegSide
   const shape = new THREE.Shape([
     new THREE.Vector2(apothem, -halfLegSide),
@@ -283,10 +282,6 @@ function makeOctagonalPlateGeometry(size: number, thickness: number): THREE.Extr
   geometry.userData.chamferSideLength = Math.hypot(inset, inset)
   geometry.translate(0, 0, -thickness / 2)
   return geometry
-}
-
-function legSideLength(size: number): number {
-  return size * 0.46
 }
 
 function subtractVec(a: Vec3, b: Vec3): Vec3 {

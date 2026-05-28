@@ -28,6 +28,7 @@ export type CellParams = {
   angleFlex: number
   showLabels: boolean
   animate: boolean
+  constrainPerimeter: boolean
 }
 
 export type CellStateMeta = {

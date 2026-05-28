@@ -1,8 +1,9 @@
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Suspense, useMemo, useState } from 'react'
-import DoubleLayerCell, { CylinderSegment } from './DoubleLayerCell'
+import DoubleLayerCell, { PlankSegment } from './DoubleLayerCell'
 import { buildArrayLayout, layoutBounds, sideNodePositionFromLayout } from './geometry'
+import { linkageColor, linkageWidth } from './renderStyle'
 import type { CellGrid, CellParams, LayerName, Vec3 } from './types'
 
 type Scene3DProps = {
@@ -15,6 +16,8 @@ type Connector = {
   start: Vec3
   end: Vec3
 }
+
+const connectorWidthHint: Vec3 = [0, 0, 1]
 
 export default function Scene3D({ grid, params }: Scene3DProps) {
   const initialLayout = useMemo(() => buildArrayLayout(grid, params), [grid, params])
@@ -55,7 +58,7 @@ function ArrayModel({ grid, params }: Scene3DProps) {
 
   const layoutTime = params.animate ? time : 0
   const layout = useMemo(() => buildArrayLayout(grid, params, layoutTime), [grid, params, layoutTime])
-  const connectors = useMemo(() => buildConnectors(grid, layout), [grid, layout])
+  const connectors = useMemo(() => (params.connectorLength > 0.0001 ? buildConnectors(grid, layout) : []), [grid, layout, params.connectorLength])
 
   return (
     <group>
@@ -65,7 +68,15 @@ function ArrayModel({ grid, params }: Scene3DProps) {
         )),
       )}
       {connectors.map((connector) => (
-        <CylinderSegment key={connector.id} start={connector.start} end={connector.end} radius={0.034} color="#d12c2c" />
+        <PlankSegment
+          key={connector.id}
+          start={connector.start}
+          end={connector.end}
+          width={linkageWidth(params.plateSize)}
+          thickness={0.055}
+          color={linkageColor}
+          widthHint={connectorWidthHint}
+        />
       ))}
     </group>
   )

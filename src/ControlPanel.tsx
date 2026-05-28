@@ -172,6 +172,14 @@ export default function ControlPanel({
           />
           animate
         </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={params.constrainPerimeter}
+            onChange={(event) => onParamsChange({ ...params, constrainPerimeter: event.target.checked })}
+          />
+          constrainPerimeter
+        </label>
       </section>
 
       <section className="button-row">
