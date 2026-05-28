@@ -54,6 +54,8 @@ export const DEFAULT_PARAM_SEED = {
   linkLength: 1.55,
   plateSize: 1.5,
   connectorLength: 0.15,
+  zRotationFlex: 60,
+  angleFlex: 0.85,
   showLabels: false,
   animate: false,
 }
@@ -71,6 +73,7 @@ export type CellLayout = {
   topH: number
   lowerOffset: number
   upperOffset: number
+  yaw: number
   nodes: Record<LayerName, Record<SideName, Vec3>>
 }
 
@@ -79,6 +82,29 @@ export type LayoutBounds = {
   max: Vec3
   center: Vec3
   span: Vec3
+}
+
+type AxisName = 'x' | 'y'
+
+type CellPose = {
+  lowerCenter: Vec3
+  upperCenter: Vec3
+  lowerTarget: number
+  upperTarget: number
+  lowerHeight: number
+  upperHeight: number
+  yaw: number
+  yawTarget: number
+}
+
+type ConnectorConstraint = {
+  aRow: number
+  aCol: number
+  aSide: SideName
+  bRow: number
+  bCol: number
+  bSide: SideName
+  layer: LayerName
 }
 
 export function sideNodeOffset(height: number, params: Pick<CellParams, 'linkLength' | 'plateSize'>): number {
@@ -130,6 +156,8 @@ export function sanitizeParams(params: CellParams): CellParams {
     linkLength: clampNumber(params.linkLength, hOff / 2 + 0.05, 8),
     cellPitch: clampNumber(params.cellPitch, plateSize, 16),
     connectorLength: clampNumber(params.connectorLength, 0, 3),
+    zRotationFlex: clampNumber(params.zRotationFlex, 0, 180),
+    angleFlex: clampNumber(params.angleFlex, 0, 1),
     showLabels: params.showLabels,
     animate: params.animate,
   }
@@ -184,6 +212,16 @@ export function cellOrigin(row: number, col: number, params: CellParams): Vec3 {
 }
 
 export function buildArrayLayout(grid: CellGrid, params: CellParams, time = 0): CellLayout[][] {
+  const poses = buildInitialPoses(grid, params, time)
+  solveConnectorPoses(grid, params, poses)
+
+  const layout = buildLayoutFromPoses(grid, params, poses)
+  normalizeLayoutFloor(layout)
+  populateSymmetricNodes(layout)
+  return layout
+}
+
+function buildInitialPoses(grid: CellGrid, params: CellParams, time: number): CellPose[][] {
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
   const lowerX = buildLayerAxisCenters(grid, params, 'lower', 'x', time)
@@ -191,47 +229,78 @@ export function buildArrayLayout(grid: CellGrid, params: CellParams, time = 0): 
   const lowerY = buildLayerAxisCenters(grid, params, 'lower', 'y', time)
   const upperY = buildLayerAxisCenters(grid, params, 'upper', 'y', time)
 
-  const layout = Array.from({ length: rows }, (_, row) =>
+  return Array.from({ length: rows }, (_, row) =>
     Array.from({ length: columns }, (_, col) => {
       const state = grid[row][col]
-      const bottomH = layerHeight(state, 'lower', params, time)
-      const topH = layerHeight(state, 'upper', params, time)
-      const lowerOffset = sideNodeOffset(bottomH, params)
-      const upperOffset = sideNodeOffset(topH, params)
-      const bottom: Vec3 = [lowerX[row][col], lowerY[row][col], 0]
-      const top: Vec3 = [upperX[row][col], upperY[row][col], bottomH + topH]
-      const middleT = bottomH / Math.max(bottomH + topH, 0.0001)
-      const middle: Vec3 = [
-        bottom[0] + (top[0] - bottom[0]) * middleT,
-        bottom[1] + (top[1] - bottom[1]) * middleT,
-        bottomH,
-      ]
+      const lowerTarget = layerHeight(state, 'lower', params, time)
+      const upperTarget = layerHeight(state, 'upper', params, time)
+      const centerSpan = Math.max((lowerTarget + upperTarget) / 2, 0.0001)
+      const centerDx = upperX[row][col] - lowerX[row][col]
+      const centerDy = upperY[row][col] - lowerY[row][col]
+      const centerDz = Math.sqrt(Math.max(centerSpan ** 2 - centerDx ** 2 - centerDy ** 2, 0))
+      const axis = normalize([centerDx, centerDy, centerDz])
+      return {
+        lowerCenter: [lowerX[row][col], lowerY[row][col], axis[2] * lowerTarget * 0.5],
+        upperCenter: [
+          lowerX[row][col] + axis[0] * centerSpan,
+          lowerY[row][col] + axis[1] * centerSpan,
+          axis[2] * (lowerTarget * 0.5 + centerSpan),
+        ],
+        lowerTarget,
+        upperTarget,
+        lowerHeight: lowerTarget,
+        upperHeight: upperTarget,
+        yaw: 0,
+        yawTarget: 0,
+      }
+    }),
+  )
+}
+
+function buildLayoutFromPoses(grid: CellGrid, params: CellParams, poses: CellPose[][]): CellLayout[][] {
+  const rows = grid.length
+  const columns = grid[0]?.length ?? 0
+  const layout = Array.from({ length: rows }, (_, row) =>
+    Array.from({ length: columns }, (_, col) => {
+      const pose = poses[row][col]
+      const lowerHeight = clampLayerHeight(pose.lowerHeight, params)
+      const upperHeight = clampLayerHeight(pose.upperHeight, params)
+      pose.lowerHeight = lowerHeight
+      pose.upperHeight = upperHeight
+      const targetTotal = Math.max(lowerHeight + upperHeight, 0.0001)
+      const lowerRatio = lowerHeight / targetTotal
+      const upperRatio = upperHeight / targetTotal
+      const centerDelta = subtract(pose.upperCenter, pose.lowerCenter)
+      const centerDistance = Math.max(vectorLength(centerDelta), 0.0001)
+      const axis = normalize(centerDelta)
+      const actualTotal = Math.min(centerDistance * 2, maxTotalSpan(params, lowerRatio, upperRatio))
+      const bottomH = actualTotal * lowerRatio
+      const topH = actualTotal * upperRatio
+      const lowerCenter = pose.lowerCenter
+      const upperCenter = add(lowerCenter, scale(axis, actualTotal * 0.5))
+      pose.upperCenter = upperCenter
+      const bottom = subtract(lowerCenter, scale(axis, bottomH * 0.5))
+      const middle = add(lowerCenter, scale(axis, bottomH * 0.5))
+      const top = add(upperCenter, scale(axis, topH * 0.5))
 
       return {
         bottom,
         middle,
         top,
-        lowerCenter: midpoint(bottom, middle),
-        upperCenter: midpoint(middle, top),
+        lowerCenter,
+        upperCenter,
         bottomH,
         topH,
-        lowerOffset,
-        upperOffset,
+        lowerOffset: sideNodeOffset(bottomH, params),
+        upperOffset: sideNodeOffset(topH, params),
+        yaw: pose.yaw,
         nodes: emptyNodeRecord(),
       }
     }),
   )
 
-  layout.forEach((row) =>
-    row.forEach((cell) => {
-      SIDE_NAMES.forEach((side) => {
-        cell.nodes.lower[side] = symmetricSideNodePosition(cell, 'lower', side)
-        cell.nodes.upper[side] = symmetricSideNodePosition(cell, 'upper', side)
-      })
-    }),
-  )
+  populateSymmetricNodes(layout)
 
-  constrainConnectorNodes(layout, params.connectorLength)
   return layout
 }
 
@@ -282,7 +351,9 @@ export function sideNodePositionFromLayout(layout: CellLayout, layer: LayerName,
 
 export function sideVectorFromLayout(layout: CellLayout, side: SideName): Vec3 {
   const axis = normalize(subtract(layout.top, layout.bottom))
-  const seed: Vec3 = Math.abs(dot(axis, [1, 0, 0])) > 0.92 ? [0, 1, 0] : [1, 0, 0]
+  const yawSeed: Vec3 = [Math.cos(layout.yaw), Math.sin(layout.yaw), 0]
+  const fallbackSeed: Vec3 = [-Math.sin(layout.yaw), Math.cos(layout.yaw), 0]
+  const seed = vectorLength(subtract(yawSeed, scale(axis, dot(yawSeed, axis)))) > 0.02 ? yawSeed : fallbackSeed
   const basisX = normalize(subtract(seed, scale(axis, dot(seed, axis))))
   const basisY = normalize(cross(axis, basisX))
 
@@ -352,7 +423,7 @@ function buildLayerAxisCenters(
   grid: CellGrid,
   params: CellParams,
   layer: LayerName,
-  axis: 'x' | 'y',
+  axis: AxisName,
   time: number,
 ): number[][] {
   const rows = grid.length
@@ -396,16 +467,20 @@ function add(a: Vec3, b: Vec3): Vec3 {
   return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
 }
 
-function midpoint(a: Vec3, b: Vec3): Vec3 {
-  return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2]
-}
-
 function subtract(a: Vec3, b: Vec3): Vec3 {
   return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 }
 
 function scale(vector: Vec3, scalar: number): Vec3 {
   return [vector[0] * scalar, vector[1] * scalar, vector[2] * scalar]
+}
+
+function vectorLength(vector: Vec3): number {
+  return Math.hypot(vector[0], vector[1], vector[2])
+}
+
+function shiftZ(vector: Vec3, amount: number): Vec3 {
+  return [vector[0], vector[1], vector[2] + amount]
 }
 
 function dot(a: Vec3, b: Vec3): number {
@@ -439,41 +514,198 @@ function symmetricSideNodePosition(layout: CellLayout, layer: LayerName, side: S
   return add(center, scale(sideVectorFromLayout(layout, side), offset))
 }
 
-function constrainConnectorNodes(layout: CellLayout[][], connectorLength: number): void {
-  const rows = layout.length
-  const columns = layout[0]?.length ?? 0
+function populateSymmetricNodes(layout: CellLayout[][]): void {
+  layout.forEach((row) =>
+    row.forEach((cell) => {
+      SIDE_NAMES.forEach((side) => {
+        cell.nodes.lower[side] = symmetricSideNodePosition(cell, 'lower', side)
+        cell.nodes.upper[side] = symmetricSideNodePosition(cell, 'upper', side)
+      })
+    }),
+  )
+}
+
+function normalizeLayoutFloor(layout: CellLayout[][]): void {
+  const minZ = Math.min(...layout.flatMap((row) => row.map((cell) => Math.min(cell.bottom[2], cell.middle[2], cell.top[2]))), 0)
+  if (Math.abs(minZ) <= 0.0001) return
+
+  layout.forEach((row) =>
+    row.forEach((cell) => {
+      shiftCell(cell, -minZ)
+    }),
+  )
+}
+
+function shiftCell(cell: CellLayout, amount: number): void {
+  cell.bottom = shiftZ(cell.bottom, amount)
+  cell.middle = shiftZ(cell.middle, amount)
+  cell.top = shiftZ(cell.top, amount)
+  cell.lowerCenter = shiftZ(cell.lowerCenter, amount)
+  cell.upperCenter = shiftZ(cell.upperCenter, amount)
+}
+
+// Kinematic model: every layer keeps the Sarrus link length fixed by deriving
+// side-node offset from the current layer height. The iterative pass treats red
+// connector length as another hard constraint, then spends the allowed leeway on
+// whole-cell z-yaw and small layer-height/expansion relaxation. Individual side
+// nodes are never pulled independently, so each cell remains symmetric.
+function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose[][]): void {
+  const constraints = buildConnectorConstraints(grid)
+
+  for (let pass = 0; pass < 320; pass += 1) {
+    const layout = buildLayoutFromPoses(grid, params, poses)
+
+    constraints.forEach((constraint) => {
+      projectConnectorConstraint(poses, layout, constraint, params, 0.42)
+    })
+
+    poses.forEach((row) =>
+      row.forEach((pose) => {
+        projectPoseSpan(pose, params)
+      }),
+    )
+  }
+
+  for (let pass = 0; pass < 1200; pass += 1) {
+    const layout = buildLayoutFromPoses(grid, params, poses)
+    constraints.forEach((constraint) => {
+      projectConnectorConstraint(poses, layout, constraint, params, 0.62)
+    })
+  }
+}
+
+function buildConnectorConstraints(grid: CellGrid): ConnectorConstraint[] {
+  const rows = grid.length
+  const columns = grid[0]?.length ?? 0
+  const constraints: ConnectorConstraint[] = []
 
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < columns - 1; col += 1) {
-      constrainPair(layout[row][col], 'px', layout[row][col + 1], 'nx', 'lower', connectorLength)
-      constrainPair(layout[row][col], 'px', layout[row][col + 1], 'nx', 'upper', connectorLength)
+      constraints.push({ aRow: row, aCol: col, aSide: 'px', bRow: row, bCol: col + 1, bSide: 'nx', layer: 'lower' })
+      constraints.push({ aRow: row, aCol: col, aSide: 'px', bRow: row, bCol: col + 1, bSide: 'nx', layer: 'upper' })
     }
   }
 
   for (let row = 0; row < rows - 1; row += 1) {
     for (let col = 0; col < columns; col += 1) {
-      constrainPair(layout[row][col], 'py', layout[row + 1][col], 'ny', 'lower', connectorLength)
-      constrainPair(layout[row][col], 'py', layout[row + 1][col], 'ny', 'upper', connectorLength)
+      constraints.push({ aRow: row, aCol: col, aSide: 'py', bRow: row + 1, bCol: col, bSide: 'ny', layer: 'lower' })
+      constraints.push({ aRow: row, aCol: col, aSide: 'py', bRow: row + 1, bCol: col, bSide: 'ny', layer: 'upper' })
     }
+  }
+
+  return constraints
+}
+
+function projectConnectorConstraint(
+  poses: CellPose[][],
+  layout: CellLayout[][],
+  constraint: ConnectorConstraint,
+  params: CellParams,
+  strength: number,
+): void {
+  const aLayout = layout[constraint.aRow][constraint.aCol]
+  const bLayout = layout[constraint.bRow][constraint.bCol]
+  const aPose = poses[constraint.aRow][constraint.aCol]
+  const bPose = poses[constraint.bRow][constraint.bCol]
+  const start = sideNodePositionFromLayout(aLayout, constraint.layer, constraint.aSide)
+  const end = sideNodePositionFromLayout(bLayout, constraint.layer, constraint.bSide)
+  const delta = subtract(end, start)
+  const currentLength = vectorLength(delta)
+  if (currentLength <= 0.0001) return
+
+  const direction = scale(delta, 1 / currentLength)
+  const correctionLength = clampNumber((currentLength - params.connectorLength) * 0.5 * strength, -0.08, 0.08)
+  const correction = scale(direction, correctionLength)
+  movePoseLayer(aPose, constraint.layer, correction)
+  movePoseLayer(bPose, constraint.layer, scale(correction, -1))
+  relaxPoseLayerHeight(aPose, constraint.layer, currentLength - params.connectorLength, params, strength)
+  relaxPoseLayerHeight(bPose, constraint.layer, currentLength - params.connectorLength, params, strength)
+  rotatePoseTowardNodeMove(aPose, aLayout, constraint.layer, constraint.aSide, correction, params, strength)
+  rotatePoseTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -1), params, strength)
+}
+
+function movePoseLayer(pose: CellPose, layer: LayerName, correction: Vec3): void {
+  if (layer === 'lower') {
+    pose.lowerCenter = add(pose.lowerCenter, correction)
+  } else {
+    pose.upperCenter = add(pose.upperCenter, correction)
   }
 }
 
-function constrainPair(a: CellLayout, aSide: SideName, b: CellLayout, bSide: SideName, layer: LayerName, connectorLength: number): void {
-  const start = a.nodes[layer][aSide]
-  const end = b.nodes[layer][bSide]
-  const mid = midpoint(start, end)
-  const fallbackDirection = normalize(subtract(b[layer === 'upper' ? 'upperCenter' : 'lowerCenter'], a[layer === 'upper' ? 'upperCenter' : 'lowerCenter']))
-  const direction = normalizeWithFallback(subtract(end, start), fallbackDirection)
-  const half = Math.max(connectorLength, 0) / 2
+function relaxPoseLayerHeight(pose: CellPose, layer: LayerName, connectorError: number, params: CellParams, strength: number): void {
+  if (params.angleFlex <= 0) return
 
-  a.nodes[layer][aSide] = add(mid, scale(direction, -half))
-  b.nodes[layer][bSide] = add(mid, scale(direction, half))
+  const delta = clampNumber(connectorError * params.angleFlex * strength * 0.08, -0.08, 0.08)
+  if (layer === 'lower') {
+    pose.lowerHeight = clampLayerHeight(pose.lowerHeight - delta, params)
+  } else {
+    pose.upperHeight = clampLayerHeight(pose.upperHeight - delta, params)
+  }
 }
 
-function normalizeWithFallback(vector: Vec3, fallback: Vec3): Vec3 {
-  const length = Math.hypot(vector[0], vector[1], vector[2])
-  if (length <= 0.0001) return normalize(fallback)
-  return [vector[0] / length, vector[1] / length, vector[2] / length]
+function rotatePoseTowardNodeMove(
+  pose: CellPose,
+  layout: CellLayout,
+  layer: LayerName,
+  side: SideName,
+  desiredMove: Vec3,
+  params: CellParams,
+  strength: number,
+): void {
+  if (params.zRotationFlex <= 0) return
+
+  const center = layer === 'upper' ? layout.upperCenter : layout.lowerCenter
+  const radius = subtract(sideNodePositionFromLayout(layout, layer, side), center)
+  const tangent = cross([0, 0, 1], radius)
+  const tangentLengthSq = Math.max(dot(tangent, tangent), 0.0001)
+  const yawDelta = clampNumber((dot(desiredMove, tangent) / tangentLengthSq) * strength, -0.08, 0.08)
+  pose.yaw = clampNumber(pose.yaw + yawDelta, pose.yawTarget - degreesToRadians(params.zRotationFlex), pose.yawTarget + degreesToRadians(params.zRotationFlex))
+}
+
+function projectPoseSpan(pose: CellPose, params: CellParams): void {
+  const delta = subtract(pose.upperCenter, pose.lowerCenter)
+  const currentLength = vectorLength(delta)
+  if (currentLength <= 0.0001) return
+
+  const targetStrength = ((1 - params.angleFlex) ** 2) * 0.02
+  const direction = scale(delta, 1 / currentLength)
+  pose.lowerHeight += (pose.lowerTarget - pose.lowerHeight) * targetStrength
+  pose.upperHeight += (pose.upperTarget - pose.upperHeight) * targetStrength
+  pose.lowerHeight = clampLayerHeight(pose.lowerHeight, params)
+  pose.upperHeight = clampLayerHeight(pose.upperHeight, params)
+
+  const targetLength = (pose.lowerHeight + pose.upperHeight) * 0.5
+  const lowerRatio = pose.lowerHeight / Math.max(pose.lowerHeight + pose.upperHeight, 0.0001)
+  const upperRatio = pose.upperHeight / Math.max(pose.lowerHeight + pose.upperHeight, 0.0001)
+  const hardLength = clampNumber(currentLength, 0.12, maxTotalSpan(params, lowerRatio, upperRatio) * 0.5)
+  const hardError = currentLength - hardLength
+
+  if (Math.abs(hardError) > 0.0001) {
+    const hardCorrection = scale(direction, hardError * 0.5)
+    pose.lowerCenter = add(pose.lowerCenter, hardCorrection)
+    pose.upperCenter = add(pose.upperCenter, scale(hardCorrection, -1))
+  }
+
+  const adjustedDelta = subtract(pose.upperCenter, pose.lowerCenter)
+  const adjustedLength = vectorLength(adjustedDelta)
+  const adjustedDirection = scale(adjustedDelta, 1 / Math.max(adjustedLength, 0.0001))
+  const targetError = adjustedLength - targetLength
+  const targetCorrection = scale(adjustedDirection, targetError * 0.5 * targetStrength)
+  pose.lowerCenter = add(pose.lowerCenter, targetCorrection)
+  pose.upperCenter = add(pose.upperCenter, scale(targetCorrection, -1))
+}
+
+function maxTotalSpan(params: Pick<CellParams, 'linkLength'>, lowerRatio: number, upperRatio: number): number {
+  const largestRatio = Math.max(lowerRatio, upperRatio, 0.0001)
+  return ((params.linkLength * 2 - 0.02) / largestRatio)
+}
+
+function clampLayerHeight(height: number, params: Pick<CellParams, 'linkLength'>): number {
+  return clampNumber(height, 0.15, params.linkLength * 2 - 0.02)
+}
+
+function degreesToRadians(degrees: number): number {
+  return (degrees * Math.PI) / 180
 }
 
 function normalize(vector: Vec3): Vec3 {

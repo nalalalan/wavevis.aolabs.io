@@ -92,6 +92,8 @@ function stateKey(params: CellParams, grid: CellState[][]): string {
     params.plateSize,
     params.cellPitch,
     params.connectorLength,
+    params.zRotationFlex,
+    params.angleFlex,
     params.showLabels,
     params.animate,
     grid.map((row) => row.join(',')).join(';'),

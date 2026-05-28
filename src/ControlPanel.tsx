@@ -16,10 +16,11 @@ type ControlPanelProps = {
 }
 
 const numericInputs: Array<{
-  key: keyof Pick<CellParams, 'hOff' | 'hOn' | 'linkLength' | 'plateSize' | 'cellPitch' | 'connectorLength'>
+  key: keyof Pick<CellParams, 'hOff' | 'hOn' | 'linkLength' | 'plateSize' | 'cellPitch' | 'connectorLength' | 'zRotationFlex' | 'angleFlex'>
   label: string
   step: number
   min: number
+  max?: number
 }> = [
   { key: 'hOff', label: 'hOff', step: 0.1, min: 0.25 },
   { key: 'hOn', label: 'hOn', step: 0.1, min: 0.15 },
@@ -27,6 +28,8 @@ const numericInputs: Array<{
   { key: 'plateSize', label: 'plateSize', step: 0.1, min: 0.25 },
   { key: 'cellPitch', label: 'cellPitch', step: 0.05, min: 0.5 },
   { key: 'connectorLength', label: 'connectorLength', step: 0.05, min: 0 },
+  { key: 'zRotationFlex', label: 'zRotationFlex', step: 1, min: 0, max: 180 },
+  { key: 'angleFlex', label: 'angleFlex', step: 0.05, min: 0, max: 1 },
 ]
 
 export default function ControlPanel({
@@ -135,6 +138,7 @@ export default function ControlPanel({
               <input
                 type="number"
                 min={input.min}
+                max={input.max}
                 step={input.step}
                 value={params[input.key]}
                 onChange={(event) => setNumber(input.key, Number(event.target.value))}

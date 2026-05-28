@@ -29,6 +29,16 @@ type SegmentProps = {
   opacity?: number
 }
 
+type PlankSegmentProps = {
+  start: Vec3
+  end: Vec3
+  width: number
+  thickness?: number
+  color: string
+  opacity?: number
+  widthHint: Vec3
+}
+
 const plateMaterial = new THREE.MeshStandardMaterial({
   color: '#f5f1e8',
   roughness: 0.7,
@@ -46,6 +56,8 @@ const nodeMaterial = new THREE.MeshStandardMaterial({
   roughness: 0.55,
   metalness: 0.1,
 })
+
+const linkageColor = '#d99a9b'
 
 export function CylinderSegment({ start, end, radius = 0.026, color, opacity = 1 }: SegmentProps) {
   const { midpoint, length, quaternion } = useMemo(() => {
@@ -77,9 +89,50 @@ export function CylinderSegment({ start, end, radius = 0.026, color, opacity = 1
   )
 }
 
+function PlankSegment({ start, end, width, thickness = 0.045, color, opacity = 1, widthHint }: PlankSegmentProps) {
+  const { midpoint, length, quaternion } = useMemo(() => {
+    const startVector = new THREE.Vector3(...start)
+    const endVector = new THREE.Vector3(...end)
+    const direction = new THREE.Vector3().subVectors(endVector, startVector)
+    const lengthValue = direction.length()
+    const midpointValue = new THREE.Vector3().addVectors(startVector, endVector).multiplyScalar(0.5)
+    const quaternionValue = new THREE.Quaternion()
+
+    if (lengthValue > 0.0001) {
+      const yAxis = direction.normalize()
+      const xAxis = new THREE.Vector3(...widthHint).addScaledVector(yAxis, -new THREE.Vector3(...widthHint).dot(yAxis))
+
+      if (xAxis.length() <= 0.0001) {
+        xAxis.set(1, 0, 0).addScaledVector(yAxis, -yAxis.x)
+      }
+
+      xAxis.normalize()
+      const zAxis = new THREE.Vector3().crossVectors(xAxis, yAxis).normalize()
+      const matrix = new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis)
+      quaternionValue.setFromRotationMatrix(matrix)
+    }
+
+    return {
+      midpoint: midpointValue,
+      length: lengthValue,
+      quaternion: quaternionValue,
+    }
+  }, [start, end, widthHint])
+
+  if (length <= 0.0001) return null
+
+  return (
+    <mesh position={midpoint} quaternion={quaternion}>
+      <boxGeometry args={[width, length, thickness]} />
+      <meshStandardMaterial color={color} transparent={opacity < 1} opacity={opacity} roughness={0.62} metalness={0.06} />
+    </mesh>
+  )
+}
+
 export default function DoubleLayerCell({ row, col, state, params, layout }: DoubleLayerCellProps) {
   const plateHalf = params.plateSize / 2
   const plateThickness = 0.1
+  const plateXAxis = sideVectorFromLayout(layout, 'px')
   const meta = stateMeta(state)
   const upperOn = isUpperActuated(state)
   const lowerOn = isLowerActuated(state)
@@ -87,18 +140,19 @@ export default function DoubleLayerCell({ row, col, state, params, layout }: Dou
 
   return (
     <group>
-      <Plate center={layout.bottom} normal={plateNormal(layout, 'bottom')} size={params.plateSize} thickness={plateThickness} material={plateMaterial} />
+      <Plate center={layout.bottom} normal={plateNormal(layout, 'bottom')} xAxis={plateXAxis} size={params.plateSize} thickness={plateThickness} material={plateMaterial} />
       <Plate
         center={layout.middle}
         normal={plateNormal(layout, 'middle')}
-        size={params.plateSize * 1.04}
+        xAxis={plateXAxis}
+        size={params.plateSize}
         thickness={plateThickness}
         material={middlePlateMaterial}
       />
-      <Plate center={layout.top} normal={plateNormal(layout, 'top')} size={params.plateSize} thickness={plateThickness} material={plateMaterial} />
+      <Plate center={layout.top} normal={plateNormal(layout, 'top')} xAxis={plateXAxis} size={params.plateSize} thickness={plateThickness} material={plateMaterial} />
 
-      <LayerLinks layer="lower" lowCenter={layout.bottom} highCenter={layout.middle} layout={layout} plateHalf={plateHalf} />
-      <LayerLinks layer="upper" lowCenter={layout.middle} highCenter={layout.top} layout={layout} plateHalf={plateHalf} />
+      <LayerLinks layer="lower" lowCenter={layout.bottom} highCenter={layout.middle} layout={layout} plateHalf={plateHalf} plankWidth={legSideLength(params.plateSize)} />
+      <LayerLinks layer="upper" lowCenter={layout.middle} highCenter={layout.top} layout={layout} plateHalf={plateHalf} plankWidth={legSideLength(params.plateSize)} />
 
       <CylinderSegment start={layout.bottom} end={layout.middle} radius={0.052} color={lowerOn ? '#ff8a2a' : '#85827b'} />
       <CylinderSegment start={layout.middle} end={layout.top} radius={0.052} color={upperOn ? '#ff8a2a' : '#85827b'} />
@@ -124,24 +178,37 @@ export default function DoubleLayerCell({ row, col, state, params, layout }: Dou
 function Plate({
   center,
   normal,
+  xAxis,
   size,
   thickness,
   material,
 }: {
   center: Vec3
   normal: Vec3
+  xAxis: Vec3
   size: number
   thickness: number
   material: THREE.MeshStandardMaterial
 }) {
+  const geometry = useMemo(() => makeOctagonalPlateGeometry(size, thickness), [size, thickness])
   const quaternion = useMemo(() => {
-    const target = new THREE.Vector3(...normal).normalize()
-    return new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), target)
-  }, [normal])
+    const zAxis = new THREE.Vector3(...normal).normalize()
+    const xBasis = new THREE.Vector3(...xAxis)
+    const xProjected = xBasis.addScaledVector(zAxis, -xBasis.dot(zAxis))
+
+    if (xProjected.length() <= 0.0001) {
+      xProjected.set(1, 0, 0).addScaledVector(zAxis, -zAxis.x)
+    }
+
+    xProjected.normalize()
+    const yAxis = new THREE.Vector3().crossVectors(zAxis, xProjected).normalize()
+    const matrix = new THREE.Matrix4().makeBasis(xProjected, yAxis, zAxis)
+    return new THREE.Quaternion().setFromRotationMatrix(matrix)
+  }, [normal, xAxis])
 
   return (
     <mesh position={center} quaternion={quaternion}>
-      <boxGeometry args={[size, size, thickness]} />
+      <primitive object={geometry} attach="geometry" />
       <primitive object={material} attach="material" />
     </mesh>
   )
@@ -153,18 +220,23 @@ function LayerLinks({
   highCenter,
   layout,
   plateHalf,
+  plankWidth,
 }: {
   layer: LayerName
   lowCenter: Vec3
   highCenter: Vec3
   layout: CellLayout
   plateHalf: number
+  plankWidth: number
 }) {
+  const layerAxis = normalizeVec(subtractVec(highCenter, lowCenter))
+
   return (
     <>
       {SIDE_NAMES.map((side) => {
         const sideVector = sideVectorFromLayout(layout, side)
         const node = sideNodePositionFromLayout(layout, layer, side)
+        const widthHint = normalizeVec(crossVec(layerAxis, sideVector))
         const lowAnchor: Vec3 = [
           lowCenter[0] + sideVector[0] * plateHalf,
           lowCenter[1] + sideVector[1] * plateHalf,
@@ -179,8 +251,8 @@ function LayerLinks({
 
         return (
           <group key={`${layer}-${side}`}>
-            <CylinderSegment start={lowAnchor} end={node} radius={isDepthSide ? 0.018 : 0.026} color="#38474d" opacity={isDepthSide ? 0.56 : 1} />
-            <CylinderSegment start={node} end={highAnchor} radius={isDepthSide ? 0.018 : 0.026} color="#38474d" opacity={isDepthSide ? 0.56 : 1} />
+            <PlankSegment start={lowAnchor} end={node} width={plankWidth} thickness={isDepthSide ? 0.028 : 0.044} widthHint={widthHint} color={linkageColor} opacity={isDepthSide ? 0.54 : 0.96} />
+            <PlankSegment start={node} end={highAnchor} width={plankWidth} thickness={isDepthSide ? 0.028 : 0.044} widthHint={widthHint} color={linkageColor} opacity={isDepthSide ? 0.54 : 0.96} />
             <mesh position={node}>
               <sphereGeometry args={[0.07, 18, 18]} />
               <primitive object={nodeMaterial} attach="material" />
@@ -190,4 +262,43 @@ function LayerLinks({
       })}
     </>
   )
+}
+
+function makeOctagonalPlateGeometry(size: number, thickness: number): THREE.ExtrudeGeometry {
+  const apothem = size / 2
+  const halfLegSide = legSideLength(size) / 2
+  const inset = apothem - halfLegSide
+  const shape = new THREE.Shape([
+    new THREE.Vector2(apothem, -halfLegSide),
+    new THREE.Vector2(apothem, halfLegSide),
+    new THREE.Vector2(halfLegSide, apothem),
+    new THREE.Vector2(-halfLegSide, apothem),
+    new THREE.Vector2(-apothem, halfLegSide),
+    new THREE.Vector2(-apothem, -halfLegSide),
+    new THREE.Vector2(-halfLegSide, -apothem),
+    new THREE.Vector2(halfLegSide, -apothem),
+  ])
+  const geometry = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false })
+  geometry.userData.legSideLength = halfLegSide * 2
+  geometry.userData.chamferSideLength = Math.hypot(inset, inset)
+  geometry.translate(0, 0, -thickness / 2)
+  return geometry
+}
+
+function legSideLength(size: number): number {
+  return size * 0.46
+}
+
+function subtractVec(a: Vec3, b: Vec3): Vec3 {
+  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+
+function crossVec(a: Vec3, b: Vec3): Vec3 {
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+}
+
+function normalizeVec(vector: Vec3): Vec3 {
+  const length = Math.hypot(vector[0], vector[1], vector[2])
+  if (length <= 0.0001) return [0, 1, 0]
+  return [vector[0] / length, vector[1] / length, vector[2] / length]
 }
