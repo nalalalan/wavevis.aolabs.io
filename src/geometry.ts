@@ -17,15 +17,15 @@ export const STATE_META = [
     color: '#f2f1ee',
   },
   {
-    value: CELL_STATES.BEND_DOWN,
-    name: 'BEND_DOWN',
+    value: CELL_STATES.BEND_UP,
+    name: 'BEND_UP',
     label: 'Bend Up',
     shortLabel: 'UP',
     color: '#32b66d',
   },
   {
-    value: CELL_STATES.BEND_UP,
-    name: 'BEND_UP',
+    value: CELL_STATES.BEND_DOWN,
+    name: 'BEND_DOWN',
     label: 'Bend Down',
     shortLabel: 'DOWN',
     color: '#d95757',
@@ -43,8 +43,8 @@ export const SIDE_NAMES: SideName[] = ['px', 'nx', 'py', 'ny']
 
 const CELL_STATE_SEQUENCE = [
   CELL_STATES.OFF,
-  CELL_STATES.BEND_DOWN,
   CELL_STATES.BEND_UP,
+  CELL_STATES.BEND_DOWN,
   CELL_STATES.EXPAND,
 ] as const
 
