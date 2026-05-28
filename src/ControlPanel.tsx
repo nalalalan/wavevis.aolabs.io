@@ -16,7 +16,7 @@ type ControlPanelProps = {
 }
 
 const numericInputs: Array<{
-  key: keyof Pick<CellParams, 'hOff' | 'hOn' | 'linkLength' | 'plateSize' | 'cellPitch' | 'connectorLength' | 'zRotationFlex' | 'angleFlex'>
+  key: keyof Pick<CellParams, 'hOff' | 'hOn' | 'linkLength' | 'plateSize' | 'cellPitch' | 'connectorLength'>
   label: string
   step: number
   min: number
@@ -28,8 +28,6 @@ const numericInputs: Array<{
   { key: 'plateSize', label: 'plateSize', step: 0.1, min: 0.25 },
   { key: 'cellPitch', label: 'cellPitch', step: 0.05, min: 0.5 },
   { key: 'connectorLength', label: 'connectorLength', step: 0.05, min: 0 },
-  { key: 'zRotationFlex', label: 'zRotationFlex', step: 1, min: 0, max: 100 },
-  { key: 'angleFlex', label: 'angleFlex', step: 0.05, min: 0, max: 1 },
 ]
 
 export default function ControlPanel({
@@ -49,6 +47,10 @@ export default function ControlPanel({
   const fittedPitch = defaultCellPitch(params)
 
   const setNumber = (key: (typeof numericInputs)[number]['key'], value: number) => {
+    onParamsChange({ ...params, [key]: value })
+  }
+
+  const setConstraintNumber = (key: 'zRotationFlex' | 'angleFlex', value: number) => {
     onParamsChange({ ...params, [key]: value })
   }
 
@@ -124,6 +126,61 @@ export default function ControlPanel({
         <button type="button" className="primary" onClick={onRun}>
           Run / Update 3D
         </button>
+      </section>
+
+      <section className="panel-section">
+        <div className="section-heading">
+          <h2>constraints</h2>
+          <span>solver</span>
+        </div>
+        <div className="constraint-grid">
+          <label className="constraint-field">
+            <span className="field-title">
+              z yaw stiffness
+              <span>{params.zRotationFlex}</span>
+            </span>
+            <span className="field-note">0 free yaw / 100 locked yaw</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={params.zRotationFlex}
+              onChange={(event) => setConstraintNumber('zRotationFlex', Number(event.target.value))}
+            />
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              value={params.zRotationFlex}
+              onChange={(event) => setConstraintNumber('zRotationFlex', Number(event.target.value))}
+            />
+          </label>
+          <label className="constraint-field">
+            <span className="field-title">
+              angle leeway
+              <span>{params.angleFlex}</span>
+            </span>
+            <span className="field-note">0 ideal height / 1 relaxed height</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={params.angleFlex}
+              onChange={(event) => setConstraintNumber('angleFlex', Number(event.target.value))}
+            />
+            <input
+              type="number"
+              min={0}
+              max={1}
+              step={0.05}
+              value={params.angleFlex}
+              onChange={(event) => setConstraintNumber('angleFlex', Number(event.target.value))}
+            />
+          </label>
+        </div>
       </section>
 
       <section className="panel-section">
