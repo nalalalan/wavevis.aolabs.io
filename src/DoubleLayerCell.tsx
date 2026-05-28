@@ -12,7 +12,7 @@ import {
   sideNodePositionFromLayout,
   stateMeta,
 } from './geometry'
-import { linkageColor, linkageWidth } from './renderStyle'
+import { emOffColor, linkageColor, linkageWidth } from './renderStyle'
 
 type DoubleLayerCellProps = {
   row: number
@@ -53,7 +53,7 @@ const middlePlateMaterial = new THREE.MeshStandardMaterial({
 })
 
 const nodeMaterial = new THREE.MeshStandardMaterial({
-  color: '#1f2c31',
+  color: linkageColor,
   roughness: 0.55,
   metalness: 0.1,
 })
@@ -153,8 +153,8 @@ export default function DoubleLayerCell({ row, col, state, params, layout }: Dou
       <LayerLinks layer="lower" lowCenter={layout.bottom} highCenter={layout.middle} layout={layout} plateHalf={plateHalf} plankWidth={linkageWidth(params.plateSize)} />
       <LayerLinks layer="upper" lowCenter={layout.middle} highCenter={layout.top} layout={layout} plateHalf={plateHalf} plankWidth={linkageWidth(params.plateSize)} />
 
-      <CylinderSegment start={layout.bottom} end={layout.middle} radius={0.052} color={lowerOn ? '#ff8a2a' : '#85827b'} />
-      <CylinderSegment start={layout.middle} end={layout.top} radius={0.052} color={upperOn ? '#ff8a2a' : '#85827b'} />
+      <CylinderSegment start={layout.bottom} end={layout.middle} radius={0.052} color={lowerOn ? '#ff8a2a' : emOffColor} />
+      <CylinderSegment start={layout.middle} end={layout.top} radius={0.052} color={upperOn ? '#ff8a2a' : emOffColor} />
 
       {params.showLabels && (
         <Billboard position={[layout.top[0], layout.top[1], layout.top[2] + 0.35]}>

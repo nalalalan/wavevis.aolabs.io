@@ -252,10 +252,12 @@ function buildInitialPoses(grid: CellGrid, params: CellParams, time: number): Ce
         axis[2] * (lowerTarget * 0.5 + centerSpan),
       ]
       const locked = params.constrainPerimeter && isPerimeterCell(row, col, rows, columns)
+      const lockedLowerCenter = perimeterAnchorCenter(row, col, rows, columns, params, 'lower')
+      const lockedUpperCenter = perimeterAnchorCenter(row, col, rows, columns, params, 'upper')
 
       return {
-        lowerCenter,
-        upperCenter,
+        lowerCenter: locked ? [...lockedLowerCenter] : lowerCenter,
+        upperCenter: locked ? [...lockedUpperCenter] : upperCenter,
         lowerTarget,
         upperTarget,
         lowerHeight: lowerTarget,
@@ -263,8 +265,8 @@ function buildInitialPoses(grid: CellGrid, params: CellParams, time: number): Ce
         yaw: 0,
         yawTarget: 0,
         locked,
-        lockedLowerCenter: [...lowerCenter],
-        lockedUpperCenter: [...upperCenter],
+        lockedLowerCenter,
+        lockedUpperCenter,
         lockedYaw: 0,
       }
     }),
@@ -753,6 +755,14 @@ function restoreLockedPose(pose: CellPose): void {
 
 function isPerimeterCell(row: number, col: number, rows: number, columns: number): boolean {
   return row === 0 || col === 0 || row === rows - 1 || col === columns - 1
+}
+
+function perimeterAnchorCenter(row: number, col: number, rows: number, columns: number, params: CellParams, layer: LayerName): Vec3 {
+  const x = (col - (columns - 1) * 0.5) * params.cellPitch
+  const y = (row - (rows - 1) * 0.5) * params.cellPitch
+  const z = layer === 'lower' ? params.hOff * 0.5 : params.hOff * 1.5
+
+  return [x, y, z]
 }
 
 function degreesToRadians(degrees: number): number {
