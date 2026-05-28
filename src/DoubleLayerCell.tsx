@@ -1,15 +1,24 @@
 import { Billboard, Text } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import * as THREE from 'three'
-import { CELL_STATES, type CellParams, type CellState, type LayerName, type SideName, type Vec3 } from './types'
-import { isLowerActuated, isUpperActuated, layerStack, sideDirection, sideNodeLocalPosition, stateMeta } from './geometry'
+import { CELL_STATES, type CellParams, type CellState, type LayerName, type Vec3 } from './types'
+import {
+  SIDE_NAMES,
+  type CellLayout,
+  isLowerActuated,
+  isUpperActuated,
+  plateNormal,
+  sideDirection,
+  sideNodePositionFromLayout,
+  stateMeta,
+} from './geometry'
 
 type DoubleLayerCellProps = {
   row: number
   col: number
   state: CellState
   params: CellParams
+  layout: CellLayout
 }
 
 type SegmentProps = {
@@ -19,8 +28,6 @@ type SegmentProps = {
   color: string
   opacity?: number
 }
-
-const sides: SideName[] = ['px', 'nx', 'py', 'ny']
 
 const plateMaterial = new THREE.MeshStandardMaterial({
   color: '#f5f1e8',
@@ -70,43 +77,34 @@ export function CylinderSegment({ start, end, radius = 0.026, color, opacity = 1
   )
 }
 
-export default function DoubleLayerCell({ row, col, state, params }: DoubleLayerCellProps) {
-  const [time, setTime] = useState(0)
-
-  useFrame(() => {
-    if (params.animate) setTime(performance.now() / 1000 + row * 0.2 + col * 0.17)
-  })
-
-  const stack = layerStack(state, params, time)
+export default function DoubleLayerCell({ row, col, state, params, layout }: DoubleLayerCellProps) {
   const plateHalf = params.plateSize / 2
   const plateThickness = 0.1
   const meta = stateMeta(state)
   const upperOn = isUpperActuated(state)
   const lowerOn = isLowerActuated(state)
+  const highlightCenter: Vec3 = [layout.bottom[0], layout.bottom[1], layout.bottom[2] - 0.055]
 
   return (
-    <group position={[col * params.cellPitch, row * params.cellPitch, 0]}>
-      <mesh position={[0, 0, stack.bottomZ]}>
-        <boxGeometry args={[params.plateSize, params.plateSize, plateThickness]} />
-        <primitive object={plateMaterial} attach="material" />
-      </mesh>
-      <mesh position={[0, 0, stack.middleZ]}>
-        <boxGeometry args={[params.plateSize * 1.04, params.plateSize * 1.04, plateThickness]} />
-        <primitive object={middlePlateMaterial} attach="material" />
-      </mesh>
-      <mesh position={[0, 0, stack.topZ]}>
-        <boxGeometry args={[params.plateSize, params.plateSize, plateThickness]} />
-        <primitive object={plateMaterial} attach="material" />
-      </mesh>
+    <group>
+      <Plate center={layout.bottom} normal={plateNormal(layout, 'bottom')} size={params.plateSize} thickness={plateThickness} material={plateMaterial} />
+      <Plate
+        center={layout.middle}
+        normal={plateNormal(layout, 'middle')}
+        size={params.plateSize * 1.04}
+        thickness={plateThickness}
+        material={middlePlateMaterial}
+      />
+      <Plate center={layout.top} normal={plateNormal(layout, 'top')} size={params.plateSize} thickness={plateThickness} material={plateMaterial} />
 
-      <LayerLinks layer="lower" lowZ={stack.bottomZ} highZ={stack.middleZ} state={state} params={params} time={time} plateHalf={plateHalf} />
-      <LayerLinks layer="upper" lowZ={stack.middleZ} highZ={stack.topZ} state={state} params={params} time={time} plateHalf={plateHalf} />
+      <LayerLinks layer="lower" lowCenter={layout.bottom} highCenter={layout.middle} layout={layout} plateHalf={plateHalf} />
+      <LayerLinks layer="upper" lowCenter={layout.middle} highCenter={layout.top} layout={layout} plateHalf={plateHalf} />
 
-      <CylinderSegment start={[0, 0, stack.bottomZ]} end={[0, 0, stack.middleZ]} radius={0.052} color={lowerOn ? '#ff8a2a' : '#85827b'} />
-      <CylinderSegment start={[0, 0, stack.middleZ]} end={[0, 0, stack.topZ]} radius={0.052} color={upperOn ? '#ff8a2a' : '#85827b'} />
+      <CylinderSegment start={layout.bottom} end={layout.middle} radius={0.052} color={lowerOn ? '#ff8a2a' : '#85827b'} />
+      <CylinderSegment start={layout.middle} end={layout.top} radius={0.052} color={upperOn ? '#ff8a2a' : '#85827b'} />
 
       {params.showLabels && (
-        <Billboard position={[0, 0, stack.topZ + 0.35]}>
+        <Billboard position={[layout.top[0], layout.top[1], layout.top[2] + 0.35]}>
           <Text fontSize={0.24} color="#1f2328" anchorX="center" anchorY="middle">
             {`${row + 1},${col + 1} ${meta.shortLabel}`}
           </Text>
@@ -114,7 +112,7 @@ export default function DoubleLayerCell({ row, col, state, params }: DoubleLayer
       )}
 
       {state !== CELL_STATES.OFF && (
-        <mesh position={[0, 0, -0.055]}>
+        <mesh position={highlightCenter}>
           <boxGeometry args={[params.plateSize * 1.15, params.plateSize * 1.15, 0.018]} />
           <meshBasicMaterial color={meta.color} transparent opacity={0.32} />
         </mesh>
@@ -123,35 +121,58 @@ export default function DoubleLayerCell({ row, col, state, params }: DoubleLayer
   )
 }
 
+function Plate({
+  center,
+  normal,
+  size,
+  thickness,
+  material,
+}: {
+  center: Vec3
+  normal: Vec3
+  size: number
+  thickness: number
+  material: THREE.MeshStandardMaterial
+}) {
+  const quaternion = useMemo(() => {
+    const target = new THREE.Vector3(...normal).normalize()
+    return new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), target)
+  }, [normal])
+
+  return (
+    <mesh position={center} quaternion={quaternion}>
+      <boxGeometry args={[size, size, thickness]} />
+      <primitive object={material} attach="material" />
+    </mesh>
+  )
+}
+
 function LayerLinks({
   layer,
-  lowZ,
-  highZ,
-  state,
-  params,
-  time,
+  lowCenter,
+  highCenter,
+  layout,
   plateHalf,
 }: {
   layer: LayerName
-  lowZ: number
-  highZ: number
-  state: CellState
-  params: CellParams
-  time: number
+  lowCenter: Vec3
+  highCenter: Vec3
+  layout: CellLayout
   plateHalf: number
 }) {
   return (
     <>
-      {sides.map((side) => {
+      {SIDE_NAMES.map((side) => {
         const [dx, dy] = sideDirection(side)
-        const node = sideNodeLocalPosition(state, layer, side, params, time)
-        const lowAnchor: Vec3 = [dx * plateHalf, dy * plateHalf, lowZ]
-        const highAnchor: Vec3 = [dx * plateHalf, dy * plateHalf, highZ]
+        const node = sideNodePositionFromLayout(layout, layer, side)
+        const lowAnchor: Vec3 = [lowCenter[0] + dx * plateHalf, lowCenter[1] + dy * plateHalf, lowCenter[2]]
+        const highAnchor: Vec3 = [highCenter[0] + dx * plateHalf, highCenter[1] + dy * plateHalf, highCenter[2]]
+        const isDepthSide = side === 'py' || side === 'ny'
 
         return (
           <group key={`${layer}-${side}`}>
-            <CylinderSegment start={lowAnchor} end={node} color="#38474d" />
-            <CylinderSegment start={node} end={highAnchor} color="#38474d" />
+            <CylinderSegment start={lowAnchor} end={node} radius={isDepthSide ? 0.018 : 0.026} color="#38474d" opacity={isDepthSide ? 0.56 : 1} />
+            <CylinderSegment start={node} end={highAnchor} radius={isDepthSide ? 0.018 : 0.026} color="#38474d" opacity={isDepthSide ? 0.56 : 1} />
             <mesh position={node}>
               <sphereGeometry args={[0.07, 18, 18]} />
               <primitive object={nodeMaterial} attach="material" />

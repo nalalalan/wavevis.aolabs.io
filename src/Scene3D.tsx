@@ -1,8 +1,8 @@
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei'
-import { Canvas } from '@react-three/fiber'
-import { Suspense, useMemo } from 'react'
+import { Canvas, useFrame } from '@react-three/fiber'
+import { Suspense, useMemo, useState } from 'react'
 import DoubleLayerCell, { CylinderSegment } from './DoubleLayerCell'
-import { arrayCenterOffset, sideNodeWorldPosition } from './geometry'
+import { buildArrayLayout, layoutBounds, sideNodePositionFromLayout } from './geometry'
 import type { CellGrid, CellParams, LayerName, Vec3 } from './types'
 
 type Scene3DProps = {
@@ -17,10 +17,10 @@ type Connector = {
 }
 
 export default function Scene3D({ grid, params }: Scene3DProps) {
-  const rows = grid.length
-  const columns = grid[0]?.length ?? 0
-  const maxSpan = Math.max(rows, columns, 2) * params.cellPitch
-  const maxHeight = params.hOff * 2
+  const initialLayout = useMemo(() => buildArrayLayout(grid, params), [grid, params])
+  const bounds = useMemo(() => layoutBounds(initialLayout), [initialLayout])
+  const maxSpan = Math.max(bounds.span[0], bounds.span[1], bounds.span[2], params.cellPitch * 2)
+  const maxHeight = Math.max(bounds.max[2], params.hOff * 2)
   const cameraDistance = Math.max(maxSpan, maxHeight)
 
   return (
@@ -39,24 +39,29 @@ export default function Scene3D({ grid, params }: Scene3DProps) {
         <Suspense fallback={null}>
           <ArrayModel grid={grid} params={params} />
         </Suspense>
-        <gridHelper args={[Math.max(maxSpan * 1.8, 8), 24, '#c8bdb0', '#e1d8cd']} rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -0.08]} />
-        <OrbitControls makeDefault enablePan enableZoom enableRotate target={[0, 0, maxHeight * 0.48]} />
+        <gridHelper args={[Math.max(maxSpan * 1.45, 8), 24, '#c8bdb0', '#e1d8cd']} rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -0.08]} />
+        <OrbitControls makeDefault enablePan enableZoom enableRotate target={[bounds.center[0], bounds.center[1], maxHeight * 0.45]} />
       </Canvas>
     </section>
   )
 }
 
 function ArrayModel({ grid, params }: Scene3DProps) {
-  const rows = grid.length
-  const columns = grid[0]?.length ?? 0
-  const centerOffset = arrayCenterOffset(rows, columns, params)
-  const connectors = useMemo(() => buildConnectors(grid, params), [grid, params])
+  const [time, setTime] = useState(0)
+
+  useFrame(() => {
+    if (params.animate) setTime(performance.now() / 1000)
+  })
+
+  const layoutTime = params.animate ? time : 0
+  const layout = useMemo(() => buildArrayLayout(grid, params, layoutTime), [grid, params, layoutTime])
+  const connectors = useMemo(() => buildConnectors(grid, layout), [grid, layout])
 
   return (
-    <group position={centerOffset}>
+    <group>
       {grid.map((row, rowIndex) =>
         row.map((state, colIndex) => (
-          <DoubleLayerCell key={`${rowIndex}-${colIndex}`} row={rowIndex} col={colIndex} state={state} params={params} />
+          <DoubleLayerCell key={`${rowIndex}-${colIndex}`} row={rowIndex} col={colIndex} state={state} params={params} layout={layout[rowIndex][colIndex]} />
         )),
       )}
       {connectors.map((connector) => (
@@ -66,7 +71,7 @@ function ArrayModel({ grid, params }: Scene3DProps) {
   )
 }
 
-function buildConnectors(grid: CellGrid, params: CellParams): Connector[] {
+function buildConnectors(grid: CellGrid, layout: ReturnType<typeof buildArrayLayout>): Connector[] {
   const connectors: Connector[] = []
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
@@ -79,14 +84,14 @@ function buildConnectors(grid: CellGrid, params: CellParams): Connector[] {
     if (axis === 'x') {
       addPair(
         `x-${layer}-${row}-${col}`,
-        sideNodeWorldPosition(row, col, grid[row][col], layer, 'px', params),
-        sideNodeWorldPosition(row, col + 1, grid[row][col + 1], layer, 'nx', params),
+        sideNodePositionFromLayout(layout[row][col], layer, 'px'),
+        sideNodePositionFromLayout(layout[row][col + 1], layer, 'nx'),
       )
     } else {
       addPair(
         `y-${layer}-${row}-${col}`,
-        sideNodeWorldPosition(row, col, grid[row][col], layer, 'py', params),
-        sideNodeWorldPosition(row + 1, col, grid[row + 1][col], layer, 'ny', params),
+        sideNodePositionFromLayout(layout[row][col], layer, 'py'),
+        sideNodePositionFromLayout(layout[row + 1][col], layer, 'ny'),
       )
     }
   }
