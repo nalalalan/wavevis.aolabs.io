@@ -47,17 +47,57 @@ button {
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
+  grid-template-columns: minmax(320px, var(--panel-width, 390px)) 8px minmax(0, 1fr);
   gap: 0;
 }
 
 .control-panel {
+  min-width: 0;
   min-height: 100vh;
   max-height: 100vh;
   overflow: auto;
-  border-right: 1px solid var(--line);
   background: rgba(255, 253, 248, 0.92);
   padding: 20px;
+}
+
+.panel-resize-handle {
+  width: 8px;
+  min-width: 8px;
+  min-height: 100vh;
+  padding: 0;
+  border: 0;
+  border-inline: 1px solid var(--line);
+  background: rgba(255, 253, 248, 0.54);
+  cursor: col-resize;
+  position: relative;
+}
+
+.panel-resize-handle::before {
+  content: "";
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 3px;
+  height: 52px;
+  border-radius: 999px;
+  background: rgba(63, 55, 46, 0.28);
+  transform: translate(-50%, -50%);
+}
+
+.panel-resize-handle:hover,
+.panel-resize-handle:focus-visible {
+  background: rgba(244, 168, 188, 0.28);
+  outline: none;
+}
+
+.panel-resize-handle:hover::before,
+.panel-resize-handle:focus-visible::before,
+.resizing-panel .panel-resize-handle::before {
+  background: rgba(37, 34, 30, 0.56);
+}
+
+.resizing-panel {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .panel-header {
@@ -333,6 +373,10 @@ input[type="number"]:focus-visible {
     max-height: none;
     border-right: 0;
     border-bottom: 1px solid var(--line);
+  }
+
+  .panel-resize-handle {
+    display: none;
   }
 
   .scene-shell {

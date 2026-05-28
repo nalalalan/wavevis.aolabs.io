@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import ControlPanel from './ControlPanel'
 import Scene3D from './Scene3D'
 import { CELL_STATES, type CellParams, type CellState } from './types'
@@ -18,9 +18,11 @@ function App() {
   const [draftGrid, setDraftGrid] = useState(() => createGrid(DEFAULT_ROWS, DEFAULT_COLUMNS))
   const [appliedParams, setAppliedParams] = useState<CellParams>(DEFAULT_PARAMS)
   const [appliedGrid, setAppliedGrid] = useState(() => createGrid(DEFAULT_ROWS, DEFAULT_COLUMNS))
+  const [panelWidth, setPanelWidth] = useState(390)
 
   const safeDraftParams = useMemo(() => sanitizeParams(draftParams), [draftParams])
   const hasPendingChanges = stateKey(safeDraftParams, draftGrid) !== stateKey(appliedParams, appliedGrid)
+  const appStyle = { '--panel-width': `${panelWidth}px` } as CSSProperties
 
   const applyDraftToScene = () => {
     const nextParams = sanitizeParams(draftParams)
@@ -63,8 +65,33 @@ function App() {
     setDraftGrid(randomGrid(rows, columns))
   }
 
+  const startPanelResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    const startX = event.clientX
+    const startWidth = panelWidth
+
+    const updateWidth = (moveEvent: PointerEvent) => {
+      const viewportWidth = window.innerWidth || 1280
+      const maxWidth = Math.max(390, Math.min(920, viewportWidth - 360))
+      const nextWidth = Math.min(maxWidth, Math.max(320, startWidth + moveEvent.clientX - startX))
+      setPanelWidth(nextWidth)
+    }
+
+    const stopResize = () => {
+      window.removeEventListener('pointermove', updateWidth)
+      window.removeEventListener('pointerup', stopResize)
+      window.removeEventListener('pointercancel', stopResize)
+      document.body.classList.remove('resizing-panel')
+    }
+
+    document.body.classList.add('resizing-panel')
+    window.addEventListener('pointermove', updateWidth)
+    window.addEventListener('pointerup', stopResize)
+    window.addEventListener('pointercancel', stopResize)
+  }
+
   return (
-    <main className="app-shell">
+    <main className="app-shell" style={appStyle}>
       <ControlPanel
         grid={draftGrid}
         params={safeDraftParams}
@@ -76,6 +103,13 @@ function App() {
         onReset={resetAllOff}
         onRandomize={randomize}
         onDefault={setDefault}
+      />
+      <button
+        type="button"
+        className="panel-resize-handle"
+        aria-label="Resize controls panel"
+        title="Resize controls panel"
+        onPointerDown={startPanelResize}
       />
       <Scene3D grid={appliedGrid} params={appliedParams} />
     </main>
