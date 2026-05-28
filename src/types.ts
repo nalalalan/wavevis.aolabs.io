@@ -24,7 +24,12 @@ export type CellParams = {
   plateSize: number
   cellPitch: number
   connectorLength: number
-  zRotationFlex: number
+  rotationXStiffness: number
+  rotationYStiffness: number
+  rotationZStiffness: number
+  translationXStiffness: number
+  translationYStiffness: number
+  translationZStiffness: number
   angleFlex: number
   showLabels: boolean
   animate: boolean

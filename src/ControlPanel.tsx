@@ -30,6 +30,31 @@ const numericInputs: Array<{
   { key: 'connectorLength', label: 'connectorLength', step: 0.05, min: 0 },
 ]
 
+type StiffnessInput = {
+  key: keyof Pick<
+    CellParams,
+    | 'rotationXStiffness'
+    | 'rotationYStiffness'
+    | 'rotationZStiffness'
+    | 'translationXStiffness'
+    | 'translationYStiffness'
+    | 'translationZStiffness'
+  >
+  axis: 'x' | 'y' | 'z'
+}
+
+const rotationStiffnessInputs: StiffnessInput[] = [
+  { key: 'rotationXStiffness', axis: 'x' },
+  { key: 'rotationYStiffness', axis: 'y' },
+  { key: 'rotationZStiffness', axis: 'z' },
+]
+
+const translationStiffnessInputs: StiffnessInput[] = [
+  { key: 'translationXStiffness', axis: 'x' },
+  { key: 'translationYStiffness', axis: 'y' },
+  { key: 'translationZStiffness', axis: 'z' },
+]
+
 export default function ControlPanel({
   grid,
   params,
@@ -50,7 +75,7 @@ export default function ControlPanel({
     onParamsChange({ ...params, [key]: value })
   }
 
-  const setConstraintNumber = (key: 'zRotationFlex' | 'angleFlex', value: number) => {
+  const setConstraintNumber = (key: StiffnessInput['key'] | 'angleFlex', value: number) => {
     onParamsChange({ ...params, [key]: value })
   }
 
@@ -134,29 +159,60 @@ export default function ControlPanel({
           <span>solver</span>
         </div>
         <div className="constraint-grid">
-          <label className="constraint-field">
-            <span className="field-title">
-              z yaw stiffness
-              <span>{params.zRotationFlex}</span>
-            </span>
-            <span className="field-note">0 free yaw / 100 locked yaw</span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={1}
-              value={params.zRotationFlex}
-              onChange={(event) => setConstraintNumber('zRotationFlex', Number(event.target.value))}
-            />
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={1}
-              value={params.zRotationFlex}
-              onChange={(event) => setConstraintNumber('zRotationFlex', Number(event.target.value))}
-            />
-          </label>
+          <div className="constraint-field">
+            <span className="field-title">rotation stiffness</span>
+            <span className="field-note">0 free rotation / 100 locked rotation</span>
+            <div className="axis-control-list">
+              {rotationStiffnessInputs.map((input) => (
+                <label key={input.key} className="axis-control">
+                  <span>{input.axis}</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={params[input.key]}
+                    onChange={(event) => setConstraintNumber(input.key, Number(event.target.value))}
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={params[input.key]}
+                    onChange={(event) => setConstraintNumber(input.key, Number(event.target.value))}
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="constraint-field">
+            <span className="field-title">translation stiffness</span>
+            <span className="field-note">0 free translation / 100 locked translation</span>
+            <div className="axis-control-list">
+              {translationStiffnessInputs.map((input) => (
+                <label key={input.key} className="axis-control">
+                  <span>{input.axis}</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={params[input.key]}
+                    onChange={(event) => setConstraintNumber(input.key, Number(event.target.value))}
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={params[input.key]}
+                    onChange={(event) => setConstraintNumber(input.key, Number(event.target.value))}
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
           <label className="constraint-field">
             <span className="field-title">
               angle leeway
