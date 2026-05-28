@@ -1,10 +1,11 @@
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Suspense, useMemo, useState } from 'react'
+import * as THREE from 'three'
 import DoubleLayerCell, { PlankSegment } from './DoubleLayerCell'
 import { buildArrayLayout, layoutBounds, sideNodePositionFromLayout } from './geometry'
 import { linkageColor, linkageWidth } from './renderStyle'
-import type { CellGrid, CellParams, LayerName, Vec3 } from './types'
+import { CELL_STATES, type CellGrid, type CellParams, type LayerName, type Vec3 } from './types'
 
 type Scene3DProps = {
   grid: CellGrid
@@ -25,15 +26,22 @@ export default function Scene3D({ grid, params }: Scene3DProps) {
   const maxSpan = Math.max(bounds.span[0], bounds.span[1], bounds.span[2], params.cellPitch * 2)
   const maxHeight = Math.max(bounds.max[2], params.hOff * 2)
   const cameraDistance = Math.max(maxSpan, maxHeight)
+  const overhangScene = isOverhangScene(grid, params)
+  const cameraPosition: Vec3 = overhangScene
+    ? [bounds.center[0], bounds.center[1] - cameraDistance * 1.5, bounds.center[2] + cameraDistance * 0.22]
+    : [cameraDistance * 1.25, -cameraDistance * 1.45, cameraDistance * 1.25]
+  const cameraTarget: Vec3 = overhangScene
+    ? [bounds.center[0], bounds.center[1], bounds.center[2] * 0.62]
+    : [bounds.center[0], bounds.center[1], maxHeight * 0.45]
 
   return (
     <section className="scene-shell" aria-label="3D Sarrus array view">
       <Canvas dpr={[1, 1.8]} gl={{ antialias: true, preserveDrawingBuffer: true }}>
         <PerspectiveCamera
           makeDefault
-          position={[cameraDistance * 1.25, -cameraDistance * 1.45, cameraDistance * 1.25]}
+          position={cameraPosition}
           up={[0, 0, 1]}
-          fov={38}
+          fov={overhangScene ? 46 : 38}
         />
         <color attach="background" args={['#f7f3ed']} />
         <ambientLight intensity={0.65} />
@@ -43,7 +51,7 @@ export default function Scene3D({ grid, params }: Scene3DProps) {
           <ArrayModel grid={grid} params={params} />
         </Suspense>
         <gridHelper args={[Math.max(maxSpan * 1.45, 8), 24, '#c8bdb0', '#e1d8cd']} rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -0.08]} />
-        <OrbitControls makeDefault enablePan enableZoom enableRotate target={[bounds.center[0], bounds.center[1], maxHeight * 0.45]} />
+        <OrbitControls makeDefault enablePan enableZoom enableRotate target={cameraTarget} />
       </Canvas>
     </section>
   )
@@ -59,9 +67,12 @@ function ArrayModel({ grid, params }: Scene3DProps) {
   const layoutTime = params.animate ? time : 0
   const layout = useMemo(() => buildArrayLayout(grid, params, layoutTime), [grid, params, layoutTime])
   const connectors = useMemo(() => (params.connectorLength > 0.0001 ? buildConnectors(grid, layout) : []), [grid, layout, params.connectorLength])
+  const showSkin = isOverhangScene(grid, params)
+  const bounds = useMemo(() => layoutBounds(layout), [layout])
 
   return (
     <group>
+      {showSkin && <SurfaceSkin grid={grid} params={params} bounds={bounds} />}
       {grid.map((row, rowIndex) =>
         row.map((state, colIndex) => (
           <DoubleLayerCell key={`${rowIndex}-${colIndex}`} row={rowIndex} col={colIndex} state={state} params={params} layout={layout[rowIndex][colIndex]} />
@@ -80,6 +91,99 @@ function ArrayModel({ grid, params }: Scene3DProps) {
       ))}
     </group>
   )
+}
+
+function SurfaceSkin({ grid, params, bounds }: { grid: CellGrid; params: CellParams; bounds: ReturnType<typeof layoutBounds> }) {
+  const geometry = useMemo(() => {
+    const surfaceRows = 18
+    const surfaceColumns = 72
+    const gridColumns = grid[0]?.length ?? 0
+    const active = activeColumnSpan(grid)
+    const activeStart = active.start / Math.max(gridColumns - 1, 1)
+    const activeEnd = active.end / Math.max(gridColumns - 1, 1)
+    const widthX = Math.max(bounds.span[0] * 0.92, params.cellPitch * Math.max(gridColumns - 1, 1))
+    const widthY = Math.max(bounds.span[1] * 0.78, params.cellPitch * Math.max(grid.length - 1, 1))
+    const baseZ = params.hOff * 2 + 0.22
+    const waveHeight = widthX * 0.25 * active.strength
+    const curlDepth = widthX * 0.44 * active.strength
+    const vertices: number[] = []
+    const indices: number[] = []
+
+    for (let row = 0; row < surfaceRows; row += 1) {
+      const v = row / (surfaceRows - 1)
+      const widthEnvelope = Math.pow(Math.sin(v * Math.PI), 0.58)
+      const y = (v - 0.5) * widthY
+
+      for (let col = 0; col < surfaceColumns; col += 1) {
+        const u = col / (surfaceColumns - 1)
+        const baseX = (u - 0.5) * widthX
+        const activeEnvelope = smoothStep(activeStart - 0.04, activeStart + 0.12, u) * (1 - smoothStep(activeEnd - 0.12, activeEnd + 0.04, u))
+        const localU = clampNumber((u - activeStart) / Math.max(activeEnd - activeStart, 0.0001), 0, 1)
+        const rise = smoothStep(0.02, 0.52, localU)
+        const lip = smoothStep(0.48, 0.9, localU)
+        const fall = smoothStep(0.76, 1, localU)
+        const curledX = baseX - curlDepth * lip * activeEnvelope
+        const curledZ = baseZ + waveHeight * (rise - fall * 0.62) * activeEnvelope
+        const x = baseX + (curledX - baseX) * widthEnvelope
+        const z = baseZ + (curledZ - baseZ) * widthEnvelope
+        vertices.push(x, y, z)
+      }
+    }
+
+    for (let row = 0; row < surfaceRows - 1; row += 1) {
+      for (let col = 0; col < surfaceColumns - 1; col += 1) {
+        const a = row * surfaceColumns + col
+        const b = a + 1
+        const c = a + surfaceColumns
+        const d = c + 1
+        indices.push(a, c, b, b, c, d)
+      }
+    }
+
+    const nextGeometry = new THREE.BufferGeometry()
+    nextGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
+    nextGeometry.setIndex(indices)
+    nextGeometry.computeVertexNormals()
+    return nextGeometry
+  }, [bounds.span, grid, params.cellPitch, params.hOff])
+
+  return (
+    <mesh geometry={geometry}>
+      <meshStandardMaterial color="#f8b8c9" side={THREE.DoubleSide} transparent opacity={0.32} roughness={0.66} metalness={0.02} depthWrite={false} />
+    </mesh>
+  )
+}
+
+function activeColumnSpan(grid: CellGrid): { start: number; end: number; strength: number } {
+  const rows = grid.length
+  const columns = grid[0]?.length ?? 0
+  let start = columns - 1
+  let end = 0
+  let active = 0
+  let possible = 0
+
+  for (let row = 1; row < rows - 1; row += 1) {
+    for (let col = 1; col < columns - 1; col += 1) {
+      possible += 1
+      if (grid[row][col] !== CELL_STATES.OFF) {
+        start = Math.min(start, col)
+        end = Math.max(end, col)
+        active += 1
+      }
+    }
+  }
+
+  if (active === 0) return { start: 1, end: columns - 2, strength: 1 }
+  return { start, end, strength: Math.min(1, Math.max(0.42, active / Math.max(possible * 0.45, 1))) }
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, Number.isFinite(value) ? value : min))
+}
+
+function smoothStep(edge0: number, edge1: number, value: number): number {
+  const t = clampNumber((value - edge0) / Math.max(edge1 - edge0, 0.0001), 0, 1)
+  return t * t * (3 - 2 * t)
 }
 
 function buildConnectors(grid: CellGrid, layout: ReturnType<typeof buildArrayLayout>): Connector[] {
@@ -122,4 +226,8 @@ function buildConnectors(grid: CellGrid, layout: ReturnType<typeof buildArrayLay
   }
 
   return connectors
+}
+
+function isOverhangScene(grid: CellGrid, params: CellParams): boolean {
+  return params.constrainPerimeter && grid.length >= 5 && (grid[0]?.length ?? 0) >= 8
 }
