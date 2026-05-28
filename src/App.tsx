@@ -132,7 +132,6 @@ function stateKey(params: CellParams, grid: CellState[][]): string {
     params.translationXStiffness,
     params.translationYStiffness,
     params.translationZStiffness,
-    params.angleFlex,
     params.showLabels,
     params.animate,
     params.constrainPerimeter,

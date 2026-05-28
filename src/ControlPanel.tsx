@@ -75,7 +75,7 @@ export default function ControlPanel({
     onParamsChange({ ...params, [key]: value })
   }
 
-  const setConstraintNumber = (key: StiffnessInput['key'] | 'angleFlex', value: number) => {
+  const setConstraintNumber = (key: StiffnessInput['key'], value: number) => {
     onParamsChange({ ...params, [key]: value })
   }
 
@@ -213,29 +213,6 @@ export default function ControlPanel({
               ))}
             </div>
           </div>
-          <label className="constraint-field">
-            <span className="field-title">
-              angle leeway
-              <span>{params.angleFlex}</span>
-            </span>
-            <span className="field-note">0 ideal height / 1 relaxed height</span>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={params.angleFlex}
-              onChange={(event) => setConstraintNumber('angleFlex', Number(event.target.value))}
-            />
-            <input
-              type="number"
-              min={0}
-              max={1}
-              step={0.05}
-              value={params.angleFlex}
-              onChange={(event) => setConstraintNumber('angleFlex', Number(event.target.value))}
-            />
-          </label>
         </div>
       </section>
 

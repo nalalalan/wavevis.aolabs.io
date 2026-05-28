@@ -51,8 +51,8 @@ const CELL_STATE_SEQUENCE = [
 export const DEFAULT_PARAM_SEED = {
   hOff: 2.5,
   hOn: 1,
-  linkLength: 1.3,
-  plateSize: 1.5,
+  linkLength: 1.25,
+  plateSize: 1.6,
   connectorLength: 0,
   rotationXStiffness: 0,
   rotationYStiffness: 0,
@@ -60,7 +60,6 @@ export const DEFAULT_PARAM_SEED = {
   translationXStiffness: 0,
   translationYStiffness: 0,
   translationZStiffness: 0,
-  angleFlex: 0.85,
   showLabels: false,
   animate: false,
   constrainPerimeter: false,
@@ -174,7 +173,6 @@ export function sanitizeParams(params: CellParams): CellParams {
     translationXStiffness: clampNumber(params.translationXStiffness, 0, 100),
     translationYStiffness: clampNumber(params.translationYStiffness, 0, 100),
     translationZStiffness: clampNumber(params.translationZStiffness, 0, 100),
-    angleFlex: clampNumber(params.angleFlex, 0, 1),
     showLabels: params.showLabels,
     animate: params.animate,
     constrainPerimeter: params.constrainPerimeter,
@@ -585,8 +583,9 @@ function shiftCell(cell: CellLayout, amount: number): void {
 // node-to-node connector length as a hard constraint. Connection stiffness
 // values are 0-100: 0 lets that rotation or translation mode move freely, while
 // 100 makes it rigid and pushes the correction into other connection modes or
-// the small height/expansion leeway. Individual side nodes are never pulled
-// independently, so each cell remains symmetric.
+// automatic height relaxation only when the requested geometry is otherwise
+// infeasible. Individual side nodes are never pulled independently, so each
+// cell remains symmetric.
 function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose[][]): void {
   const constraints = buildConnectorConstraints(grid)
 
@@ -662,7 +661,7 @@ function projectConnectorConstraint(
   const translationFreedom = translationFreedomVector(params)
   const rotationFreedom = rotationFreedomVector(params)
   const stiffness = averageConnectionStiffness(params)
-  const angleLeewayShare = 0.18 + stiffness * 0.82
+  const heightFallbackShare = 0.18 + stiffness * 0.82
   const direction = scale(delta, 1 / currentLength)
   const correctionLength = clampNumber((currentLength - params.connectorLength) * 0.5 * strength, -0.08, 0.08)
   const correction = scale(direction, correctionLength)
@@ -684,17 +683,17 @@ function projectConnectorConstraint(
   }
   movePoseLayer(aPose, constraint.layer, scale(translationCorrection, aScale))
   movePoseLayer(bPose, constraint.layer, scale(translationCorrection, -bScale))
-  if (allowHeightFlex) {
+  if (allowHeightFlex && stiffness > 0.0001) {
     if (aPose.locked) {
-      relaxPoseLayerHeightTowardNodeMove(aPose, aLayout, constraint.layer, constraint.aSide, correction, params, strength * angleLeewayShare)
+      relaxPoseLayerHeightTowardNodeMove(aPose, aLayout, constraint.layer, constraint.aSide, correction, params, strength * heightFallbackShare)
     } else {
-      relaxPoseLayerHeightByDistance(aPose, constraint.layer, currentLength - params.connectorLength, params, strength * angleLeewayShare)
+      relaxPoseLayerHeightByDistance(aPose, constraint.layer, currentLength - params.connectorLength, params, strength * heightFallbackShare)
     }
 
     if (bPose.locked) {
-      relaxPoseLayerHeightTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -1), params, strength * angleLeewayShare)
+      relaxPoseLayerHeightTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -1), params, strength * heightFallbackShare)
     } else {
-      relaxPoseLayerHeightByDistance(bPose, constraint.layer, currentLength - params.connectorLength, params, strength * angleLeewayShare)
+      relaxPoseLayerHeightByDistance(bPose, constraint.layer, currentLength - params.connectorLength, params, strength * heightFallbackShare)
     }
   }
 }
@@ -727,8 +726,6 @@ function relaxPoseLayerHeightTowardNodeMove(
   params: CellParams,
   strength: number,
 ): void {
-  if (params.angleFlex <= 0) return
-
   const height = layer === 'lower' ? pose.lowerHeight : pose.upperHeight
   const lateralSpan = Math.sqrt(Math.max(params.linkLength ** 2 - (height / 2) ** 2, 0))
   if (lateralSpan <= 0.0001) return
@@ -736,7 +733,7 @@ function relaxPoseLayerHeightTowardNodeMove(
   const sideVector = sideVectorFromLayout(layout, side)
   const nodeMoveAlongSide = dot(desiredNodeMove, sideVector)
   const offsetChangePerHeight = -height / (4 * lateralSpan)
-  const delta = clampNumber((nodeMoveAlongSide / offsetChangePerHeight) * params.angleFlex * strength, -0.08, 0.08)
+  const delta = clampNumber((nodeMoveAlongSide / offsetChangePerHeight) * strength, -0.08, 0.08)
 
   if (layer === 'lower') {
     pose.lowerHeight = clampLayerHeight(pose.lowerHeight + delta, params)
@@ -746,9 +743,7 @@ function relaxPoseLayerHeightTowardNodeMove(
 }
 
 function relaxPoseLayerHeightByDistance(pose: CellPose, layer: LayerName, connectorError: number, params: CellParams, strength: number): void {
-  if (params.angleFlex <= 0) return
-
-  const delta = clampNumber(connectorError * params.angleFlex * strength * 0.08, -0.08, 0.08)
+  const delta = clampNumber(connectorError * strength * 0.08, -0.08, 0.08)
   if (layer === 'lower') {
     pose.lowerHeight = clampLayerHeight(pose.lowerHeight - delta, params)
   } else {
@@ -826,7 +821,7 @@ function projectPoseSpan(pose: CellPose, params: CellParams): void {
   const currentLength = vectorLength(delta)
   if (currentLength <= 0.0001) return
 
-  const targetStrength = ((1 - params.angleFlex) ** 2) * (0.004 + averageConnectionStiffness(params) * 0.02)
+  const targetStrength = 0.004 + averageConnectionStiffness(params) * 0.02
   const direction = scale(delta, 1 / currentLength)
   pose.lowerHeight += (pose.lowerTarget - pose.lowerHeight) * targetStrength
   pose.upperHeight += (pose.upperTarget - pose.upperHeight) * targetStrength
