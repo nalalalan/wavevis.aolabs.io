@@ -571,41 +571,154 @@ function shiftCell(cell: CellLayout, amount: number): void {
 }
 
 // Kinematic model: every layer keeps the Sarrus link length fixed by deriving
-// side-node offset from the current layer height. The iterative pass treats the
-// node-to-node connector length as a hard constraint. Rotation stiffness values
-// control how freely connections can hinge; linkage bend stiffness controls how
-// much connector error is allowed to propagate into neighboring cell leg angles.
-// Individual side nodes are never pulled independently, so each cell remains
-// symmetric.
+// side-node offset from the current layer height. The array shape is first built
+// as a smooth actuation field, then lightly settled at connector boundaries.
+// Rotation stiffness controls how freely the cells can tilt/yaw at connections.
+// Linkage bend stiffness controls how much a local actuation propagates into
+// neighboring cell leg angles. Individual side nodes are never pulled
+// independently, so each cell remains symmetric and all same-cell legs keep the
+// same length.
 function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose[][]): void {
-  const constraints = buildConnectorConstraints(grid)
+  if (!hasActuatedCells(grid)) return
 
-  for (let pass = 0; pass < 520; pass += 1) {
+  const constraints = buildConnectorConstraints(grid)
+  const cellCount = grid.length * (grid[0]?.length ?? 0)
+  const baseSettlePasses = cellCount > 2500 ? 2 : cellCount > 900 ? 5 : cellCount > 225 ? 16 : 48
+  const settlePasses = params.constrainPerimeter ? baseSettlePasses : Math.min(baseSettlePasses, 28)
+  const finalPasses = cellCount > 2500 ? 2 : cellCount > 900 ? 4 : Math.max(8, Math.floor(settlePasses * 0.55))
+
+  applyCoherentActuationField(grid, params, poses)
+
+  for (let pass = 0; pass < settlePasses; pass += 1) {
     const layout = buildLayoutFromPoses(grid, params, poses)
 
     constraints.forEach((constraint) => {
-      projectConnectorConstraint(poses, layout, constraint, params, 0.42, true, true)
+      projectConnectorConstraint(poses, layout, constraint, params, 0.16, true, false)
     })
 
     poses.forEach((row) =>
       row.forEach((pose) => {
         projectPoseSpan(pose, params)
-        relaxPoseYaw(pose, params, 0.08)
+        relaxPoseYaw(pose, params, 0.04)
       }),
     )
   }
 
-  for (let pass = 0; pass < 1500; pass += 1) {
+  for (let pass = 0; pass < finalPasses; pass += 1) {
     const layout = buildLayoutFromPoses(grid, params, poses)
     constraints.forEach((constraint) => {
-      projectConnectorConstraint(poses, layout, constraint, params, 0.62, true, true)
+      projectConnectorConstraint(poses, layout, constraint, params, 0.1, true, false)
     })
     poses.forEach((row) =>
       row.forEach((pose) => {
+        projectPoseSpan(pose, params)
         relaxPoseYaw(pose, params, 0.02)
       }),
     )
   }
+}
+
+function hasActuatedCells(grid: CellGrid): boolean {
+  return grid.some((row) => row.some((state) => state !== CELL_STATES.OFF))
+}
+
+function applyCoherentActuationField(grid: CellGrid, params: CellParams, poses: CellPose[][]): void {
+  const rows = grid.length
+  const columns = grid[0]?.length ?? 0
+  if (rows === 0 || columns === 0) return
+
+  const range = Math.max(params.hOff - params.hOn, 0.0001)
+  const bendFreedom = 1 - connectionStiffness(params.linkageBendStiffness)
+  const spread = 0.16 + bendFreedom * 0.28
+  const passes = 1 + Math.round(bendFreedom * 5)
+  const bendSeed = Array.from({ length: rows }, (_, row) =>
+    Array.from({ length: columns }, (_, col) => {
+      const pose = poses[row][col]
+      const lowerCompression = clampNumber((params.hOff - pose.lowerTarget) / range, 0, 1)
+      const upperCompression = clampNumber((params.hOff - pose.upperTarget) / range, 0, 1)
+      return lowerCompression - upperCompression
+    }),
+  )
+  const expansionSeed = Array.from({ length: rows }, (_, row) =>
+    Array.from({ length: columns }, (_, col) => {
+      const pose = poses[row][col]
+      const lowerCompression = clampNumber((params.hOff - pose.lowerTarget) / range, 0, 1)
+      const upperCompression = clampNumber((params.hOff - pose.upperTarget) / range, 0, 1)
+      return (lowerCompression + upperCompression) * 0.5
+    }),
+  )
+  const bend = smoothActuationField(bendSeed, passes, spread, params.constrainPerimeter)
+  const expansion = smoothActuationField(expansionSeed, Math.max(1, Math.floor(passes * 0.5)), spread * 0.65, params.constrainPerimeter)
+  const pitch = Math.max(defaultCellPitch(params), params.plateSize, 0.0001)
+  const liftScale = range * (params.constrainPerimeter ? 1.9 + bendFreedom * 1.25 : 3.8 + bendFreedom * 2.6)
+  const tiltScale = 0.75 + bendFreedom * 0.95
+
+  poses.forEach((row, rowIndex) =>
+    row.forEach((pose, colIndex) => {
+      const currentMid = scale(add(pose.lowerCenter, pose.upperCenter), 0.5)
+      const lift = bend[rowIndex][colIndex] * liftScale + expansion[rowIndex][colIndex] * range * 0.12
+      const gradient = fieldGradient(bend, rowIndex, colIndex, pitch)
+      const xFreedom = rotationFreedom(params, 'y')
+      const yFreedom = rotationFreedom(params, 'x')
+      const targetAxis = normalize([
+        -gradient[0] * tiltScale * xFreedom,
+        -gradient[1] * tiltScale * yFreedom,
+        1,
+      ])
+      const currentAxis = normalize(subtract(pose.upperCenter, pose.lowerCenter))
+      const axisBlend = pose.locked ? 0.55 : 0.78
+      const axis = normalize(add(scale(currentAxis, 1 - axisBlend), scale(targetAxis, axisBlend)))
+      const centerSpan = Math.max((pose.lowerHeight + pose.upperHeight) * 0.5, 0.0001)
+      const midpoint: Vec3 = [currentMid[0], currentMid[1], currentMid[2] + lift]
+
+      pose.lowerCenter = subtract(midpoint, scale(axis, centerSpan * 0.5))
+      pose.upperCenter = add(midpoint, scale(axis, centerSpan * 0.5))
+      pose.yawTarget = 0
+
+      if (pose.locked) {
+        pinLockedPose(pose)
+      }
+    }),
+  )
+}
+
+function smoothActuationField(seed: number[][], passes: number, spread: number, constrainPerimeter: boolean): number[][] {
+  let field = seed.map((row) => [...row])
+  const rows = field.length
+  const columns = field[0]?.length ?? 0
+
+  for (let pass = 0; pass < passes; pass += 1) {
+    field = field.map((row, rowIndex) =>
+      row.map((value, colIndex) => {
+        if (constrainPerimeter && isPerimeterCell(rowIndex, colIndex, rows, columns)) return 0
+
+        const neighbors = [
+          sampleField(field, rowIndex - 1, colIndex),
+          sampleField(field, rowIndex + 1, colIndex),
+          sampleField(field, rowIndex, colIndex - 1),
+          sampleField(field, rowIndex, colIndex + 1),
+        ]
+        const neighborAverage = neighbors.reduce((sum, neighbor) => sum + neighbor, 0) / neighbors.length
+        const retainedSeed = seed[rowIndex][colIndex] * 0.22
+        const diffused = value * (1 - spread) + neighborAverage * spread
+        return diffused * 0.78 + retainedSeed
+      }),
+    )
+  }
+
+  return field
+}
+
+function sampleField(field: number[][], row: number, col: number): number {
+  const safeRow = clampInteger(row, 0, field.length - 1)
+  const safeCol = clampInteger(col, 0, (field[0]?.length ?? 1) - 1)
+  return field[safeRow]?.[safeCol] ?? 0
+}
+
+function fieldGradient(field: number[][], row: number, col: number, pitch: number): [number, number] {
+  const dx = (sampleField(field, row, col + 1) - sampleField(field, row, col - 1)) / (2 * pitch)
+  const dy = (sampleField(field, row + 1, col) - sampleField(field, row - 1, col)) / (2 * pitch)
+  return [dx, dy]
 }
 
 function buildConnectorConstraints(grid: CellGrid): ConnectorConstraint[] {
@@ -653,7 +766,7 @@ function projectConnectorConstraint(
   const bendStiffness = connectionStiffness(params.linkageBendStiffness)
   const bendFreedom = 1 - bendStiffness
   const direction = scale(delta, 1 / currentLength)
-  const correctionLength = clampNumber((currentLength - params.connectorLength) * 0.5 * strength, -0.08, 0.08)
+  const correctionLength = clampNumber((currentLength - params.connectorLength) * 0.5 * strength, -0.025, 0.025)
   const correction = scale(direction, correctionLength)
   const bendCorrection = scale(correction, bendFreedom)
   const aCanMove = !aPose.locked

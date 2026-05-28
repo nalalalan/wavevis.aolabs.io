@@ -242,8 +242,8 @@ function LayerLinks({
         ]
         return (
           <group key={`${layer}-${side}`}>
-            <PlankSegment start={lowAnchor} end={node} width={plankWidth} thickness={0.044} widthHint={widthHint} color={linkageColor} opacity={0.9} />
-            <PlankSegment start={node} end={highAnchor} width={plankWidth} thickness={0.044} widthHint={widthHint} color={linkageColor} opacity={0.9} />
+            <PlankSegment start={lowAnchor} end={node} width={plankWidth} thickness={0.044} widthHint={widthHint} color={linkageColor} />
+            <PlankSegment start={node} end={highAnchor} width={plankWidth} thickness={0.044} widthHint={widthHint} color={linkageColor} />
           </group>
         )
       })}
