@@ -8,7 +8,7 @@ import {
   isLowerActuated,
   isUpperActuated,
   plateNormal,
-  sideDirection,
+  sideVectorFromLayout,
   sideNodePositionFromLayout,
   stateMeta,
 } from './geometry'
@@ -163,10 +163,18 @@ function LayerLinks({
   return (
     <>
       {SIDE_NAMES.map((side) => {
-        const [dx, dy] = sideDirection(side)
+        const sideVector = sideVectorFromLayout(layout, side)
         const node = sideNodePositionFromLayout(layout, layer, side)
-        const lowAnchor: Vec3 = [lowCenter[0] + dx * plateHalf, lowCenter[1] + dy * plateHalf, lowCenter[2]]
-        const highAnchor: Vec3 = [highCenter[0] + dx * plateHalf, highCenter[1] + dy * plateHalf, highCenter[2]]
+        const lowAnchor: Vec3 = [
+          lowCenter[0] + sideVector[0] * plateHalf,
+          lowCenter[1] + sideVector[1] * plateHalf,
+          lowCenter[2] + sideVector[2] * plateHalf,
+        ]
+        const highAnchor: Vec3 = [
+          highCenter[0] + sideVector[0] * plateHalf,
+          highCenter[1] + sideVector[1] * plateHalf,
+          highCenter[2] + sideVector[2] * plateHalf,
+        ]
         const isDepthSide = side === 'py' || side === 'ny'
 
         return (

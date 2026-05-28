@@ -210,8 +210,8 @@ export function buildArrayLayout(grid: CellGrid, params: CellParams, time = 0): 
         bottom,
         middle,
         top,
-        lowerCenter: [lowerX[row][col], lowerY[row][col], bottomH / 2],
-        upperCenter: [upperX[row][col], upperY[row][col], bottomH + topH / 2],
+        lowerCenter: midpoint(bottom, middle),
+        upperCenter: midpoint(middle, top),
         bottomH,
         topH,
         lowerOffset,
@@ -263,11 +263,23 @@ export function arrayCenterOffset(rows: number, columns: number, params: CellPar
 }
 
 export function sideNodePositionFromLayout(layout: CellLayout, layer: LayerName, side: SideName): Vec3 {
-  const [dx, dy] = sideDirection(side)
   const center = layer === 'upper' ? layout.upperCenter : layout.lowerCenter
   const offset = layer === 'upper' ? layout.upperOffset : layout.lowerOffset
+  const sideVector = sideVectorFromLayout(layout, side)
 
-  return [center[0] + dx * offset, center[1] + dy * offset, center[2]]
+  return add(center, scale(sideVector, offset))
+}
+
+export function sideVectorFromLayout(layout: CellLayout, side: SideName): Vec3 {
+  const axis = normalize(subtract(layout.top, layout.bottom))
+  const seed: Vec3 = Math.abs(dot(axis, [1, 0, 0])) > 0.92 ? [0, 1, 0] : [1, 0, 0]
+  const basisX = normalize(subtract(seed, scale(axis, dot(seed, axis))))
+  const basisY = normalize(cross(axis, basisX))
+
+  if (side === 'px') return basisX
+  if (side === 'nx') return scale(basisX, -1)
+  if (side === 'py') return basisY
+  return scale(basisY, -1)
 }
 
 export function plateNormal(layout: CellLayout, level: 'bottom' | 'middle' | 'top'): Vec3 {
@@ -374,8 +386,24 @@ function add(a: Vec3, b: Vec3): Vec3 {
   return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
 }
 
+function midpoint(a: Vec3, b: Vec3): Vec3 {
+  return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2]
+}
+
 function subtract(a: Vec3, b: Vec3): Vec3 {
   return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+
+function scale(vector: Vec3, scalar: number): Vec3 {
+  return [vector[0] * scalar, vector[1] * scalar, vector[2] * scalar]
+}
+
+function dot(a: Vec3, b: Vec3): number {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+function cross(a: Vec3, b: Vec3): Vec3 {
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 }
 
 function normalize(vector: Vec3): Vec3 {
