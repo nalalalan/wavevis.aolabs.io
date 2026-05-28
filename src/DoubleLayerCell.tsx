@@ -52,12 +52,6 @@ const middlePlateMaterial = new THREE.MeshStandardMaterial({
   metalness: 0.04,
 })
 
-const nodeMaterial = new THREE.MeshStandardMaterial({
-  color: linkageColor,
-  roughness: 0.55,
-  metalness: 0.1,
-})
-
 export function CylinderSegment({ start, end, radius = 0.026, color, opacity = 1 }: SegmentProps) {
   const { midpoint, length, quaternion } = useMemo(() => {
     const startVector = new THREE.Vector3(...start)
@@ -252,10 +246,6 @@ function LayerLinks({
           <group key={`${layer}-${side}`}>
             <PlankSegment start={lowAnchor} end={node} width={plankWidth} thickness={isDepthSide ? 0.028 : 0.044} widthHint={widthHint} color={linkageColor} opacity={isDepthSide ? 0.54 : 0.96} />
             <PlankSegment start={node} end={highAnchor} width={plankWidth} thickness={isDepthSide ? 0.028 : 0.044} widthHint={widthHint} color={linkageColor} opacity={isDepthSide ? 0.54 : 0.96} />
-            <mesh position={node}>
-              <sphereGeometry args={[0.07, 18, 18]} />
-              <primitive object={nodeMaterial} attach="material" />
-            </mesh>
           </group>
         )
       })}
