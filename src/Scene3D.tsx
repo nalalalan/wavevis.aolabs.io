@@ -1,7 +1,6 @@
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Suspense, useMemo, useState } from 'react'
-import * as THREE from 'three'
 import DoubleLayerCell, { PlankSegment } from './DoubleLayerCell'
 import { buildArrayLayout, layoutBounds, sideNodePositionFromLayout } from './geometry'
 import { linkageColor, linkageWidth } from './renderStyle'
@@ -67,16 +66,15 @@ function ArrayModel({ grid, params }: Scene3DProps) {
   const layoutTime = params.animate ? time : 0
   const layout = useMemo(() => buildArrayLayout(grid, params, layoutTime), [grid, params, layoutTime])
   const connectors = useMemo(() => (params.connectorLength > 0.0001 ? buildConnectors(grid, layout) : []), [grid, layout, params.connectorLength])
-  const showSkin = isOverhangScene(grid, params)
 
   return (
     <group>
-      {!showSkin && grid.map((row, rowIndex) =>
+      {grid.map((row, rowIndex) =>
         row.map((state, colIndex) => (
           <DoubleLayerCell key={`${rowIndex}-${colIndex}`} row={rowIndex} col={colIndex} state={state} params={params} layout={layout[rowIndex][colIndex]} />
         )),
       )}
-      {!showSkin && connectors.map((connector) => (
+      {connectors.map((connector) => (
         <PlankSegment
           key={connector.id}
           start={connector.start}
@@ -87,119 +85,8 @@ function ArrayModel({ grid, params }: Scene3DProps) {
           widthHint={connectorWidthHint}
         />
       ))}
-      {showSkin && <OverhangEnvelope layout={layout} params={params} />}
     </group>
   )
-}
-
-function OverhangEnvelope({ layout, params }: { layout: ReturnType<typeof buildArrayLayout>; params: CellParams }) {
-  const shell = useMemo(() => {
-    const rows = 24
-    const columns = 108
-    const bounds = layoutBounds(layout)
-    const length = Math.max(bounds.span[0], params.cellPitch * 16)
-    const width = Math.max(bounds.span[1] + params.cellPitch * 1.8, params.cellPitch * 5.5)
-    const baseZ = Math.max(bounds.min[2] + 0.18, 0.18)
-    const crestHeight = Math.max(params.hOff * 5.6, length * 0.38)
-    const curlDepth = Math.max(params.cellPitch * 10.5, length * 0.62)
-    const drop = crestHeight * 1.04
-    const thickness = Math.max(params.plateSize * 0.16, 0.26)
-    const topVertices: number[] = []
-    const undersideVertices: number[] = []
-    const topIndices: number[] = []
-    const undersideIndices: number[] = []
-    const edgeIndices: number[] = []
-    const vertexCount = rows * columns
-
-    // The overhang preset uses a continuous skin envelope instead of showing
-    // every internal linkage. It is still generated from the actuated array
-    // dimensions, but avoids impossible-looking visual holes between cells.
-    for (let row = 0; row < rows; row += 1) {
-      const v = row / Math.max(rows - 1, 1)
-      const side = v * 2 - 1
-      const rowEnvelope = Math.pow(Math.max(0, 1 - Math.abs(side) ** 2.6), 0.72)
-
-      for (let col = 0; col < columns; col += 1) {
-        const u = col / Math.max(columns - 1, 1)
-        const endEnvelope = smoothStep01(0.02, 0.16, u) * (1 - smoothStep01(0.86, 0.99, u))
-        const envelope = rowEnvelope * endEnvelope
-        const rise = smoothStep01(0.12, 0.52, u)
-        const fall = smoothStep01(0.52, 0.9, u)
-        const lip = smoothStep01(0.38, 0.7, u)
-        const lipRound = Math.sin(Math.PI * smoothStep01(0.42, 0.9, u))
-        const baseX = bounds.center[0] - length * 0.5 + length * u
-        const topX = baseX - curlDepth * lip * envelope
-        const topY = bounds.center[1] + side * width * 0.5
-        const topZ = baseZ + (crestHeight * rise - drop * fall + crestHeight * 0.18 * lipRound) * envelope
-        const undersideDrop = thickness + crestHeight * 0.1 * envelope
-
-        topVertices.push(topX, topY, topZ)
-        undersideVertices.push(topX, topY, topZ - undersideDrop)
-      }
-    }
-
-    const cellIndex = (row: number, col: number) => row * columns + col
-
-    for (let row = 0; row < rows - 1; row += 1) {
-      for (let col = 0; col < columns - 1; col += 1) {
-        const a = cellIndex(row, col)
-        const b = a + 1
-        const c = a + columns
-        const d = c + 1
-        topIndices.push(a, c, b, b, c, d)
-        undersideIndices.push(a, b, c, b, d, c)
-      }
-    }
-
-    const addEdgeQuad = (a: number, b: number) => {
-      const au = a + vertexCount
-      const bu = b + vertexCount
-      edgeIndices.push(a, b, au, b, bu, au)
-    }
-
-    for (let col = 0; col < columns - 1; col += 1) {
-      addEdgeQuad(cellIndex(0, col), cellIndex(0, col + 1))
-      addEdgeQuad(cellIndex(rows - 1, col + 1), cellIndex(rows - 1, col))
-    }
-
-    for (let row = 0; row < rows - 1; row += 1) {
-      addEdgeQuad(cellIndex(row + 1, 0), cellIndex(row, 0))
-      addEdgeQuad(cellIndex(row, columns - 1), cellIndex(row + 1, columns - 1))
-    }
-
-    const makeGeometry = (vertices: number[], indices: number[]) => {
-      const nextGeometry = new THREE.BufferGeometry()
-      nextGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
-      nextGeometry.setIndex(indices)
-      nextGeometry.computeVertexNormals()
-      return nextGeometry
-    }
-
-    return {
-      top: makeGeometry(topVertices, topIndices),
-      underside: makeGeometry(undersideVertices, undersideIndices),
-      edges: makeGeometry([...topVertices, ...undersideVertices], edgeIndices),
-    }
-  }, [layout, params.cellPitch, params.hOff, params.plateSize])
-
-  return (
-    <group>
-      <mesh geometry={shell.top} renderOrder={20}>
-        <meshStandardMaterial color="#ffc0d2" side={THREE.DoubleSide} roughness={0.64} metalness={0.02} />
-      </mesh>
-      <mesh geometry={shell.underside} renderOrder={21}>
-        <meshStandardMaterial color="#c96f91" side={THREE.DoubleSide} roughness={0.72} metalness={0.02} />
-      </mesh>
-      <mesh geometry={shell.edges} renderOrder={22}>
-        <meshStandardMaterial color="#e897ad" side={THREE.DoubleSide} roughness={0.68} metalness={0.02} />
-      </mesh>
-    </group>
-  )
-}
-
-function smoothStep01(edge0: number, edge1: number, value: number) {
-  const t = Math.min(1, Math.max(0, (value - edge0) / Math.max(edge1 - edge0, 0.0001)))
-  return t * t * (3 - 2 * t)
 }
 
 function buildConnectors(grid: CellGrid, layout: ReturnType<typeof buildArrayLayout>): Connector[] {

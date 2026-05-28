@@ -297,6 +297,7 @@ export function buildArrayLayout(grid: CellGrid, params: CellParams, time = 0): 
   const layout = buildLayoutFromPoses(grid, params, poses)
   normalizeLayoutFloor(layout)
   populateSymmetricNodes(layout)
+  coupleConnectorNodes(layout, params.connectorLength)
   return layout
 }
 
@@ -618,6 +619,42 @@ function populateSymmetricNodes(layout: CellLayout[][]): void {
   )
 }
 
+function coupleConnectorNodes(layout: CellLayout[][], connectorLength: number): void {
+  const rows = layout.length
+  const columns = layout[0]?.length ?? 0
+
+  const couplePair = (a: Vec3, b: Vec3) => {
+    const delta = subtract(b, a)
+    const currentLength = vectorLength(delta)
+    const midpoint = scale(add(a, b), 0.5)
+    const direction = currentLength > 0.0001 ? scale(delta, 1 / currentLength) : [1, 0, 0] as Vec3
+    const half = Math.max(connectorLength, 0) * 0.5
+    const nextA = subtract(midpoint, scale(direction, half))
+    const nextB = add(midpoint, scale(direction, half))
+
+    a[0] = nextA[0]
+    a[1] = nextA[1]
+    a[2] = nextA[2]
+    b[0] = nextB[0]
+    b[1] = nextB[1]
+    b[2] = nextB[2]
+  }
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < columns - 1; col += 1) {
+      couplePair(layout[row][col].nodes.lower.px, layout[row][col + 1].nodes.lower.nx)
+      couplePair(layout[row][col].nodes.upper.px, layout[row][col + 1].nodes.upper.nx)
+    }
+  }
+
+  for (let row = 0; row < rows - 1; row += 1) {
+    for (let col = 0; col < columns; col += 1) {
+      couplePair(layout[row][col].nodes.lower.py, layout[row + 1][col].nodes.lower.ny)
+      couplePair(layout[row][col].nodes.upper.py, layout[row + 1][col].nodes.upper.ny)
+    }
+  }
+}
+
 function normalizeLayoutFloor(layout: CellLayout[][]): void {
   const minZ = Math.min(...layout.flatMap((row) => row.map((cell) => Math.min(cell.bottom[2], cell.middle[2], cell.top[2]))), 0)
   if (Math.abs(minZ) <= 0.0001) return
@@ -638,8 +675,9 @@ function shiftCell(cell: CellLayout, amount: number): void {
 }
 
 // Kinematic model: every layer keeps the Sarrus link length fixed by deriving
-// side-node offset from the current layer height. The array shape is first built
-// as a smooth actuation field, then lightly settled at connector boundaries.
+// side-node offset from the current layer height. Adjacent cells are then
+// settled at connector boundaries so side nodes remain coupled instead of
+// drawing stretched connector spans.
 // Rotation stiffness controls how freely the cells can tilt/yaw at connections.
 // Linkage bend stiffness controls how much a local actuation propagates into
 // neighboring cell leg angles. Individual side nodes are never pulled
@@ -652,17 +690,15 @@ function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose
   const cellCount = grid.length * (grid[0]?.length ?? 0)
   const stripPlanar = isLongPlanarStrip(grid)
   const overhangSurface = isOverhangSurface(grid, params)
-  const baseSettlePasses = overhangSurface ? 8 : stripPlanar ? 6 : cellCount > 2500 ? 2 : cellCount > 900 ? 5 : cellCount > 225 ? 16 : 48
-  const settlePasses = params.constrainPerimeter ? baseSettlePasses : Math.min(baseSettlePasses, 28)
-  const finalPasses = overhangSurface ? 3 : stripPlanar ? 3 : cellCount > 2500 ? 2 : cellCount > 900 ? 4 : Math.max(8, Math.floor(settlePasses * 0.55))
-
-  applyCoherentActuationField(grid, params, poses)
+  const baseSettlePasses = overhangSurface ? 72 : stripPlanar ? 72 : cellCount > 2500 ? 3 : cellCount > 900 ? 8 : cellCount > 225 ? 18 : 56
+  const settlePasses = params.constrainPerimeter || stripPlanar ? baseSettlePasses : Math.min(baseSettlePasses, 28)
+  const finalPasses = overhangSurface ? 72 : stripPlanar ? 72 : cellCount > 2500 ? 4 : cellCount > 900 ? 8 : Math.max(12, Math.floor(settlePasses * 0.65))
 
   for (let pass = 0; pass < settlePasses; pass += 1) {
     const layout = buildLayoutFromPoses(grid, params, poses)
 
     constraints.forEach((constraint) => {
-      projectConnectorConstraint(poses, layout, constraint, params, 0.16, true, false)
+      projectConnectorConstraint(poses, layout, constraint, params, overhangSurface || stripPlanar ? 0.62 : 0.28, true, false)
     })
 
     poses.forEach((row) =>
@@ -672,15 +708,12 @@ function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose
       }),
     )
 
-    if (overhangSurface && pass < settlePasses - 1) {
-      applyOverhangSurfaceCurl(grid, params, poses, 0.72)
-    }
   }
 
   for (let pass = 0; pass < finalPasses; pass += 1) {
     const layout = buildLayoutFromPoses(grid, params, poses)
     constraints.forEach((constraint) => {
-      projectConnectorConstraint(poses, layout, constraint, params, 0.1, true, false)
+      projectConnectorConstraint(poses, layout, constraint, params, overhangSurface || stripPlanar ? 0.74 : 0.34, true, pass > finalPasses * 0.35)
     })
     poses.forEach((row) =>
       row.forEach((pose) => {
@@ -688,10 +721,6 @@ function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose
         relaxPoseYaw(pose, params, 0.02)
       }),
     )
-  }
-
-  if (overhangSurface) {
-    applyOverhangSurfaceCurl(grid, params, poses, 0.92)
   }
 }
 
@@ -721,321 +750,6 @@ function hasInteriorActuation(grid: CellGrid): boolean {
   }
 
   return false
-}
-
-function applyCoherentActuationField(grid: CellGrid, params: CellParams, poses: CellPose[][]): void {
-  const rows = grid.length
-  const columns = grid[0]?.length ?? 0
-  if (rows === 0 || columns === 0) return
-
-  const stripPlanar = isLongPlanarStrip(grid)
-  const range = Math.max(params.hOff - params.hOn, 0.0001)
-  const bendFreedom = 1 - connectionStiffness(params.linkageBendStiffness)
-  const spread = 0.16 + bendFreedom * 0.28
-  const passes = 1 + Math.round(bendFreedom * 5)
-  const bendSeed = Array.from({ length: rows }, (_, row) =>
-    Array.from({ length: columns }, (_, col) => {
-      const pose = poses[row][col]
-      const lowerCompression = clampNumber((params.hOff - pose.lowerTarget) / range, 0, 1)
-      const upperCompression = clampNumber((params.hOff - pose.upperTarget) / range, 0, 1)
-      return lowerCompression - upperCompression
-    }),
-  )
-  const expansionSeed = Array.from({ length: rows }, (_, row) =>
-    Array.from({ length: columns }, (_, col) => {
-      const pose = poses[row][col]
-      const lowerCompression = clampNumber((params.hOff - pose.lowerTarget) / range, 0, 1)
-      const upperCompression = clampNumber((params.hOff - pose.upperTarget) / range, 0, 1)
-      return (lowerCompression + upperCompression) * 0.5
-    }),
-  )
-  const bend = smoothActuationField(bendSeed, passes, spread, params.constrainPerimeter)
-  const expansion = smoothActuationField(expansionSeed, Math.max(1, Math.floor(passes * 0.5)), spread * 0.65, params.constrainPerimeter)
-  const pitch = Math.max(defaultCellPitch(params), params.plateSize, 0.0001)
-  const liftScale =
-    range * (params.constrainPerimeter ? 1.9 + bendFreedom * 1.25 : 3.8 + bendFreedom * 2.6) * (stripPlanar ? 0.16 : 1)
-  const tiltScale = (0.75 + bendFreedom * 0.95) * (stripPlanar ? 0.28 : 1)
-
-  poses.forEach((row, rowIndex) =>
-    row.forEach((pose, colIndex) => {
-      const currentMid = scale(add(pose.lowerCenter, pose.upperCenter), 0.5)
-      const lift = bend[rowIndex][colIndex] * liftScale + expansion[rowIndex][colIndex] * range * 0.12
-      const gradient = fieldGradient(bend, rowIndex, colIndex, pitch)
-      const xFreedom = rotationFreedom(params, 'y')
-      const yFreedom = rotationFreedom(params, 'x')
-      const targetAxis = normalize([
-        -gradient[0] * tiltScale * xFreedom,
-        -gradient[1] * tiltScale * yFreedom,
-        1,
-      ])
-      const currentAxis = normalize(subtract(pose.upperCenter, pose.lowerCenter))
-      const axisBlend = pose.locked ? 0.55 : 0.78
-      const axis = normalize(add(scale(currentAxis, 1 - axisBlend), scale(targetAxis, axisBlend)))
-      const centerSpan = Math.max((pose.lowerHeight + pose.upperHeight) * 0.5, 0.0001)
-      const midpoint: Vec3 = [currentMid[0], currentMid[1], currentMid[2] + lift]
-
-      pose.lowerCenter = subtract(midpoint, scale(axis, centerSpan * 0.5))
-      pose.upperCenter = add(midpoint, scale(axis, centerSpan * 0.5))
-      pose.yawTarget = 0
-
-      if (pose.locked) {
-        pinLockedPose(pose)
-      }
-    }),
-  )
-
-  if (stripPlanar) {
-    applyPlanarStripBend(grid, params, poses)
-  }
-
-  if (isOverhangSurface(grid, params)) {
-    applyOverhangSurfaceCurl(grid, params, poses, 0.9)
-  }
-}
-
-function applyOverhangSurfaceCurl(grid: CellGrid, params: CellParams, poses: CellPose[][], strength: number): void {
-  const rows = grid.length
-  const columns = grid[0]?.length ?? 0
-  if (rows < 5 || columns < 8) return
-
-  const step = Math.max(params.cellPitch, params.plateSize, 0.0001)
-  const profile = buildOverhangProfile(grid, step)
-  const profileMinZ = Math.min(...profile.map((point) => point.z))
-
-  poses.forEach((row, rowIndex) =>
-    row.forEach((pose, colIndex) => {
-      if (pose.locked) return
-
-      const rowEnvelope = rowInteriorEnvelope(rowIndex, rows)
-      const colEnvelope = columnInteriorEnvelope(colIndex, columns)
-      const envelope = Math.min(1, rowEnvelope * colEnvelope * strength)
-      if (envelope <= 0.0001) return
-
-      const profilePoint = profile[colIndex]
-      const currentMid = scale(add(pose.lowerCenter, pose.upperCenter), 0.5)
-      const flatMidZ = pose.lowerHeight * 0.75 + pose.upperHeight * 0.25
-      const targetX = profilePoint.x
-      const targetZ = flatMidZ + (profilePoint.z - profileMinZ) * envelope
-      const widthBow = Math.sin((colIndex / Math.max(columns - 1, 1)) * Math.PI) * rowEnvelope * envelope * step * 0.25
-      const targetY = currentMid[1] + Math.sign(rowIndex - (rows - 1) * 0.5) * widthBow
-      const upright: Vec3 = [0, 0, 1]
-      const curlNormal = profilePoint.normal
-      const axis = normalize(add(scale(upright, 1 - envelope), scale(curlNormal, envelope)))
-      const span = Math.max((pose.lowerHeight + pose.upperHeight) * 0.5, 0.0001)
-      const targetMid: Vec3 = [
-        currentMid[0] + (targetX - currentMid[0]) * envelope,
-        currentMid[1] + (targetY - currentMid[1]) * envelope,
-        currentMid[2] + (targetZ - currentMid[2]) * envelope,
-      ]
-
-      pose.lowerCenter = subtract(targetMid, scale(axis, span * 0.5))
-      pose.upperCenter = add(targetMid, scale(axis, span * 0.5))
-      pose.yaw = 0
-      pose.yawTarget = 0
-    }),
-  )
-}
-
-function buildOverhangProfile(grid: CellGrid, step: number): Array<{ x: number; z: number; normal: Vec3 }> {
-  const columns = grid[0]?.length ?? 0
-  const span = activeColumnSpan(grid)
-  const activeWidth = Math.max(span.end - span.start, 1)
-  const centerCol = (columns - 1) * 0.5
-  const waveHeight = step * (3.8 + Math.min(activeWidth, 16) * 0.06) * span.strength
-  const curlDepth = step * (4.2 + Math.min(activeWidth, 16) * 0.32) * span.strength
-  const coordinates = Array.from({ length: columns }, (_, col) => {
-    const baseX = (col - centerCol) * step
-    const u = clampNumber((col - span.start) / activeWidth, 0, 1)
-    const activeEnvelope = smoothStep(span.start - 1, span.start + 2, col) * (1 - smoothStep(span.end - 2, span.end + 1, col))
-    const rise = smoothStep(0.02, 0.52, u)
-    const lip = smoothStep(0.48, 0.88, u)
-    const fall = smoothStep(0.78, 1, u)
-    const x = baseX - curlDepth * lip * activeEnvelope
-    const z = waveHeight * (rise - fall * 0.55) * activeEnvelope
-    return { x, z }
-  })
-
-  return coordinates.map((point, index) => {
-    const previous = coordinates[Math.max(0, index - 1)]
-    const next = coordinates[Math.min(coordinates.length - 1, index + 1)]
-    const tangent = normalize([next.x - previous.x, 0, next.z - previous.z])
-    const normal = normalize([-tangent[2], 0, tangent[0]])
-    return { ...point, normal }
-  })
-}
-
-function activeColumnSpan(grid: CellGrid): { start: number; end: number; strength: number } {
-  const rows = grid.length
-  const columns = grid[0]?.length ?? 0
-  let start = columns - 1
-  let end = 0
-  let active = 0
-  let possible = 0
-
-  for (let row = 1; row < rows - 1; row += 1) {
-    for (let col = 1; col < columns - 1; col += 1) {
-      possible += 1
-      if (grid[row][col] !== CELL_STATES.OFF) {
-        start = Math.min(start, col)
-        end = Math.max(end, col)
-        active += 1
-      }
-    }
-  }
-
-  if (active === 0) return { start: 1, end: columns - 2, strength: 1 }
-
-  return {
-    start,
-    end,
-    strength: clampNumber(active / Math.max(possible * 0.45, 1), 0.35, 1),
-  }
-}
-
-function smoothStep(edge0: number, edge1: number, value: number): number {
-  const t = clampNumber((value - edge0) / Math.max(edge1 - edge0, 0.0001), 0, 1)
-  return t * t * (3 - 2 * t)
-}
-
-function rowInteriorEnvelope(row: number, rows: number): number {
-  if (rows <= 2) return 1
-  const center = (rows - 1) * 0.5
-  const normalized = Math.abs(row - center) / Math.max(center, 0.0001)
-  return Math.pow(Math.max(0, 1 - normalized), 0.65)
-}
-
-function columnInteriorEnvelope(col: number, columns: number): number {
-  if (columns <= 2) return 1
-  const phase = (col / Math.max(columns - 1, 1)) * Math.PI
-  return Math.pow(Math.sin(phase), 0.42)
-}
-
-function applyPlanarStripBend(grid: CellGrid, params: CellParams, poses: CellPose[][]): void {
-  const rows = grid.length
-  const columns = grid[0]?.length ?? 0
-  if (rows === 0 || columns === 0) return
-
-  const bendFreedom = 1 - connectionStiffness(params.linkageBendStiffness)
-  const yawFreedom = rotationFreedom(params, 'z')
-  const step = Math.max(defaultCellPitch(params), params.plateSize, 0.0001)
-  const rowSpacing = step * 0.86
-  const rawCurvature = Array.from({ length: columns }, (_, col) => {
-    const columnCurvature = grid.reduce((sum, row) => sum + stateCurvatureSeed(row[col]), 0)
-    return columnCurvature / rows
-  })
-  const curvature = smoothCurve(rawCurvature, 3, 0.42)
-  const gain = yawFreedom * (0.3 + bendFreedom * 0.15) * (0.35 + bendFreedom * 0.65)
-  const points: Array<[number, number]> = []
-  const yaws: number[] = []
-  let x = 0
-  let y = 0
-  let yaw = -0.18
-
-  for (let col = 0; col < columns; col += 1) {
-    yaw += curvature[col] * gain * 0.5
-    points[col] = [x, y]
-    yaws[col] = yaw
-    x += Math.cos(yaw) * step
-    y += Math.sin(yaw) * step
-    yaw += curvature[col] * gain * 0.5
-  }
-
-  const pointCenter = points.reduce<[number, number]>((sum, point) => [sum[0] + point[0], sum[1] + point[1]], [0, 0])
-  pointCenter[0] /= columns
-  pointCenter[1] /= columns
-  const currentCenter = poses
-    .flat()
-    .reduce<[number, number]>(
-      (sum, pose) => {
-        const mid = scale(add(pose.lowerCenter, pose.upperCenter), 0.5)
-        return [sum[0] + mid[0], sum[1] + mid[1]]
-      },
-      [0, 0],
-    )
-  currentCenter[0] /= columns * rows
-  currentCenter[1] /= columns * rows
-
-  poses.forEach((row, rowIndex) =>
-    row.forEach((pose, colIndex) => {
-      if (pose.locked) return
-
-      const centerline = points[colIndex]
-      const rowOffset = (rowIndex - 0.5) * rowSpacing
-      const yawAtColumn = yaws[colIndex]
-      const normal: [number, number] = [-Math.sin(yawAtColumn), Math.cos(yawAtColumn)]
-      const targetX = centerline[0] - pointCenter[0] + currentCenter[0] + normal[0] * rowOffset
-      const targetY = centerline[1] - pointCenter[1] + currentCenter[1] + normal[1] * rowOffset
-      const currentMid = scale(add(pose.lowerCenter, pose.upperCenter), 0.5)
-      const shift: Vec3 = [targetX - currentMid[0], targetY - currentMid[1], 0]
-
-      pose.lowerCenter = add(pose.lowerCenter, shift)
-      pose.upperCenter = add(pose.upperCenter, shift)
-      pose.yaw = yawAtColumn
-      pose.yawTarget = yawAtColumn
-    }),
-  )
-}
-
-function stateCurvatureSeed(state: CellState): number {
-  const lower = isLowerActuated(state)
-  const upper = isUpperActuated(state)
-
-  if (lower && !upper) return 1
-  if (upper && !lower) return -1
-  return 0
-}
-
-function smoothCurve(seed: number[], passes: number, spread: number): number[] {
-  let curve = [...seed]
-
-  for (let pass = 0; pass < passes; pass += 1) {
-    curve = curve.map((value, index) => {
-      const left = curve[Math.max(0, index - 1)]
-      const right = curve[Math.min(curve.length - 1, index + 1)]
-      return value * (1 - spread) + ((left + right) * 0.5) * spread
-    })
-  }
-
-  return curve
-}
-
-function smoothActuationField(seed: number[][], passes: number, spread: number, constrainPerimeter: boolean): number[][] {
-  let field = seed.map((row) => [...row])
-  const rows = field.length
-  const columns = field[0]?.length ?? 0
-
-  for (let pass = 0; pass < passes; pass += 1) {
-    field = field.map((row, rowIndex) =>
-      row.map((value, colIndex) => {
-        if (constrainPerimeter && isPerimeterCell(rowIndex, colIndex, rows, columns)) return 0
-
-        const neighbors = [
-          sampleField(field, rowIndex - 1, colIndex),
-          sampleField(field, rowIndex + 1, colIndex),
-          sampleField(field, rowIndex, colIndex - 1),
-          sampleField(field, rowIndex, colIndex + 1),
-        ]
-        const neighborAverage = neighbors.reduce((sum, neighbor) => sum + neighbor, 0) / neighbors.length
-        const retainedSeed = seed[rowIndex][colIndex] * 0.22
-        const diffused = value * (1 - spread) + neighborAverage * spread
-        return diffused * 0.78 + retainedSeed
-      }),
-    )
-  }
-
-  return field
-}
-
-function sampleField(field: number[][], row: number, col: number): number {
-  const safeRow = clampInteger(row, 0, field.length - 1)
-  const safeCol = clampInteger(col, 0, (field[0]?.length ?? 1) - 1)
-  return field[safeRow]?.[safeCol] ?? 0
-}
-
-function fieldGradient(field: number[][], row: number, col: number, pitch: number): [number, number] {
-  const dx = (sampleField(field, row, col + 1) - sampleField(field, row, col - 1)) / (2 * pitch)
-  const dy = (sampleField(field, row + 1, col) - sampleField(field, row - 1, col)) / (2 * pitch)
-  return [dx, dy]
 }
 
 function buildConnectorConstraints(grid: CellGrid): ConnectorConstraint[] {
@@ -1080,12 +794,15 @@ function projectConnectorConstraint(
   if (currentLength <= 0.000001) return
 
   const rotationFreedom = rotationFreedomVector(params)
-  const bendStiffness = connectionStiffness(params.linkageBendStiffness)
-  const bendFreedom = 1 - bendStiffness
   const direction = scale(delta, 1 / currentLength)
-  const correctionLength = clampNumber((currentLength - params.connectorLength) * 0.5 * strength, -0.025, 0.025)
+  const maxCorrection = Math.max(params.cellPitch, params.linkLength, params.plateSize) * 0.42
+  const correctionLength = clampNumber((currentLength - params.connectorLength) * 0.5 * strength, -maxCorrection, maxCorrection)
   const correction = scale(direction, correctionLength)
-  const bendCorrection = scale(correction, bendFreedom)
+  // Node-to-node connectors are hard couplings in the visual model. Stiffness
+  // can decide how much neighboring cells tilt/yaw or relax their layer height,
+  // but it cannot leave a connector stretched between separated side nodes.
+  const couplingCorrection = correction
+  const bendFreedom = 1 - connectionStiffness(params.linkageBendStiffness)
   const aCanMove = !aPose.locked
   const bCanMove = !bPose.locked
   const aScale = aCanMove && bCanMove ? 1 : aCanMove ? 2 : 0
@@ -1101,19 +818,20 @@ function projectConnectorConstraint(
     rotatePoseTiltTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -bRotationScale), params, strength * (0.03 + rotationFreedom[1] * 0.28), 1)
     rotatePoseYawTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -bRotationScale), params, strength * (0.05 + rotationFreedom[2] * 0.45))
   }
-  movePoseLayer(aPose, constraint.layer, scale(bendCorrection, aScale))
-  movePoseLayer(bPose, constraint.layer, scale(bendCorrection, -bScale))
-  if (allowHeightFlex && bendFreedom > 0.0001) {
+  movePoseLayer(aPose, constraint.layer, scale(couplingCorrection, aScale))
+  movePoseLayer(bPose, constraint.layer, scale(couplingCorrection, -bScale))
+  if (allowHeightFlex) {
+    const flexStrength = strength * Math.max(0.18, bendFreedom)
     if (aPose.locked) {
-      relaxPoseLayerHeightTowardNodeMove(aPose, aLayout, constraint.layer, constraint.aSide, correction, params, strength * bendFreedom)
+      relaxPoseLayerHeightTowardNodeMove(aPose, aLayout, constraint.layer, constraint.aSide, correction, params, flexStrength)
     } else {
-      relaxPoseLayerHeightByDistance(aPose, constraint.layer, currentLength - params.connectorLength, params, strength * bendFreedom)
+      relaxPoseLayerHeightByDistance(aPose, constraint.layer, currentLength - params.connectorLength, params, flexStrength)
     }
 
     if (bPose.locked) {
-      relaxPoseLayerHeightTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -1), params, strength * bendFreedom)
+      relaxPoseLayerHeightTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -1), params, flexStrength)
     } else {
-      relaxPoseLayerHeightByDistance(bPose, constraint.layer, currentLength - params.connectorLength, params, strength * bendFreedom)
+      relaxPoseLayerHeightByDistance(bPose, constraint.layer, currentLength - params.connectorLength, params, flexStrength)
     }
   }
 }
@@ -1275,11 +993,11 @@ function projectPoseSpan(pose: CellPose, params: CellParams): void {
 
 function maxTotalSpan(params: Pick<CellParams, 'linkLength'>, lowerRatio: number, upperRatio: number): number {
   const largestRatio = Math.max(lowerRatio, upperRatio, 0.0001)
-  return ((params.linkLength * 2 - 0.02) / largestRatio)
+  return (params.linkLength * 2) / largestRatio
 }
 
 function clampLayerHeight(height: number, params: Pick<CellParams, 'linkLength'>): number {
-  return clampNumber(height, 0.15, params.linkLength * 2 - 0.02)
+  return clampNumber(height, 0.15, params.linkLength * 2)
 }
 
 function pinLockedPose(pose: CellPose): void {
