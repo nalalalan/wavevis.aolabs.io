@@ -1,5 +1,5 @@
 import CellGridEditor from './CellGridEditor'
-import { DEFAULT_PARAMS, STATE_META, defaultCellPitch, roundForInput, stateMeta } from './geometry'
+import { DEFAULT_COLUMNS, DEFAULT_PARAMS, DEFAULT_ROWS, STATE_META, defaultCellPitch, roundForInput, stateMeta } from './geometry'
 import type { CellGrid, CellParams, CellState } from './types'
 
 type ControlPanelProps = {
@@ -189,7 +189,7 @@ export default function ControlPanel({
             onDefault()
           }}
         >
-          Default 2x2
+          Default {DEFAULT_ROWS}x{DEFAULT_COLUMNS}
         </button>
       </section>
     </aside>

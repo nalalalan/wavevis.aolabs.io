@@ -2,14 +2,14 @@ import { useMemo, useState } from 'react'
 import ControlPanel from './ControlPanel'
 import Scene3D from './Scene3D'
 import { CELL_STATES, type CellParams, type CellState } from './types'
-import { DEFAULT_PARAMS, createGrid, randomGrid, resizeGrid, sanitizeParams } from './geometry'
+import { DEFAULT_COLUMNS, DEFAULT_PARAMS, DEFAULT_ROWS, createGrid, randomGrid, resizeGrid, sanitizeParams } from './geometry'
 
 function App() {
   const [draftParams, setDraftParams] = useState<CellParams>(DEFAULT_PARAMS)
-  const [draftGrid, setDraftGrid] = useState(() => createGrid(2, 2))
+  const [draftGrid, setDraftGrid] = useState(() => createGrid(DEFAULT_ROWS, DEFAULT_COLUMNS))
   const [selectedMode, setSelectedMode] = useState<CellState>(CELL_STATES.OFF)
   const [appliedParams, setAppliedParams] = useState<CellParams>(DEFAULT_PARAMS)
-  const [appliedGrid, setAppliedGrid] = useState(() => createGrid(2, 2))
+  const [appliedGrid, setAppliedGrid] = useState(() => createGrid(DEFAULT_ROWS, DEFAULT_COLUMNS))
 
   const safeDraftParams = useMemo(() => sanitizeParams(draftParams), [draftParams])
   const hasPendingChanges = stateKey(safeDraftParams, draftGrid) !== stateKey(appliedParams, appliedGrid)
@@ -34,15 +34,16 @@ function App() {
   }
 
   const resetAllOff = () => {
-    const rows = draftGrid.length
-    const columns = draftGrid[0]?.length ?? 1
-    const nextGrid = createGrid(rows, columns, CELL_STATES.OFF)
+    const nextGrid = createGrid(DEFAULT_ROWS, DEFAULT_COLUMNS, CELL_STATES.OFF)
+    setDraftParams(DEFAULT_PARAMS)
+    setAppliedParams(DEFAULT_PARAMS)
     setDraftGrid(nextGrid)
     setAppliedGrid(nextGrid)
+    setSelectedMode(CELL_STATES.OFF)
   }
 
   const setDefault = () => {
-    const nextGrid = createGrid(2, 2, CELL_STATES.OFF)
+    const nextGrid = createGrid(DEFAULT_ROWS, DEFAULT_COLUMNS, CELL_STATES.OFF)
     setDraftParams(DEFAULT_PARAMS)
     setAppliedParams(DEFAULT_PARAMS)
     setDraftGrid(nextGrid)

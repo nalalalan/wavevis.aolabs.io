@@ -41,13 +41,16 @@ export const STATE_META = [
 
 export const DEFAULT_PARAM_SEED = {
   hOff: 3,
-  hOn: 1.2,
-  linkLength: 2,
-  plateSize: 0.8,
+  hOn: 1,
+  linkLength: 1.55,
+  plateSize: 1.5,
   connectorLength: 0.15,
   showLabels: false,
   animate: false,
 }
+
+export const DEFAULT_ROWS = 1
+export const DEFAULT_COLUMNS = 2
 
 export function sideNodeOffset(height: number, params: Pick<CellParams, 'linkLength' | 'plateSize'>): number {
   const plateHalf = params.plateSize / 2
