@@ -2,12 +2,20 @@ import { useMemo, useState } from 'react'
 import ControlPanel from './ControlPanel'
 import Scene3D from './Scene3D'
 import { CELL_STATES, type CellParams, type CellState } from './types'
-import { DEFAULT_COLUMNS, DEFAULT_PARAMS, DEFAULT_ROWS, createGrid, randomGrid, resizeGrid, sanitizeParams } from './geometry'
+import {
+  DEFAULT_COLUMNS,
+  DEFAULT_PARAMS,
+  DEFAULT_ROWS,
+  createGrid,
+  nextCellState,
+  randomGrid,
+  resizeGrid,
+  sanitizeParams,
+} from './geometry'
 
 function App() {
   const [draftParams, setDraftParams] = useState<CellParams>(DEFAULT_PARAMS)
   const [draftGrid, setDraftGrid] = useState(() => createGrid(DEFAULT_ROWS, DEFAULT_COLUMNS))
-  const [selectedMode, setSelectedMode] = useState<CellState>(CELL_STATES.OFF)
   const [appliedParams, setAppliedParams] = useState<CellParams>(DEFAULT_PARAMS)
   const [appliedGrid, setAppliedGrid] = useState(() => createGrid(DEFAULT_ROWS, DEFAULT_COLUMNS))
 
@@ -28,7 +36,7 @@ function App() {
   const updateCell = (row: number, col: number) => {
     setDraftGrid((current) =>
       current.map((cellRow, rowIndex) =>
-        cellRow.map((state, colIndex) => (rowIndex === row && colIndex === col ? selectedMode : state)),
+        cellRow.map((state, colIndex) => (rowIndex === row && colIndex === col ? nextCellState(state) : state)),
       ),
     )
   }
@@ -39,7 +47,6 @@ function App() {
     setAppliedParams(DEFAULT_PARAMS)
     setDraftGrid(nextGrid)
     setAppliedGrid(nextGrid)
-    setSelectedMode(CELL_STATES.OFF)
   }
 
   const setDefault = () => {
@@ -48,7 +55,6 @@ function App() {
     setAppliedParams(DEFAULT_PARAMS)
     setDraftGrid(nextGrid)
     setAppliedGrid(nextGrid)
-    setSelectedMode(CELL_STATES.OFF)
   }
 
   const randomize = () => {
@@ -62,11 +68,9 @@ function App() {
       <ControlPanel
         grid={draftGrid}
         params={safeDraftParams}
-        selectedMode={selectedMode}
         hasPendingChanges={hasPendingChanges}
         onParamsChange={setDraftParams}
         onRowsColumnsChange={updateGridSize}
-        onModeChange={setSelectedMode}
         onCellClick={updateCell}
         onRun={applyDraftToScene}
         onReset={resetAllOff}

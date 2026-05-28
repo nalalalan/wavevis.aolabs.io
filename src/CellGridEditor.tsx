@@ -1,14 +1,13 @@
-import { stateMeta } from './geometry'
-import type { CellGrid, CellState } from './types'
+import { nextCellState, stateMeta } from './geometry'
+import type { CellGrid } from './types'
 
 type CellGridEditorProps = {
   grid: CellGrid
-  selectedMode: CellState
   showLabels: boolean
   onCellClick: (row: number, col: number) => void
 }
 
-export default function CellGridEditor({ grid, selectedMode, showLabels, onCellClick }: CellGridEditorProps) {
+export default function CellGridEditor({ grid, showLabels, onCellClick }: CellGridEditorProps) {
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
 
@@ -23,16 +22,16 @@ export default function CellGridEditor({ grid, selectedMode, showLabels, onCellC
         {grid.map((row, rowIndex) =>
           row.map((state, colIndex) => {
             const meta = stateMeta(state)
-            const active = state === selectedMode
+            const nextMeta = stateMeta(nextCellState(state))
 
             return (
               <button
                 key={`${rowIndex}-${colIndex}`}
                 type="button"
-                className={`grid-cell ${active ? 'mode-match' : ''}`}
+                className="grid-cell"
                 style={{ '--cell-color': meta.color } as React.CSSProperties}
-                aria-label={`row ${rowIndex + 1}, column ${colIndex + 1}, ${meta.label}`}
-                title={`${rowIndex + 1}, ${colIndex + 1}: ${meta.label}`}
+                aria-label={`row ${rowIndex + 1}, column ${colIndex + 1}, ${meta.label}; next ${nextMeta.label}`}
+                title={`${rowIndex + 1}, ${colIndex + 1}: ${meta.label}; next ${nextMeta.label}`}
                 onClick={() => onCellClick(rowIndex, colIndex)}
               >
                 {showLabels ? meta.shortLabel : ''}

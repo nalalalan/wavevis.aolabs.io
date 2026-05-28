@@ -1,15 +1,13 @@
 import CellGridEditor from './CellGridEditor'
-import { DEFAULT_COLUMNS, DEFAULT_PARAMS, DEFAULT_ROWS, STATE_META, defaultCellPitch, roundForInput, stateMeta } from './geometry'
-import type { CellGrid, CellParams, CellState } from './types'
+import { DEFAULT_COLUMNS, DEFAULT_PARAMS, DEFAULT_ROWS, STATE_META, defaultCellPitch, roundForInput } from './geometry'
+import type { CellGrid, CellParams } from './types'
 
 type ControlPanelProps = {
   grid: CellGrid
   params: CellParams
-  selectedMode: CellState
   hasPendingChanges: boolean
   onParamsChange: (next: CellParams) => void
   onRowsColumnsChange: (rows: number, columns: number) => void
-  onModeChange: (mode: CellState) => void
   onCellClick: (row: number, col: number) => void
   onRun: () => void
   onReset: () => void
@@ -34,11 +32,9 @@ const numericInputs: Array<{
 export default function ControlPanel({
   grid,
   params,
-  selectedMode,
   hasPendingChanges,
   onParamsChange,
   onRowsColumnsChange,
-  onModeChange,
   onCellClick,
   onRun,
   onReset,
@@ -47,7 +43,6 @@ export default function ControlPanel({
 }: ControlPanelProps) {
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
-  const selectedMeta = stateMeta(selectedMode)
   const fittedPitch = defaultCellPitch(params)
 
   const setNumber = (key: (typeof numericInputs)[number]['key'], value: number) => {
@@ -103,26 +98,24 @@ export default function ControlPanel({
 
       <section className="panel-section">
         <div className="section-heading">
-          <h2>mode</h2>
-          <span>{selectedMeta.label}</span>
+          <h2>states</h2>
+          <span>click cell to cycle</span>
         </div>
-        <div className="mode-selector" role="radiogroup" aria-label="cell state">
+        <div className="mode-legend" aria-label="cell color legend">
           {STATE_META.map((mode) => (
-            <button
+            <div
               key={mode.value}
-              type="button"
-              className={mode.value === selectedMode ? 'selected' : ''}
+              className="mode-item"
               style={{ '--mode-color': mode.color } as React.CSSProperties}
-              aria-pressed={mode.value === selectedMode}
-              onClick={() => onModeChange(mode.value)}
             >
+              <span className="mode-swatch" aria-hidden="true" />
               {mode.label}
-            </button>
+            </div>
           ))}
         </div>
       </section>
 
-      <CellGridEditor grid={grid} selectedMode={selectedMode} showLabels={params.showLabels} onCellClick={onCellClick} />
+      <CellGridEditor grid={grid} showLabels={params.showLabels} onCellClick={onCellClick} />
 
       <section className="panel-section">
         <div className="section-heading">

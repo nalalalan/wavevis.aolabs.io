@@ -39,6 +39,13 @@ export const STATE_META = [
   },
 ] as const
 
+const CELL_STATE_SEQUENCE = [
+  CELL_STATES.OFF,
+  CELL_STATES.BEND_UP,
+  CELL_STATES.BEND_DOWN,
+  CELL_STATES.EXPAND,
+] as const
+
 export const DEFAULT_PARAM_SEED = {
   hOff: 3,
   hOn: 1,
@@ -108,6 +115,11 @@ export function sanitizeParams(params: CellParams): CellParams {
 
 export function stateMeta(state: CellState) {
   return STATE_META.find((entry) => entry.value === state) ?? STATE_META[0]
+}
+
+export function nextCellState(state: CellState): CellState {
+  const index = CELL_STATE_SEQUENCE.indexOf(state)
+  return CELL_STATE_SEQUENCE[(index + 1) % CELL_STATE_SEQUENCE.length]
 }
 
 export function isUpperActuated(state: CellState): boolean {

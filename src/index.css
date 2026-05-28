@@ -191,13 +191,12 @@ input[type="number"]:focus-visible {
   gap: 10px;
 }
 
-.mode-selector {
+.mode-legend {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
-.mode-selector button,
 .button-row button,
 .wide {
   min-height: 38px;
@@ -208,22 +207,27 @@ input[type="number"]:focus-visible {
   font-weight: 760;
 }
 
-.mode-selector button {
-  position: relative;
-  overflow: hidden;
+.mode-item {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid color-mix(in srgb, var(--mode-color) 32%, var(--line));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--mode-color) 16%, #fffaf2);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 760;
+  padding: 0 10px;
 }
 
-.mode-selector button::before {
-  content: "";
-  position: absolute;
-  inset: 0;
+.mode-swatch {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(45, 40, 33, 0.24);
+  border-radius: 3px;
   background: var(--mode-color);
-  opacity: 0.16;
-}
-
-.mode-selector button.selected {
-  border-color: color-mix(in srgb, var(--mode-color) 66%, #42382f);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mode-color) 34%, transparent);
 }
 
 .cell-grid {
@@ -247,11 +251,6 @@ input[type="number"]:focus-visible {
 .grid-cell:hover {
   transform: translateY(-1px);
   border-color: rgba(45, 40, 33, 0.42);
-}
-
-.grid-cell.mode-match {
-  outline: 2px solid rgba(37, 34, 30, 0.2);
-  outline-offset: 1px;
 }
 
 .grid-count {
@@ -286,8 +285,7 @@ input[type="number"]:focus-visible {
 }
 
 .secondary:hover,
-.wide:hover,
-.mode-selector button:hover {
+.wide:hover {
   background: #f7efe4;
 }
 
@@ -339,7 +337,7 @@ input[type="number"]:focus-visible {
 
   .two-col,
   .param-grid,
-  .mode-selector,
+  .mode-legend,
   .button-row {
     grid-template-columns: 1fr;
   }
