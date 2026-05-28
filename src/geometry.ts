@@ -71,6 +71,7 @@ export type CellLayout = {
   topH: number
   lowerOffset: number
   upperOffset: number
+  nodes: Record<LayerName, Record<SideName, Vec3>>
 }
 
 export type LayoutBounds = {
@@ -190,7 +191,7 @@ export function buildArrayLayout(grid: CellGrid, params: CellParams, time = 0): 
   const lowerY = buildLayerAxisCenters(grid, params, 'lower', 'y', time)
   const upperY = buildLayerAxisCenters(grid, params, 'upper', 'y', time)
 
-  return Array.from({ length: rows }, (_, row) =>
+  const layout = Array.from({ length: rows }, (_, row) =>
     Array.from({ length: columns }, (_, col) => {
       const state = grid[row][col]
       const bottomH = layerHeight(state, 'lower', params, time)
@@ -216,9 +217,22 @@ export function buildArrayLayout(grid: CellGrid, params: CellParams, time = 0): 
         topH,
         lowerOffset,
         upperOffset,
+        nodes: emptyNodeRecord(),
       }
     }),
   )
+
+  layout.forEach((row) =>
+    row.forEach((cell) => {
+      SIDE_NAMES.forEach((side) => {
+        cell.nodes.lower[side] = symmetricSideNodePosition(cell, 'lower', side)
+        cell.nodes.upper[side] = symmetricSideNodePosition(cell, 'upper', side)
+      })
+    }),
+  )
+
+  constrainConnectorNodes(layout, params.connectorLength)
+  return layout
 }
 
 export function sideDirection(side: SideName): [number, number] {
@@ -263,11 +277,7 @@ export function arrayCenterOffset(rows: number, columns: number, params: CellPar
 }
 
 export function sideNodePositionFromLayout(layout: CellLayout, layer: LayerName, side: SideName): Vec3 {
-  const center = layer === 'upper' ? layout.upperCenter : layout.lowerCenter
-  const offset = layer === 'upper' ? layout.upperOffset : layout.lowerOffset
-  const sideVector = sideVectorFromLayout(layout, side)
-
-  return add(center, scale(sideVector, offset))
+  return layout.nodes[layer][side]
 }
 
 export function sideVectorFromLayout(layout: CellLayout, side: SideName): Vec3 {
@@ -404,6 +414,66 @@ function dot(a: Vec3, b: Vec3): number {
 
 function cross(a: Vec3, b: Vec3): Vec3 {
   return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+}
+
+function emptyNodeRecord(): Record<LayerName, Record<SideName, Vec3>> {
+  return {
+    lower: {
+      px: [0, 0, 0],
+      nx: [0, 0, 0],
+      py: [0, 0, 0],
+      ny: [0, 0, 0],
+    },
+    upper: {
+      px: [0, 0, 0],
+      nx: [0, 0, 0],
+      py: [0, 0, 0],
+      ny: [0, 0, 0],
+    },
+  }
+}
+
+function symmetricSideNodePosition(layout: CellLayout, layer: LayerName, side: SideName): Vec3 {
+  const center = layer === 'upper' ? layout.upperCenter : layout.lowerCenter
+  const offset = layer === 'upper' ? layout.upperOffset : layout.lowerOffset
+  return add(center, scale(sideVectorFromLayout(layout, side), offset))
+}
+
+function constrainConnectorNodes(layout: CellLayout[][], connectorLength: number): void {
+  const rows = layout.length
+  const columns = layout[0]?.length ?? 0
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < columns - 1; col += 1) {
+      constrainPair(layout[row][col], 'px', layout[row][col + 1], 'nx', 'lower', connectorLength)
+      constrainPair(layout[row][col], 'px', layout[row][col + 1], 'nx', 'upper', connectorLength)
+    }
+  }
+
+  for (let row = 0; row < rows - 1; row += 1) {
+    for (let col = 0; col < columns; col += 1) {
+      constrainPair(layout[row][col], 'py', layout[row + 1][col], 'ny', 'lower', connectorLength)
+      constrainPair(layout[row][col], 'py', layout[row + 1][col], 'ny', 'upper', connectorLength)
+    }
+  }
+}
+
+function constrainPair(a: CellLayout, aSide: SideName, b: CellLayout, bSide: SideName, layer: LayerName, connectorLength: number): void {
+  const start = a.nodes[layer][aSide]
+  const end = b.nodes[layer][bSide]
+  const mid = midpoint(start, end)
+  const fallbackDirection = normalize(subtract(b[layer === 'upper' ? 'upperCenter' : 'lowerCenter'], a[layer === 'upper' ? 'upperCenter' : 'lowerCenter']))
+  const direction = normalizeWithFallback(subtract(end, start), fallbackDirection)
+  const half = Math.max(connectorLength, 0) / 2
+
+  a.nodes[layer][aSide] = add(mid, scale(direction, -half))
+  b.nodes[layer][bSide] = add(mid, scale(direction, half))
+}
+
+function normalizeWithFallback(vector: Vec3, fallback: Vec3): Vec3 {
+  const length = Math.hypot(vector[0], vector[1], vector[2])
+  if (length <= 0.0001) return normalize(fallback)
+  return [vector[0] / length, vector[1] / length, vector[2] / length]
 }
 
 function normalize(vector: Vec3): Vec3 {
