@@ -12,7 +12,7 @@ import {
   sideNodePositionFromLayout,
   stateMeta,
 } from './geometry'
-import { emOffColor, linkageColor, linkageWidth } from './renderStyle'
+import { emOffColor, linkageColor, linkageWidth, octagonHalfLegSide } from './renderStyle'
 
 type DoubleLayerCellProps = {
   row: number
@@ -133,19 +133,20 @@ export default function DoubleLayerCell({ row, col, state, params, layout }: Dou
 
   return (
     <group>
-      <Plate center={layout.bottom} normal={plateNormal(layout, 'bottom')} xAxis={plateXAxis} size={params.plateSize} thickness={plateThickness} material={plateMaterial} />
+      <Plate center={layout.bottom} normal={plateNormal(layout, 'bottom')} xAxis={plateXAxis} size={params.plateSize} faceRatio={params.octagonFaceRatio} thickness={plateThickness} material={plateMaterial} />
       <Plate
         center={layout.middle}
         normal={plateNormal(layout, 'middle')}
         xAxis={plateXAxis}
         size={params.plateSize}
+        faceRatio={params.octagonFaceRatio}
         thickness={plateThickness}
         material={middlePlateMaterial}
       />
-      <Plate center={layout.top} normal={plateNormal(layout, 'top')} xAxis={plateXAxis} size={params.plateSize} thickness={plateThickness} material={plateMaterial} />
+      <Plate center={layout.top} normal={plateNormal(layout, 'top')} xAxis={plateXAxis} size={params.plateSize} faceRatio={params.octagonFaceRatio} thickness={plateThickness} material={plateMaterial} />
 
-      <LayerLinks layer="lower" lowCenter={layout.bottom} highCenter={layout.middle} layout={layout} plateHalf={plateHalf} plankWidth={linkageWidth(params.plateSize)} />
-      <LayerLinks layer="upper" lowCenter={layout.middle} highCenter={layout.top} layout={layout} plateHalf={plateHalf} plankWidth={linkageWidth(params.plateSize)} />
+      <LayerLinks layer="lower" lowCenter={layout.bottom} highCenter={layout.middle} layout={layout} plateHalf={plateHalf} plankWidth={linkageWidth(params.plateSize, params.octagonFaceRatio)} />
+      <LayerLinks layer="upper" lowCenter={layout.middle} highCenter={layout.top} layout={layout} plateHalf={plateHalf} plankWidth={linkageWidth(params.plateSize, params.octagonFaceRatio)} />
 
       <CylinderSegment start={layout.bottom} end={layout.middle} radius={0.052} color={lowerOn ? '#ff8a2a' : emOffColor} />
       <CylinderSegment start={layout.middle} end={layout.top} radius={0.052} color={upperOn ? '#ff8a2a' : emOffColor} />
@@ -173,6 +174,7 @@ function Plate({
   normal,
   xAxis,
   size,
+  faceRatio,
   thickness,
   material,
 }: {
@@ -180,10 +182,11 @@ function Plate({
   normal: Vec3
   xAxis: Vec3
   size: number
+  faceRatio: number
   thickness: number
   material: THREE.MeshStandardMaterial
 }) {
-  const geometry = useMemo(() => makeOctagonalPlateGeometry(size, thickness), [size, thickness])
+  const geometry = useMemo(() => makeOctagonalPlateGeometry(size, faceRatio, thickness), [size, faceRatio, thickness])
   const quaternion = useMemo(() => {
     const zAxis = new THREE.Vector3(...normal).normalize()
     const xBasis = new THREE.Vector3(...xAxis)
@@ -251,9 +254,9 @@ function LayerLinks({
   )
 }
 
-function makeOctagonalPlateGeometry(size: number, thickness: number): THREE.ExtrudeGeometry {
+function makeOctagonalPlateGeometry(size: number, faceRatio: number, thickness: number): THREE.ExtrudeGeometry {
   const apothem = size / 2
-  const halfLegSide = linkageWidth(size) / 2
+  const halfLegSide = octagonHalfLegSide(size, faceRatio)
   const inset = apothem - halfLegSide
   const shape = new THREE.Shape([
     new THREE.Vector2(apothem, -halfLegSide),

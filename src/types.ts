@@ -22,8 +22,7 @@ export type CellParams = {
   hOn: number
   linkLength: number
   plateSize: number
-  cellPitch: number
-  connectorLength: number
+  octagonFaceRatio: number
   rotationXStiffness: number
   rotationYStiffness: number
   rotationZStiffness: number

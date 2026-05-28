@@ -53,7 +53,7 @@ export const DEFAULT_PARAM_SEED = {
   hOn: 1,
   linkLength: 1.25,
   plateSize: 1.6,
-  connectorLength: 0,
+  octagonFaceRatio: 0.31,
   rotationXStiffness: 0,
   rotationYStiffness: 0,
   rotationZStiffness: 0,
@@ -121,20 +121,18 @@ export function sideNodeOffset(height: number, params: Pick<CellParams, 'linkLen
   return plateHalf + lateralSpan
 }
 
-export function defaultCellPitch(params: Pick<CellParams, 'hOff' | 'linkLength' | 'plateSize' | 'connectorLength'>): number {
-  return roundForInput(2 * sideNodeOffset(params.hOff, params) + params.connectorLength)
+export function nominalCellPitch(params: Pick<CellParams, 'hOff' | 'linkLength' | 'plateSize'>): number {
+  return roundForInput(2 * sideNodeOffset(params.hOff, params))
 }
 
 export const DEFAULT_PARAMS: CellParams = {
   ...DEFAULT_PARAM_SEED,
-  cellPitch: 2.28,
 }
 
 export const REFERENCE_WAVE_COLUMNS = 33
 
 export const REFERENCE_WAVE_PARAMS: CellParams = {
   ...DEFAULT_PARAMS,
-  cellPitch: 1.6,
   rotationXStiffness: 0,
   rotationYStiffness: 0,
   rotationZStiffness: 0,
@@ -150,7 +148,6 @@ export const OVERHANG_PARAMS: CellParams = {
   hOn: 0.82,
   linkLength: 1.35,
   plateSize: 1.38,
-  cellPitch: 1.78,
   rotationXStiffness: 0,
   rotationYStiffness: 0,
   rotationZStiffness: 100,
@@ -227,11 +224,10 @@ export function sanitizeParams(params: CellParams): CellParams {
     hOff,
     hOn,
     plateSize,
+    octagonFaceRatio: clampNumber(params.octagonFaceRatio, 0.1, 4),
     // If the requested leg is shorter than half the ideal layer height, the
     // layout relaxes resultant height later instead of stretching the leg.
     linkLength: clampNumber(params.linkLength, 0.25, 8),
-    cellPitch: clampNumber(params.cellPitch, plateSize, 16),
-    connectorLength: clampNumber(params.connectorLength, 0, 3),
     rotationXStiffness: clampNumber(params.rotationXStiffness, 0, 100),
     rotationYStiffness: clampNumber(params.rotationYStiffness, 0, 100),
     rotationZStiffness: clampNumber(params.rotationZStiffness, 0, 100),
@@ -286,10 +282,6 @@ export function layerStack(state: CellState, params: CellParams, time = 0) {
   }
 }
 
-export function cellOrigin(row: number, col: number, params: CellParams): Vec3 {
-  return [col * params.cellPitch, row * params.cellPitch, 0]
-}
-
 export function buildArrayLayout(grid: CellGrid, params: CellParams, time = 0): CellLayout[][] {
   const poses = buildInitialPoses(grid, params, time)
   solveConnectorPoses(grid, params, poses)
@@ -297,7 +289,7 @@ export function buildArrayLayout(grid: CellGrid, params: CellParams, time = 0): 
   const layout = buildLayoutFromPoses(grid, params, poses)
   normalizeLayoutFloor(layout)
   populateSymmetricNodes(layout)
-  coupleConnectorNodes(layout, params.connectorLength)
+  coupleConnectorNodes(layout)
   return layout
 }
 
@@ -417,24 +409,6 @@ export function sideNodeLocalPosition(
   return [dx * offset, dy * offset, z]
 }
 
-export function sideNodeWorldPosition(
-  row: number,
-  col: number,
-  state: CellState,
-  layer: LayerName,
-  side: SideName,
-  params: CellParams,
-  time = 0,
-): Vec3 {
-  const [cx, cy] = cellOrigin(row, col, params)
-  const [x, y, z] = sideNodeLocalPosition(state, layer, side, params, time)
-  return [cx + x, cy + y, z]
-}
-
-export function arrayCenterOffset(rows: number, columns: number, params: CellParams): Vec3 {
-  return [-(columns - 1) * params.cellPitch * 0.5, -(rows - 1) * params.cellPitch * 0.5, 0]
-}
-
 export function sideNodePositionFromLayout(layout: CellLayout, layer: LayerName, side: SideName): Vec3 {
   return layout.nodes[layer][side]
 }
@@ -534,7 +508,7 @@ function buildLayerAxisCenters(
 }
 
 function layerPitch(a: CellState, b: CellState, layer: LayerName, params: CellParams, time: number): number {
-  return layerOffset(a, layer, params, time) + layerOffset(b, layer, params, time) + params.connectorLength
+  return layerOffset(a, layer, params, time) + layerOffset(b, layer, params, time)
 }
 
 function layerOffset(state: CellState, layer: LayerName, params: CellParams, time: number): number {
@@ -619,7 +593,7 @@ function populateSymmetricNodes(layout: CellLayout[][]): void {
   )
 }
 
-function coupleConnectorNodes(layout: CellLayout[][], connectorLength: number): void {
+function coupleConnectorNodes(layout: CellLayout[][]): void {
   const rows = layout.length
   const columns = layout[0]?.length ?? 0
 
@@ -628,7 +602,7 @@ function coupleConnectorNodes(layout: CellLayout[][], connectorLength: number): 
     const currentLength = vectorLength(delta)
     const midpoint = scale(add(a, b), 0.5)
     const direction = currentLength > 0.0001 ? scale(delta, 1 / currentLength) : [1, 0, 0] as Vec3
-    const half = Math.max(connectorLength, 0) * 0.5
+    const half = 0
     const nextA = subtract(midpoint, scale(direction, half))
     const nextB = add(midpoint, scale(direction, half))
 
@@ -795,8 +769,8 @@ function projectConnectorConstraint(
 
   const rotationFreedom = rotationFreedomVector(params)
   const direction = scale(delta, 1 / currentLength)
-  const maxCorrection = Math.max(params.cellPitch, params.linkLength, params.plateSize) * 0.42
-  const correctionLength = clampNumber((currentLength - params.connectorLength) * 0.5 * strength, -maxCorrection, maxCorrection)
+  const maxCorrection = Math.max(nominalCellPitch(params), params.linkLength, params.plateSize) * 0.42
+  const correctionLength = clampNumber(currentLength * 0.5 * strength, -maxCorrection, maxCorrection)
   const correction = scale(direction, correctionLength)
   // Node-to-node connectors are hard couplings in the visual model. Stiffness
   // can decide how much neighboring cells tilt/yaw or relax their layer height,
@@ -825,13 +799,13 @@ function projectConnectorConstraint(
     if (aPose.locked) {
       relaxPoseLayerHeightTowardNodeMove(aPose, aLayout, constraint.layer, constraint.aSide, correction, params, flexStrength)
     } else {
-      relaxPoseLayerHeightByDistance(aPose, constraint.layer, currentLength - params.connectorLength, params, flexStrength)
+      relaxPoseLayerHeightByDistance(aPose, constraint.layer, currentLength, params, flexStrength)
     }
 
     if (bPose.locked) {
       relaxPoseLayerHeightTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -1), params, flexStrength)
     } else {
-      relaxPoseLayerHeightByDistance(bPose, constraint.layer, currentLength - params.connectorLength, params, flexStrength)
+      relaxPoseLayerHeightByDistance(bPose, constraint.layer, currentLength, params, flexStrength)
     }
   }
 }
@@ -1029,8 +1003,9 @@ function isPerimeterCell(row: number, col: number, rows: number, columns: number
 }
 
 function perimeterAnchorCenter(row: number, col: number, rows: number, columns: number, params: CellParams, layer: LayerName): Vec3 {
-  const x = (col - (columns - 1) * 0.5) * params.cellPitch
-  const y = (row - (rows - 1) * 0.5) * params.cellPitch
+  const pitch = nominalCellPitch(params)
+  const x = (col - (columns - 1) * 0.5) * pitch
+  const y = (row - (rows - 1) * 0.5) * pitch
   const z = layer === 'lower' ? params.hOff * 0.5 : params.hOff * 1.5
 
   return [x, y, z]

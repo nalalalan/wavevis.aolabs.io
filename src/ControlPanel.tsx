@@ -1,5 +1,5 @@
 import CellGridEditor from './CellGridEditor'
-import { DEFAULT_COLUMNS, DEFAULT_PARAMS, DEFAULT_ROWS, STATE_META, defaultCellPitch, roundForInput } from './geometry'
+import { DEFAULT_COLUMNS, DEFAULT_PARAMS, DEFAULT_ROWS, STATE_META } from './geometry'
 import type { CellGrid, CellParams } from './types'
 
 type ControlPanelProps = {
@@ -18,7 +18,7 @@ type ControlPanelProps = {
 }
 
 const numericInputs: Array<{
-  key: keyof Pick<CellParams, 'hOff' | 'hOn' | 'linkLength' | 'plateSize' | 'cellPitch' | 'connectorLength'>
+  key: keyof Pick<CellParams, 'hOff' | 'hOn' | 'linkLength' | 'plateSize' | 'octagonFaceRatio'>
   label: string
   step: number
   min: number
@@ -28,8 +28,7 @@ const numericInputs: Array<{
   { key: 'hOn', label: 'hOn', step: 0.1, min: 0.15 },
   { key: 'linkLength', label: 'linkLength', step: 0.1, min: 0.25 },
   { key: 'plateSize', label: 'plateSize', step: 0.1, min: 0.25 },
-  { key: 'cellPitch', label: 'cellPitch', step: 0.05, min: 0.5 },
-  { key: 'connectorLength', label: 'connectorLength', step: 0.05, min: 0 },
+  { key: 'octagonFaceRatio', label: 'octagonFaceRatio', step: 0.05, min: 0.1, max: 4 },
 ]
 
 type StiffnessInput = {
@@ -65,7 +64,6 @@ export default function ControlPanel({
 }: ControlPanelProps) {
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
-  const fittedPitch = defaultCellPitch(params)
 
   const setNumber = (key: (typeof numericInputs)[number]['key'], value: number) => {
     onParamsChange({ ...params, [key]: value })
@@ -217,7 +215,6 @@ export default function ControlPanel({
       <section className="panel-section">
         <div className="section-heading">
           <h2>geometry</h2>
-          <span>pitch fit {roundForInput(fittedPitch)}</span>
         </div>
         <div className="param-grid">
           {numericInputs.map((input) => (
@@ -234,13 +231,6 @@ export default function ControlPanel({
             </label>
           ))}
         </div>
-        <button
-          type="button"
-          className="secondary wide"
-          onClick={() => onParamsChange({ ...params, cellPitch: fittedPitch })}
-        >
-          fit cellPitch from connectorLength
-        </button>
       </section>
 
       <section className="panel-section toggles">
