@@ -10,13 +10,15 @@ type CellGridEditorProps = {
 export default function CellGridEditor({ grid, showLabels, onCellClick }: CellGridEditorProps) {
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
+  const gridGap = columns > 48 || rows > 48 ? 1 : columns > 20 || rows > 20 ? 3 : 7
 
   return (
     <section className="grid-editor" aria-label="cell actuation grid">
       <div
         className="cell-grid"
         style={{
-          gridTemplateColumns: `repeat(${columns}, minmax(32px, 1fr))`,
+          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+          gap: `${gridGap}px`,
         }}
       >
         {grid.map((row, rowIndex) =>

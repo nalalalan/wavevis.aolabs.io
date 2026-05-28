@@ -129,14 +129,14 @@ export const DEFAULT_PARAMS: CellParams = {
 }
 
 export function createGrid(rows: number, columns: number, fill: CellState = CELL_STATES.OFF): CellGrid {
-  return Array.from({ length: clampInteger(rows, 1, 12) }, () =>
-    Array.from({ length: clampInteger(columns, 1, 12) }, () => fill),
+  return Array.from({ length: clampInteger(rows, 1, 100) }, () =>
+    Array.from({ length: clampInteger(columns, 1, 100) }, () => fill),
   )
 }
 
 export function resizeGrid(grid: CellGrid, rows: number, columns: number): CellGrid {
-  const safeRows = clampInteger(rows, 1, 12)
-  const safeColumns = clampInteger(columns, 1, 12)
+  const safeRows = clampInteger(rows, 1, 100)
+  const safeColumns = clampInteger(columns, 1, 100)
 
   return Array.from({ length: safeRows }, (_, row) =>
     Array.from({ length: safeColumns }, (_, col) => grid[row]?.[col] ?? CELL_STATES.OFF),
@@ -161,7 +161,7 @@ export function sanitizeParams(params: CellParams): CellParams {
     linkLength: clampNumber(params.linkLength, hOff / 2 + 0.05, 8),
     cellPitch: clampNumber(params.cellPitch, plateSize, 16),
     connectorLength: clampNumber(params.connectorLength, 0, 3),
-    zRotationFlex: clampNumber(params.zRotationFlex, 0, 180),
+    zRotationFlex: clampNumber(params.zRotationFlex, 0, 100),
     angleFlex: clampNumber(params.angleFlex, 0, 1),
     showLabels: params.showLabels,
     animate: params.animate,
@@ -561,36 +561,38 @@ function shiftCell(cell: CellLayout, amount: number): void {
 }
 
 // Kinematic model: every layer keeps the Sarrus link length fixed by deriving
-// side-node offset from the current layer height. The iterative pass treats red
-// connector length as another hard constraint, then spends the allowed leeway on
-// whole-cell z-yaw and small layer-height/expansion relaxation. Individual side
+// side-node offset from the current layer height. The iterative pass treats the
+// node-to-node connector length as a hard constraint. zRotationFlex is a
+// 0-100 yaw-stiffness value: 0 lets cells yaw freely around z before affecting
+// neighboring cell angles, while 100 locks yaw and pushes the correction into
+// layer-center motion and the small height/expansion leeway. Individual side
 // nodes are never pulled independently, so each cell remains symmetric.
 function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose[][]): void {
   const constraints = buildConnectorConstraints(grid)
 
-  for (let pass = 0; pass < 320; pass += 1) {
+  for (let pass = 0; pass < 520; pass += 1) {
     const layout = buildLayoutFromPoses(grid, params, poses)
 
     constraints.forEach((constraint) => {
-      projectConnectorConstraint(poses, layout, constraint, params, 0.42)
+      projectConnectorConstraint(poses, layout, constraint, params, 0.42, true, true)
     })
 
     poses.forEach((row) =>
       row.forEach((pose) => {
         projectPoseSpan(pose, params)
-        relaxPoseYaw(pose, 0.08)
+        relaxPoseYaw(pose, params, 0.08)
       }),
     )
   }
 
-  for (let pass = 0; pass < 1200; pass += 1) {
+  for (let pass = 0; pass < 1500; pass += 1) {
     const layout = buildLayoutFromPoses(grid, params, poses)
     constraints.forEach((constraint) => {
-      projectConnectorConstraint(poses, layout, constraint, params, 0.62)
+      projectConnectorConstraint(poses, layout, constraint, params, 0.62, true, true)
     })
     poses.forEach((row) =>
       row.forEach((pose) => {
-        relaxPoseYaw(pose, 0.02)
+        relaxPoseYaw(pose, params, 0.02)
       }),
     )
   }
@@ -624,6 +626,8 @@ function projectConnectorConstraint(
   constraint: ConnectorConstraint,
   params: CellParams,
   strength: number,
+  allowYaw: boolean,
+  allowHeightFlex: boolean,
 ): void {
   const aLayout = layout[constraint.aRow][constraint.aCol]
   const bLayout = layout[constraint.bRow][constraint.bCol]
@@ -635,6 +639,9 @@ function projectConnectorConstraint(
   const currentLength = vectorLength(delta)
   if (currentLength <= 0.000001) return
 
+  const stiffness = zRotationStiffness(params)
+  const yawFreedom = 1 - stiffness
+  const angleLeewayShare = 0.18 + stiffness * 0.82
   const direction = scale(delta, 1 / currentLength)
   const correctionLength = clampNumber((currentLength - params.connectorLength) * 0.5 * strength, -0.08, 0.08)
   const correction = scale(direction, correctionLength)
@@ -642,17 +649,41 @@ function projectConnectorConstraint(
   const bCanMove = !bPose.locked
   const aScale = aCanMove && bCanMove ? 1 : aCanMove ? 2 : 0
   const bScale = aCanMove && bCanMove ? 1 : bCanMove ? 2 : 0
+  const aYawScale = aPose.locked ? 0 : bCanMove ? 1 : 2
+  const bYawScale = bPose.locked ? 0 : aCanMove ? 1 : 2
 
+  if (allowYaw) {
+    rotatePoseTowardNodeMove(aPose, aLayout, constraint.layer, constraint.aSide, scale(correction, aYawScale), params, strength * (0.05 + yawFreedom * 0.45))
+    rotatePoseTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -bYawScale), params, strength * (0.05 + yawFreedom * 0.45))
+  }
   movePoseLayer(aPose, constraint.layer, scale(correction, aScale))
   movePoseLayer(bPose, constraint.layer, scale(correction, -bScale))
-  relaxPoseLayerHeight(aPose, constraint.layer, currentLength - params.connectorLength, params, strength)
-  relaxPoseLayerHeight(bPose, constraint.layer, currentLength - params.connectorLength, params, strength)
-  rotatePoseTowardNodeMove(aPose, aLayout, constraint.layer, constraint.aSide, scale(correction, aScale), params, strength)
-  rotatePoseTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -bScale), params, strength)
+  if (allowHeightFlex) {
+    if (aPose.locked) {
+      relaxPoseLayerHeightTowardNodeMove(aPose, aLayout, constraint.layer, constraint.aSide, correction, params, strength * angleLeewayShare)
+    } else {
+      relaxPoseLayerHeightByDistance(aPose, constraint.layer, currentLength - params.connectorLength, params, strength * angleLeewayShare)
+    }
+
+    if (bPose.locked) {
+      relaxPoseLayerHeightTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -1), params, strength * angleLeewayShare)
+    } else {
+      relaxPoseLayerHeightByDistance(bPose, constraint.layer, currentLength - params.connectorLength, params, strength * angleLeewayShare)
+    }
+  }
 }
 
 function movePoseLayer(pose: CellPose, layer: LayerName, correction: Vec3): void {
-  if (pose.locked) return
+  if (pose.locked) {
+    if (layer === 'lower') {
+      pose.lowerCenter = add(pose.lowerCenter, correction)
+      pose.upperCenter = add(pose.upperCenter, scale(correction, -1))
+    } else {
+      pose.upperCenter = add(pose.upperCenter, correction)
+      pose.lowerCenter = add(pose.lowerCenter, scale(correction, -1))
+    }
+    return
+  }
 
   if (layer === 'lower') {
     pose.lowerCenter = add(pose.lowerCenter, correction)
@@ -661,7 +692,34 @@ function movePoseLayer(pose: CellPose, layer: LayerName, correction: Vec3): void
   }
 }
 
-function relaxPoseLayerHeight(pose: CellPose, layer: LayerName, connectorError: number, params: CellParams, strength: number): void {
+function relaxPoseLayerHeightTowardNodeMove(
+  pose: CellPose,
+  layout: CellLayout,
+  layer: LayerName,
+  side: SideName,
+  desiredNodeMove: Vec3,
+  params: CellParams,
+  strength: number,
+): void {
+  if (params.angleFlex <= 0) return
+
+  const height = layer === 'lower' ? pose.lowerHeight : pose.upperHeight
+  const lateralSpan = Math.sqrt(Math.max(params.linkLength ** 2 - (height / 2) ** 2, 0))
+  if (lateralSpan <= 0.0001) return
+
+  const sideVector = sideVectorFromLayout(layout, side)
+  const nodeMoveAlongSide = dot(desiredNodeMove, sideVector)
+  const offsetChangePerHeight = -height / (4 * lateralSpan)
+  const delta = clampNumber((nodeMoveAlongSide / offsetChangePerHeight) * params.angleFlex * strength, -0.08, 0.08)
+
+  if (layer === 'lower') {
+    pose.lowerHeight = clampLayerHeight(pose.lowerHeight + delta, params)
+  } else {
+    pose.upperHeight = clampLayerHeight(pose.upperHeight + delta, params)
+  }
+}
+
+function relaxPoseLayerHeightByDistance(pose: CellPose, layer: LayerName, connectorError: number, params: CellParams, strength: number): void {
   if (params.angleFlex <= 0) return
 
   const delta = clampNumber(connectorError * params.angleFlex * strength * 0.08, -0.08, 0.08)
@@ -681,36 +739,38 @@ function rotatePoseTowardNodeMove(
   params: CellParams,
   strength: number,
 ): void {
-  if (params.zRotationFlex <= 0 || params.connectorLength <= 0.0001 || pose.locked) return
+  const yawFreedom = 1 - zRotationStiffness(params)
+  if (yawFreedom <= 0.0001 || pose.locked) return
 
   const center = layer === 'upper' ? layout.upperCenter : layout.lowerCenter
   const radius = subtract(sideNodePositionFromLayout(layout, layer, side), center)
   const tangent = cross([0, 0, 1], radius)
   const tangentLengthSq = Math.max(dot(tangent, tangent), 0.0001)
-  const yawDelta = clampNumber((dot(desiredMove, tangent) / tangentLengthSq) * strength, -0.08, 0.08)
-  pose.yaw = clampNumber(pose.yaw + yawDelta, pose.yawTarget - degreesToRadians(params.zRotationFlex), pose.yawTarget + degreesToRadians(params.zRotationFlex))
+  const yawDelta = clampNumber((dot(desiredMove, tangent) / tangentLengthSq) * strength * yawFreedom, -0.035, 0.035)
+  const maxYaw = yawFreedom * Math.PI
+  pose.yaw = clampNumber(pose.yaw + yawDelta, pose.yawTarget - maxYaw, pose.yawTarget + maxYaw)
 }
 
-function relaxPoseYaw(pose: CellPose, strength: number): void {
+function relaxPoseYaw(pose: CellPose, params: CellParams, strength: number): void {
   if (pose.locked) {
-    restoreLockedPose(pose)
+    pinLockedPose(pose)
     return
   }
 
-  pose.yaw += (pose.yawTarget - pose.yaw) * strength
+  const stiffness = zRotationStiffness(params)
+  if (stiffness <= 0.0001) return
+
+  pose.yaw += (pose.yawTarget - pose.yaw) * strength * stiffness
+  const maxYaw = (1 - stiffness) * Math.PI
+  pose.yaw = clampNumber(pose.yaw, pose.yawTarget - maxYaw, pose.yawTarget + maxYaw)
 }
 
 function projectPoseSpan(pose: CellPose, params: CellParams): void {
-  if (pose.locked) {
-    restoreLockedPose(pose)
-    return
-  }
-
   const delta = subtract(pose.upperCenter, pose.lowerCenter)
   const currentLength = vectorLength(delta)
   if (currentLength <= 0.0001) return
 
-  const targetStrength = params.connectorLength <= 0.0001 ? 0 : ((1 - params.angleFlex) ** 2) * 0.02
+  const targetStrength = ((1 - params.angleFlex) ** 2) * (0.004 + zRotationStiffness(params) * 0.02)
   const direction = scale(delta, 1 / currentLength)
   pose.lowerHeight += (pose.lowerTarget - pose.lowerHeight) * targetStrength
   pose.upperHeight += (pose.upperTarget - pose.upperHeight) * targetStrength
@@ -736,6 +796,10 @@ function projectPoseSpan(pose: CellPose, params: CellParams): void {
   const targetCorrection = scale(adjustedDirection, targetError * 0.5 * targetStrength)
   pose.lowerCenter = add(pose.lowerCenter, targetCorrection)
   pose.upperCenter = add(pose.upperCenter, scale(targetCorrection, -1))
+
+  if (pose.locked) {
+    pinLockedPose(pose)
+  }
 }
 
 function maxTotalSpan(params: Pick<CellParams, 'linkLength'>, lowerRatio: number, upperRatio: number): number {
@@ -747,10 +811,18 @@ function clampLayerHeight(height: number, params: Pick<CellParams, 'linkLength'>
   return clampNumber(height, 0.15, params.linkLength * 2 - 0.02)
 }
 
-function restoreLockedPose(pose: CellPose): void {
-  pose.lowerCenter = [...pose.lockedLowerCenter]
-  pose.upperCenter = [...pose.lockedUpperCenter]
+function pinLockedPose(pose: CellPose): void {
+  const lockedMid = scale(add(pose.lockedLowerCenter, pose.lockedUpperCenter), 0.5)
+  const currentMid = scale(add(pose.lowerCenter, pose.upperCenter), 0.5)
+  const correction = subtract(lockedMid, currentMid)
+  pose.lowerCenter = add(pose.lowerCenter, correction)
+  pose.upperCenter = add(pose.upperCenter, correction)
   pose.yaw = pose.lockedYaw
+}
+
+function zRotationStiffness(params: Pick<CellParams, 'zRotationFlex'>): number {
+  const normalized = clampNumber(params.zRotationFlex / 100, 0, 1)
+  return normalized * normalized
 }
 
 function isPerimeterCell(row: number, col: number, rows: number, columns: number): boolean {
@@ -763,10 +835,6 @@ function perimeterAnchorCenter(row: number, col: number, rows: number, columns: 
   const z = layer === 'lower' ? params.hOff * 0.5 : params.hOff * 1.5
 
   return [x, y, z]
-}
-
-function degreesToRadians(degrees: number): number {
-  return (degrees * Math.PI) / 180
 }
 
 function normalize(vector: Vec3): Vec3 {

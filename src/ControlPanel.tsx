@@ -28,7 +28,7 @@ const numericInputs: Array<{
   { key: 'plateSize', label: 'plateSize', step: 0.1, min: 0.25 },
   { key: 'cellPitch', label: 'cellPitch', step: 0.05, min: 0.5 },
   { key: 'connectorLength', label: 'connectorLength', step: 0.05, min: 0 },
-  { key: 'zRotationFlex', label: 'zRotationFlex', step: 1, min: 0, max: 180 },
+  { key: 'zRotationFlex', label: 'zRotationFlex', step: 1, min: 0, max: 100 },
   { key: 'angleFlex', label: 'angleFlex', step: 0.05, min: 0, max: 1 },
 ]
 
@@ -79,7 +79,7 @@ export default function ControlPanel({
             <input
               type="number"
               min={1}
-              max={12}
+              max={100}
               step={1}
               value={rows}
               onChange={(event) => onRowsColumnsChange(Number(event.target.value), columns)}
@@ -90,7 +90,7 @@ export default function ControlPanel({
             <input
               type="number"
               min={1}
-              max={12}
+              max={100}
               step={1}
               value={columns}
               onChange={(event) => onRowsColumnsChange(rows, Number(event.target.value))}

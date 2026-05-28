@@ -240,12 +240,10 @@ function LayerLinks({
           highCenter[1] + sideVector[1] * plateHalf,
           highCenter[2] + sideVector[2] * plateHalf,
         ]
-        const isDepthSide = side === 'py' || side === 'ny'
-
         return (
           <group key={`${layer}-${side}`}>
-            <PlankSegment start={lowAnchor} end={node} width={plankWidth} thickness={isDepthSide ? 0.028 : 0.044} widthHint={widthHint} color={linkageColor} opacity={isDepthSide ? 0.54 : 0.96} />
-            <PlankSegment start={node} end={highAnchor} width={plankWidth} thickness={isDepthSide ? 0.028 : 0.044} widthHint={widthHint} color={linkageColor} opacity={isDepthSide ? 0.54 : 0.96} />
+            <PlankSegment start={lowAnchor} end={node} width={plankWidth} thickness={0.044} widthHint={widthHint} color={linkageColor} opacity={0.9} />
+            <PlankSegment start={node} end={highAnchor} width={plankWidth} thickness={0.044} widthHint={widthHint} color={linkageColor} opacity={0.9} />
           </group>
         )
       })}
