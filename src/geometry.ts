@@ -49,11 +49,11 @@ const CELL_STATE_SEQUENCE = [
 ] as const
 
 export const DEFAULT_PARAM_SEED = {
-  hOff: 2.5,
-  hOn: 1,
-  linkLength: 1.25,
-  plateSize: 1.6,
-  octagonFaceRatio: 0.31,
+  hOff: 3,
+  hOn: 0.5,
+  linkLength: 1,
+  plateSize: 1,
+  octagonFaceRatio: 1.5,
   rotationXStiffness: 0,
   rotationYStiffness: 0,
   rotationZStiffness: 0,

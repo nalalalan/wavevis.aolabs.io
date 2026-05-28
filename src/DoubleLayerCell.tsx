@@ -42,12 +42,16 @@ type PlankSegmentProps = {
 
 const plateMaterial = new THREE.MeshStandardMaterial({
   color: linkageColor,
+  emissive: linkageColor,
+  emissiveIntensity: 0.08,
   roughness: 0.7,
   metalness: 0.05,
 })
 
 const middlePlateMaterial = new THREE.MeshStandardMaterial({
   color: linkageColor,
+  emissive: linkageColor,
+  emissiveIntensity: 0.08,
   roughness: 0.75,
   metalness: 0.04,
 })
@@ -117,7 +121,7 @@ export function PlankSegment({ start, end, width, thickness = 0.045, color, opac
   return (
     <mesh position={midpoint} quaternion={quaternion}>
       <boxGeometry args={[width, length, thickness]} />
-      <meshStandardMaterial color={color} transparent={opacity < 1} opacity={opacity} roughness={0.62} metalness={0.06} />
+      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.06} transparent={opacity < 1} opacity={opacity} roughness={0.62} metalness={0.06} />
     </mesh>
   )
 }
