@@ -68,17 +68,15 @@ function ArrayModel({ grid, params }: Scene3DProps) {
   const layout = useMemo(() => buildArrayLayout(grid, params, layoutTime), [grid, params, layoutTime])
   const connectors = useMemo(() => (params.connectorLength > 0.0001 ? buildConnectors(grid, layout) : []), [grid, layout, params.connectorLength])
   const showSkin = isOverhangScene(grid, params)
-  const bounds = useMemo(() => layoutBounds(layout), [layout])
 
   return (
     <group>
-      {showSkin && <SurfaceSkin grid={grid} params={params} bounds={bounds} />}
-      {grid.map((row, rowIndex) =>
+      {!showSkin && grid.map((row, rowIndex) =>
         row.map((state, colIndex) => (
           <DoubleLayerCell key={`${rowIndex}-${colIndex}`} row={rowIndex} col={colIndex} state={state} params={params} layout={layout[rowIndex][colIndex]} />
         )),
       )}
-      {connectors.map((connector) => (
+      {!showSkin && connectors.map((connector) => (
         <PlankSegment
           key={connector.id}
           start={connector.start}
@@ -89,105 +87,118 @@ function ArrayModel({ grid, params }: Scene3DProps) {
           widthHint={connectorWidthHint}
         />
       ))}
+      {showSkin && <OverhangEnvelope layout={layout} params={params} />}
     </group>
   )
 }
 
-function SurfaceSkin({ grid, params, bounds }: { grid: CellGrid; params: CellParams; bounds: ReturnType<typeof layoutBounds> }) {
-  const geometry = useMemo(() => {
-    const surfaceRows = 18
-    const surfaceColumns = 72
-    const gridColumns = grid[0]?.length ?? 0
-    const active = activeColumnSpan(grid)
-    const activeStart = active.start / Math.max(gridColumns - 1, 1)
-    const activeEnd = active.end / Math.max(gridColumns - 1, 1)
-    const widthX = Math.max(bounds.span[0] * 0.92, params.cellPitch * Math.max(gridColumns - 1, 1))
-    const widthY = Math.max(bounds.span[1] * 0.78, params.cellPitch * Math.max(grid.length - 1, 1))
-    const baseZ = params.hOff * 2 + 0.22
-    const waveHeight = widthX * 0.32 * active.strength
-    const curlDepth = widthX * 0.78 * active.strength
-    const vertices: number[] = []
-    const indices: number[] = []
+function OverhangEnvelope({ layout, params }: { layout: ReturnType<typeof buildArrayLayout>; params: CellParams }) {
+  const shell = useMemo(() => {
+    const rows = 24
+    const columns = 108
+    const bounds = layoutBounds(layout)
+    const length = Math.max(bounds.span[0], params.cellPitch * 16)
+    const width = Math.max(bounds.span[1] + params.cellPitch * 1.8, params.cellPitch * 5.5)
+    const baseZ = Math.max(bounds.min[2] + 0.18, 0.18)
+    const crestHeight = Math.max(params.hOff * 5.6, length * 0.38)
+    const curlDepth = Math.max(params.cellPitch * 10.5, length * 0.62)
+    const drop = crestHeight * 1.04
+    const thickness = Math.max(params.plateSize * 0.16, 0.26)
+    const topVertices: number[] = []
+    const undersideVertices: number[] = []
+    const topIndices: number[] = []
+    const undersideIndices: number[] = []
+    const edgeIndices: number[] = []
+    const vertexCount = rows * columns
 
-    for (let row = 0; row < surfaceRows; row += 1) {
-      const v = row / (surfaceRows - 1)
-      const widthEnvelope = Math.pow(Math.sin(v * Math.PI), 0.58)
-      const y = (v - 0.5) * widthY
+    // The overhang preset uses a continuous skin envelope instead of showing
+    // every internal linkage. It is still generated from the actuated array
+    // dimensions, but avoids impossible-looking visual holes between cells.
+    for (let row = 0; row < rows; row += 1) {
+      const v = row / Math.max(rows - 1, 1)
+      const side = v * 2 - 1
+      const rowEnvelope = Math.pow(Math.max(0, 1 - Math.abs(side) ** 2.6), 0.72)
 
-      for (let col = 0; col < surfaceColumns; col += 1) {
-        const u = col / (surfaceColumns - 1)
-        const baseX = (u - 0.5) * widthX
-        const activeEnvelope = smoothStep(activeStart - 0.04, activeStart + 0.12, u) * (1 - smoothStep(activeEnd - 0.12, activeEnd + 0.04, u))
-        const localU = clampNumber((u - activeStart) / Math.max(activeEnd - activeStart, 0.0001), 0, 1)
-        const rise = smoothStep(0.02, 0.48, localU)
-        const lip = smoothStep(0.34, 0.86, localU)
-        const fall = smoothStep(0.62, 1, localU)
-        const curledX = baseX - curlDepth * lip * activeEnvelope
-        const curledZ = baseZ + waveHeight * (rise - fall * 0.92) * activeEnvelope
-        const x = baseX + (curledX - baseX) * widthEnvelope
-        const z = baseZ + (curledZ - baseZ) * widthEnvelope
-        vertices.push(x, y, z)
+      for (let col = 0; col < columns; col += 1) {
+        const u = col / Math.max(columns - 1, 1)
+        const endEnvelope = smoothStep01(0.02, 0.16, u) * (1 - smoothStep01(0.86, 0.99, u))
+        const envelope = rowEnvelope * endEnvelope
+        const rise = smoothStep01(0.12, 0.52, u)
+        const fall = smoothStep01(0.52, 0.9, u)
+        const lip = smoothStep01(0.38, 0.7, u)
+        const lipRound = Math.sin(Math.PI * smoothStep01(0.42, 0.9, u))
+        const baseX = bounds.center[0] - length * 0.5 + length * u
+        const topX = baseX - curlDepth * lip * envelope
+        const topY = bounds.center[1] + side * width * 0.5
+        const topZ = baseZ + (crestHeight * rise - drop * fall + crestHeight * 0.18 * lipRound) * envelope
+        const undersideDrop = thickness + crestHeight * 0.1 * envelope
+
+        topVertices.push(topX, topY, topZ)
+        undersideVertices.push(topX, topY, topZ - undersideDrop)
       }
     }
 
-    for (let row = 0; row < surfaceRows - 1; row += 1) {
-      for (let col = 0; col < surfaceColumns - 1; col += 1) {
-        const a = row * surfaceColumns + col
+    const cellIndex = (row: number, col: number) => row * columns + col
+
+    for (let row = 0; row < rows - 1; row += 1) {
+      for (let col = 0; col < columns - 1; col += 1) {
+        const a = cellIndex(row, col)
         const b = a + 1
-        const c = a + surfaceColumns
+        const c = a + columns
         const d = c + 1
-        indices.push(a, c, b, b, c, d)
+        topIndices.push(a, c, b, b, c, d)
+        undersideIndices.push(a, b, c, b, d, c)
       }
     }
 
-    const nextGeometry = new THREE.BufferGeometry()
-    nextGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
-    nextGeometry.setIndex(indices)
-    nextGeometry.computeVertexNormals()
-    return nextGeometry
-  }, [bounds.span, grid, params.cellPitch, params.hOff])
+    const addEdgeQuad = (a: number, b: number) => {
+      const au = a + vertexCount
+      const bu = b + vertexCount
+      edgeIndices.push(a, b, au, b, bu, au)
+    }
+
+    for (let col = 0; col < columns - 1; col += 1) {
+      addEdgeQuad(cellIndex(0, col), cellIndex(0, col + 1))
+      addEdgeQuad(cellIndex(rows - 1, col + 1), cellIndex(rows - 1, col))
+    }
+
+    for (let row = 0; row < rows - 1; row += 1) {
+      addEdgeQuad(cellIndex(row + 1, 0), cellIndex(row, 0))
+      addEdgeQuad(cellIndex(row, columns - 1), cellIndex(row + 1, columns - 1))
+    }
+
+    const makeGeometry = (vertices: number[], indices: number[]) => {
+      const nextGeometry = new THREE.BufferGeometry()
+      nextGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
+      nextGeometry.setIndex(indices)
+      nextGeometry.computeVertexNormals()
+      return nextGeometry
+    }
+
+    return {
+      top: makeGeometry(topVertices, topIndices),
+      underside: makeGeometry(undersideVertices, undersideIndices),
+      edges: makeGeometry([...topVertices, ...undersideVertices], edgeIndices),
+    }
+  }, [layout, params.cellPitch, params.hOff, params.plateSize])
 
   return (
     <group>
-      <mesh geometry={geometry}>
-        <meshStandardMaterial color="#ffc0d2" side={THREE.FrontSide} transparent opacity={0.34} roughness={0.62} metalness={0.02} depthWrite={false} />
+      <mesh geometry={shell.top} renderOrder={20}>
+        <meshStandardMaterial color="#ffc0d2" side={THREE.DoubleSide} roughness={0.64} metalness={0.02} />
       </mesh>
-      <mesh geometry={geometry}>
-        <meshStandardMaterial color="#be6f89" side={THREE.BackSide} transparent opacity={0.58} roughness={0.72} metalness={0.02} depthWrite={false} />
+      <mesh geometry={shell.underside} renderOrder={21}>
+        <meshStandardMaterial color="#c96f91" side={THREE.DoubleSide} roughness={0.72} metalness={0.02} />
+      </mesh>
+      <mesh geometry={shell.edges} renderOrder={22}>
+        <meshStandardMaterial color="#e897ad" side={THREE.DoubleSide} roughness={0.68} metalness={0.02} />
       </mesh>
     </group>
   )
 }
 
-function activeColumnSpan(grid: CellGrid): { start: number; end: number; strength: number } {
-  const rows = grid.length
-  const columns = grid[0]?.length ?? 0
-  let start = columns - 1
-  let end = 0
-  let active = 0
-  let possible = 0
-
-  for (let row = 1; row < rows - 1; row += 1) {
-    for (let col = 1; col < columns - 1; col += 1) {
-      possible += 1
-      if (grid[row][col] !== CELL_STATES.OFF) {
-        start = Math.min(start, col)
-        end = Math.max(end, col)
-        active += 1
-      }
-    }
-  }
-
-  if (active === 0) return { start: 1, end: columns - 2, strength: 1 }
-  return { start, end, strength: Math.min(1, Math.max(0.42, active / Math.max(possible * 0.45, 1))) }
-}
-
-function clampNumber(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, Number.isFinite(value) ? value : min))
-}
-
-function smoothStep(edge0: number, edge1: number, value: number): number {
-  const t = clampNumber((value - edge0) / Math.max(edge1 - edge0, 0.0001), 0, 1)
+function smoothStep01(edge0: number, edge1: number, value: number) {
+  const t = Math.min(1, Math.max(0, (value - edge0) / Math.max(edge1 - edge0, 0.0001)))
   return t * t * (3 - 2 * t)
 }
 
@@ -234,5 +245,15 @@ function buildConnectors(grid: CellGrid, layout: ReturnType<typeof buildArrayLay
 }
 
 function isOverhangScene(grid: CellGrid, params: CellParams): boolean {
-  return params.constrainPerimeter && grid.length >= 5 && (grid[0]?.length ?? 0) >= 8
+  return params.constrainPerimeter && grid.length >= 5 && (grid[0]?.length ?? 0) >= 8 && hasInteriorActuation(grid)
+}
+
+function hasInteriorActuation(grid: CellGrid): boolean {
+  for (let row = 1; row < grid.length - 1; row += 1) {
+    for (let col = 1; col < (grid[row]?.length ?? 1) - 1; col += 1) {
+      if (grid[row][col] !== CELL_STATES.OFF) return true
+    }
+  }
+
+  return false
 }

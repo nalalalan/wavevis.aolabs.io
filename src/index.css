@@ -414,11 +414,14 @@ input[type="range"] {
 .scene-shell {
   min-width: 0;
   min-height: 100vh;
+  height: 100vh;
   background: #f7f3ed;
 }
 
 .scene-shell canvas {
   display: block;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 @media (max-width: 900px) {
