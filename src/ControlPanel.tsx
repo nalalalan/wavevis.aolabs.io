@@ -13,6 +13,7 @@ type ControlPanelProps = {
   onReset: () => void
   onRandomize: () => void
   onDefault: () => void
+  onReferenceWave: () => void
 }
 
 const numericInputs: Array<{
@@ -58,6 +59,7 @@ export default function ControlPanel({
   onReset,
   onRandomize,
   onDefault,
+  onReferenceWave,
 }: ControlPanelProps) {
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
@@ -142,6 +144,9 @@ export default function ControlPanel({
       <section className="run-row">
         <button type="button" className="primary" onClick={onRun}>
           Run / Update 3D
+        </button>
+        <button type="button" className="secondary wide" onClick={onReferenceWave}>
+          Reference 2x33 wave
         </button>
       </section>
 

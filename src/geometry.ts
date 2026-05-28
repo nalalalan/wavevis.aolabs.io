@@ -130,6 +130,18 @@ export const DEFAULT_PARAMS: CellParams = {
   cellPitch: 2.28,
 }
 
+export const REFERENCE_WAVE_COLUMNS = 33
+
+export const REFERENCE_WAVE_PARAMS: CellParams = {
+  ...DEFAULT_PARAMS,
+  cellPitch: 1.6,
+  rotationXStiffness: 0,
+  rotationYStiffness: 0,
+  rotationZStiffness: 0,
+  linkageBendStiffness: 0,
+  constrainPerimeter: false,
+}
+
 export function createGrid(rows: number, columns: number, fill: CellState = CELL_STATES.OFF): CellGrid {
   return Array.from({ length: clampInteger(rows, 1, 100) }, () =>
     Array.from({ length: clampInteger(columns, 1, 100) }, () => fill),
@@ -149,6 +161,24 @@ export function randomGrid(rows: number, columns: number): CellGrid {
   return Array.from({ length: rows }, () =>
     Array.from({ length: columns }, () => Math.floor(Math.random() * STATE_META.length) as CellState),
   )
+}
+
+export function createReferenceWaveGrid(): CellGrid {
+  const grid = createGrid(2, REFERENCE_WAVE_COLUMNS, CELL_STATES.OFF)
+
+  for (let col = 11; col <= 30; col += 1) {
+    grid[0][col] = CELL_STATES.BEND_DOWN
+  }
+
+  for (let col = 0; col <= 10; col += 1) {
+    grid[1][col] = CELL_STATES.BEND_UP
+  }
+
+  for (let col = 15; col < REFERENCE_WAVE_COLUMNS; col += 1) {
+    grid[1][col] = CELL_STATES.BEND_UP
+  }
+
+  return grid
 }
 
 export function sanitizeParams(params: CellParams): CellParams {
@@ -583,9 +613,10 @@ function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose
 
   const constraints = buildConnectorConstraints(grid)
   const cellCount = grid.length * (grid[0]?.length ?? 0)
-  const baseSettlePasses = cellCount > 2500 ? 2 : cellCount > 900 ? 5 : cellCount > 225 ? 16 : 48
+  const stripPlanar = isLongPlanarStrip(grid)
+  const baseSettlePasses = stripPlanar ? 6 : cellCount > 2500 ? 2 : cellCount > 900 ? 5 : cellCount > 225 ? 16 : 48
   const settlePasses = params.constrainPerimeter ? baseSettlePasses : Math.min(baseSettlePasses, 28)
-  const finalPasses = cellCount > 2500 ? 2 : cellCount > 900 ? 4 : Math.max(8, Math.floor(settlePasses * 0.55))
+  const finalPasses = stripPlanar ? 3 : cellCount > 2500 ? 2 : cellCount > 900 ? 4 : Math.max(8, Math.floor(settlePasses * 0.55))
 
   applyCoherentActuationField(grid, params, poses)
 
@@ -622,11 +653,16 @@ function hasActuatedCells(grid: CellGrid): boolean {
   return grid.some((row) => row.some((state) => state !== CELL_STATES.OFF))
 }
 
+function isLongPlanarStrip(grid: CellGrid): boolean {
+  return grid.length === 2 && (grid[0]?.length ?? 0) >= 8
+}
+
 function applyCoherentActuationField(grid: CellGrid, params: CellParams, poses: CellPose[][]): void {
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
   if (rows === 0 || columns === 0) return
 
+  const stripPlanar = isLongPlanarStrip(grid)
   const range = Math.max(params.hOff - params.hOn, 0.0001)
   const bendFreedom = 1 - connectionStiffness(params.linkageBendStiffness)
   const spread = 0.16 + bendFreedom * 0.28
@@ -650,8 +686,9 @@ function applyCoherentActuationField(grid: CellGrid, params: CellParams, poses: 
   const bend = smoothActuationField(bendSeed, passes, spread, params.constrainPerimeter)
   const expansion = smoothActuationField(expansionSeed, Math.max(1, Math.floor(passes * 0.5)), spread * 0.65, params.constrainPerimeter)
   const pitch = Math.max(defaultCellPitch(params), params.plateSize, 0.0001)
-  const liftScale = range * (params.constrainPerimeter ? 1.9 + bendFreedom * 1.25 : 3.8 + bendFreedom * 2.6)
-  const tiltScale = 0.75 + bendFreedom * 0.95
+  const liftScale =
+    range * (params.constrainPerimeter ? 1.9 + bendFreedom * 1.25 : 3.8 + bendFreedom * 2.6) * (stripPlanar ? 0.16 : 1)
+  const tiltScale = (0.75 + bendFreedom * 0.95) * (stripPlanar ? 0.28 : 1)
 
   poses.forEach((row, rowIndex) =>
     row.forEach((pose, colIndex) => {
@@ -680,6 +717,95 @@ function applyCoherentActuationField(grid: CellGrid, params: CellParams, poses: 
       }
     }),
   )
+
+  if (stripPlanar) {
+    applyPlanarStripBend(grid, params, poses, expansionSeed)
+  }
+}
+
+function applyPlanarStripBend(
+  grid: CellGrid,
+  params: CellParams,
+  poses: CellPose[][],
+  expansionSeed: number[][],
+): void {
+  const columns = grid[0]?.length ?? 0
+  if (columns === 0) return
+
+  const bendFreedom = 1 - connectionStiffness(params.linkageBendStiffness)
+  const yawFreedom = rotationFreedom(params, 'z')
+  const step = Math.max(defaultCellPitch(params), params.plateSize, 0.0001)
+  const rowSpacing = step * 0.86
+  const rawCurvature = Array.from({ length: columns }, (_, col) => {
+    const topActivation = expansionSeed[0][col] ?? 0
+    const bottomActivation = expansionSeed[1][col] ?? 0
+    return bottomActivation * 0.65 - topActivation
+  })
+  const curvature = smoothCurve(rawCurvature, 3, 0.42)
+  const gain = yawFreedom * (0.3 + bendFreedom * 0.15) * (0.35 + bendFreedom * 0.65)
+  const points: Array<[number, number]> = []
+  const yaws: number[] = []
+  let x = 0
+  let y = 0
+  let yaw = -0.18
+
+  for (let col = 0; col < columns; col += 1) {
+    yaw += curvature[col] * gain * 0.5
+    points[col] = [x, y]
+    yaws[col] = yaw
+    x += Math.cos(yaw) * step
+    y += Math.sin(yaw) * step
+    yaw += curvature[col] * gain * 0.5
+  }
+
+  const pointCenter = points.reduce<[number, number]>((sum, point) => [sum[0] + point[0], sum[1] + point[1]], [0, 0])
+  pointCenter[0] /= columns
+  pointCenter[1] /= columns
+  const currentCenter = poses
+    .flat()
+    .reduce<[number, number]>(
+      (sum, pose) => {
+        const mid = scale(add(pose.lowerCenter, pose.upperCenter), 0.5)
+        return [sum[0] + mid[0], sum[1] + mid[1]]
+      },
+      [0, 0],
+    )
+  currentCenter[0] /= columns * 2
+  currentCenter[1] /= columns * 2
+
+  poses.forEach((row, rowIndex) =>
+    row.forEach((pose, colIndex) => {
+      if (pose.locked) return
+
+      const centerline = points[colIndex]
+      const rowOffset = (rowIndex - 0.5) * rowSpacing
+      const yawAtColumn = yaws[colIndex]
+      const normal: [number, number] = [-Math.sin(yawAtColumn), Math.cos(yawAtColumn)]
+      const targetX = centerline[0] - pointCenter[0] + currentCenter[0] + normal[0] * rowOffset
+      const targetY = centerline[1] - pointCenter[1] + currentCenter[1] + normal[1] * rowOffset
+      const currentMid = scale(add(pose.lowerCenter, pose.upperCenter), 0.5)
+      const shift: Vec3 = [targetX - currentMid[0], targetY - currentMid[1], 0]
+
+      pose.lowerCenter = add(pose.lowerCenter, shift)
+      pose.upperCenter = add(pose.upperCenter, shift)
+      pose.yaw = yawAtColumn
+      pose.yawTarget = yawAtColumn
+    }),
+  )
+}
+
+function smoothCurve(seed: number[], passes: number, spread: number): number[] {
+  let curve = [...seed]
+
+  for (let pass = 0; pass < passes; pass += 1) {
+    curve = curve.map((value, index) => {
+      const left = curve[Math.max(0, index - 1)]
+      const right = curve[Math.min(curve.length - 1, index + 1)]
+      return value * (1 - spread) + ((left + right) * 0.5) * spread
+    })
+  }
+
+  return curve
 }
 
 function smoothActuationField(seed: number[][], passes: number, spread: number, constrainPerimeter: boolean): number[][] {
