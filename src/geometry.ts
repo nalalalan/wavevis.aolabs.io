@@ -199,7 +199,12 @@ export function buildArrayLayout(grid: CellGrid, params: CellParams, time = 0): 
       const upperOffset = sideNodeOffset(topH, params)
       const bottom: Vec3 = [lowerX[row][col], lowerY[row][col], 0]
       const top: Vec3 = [upperX[row][col], upperY[row][col], bottomH + topH]
-      const middle: Vec3 = [(lowerX[row][col] + upperX[row][col]) / 2, (lowerY[row][col] + upperY[row][col]) / 2, bottomH]
+      const middleT = bottomH / Math.max(bottomH + topH, 0.0001)
+      const middle: Vec3 = [
+        bottom[0] + (top[0] - bottom[0]) * middleT,
+        bottom[1] + (top[1] - bottom[1]) * middleT,
+        bottomH,
+      ]
 
       return {
         bottom,
