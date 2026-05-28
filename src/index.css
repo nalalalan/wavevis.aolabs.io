@@ -132,6 +132,7 @@ h1 {
 
 .panel-section,
 .grid-editor,
+.run-row,
 .button-row {
   padding: 18px 0;
   border-bottom: 1px solid var(--line);
@@ -197,6 +198,7 @@ input[type="number"]:focus-visible {
   gap: 8px;
 }
 
+.run-row button,
 .button-row button,
 .wide {
   min-height: 38px;
@@ -275,6 +277,14 @@ input[type="number"]:focus-visible {
   gap: 9px;
   border-bottom: 0;
   padding-bottom: 0;
+}
+
+.run-row {
+  padding-top: 0;
+}
+
+.run-row .primary {
+  width: 100%;
 }
 
 .primary {

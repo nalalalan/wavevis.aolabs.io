@@ -117,6 +117,12 @@ export default function ControlPanel({
 
       <CellGridEditor grid={grid} showLabels={params.showLabels} onCellClick={onCellClick} />
 
+      <section className="run-row">
+        <button type="button" className="primary" onClick={onRun}>
+          Run / Update 3D
+        </button>
+      </section>
+
       <section className="panel-section">
         <div className="section-heading">
           <h2>geometry</h2>
@@ -165,9 +171,6 @@ export default function ControlPanel({
       </section>
 
       <section className="button-row">
-        <button type="button" className="primary" onClick={onRun}>
-          Run / Update 3D
-        </button>
         <button type="button" className="secondary" onClick={onReset}>
           Reset all OFF
         </button>
