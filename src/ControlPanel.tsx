@@ -36,9 +36,7 @@ type StiffnessInput = {
     | 'rotationXStiffness'
     | 'rotationYStiffness'
     | 'rotationZStiffness'
-    | 'translationXStiffness'
-    | 'translationYStiffness'
-    | 'translationZStiffness'
+    | 'linkageBendStiffness'
   >
   axis: 'x' | 'y' | 'z'
 }
@@ -47,12 +45,6 @@ const rotationStiffnessInputs: StiffnessInput[] = [
   { key: 'rotationXStiffness', axis: 'x' },
   { key: 'rotationYStiffness', axis: 'y' },
   { key: 'rotationZStiffness', axis: 'z' },
-]
-
-const translationStiffnessInputs: StiffnessInput[] = [
-  { key: 'translationXStiffness', axis: 'x' },
-  { key: 'translationYStiffness', axis: 'y' },
-  { key: 'translationZStiffness', axis: 'z' },
 ]
 
 export default function ControlPanel({
@@ -187,31 +179,27 @@ export default function ControlPanel({
             </div>
           </div>
           <div className="constraint-field">
-            <span className="field-title">translation stiffness</span>
-            <span className="field-note">0 free translation / 100 locked translation</span>
-            <div className="axis-control-list">
-              {translationStiffnessInputs.map((input) => (
-                <label key={input.key} className="axis-control">
-                  <span>{input.axis}</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={params[input.key]}
-                    onChange={(event) => setConstraintNumber(input.key, Number(event.target.value))}
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={params[input.key]}
-                    onChange={(event) => setConstraintNumber(input.key, Number(event.target.value))}
-                  />
-                </label>
-              ))}
-            </div>
+            <span className="field-title">
+              linkage bend stiffness
+              <span>{params.linkageBendStiffness}</span>
+            </span>
+            <span className="field-note">0 bend propagates / 100 isolated legs</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={params.linkageBendStiffness}
+              onChange={(event) => setConstraintNumber('linkageBendStiffness', Number(event.target.value))}
+            />
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              value={params.linkageBendStiffness}
+              onChange={(event) => setConstraintNumber('linkageBendStiffness', Number(event.target.value))}
+            />
           </div>
         </div>
       </section>

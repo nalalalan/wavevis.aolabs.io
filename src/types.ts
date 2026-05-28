@@ -27,9 +27,7 @@ export type CellParams = {
   rotationXStiffness: number
   rotationYStiffness: number
   rotationZStiffness: number
-  translationXStiffness: number
-  translationYStiffness: number
-  translationZStiffness: number
+  linkageBendStiffness: number
   showLabels: boolean
   animate: boolean
   constrainPerimeter: boolean

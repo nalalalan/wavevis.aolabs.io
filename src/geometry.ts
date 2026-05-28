@@ -57,9 +57,7 @@ export const DEFAULT_PARAM_SEED = {
   rotationXStiffness: 0,
   rotationYStiffness: 0,
   rotationZStiffness: 0,
-  translationXStiffness: 0,
-  translationYStiffness: 0,
-  translationZStiffness: 0,
+  linkageBendStiffness: 0,
   showLabels: false,
   animate: false,
   constrainPerimeter: false,
@@ -170,9 +168,7 @@ export function sanitizeParams(params: CellParams): CellParams {
     rotationXStiffness: clampNumber(params.rotationXStiffness, 0, 100),
     rotationYStiffness: clampNumber(params.rotationYStiffness, 0, 100),
     rotationZStiffness: clampNumber(params.rotationZStiffness, 0, 100),
-    translationXStiffness: clampNumber(params.translationXStiffness, 0, 100),
-    translationYStiffness: clampNumber(params.translationYStiffness, 0, 100),
-    translationZStiffness: clampNumber(params.translationZStiffness, 0, 100),
+    linkageBendStiffness: clampNumber(params.linkageBendStiffness, 0, 100),
     showLabels: params.showLabels,
     animate: params.animate,
     constrainPerimeter: params.constrainPerimeter,
@@ -501,10 +497,6 @@ function scale(vector: Vec3, scalar: number): Vec3 {
   return [vector[0] * scalar, vector[1] * scalar, vector[2] * scalar]
 }
 
-function multiplyComponents(a: Vec3, b: Vec3): Vec3 {
-  return [a[0] * b[0], a[1] * b[1], a[2] * b[2]]
-}
-
 function vectorLength(vector: Vec3): number {
   return Math.hypot(vector[0], vector[1], vector[2])
 }
@@ -580,12 +572,11 @@ function shiftCell(cell: CellLayout, amount: number): void {
 
 // Kinematic model: every layer keeps the Sarrus link length fixed by deriving
 // side-node offset from the current layer height. The iterative pass treats the
-// node-to-node connector length as a hard constraint. Connection stiffness
-// values are 0-100: 0 lets that rotation or translation mode move freely, while
-// 100 makes it rigid and pushes the correction into other connection modes or
-// automatic height relaxation only when the requested geometry is otherwise
-// infeasible. Individual side nodes are never pulled independently, so each
-// cell remains symmetric.
+// node-to-node connector length as a hard constraint. Rotation stiffness values
+// control how freely connections can hinge; linkage bend stiffness controls how
+// much connector error is allowed to propagate into neighboring cell leg angles.
+// Individual side nodes are never pulled independently, so each cell remains
+// symmetric.
 function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose[][]): void {
   const constraints = buildConnectorConstraints(grid)
 
@@ -658,14 +649,13 @@ function projectConnectorConstraint(
   const currentLength = vectorLength(delta)
   if (currentLength <= 0.000001) return
 
-  const translationFreedom = translationFreedomVector(params)
   const rotationFreedom = rotationFreedomVector(params)
-  const stiffness = averageConnectionStiffness(params)
-  const heightFallbackShare = 0.18 + stiffness * 0.82
+  const bendStiffness = connectionStiffness(params.linkageBendStiffness)
+  const bendFreedom = 1 - bendStiffness
   const direction = scale(delta, 1 / currentLength)
   const correctionLength = clampNumber((currentLength - params.connectorLength) * 0.5 * strength, -0.08, 0.08)
   const correction = scale(direction, correctionLength)
-  const translationCorrection = multiplyComponents(correction, translationFreedom)
+  const bendCorrection = scale(correction, bendFreedom)
   const aCanMove = !aPose.locked
   const bCanMove = !bPose.locked
   const aScale = aCanMove && bCanMove ? 1 : aCanMove ? 2 : 0
@@ -681,19 +671,19 @@ function projectConnectorConstraint(
     rotatePoseTiltTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -bRotationScale), params, strength * (0.03 + rotationFreedom[1] * 0.28), 1)
     rotatePoseYawTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -bRotationScale), params, strength * (0.05 + rotationFreedom[2] * 0.45))
   }
-  movePoseLayer(aPose, constraint.layer, scale(translationCorrection, aScale))
-  movePoseLayer(bPose, constraint.layer, scale(translationCorrection, -bScale))
-  if (allowHeightFlex && stiffness > 0.0001) {
+  movePoseLayer(aPose, constraint.layer, scale(bendCorrection, aScale))
+  movePoseLayer(bPose, constraint.layer, scale(bendCorrection, -bScale))
+  if (allowHeightFlex && bendFreedom > 0.0001) {
     if (aPose.locked) {
-      relaxPoseLayerHeightTowardNodeMove(aPose, aLayout, constraint.layer, constraint.aSide, correction, params, strength * heightFallbackShare)
+      relaxPoseLayerHeightTowardNodeMove(aPose, aLayout, constraint.layer, constraint.aSide, correction, params, strength * bendFreedom)
     } else {
-      relaxPoseLayerHeightByDistance(aPose, constraint.layer, currentLength - params.connectorLength, params, strength * heightFallbackShare)
+      relaxPoseLayerHeightByDistance(aPose, constraint.layer, currentLength - params.connectorLength, params, strength * bendFreedom)
     }
 
     if (bPose.locked) {
-      relaxPoseLayerHeightTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -1), params, strength * heightFallbackShare)
+      relaxPoseLayerHeightTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -1), params, strength * bendFreedom)
     } else {
-      relaxPoseLayerHeightByDistance(bPose, constraint.layer, currentLength - params.connectorLength, params, strength * heightFallbackShare)
+      relaxPoseLayerHeightByDistance(bPose, constraint.layer, currentLength - params.connectorLength, params, strength * bendFreedom)
     }
   }
 }
@@ -821,7 +811,7 @@ function projectPoseSpan(pose: CellPose, params: CellParams): void {
   const currentLength = vectorLength(delta)
   if (currentLength <= 0.0001) return
 
-  const targetStrength = 0.004 + averageConnectionStiffness(params) * 0.02
+  const targetStrength = 0.004 + connectionStiffness(params.linkageBendStiffness) * 0.02
   const direction = scale(delta, 1 / currentLength)
   pose.lowerHeight += (pose.lowerTarget - pose.lowerHeight) * targetStrength
   pose.upperHeight += (pose.upperTarget - pose.upperHeight) * targetStrength
@@ -884,25 +874,6 @@ function rotationFreedom(params: CellParams, axis: 'x' | 'y' | 'z'): number {
 
 function rotationFreedomVector(params: CellParams): Vec3 {
   return [rotationFreedom(params, 'x'), rotationFreedom(params, 'y'), rotationFreedom(params, 'z')]
-}
-
-function translationFreedomVector(params: CellParams): Vec3 {
-  return [
-    1 - connectionStiffness(params.translationXStiffness),
-    1 - connectionStiffness(params.translationYStiffness),
-    1 - connectionStiffness(params.translationZStiffness),
-  ]
-}
-
-function averageConnectionStiffness(params: CellParams): number {
-  return (
-    connectionStiffness(params.rotationXStiffness) +
-    connectionStiffness(params.rotationYStiffness) +
-    connectionStiffness(params.rotationZStiffness) +
-    connectionStiffness(params.translationXStiffness) +
-    connectionStiffness(params.translationYStiffness) +
-    connectionStiffness(params.translationZStiffness)
-  ) / 6
 }
 
 function isPerimeterCell(row: number, col: number, rows: number, columns: number): boolean {
