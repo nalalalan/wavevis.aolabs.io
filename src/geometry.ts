@@ -54,10 +54,6 @@ export const DEFAULT_PARAM_SEED = {
   linkLength: 1,
   plateSize: 1,
   octagonFaceRatio: 1.5,
-  rotationXStiffness: 0,
-  rotationYStiffness: 0,
-  rotationZStiffness: 0,
-  linkageBendStiffness: 0,
   showLabels: false,
   animate: false,
   constrainPerimeter: false,
@@ -133,10 +129,6 @@ export const REFERENCE_WAVE_COLUMNS = 33
 
 export const REFERENCE_WAVE_PARAMS: CellParams = {
   ...DEFAULT_PARAMS,
-  rotationXStiffness: 0,
-  rotationYStiffness: 0,
-  rotationZStiffness: 0,
-  linkageBendStiffness: 0,
   constrainPerimeter: false,
 }
 
@@ -148,10 +140,6 @@ export const OVERHANG_PARAMS: CellParams = {
   hOn: 0.82,
   linkLength: 1.35,
   plateSize: 1.38,
-  rotationXStiffness: 0,
-  rotationYStiffness: 0,
-  rotationZStiffness: 100,
-  linkageBendStiffness: 0,
   animate: true,
   constrainPerimeter: true,
 }
@@ -228,10 +216,6 @@ export function sanitizeParams(params: CellParams): CellParams {
     // If the requested leg is shorter than half the ideal layer height, the
     // layout relaxes resultant height later instead of stretching the leg.
     linkLength: clampNumber(params.linkLength, 0.25, 8),
-    rotationXStiffness: clampNumber(params.rotationXStiffness, 0, 100),
-    rotationYStiffness: clampNumber(params.rotationYStiffness, 0, 100),
-    rotationZStiffness: clampNumber(params.rotationZStiffness, 0, 100),
-    linkageBendStiffness: clampNumber(params.linkageBendStiffness, 0, 100),
     showLabels: params.showLabels,
     animate: params.animate,
     constrainPerimeter: params.constrainPerimeter,
@@ -652,11 +636,9 @@ function shiftCell(cell: CellLayout, amount: number): void {
 // side-node offset from the current layer height. Adjacent cells are then
 // settled at connector boundaries so side nodes remain coupled instead of
 // drawing stretched connector spans.
-// Rotation stiffness controls how freely the cells can tilt/yaw at connections.
-// Linkage bend stiffness controls how much a local actuation propagates into
-// neighboring cell leg angles. Individual side nodes are never pulled
-// independently, so each cell remains symmetric and all same-cell legs keep the
-// same length.
+// Connections are solved with free rotation and bend propagation. Individual
+// side nodes are never pulled independently, so each cell remains symmetric and
+// all same-cell legs keep the same length.
 function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose[][]): void {
   if (!hasActuatedCells(grid)) return
 
@@ -678,7 +660,7 @@ function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose
     poses.forEach((row) =>
       row.forEach((pose) => {
         projectPoseSpan(pose, params)
-        relaxPoseYaw(pose, params, 0.04)
+        relaxPoseYaw(pose)
       }),
     )
 
@@ -692,7 +674,7 @@ function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose
     poses.forEach((row) =>
       row.forEach((pose) => {
         projectPoseSpan(pose, params)
-        relaxPoseYaw(pose, params, 0.02)
+        relaxPoseYaw(pose)
       }),
     )
   }
@@ -767,16 +749,14 @@ function projectConnectorConstraint(
   const currentLength = vectorLength(delta)
   if (currentLength <= 0.000001) return
 
-  const rotationFreedom = rotationFreedomVector(params)
   const direction = scale(delta, 1 / currentLength)
   const maxCorrection = Math.max(nominalCellPitch(params), params.linkLength, params.plateSize) * 0.42
   const correctionLength = clampNumber(currentLength * 0.5 * strength, -maxCorrection, maxCorrection)
   const correction = scale(direction, correctionLength)
-  // Node-to-node connectors are hard couplings in the visual model. Stiffness
-  // can decide how much neighboring cells tilt/yaw or relax their layer height,
-  // but it cannot leave a connector stretched between separated side nodes.
+  // Node-to-node connectors are hard couplings in the visual model. Solver
+  // relaxation can tilt/yaw cells or relax layer height, but it cannot leave a
+  // connector stretched between separated side nodes.
   const couplingCorrection = correction
-  const bendFreedom = 1 - connectionStiffness(params.linkageBendStiffness)
   const aCanMove = !aPose.locked
   const bCanMove = !bPose.locked
   const aScale = aCanMove && bCanMove ? 1 : aCanMove ? 2 : 0
@@ -785,17 +765,17 @@ function projectConnectorConstraint(
   const bRotationScale = bPose.locked ? 0.35 : aCanMove ? 1 : 2
 
   if (allowYaw) {
-    rotatePoseTiltTowardNodeMove(aPose, aLayout, constraint.layer, constraint.aSide, scale(correction, aRotationScale), params, strength * (0.03 + rotationFreedom[0] * 0.28), 0)
-    rotatePoseTiltTowardNodeMove(aPose, aLayout, constraint.layer, constraint.aSide, scale(correction, aRotationScale), params, strength * (0.03 + rotationFreedom[1] * 0.28), 1)
-    rotatePoseYawTowardNodeMove(aPose, aLayout, constraint.layer, constraint.aSide, scale(correction, aRotationScale), params, strength * (0.05 + rotationFreedom[2] * 0.45))
-    rotatePoseTiltTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -bRotationScale), params, strength * (0.03 + rotationFreedom[0] * 0.28), 0)
-    rotatePoseTiltTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -bRotationScale), params, strength * (0.03 + rotationFreedom[1] * 0.28), 1)
-    rotatePoseYawTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -bRotationScale), params, strength * (0.05 + rotationFreedom[2] * 0.45))
+    rotatePoseTiltTowardNodeMove(aPose, aLayout, constraint.layer, constraint.aSide, scale(correction, aRotationScale), strength * 0.31, 0)
+    rotatePoseTiltTowardNodeMove(aPose, aLayout, constraint.layer, constraint.aSide, scale(correction, aRotationScale), strength * 0.31, 1)
+    rotatePoseYawTowardNodeMove(aPose, aLayout, constraint.layer, constraint.aSide, scale(correction, aRotationScale), strength * 0.5)
+    rotatePoseTiltTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -bRotationScale), strength * 0.31, 0)
+    rotatePoseTiltTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -bRotationScale), strength * 0.31, 1)
+    rotatePoseYawTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -bRotationScale), strength * 0.5)
   }
   movePoseLayer(aPose, constraint.layer, scale(couplingCorrection, aScale))
   movePoseLayer(bPose, constraint.layer, scale(couplingCorrection, -bScale))
   if (allowHeightFlex) {
-    const flexStrength = strength * Math.max(0.18, bendFreedom)
+    const flexStrength = strength
     if (aPose.locked) {
       relaxPoseLayerHeightTowardNodeMove(aPose, aLayout, constraint.layer, constraint.aSide, correction, params, flexStrength)
     } else {
@@ -869,18 +849,16 @@ function rotatePoseYawTowardNodeMove(
   layer: LayerName,
   side: SideName,
   desiredMove: Vec3,
-  params: CellParams,
   strength: number,
 ): void {
-  const yawFreedom = rotationFreedom(params, 'z')
-  if (yawFreedom <= 0.0001 || pose.locked) return
+  if (pose.locked) return
 
   const center = layer === 'upper' ? layout.upperCenter : layout.lowerCenter
   const radius = subtract(sideNodePositionFromLayout(layout, layer, side), center)
   const tangent = cross([0, 0, 1], radius)
   const tangentLengthSq = Math.max(dot(tangent, tangent), 0.0001)
-  const yawDelta = clampNumber((dot(desiredMove, tangent) / tangentLengthSq) * strength * yawFreedom, -0.035, 0.035)
-  const maxYaw = yawFreedom * Math.PI
+  const yawDelta = clampNumber((dot(desiredMove, tangent) / tangentLengthSq) * strength, -0.035, 0.035)
+  const maxYaw = Math.PI
   pose.yaw = clampNumber(pose.yaw + yawDelta, pose.yawTarget - maxYaw, pose.yawTarget + maxYaw)
 }
 
@@ -890,19 +868,15 @@ function rotatePoseTiltTowardNodeMove(
   layer: LayerName,
   side: SideName,
   desiredMove: Vec3,
-  params: CellParams,
   strength: number,
   axisIndex: 0 | 1,
 ): void {
-  const freedom = rotationFreedom(params, axisIndex === 0 ? 'x' : 'y')
-  if (freedom <= 0.0001) return
-
   const pivot = scale(add(pose.lowerCenter, pose.upperCenter), 0.5)
   const axis: Vec3 = axisIndex === 0 ? [1, 0, 0] : [0, 1, 0]
   const radius = subtract(sideNodePositionFromLayout(layout, layer, side), pivot)
   const tangent = cross(axis, radius)
   const tangentLengthSq = Math.max(dot(tangent, tangent), 0.0001)
-  const angleDelta = clampNumber((dot(desiredMove, tangent) / tangentLengthSq) * strength * freedom, -0.024, 0.024)
+  const angleDelta = clampNumber((dot(desiredMove, tangent) / tangentLengthSq) * strength, -0.024, 0.024)
 
   if (Math.abs(angleDelta) <= 0.000001) return
 
@@ -914,18 +888,10 @@ function rotatePoseTiltTowardNodeMove(
   }
 }
 
-function relaxPoseYaw(pose: CellPose, params: CellParams, strength: number): void {
+function relaxPoseYaw(pose: CellPose): void {
   if (pose.locked) {
     pinLockedPose(pose)
-    return
   }
-
-  const stiffness = connectionStiffness(params.rotationZStiffness)
-  if (stiffness <= 0.0001) return
-
-  pose.yaw += (pose.yawTarget - pose.yaw) * strength * stiffness
-  const maxYaw = (1 - stiffness) * Math.PI
-  pose.yaw = clampNumber(pose.yaw, pose.yawTarget - maxYaw, pose.yawTarget + maxYaw)
 }
 
 function projectPoseSpan(pose: CellPose, params: CellParams): void {
@@ -933,7 +899,7 @@ function projectPoseSpan(pose: CellPose, params: CellParams): void {
   const currentLength = vectorLength(delta)
   if (currentLength <= 0.0001) return
 
-  const targetStrength = 0.004 + connectionStiffness(params.linkageBendStiffness) * 0.02
+  const targetStrength = 0.004
   const direction = scale(delta, 1 / currentLength)
   pose.lowerHeight += (pose.lowerTarget - pose.lowerHeight) * targetStrength
   pose.upperHeight += (pose.upperTarget - pose.upperHeight) * targetStrength
@@ -981,21 +947,6 @@ function pinLockedPose(pose: CellPose): void {
   pose.lowerCenter = add(pose.lowerCenter, correction)
   pose.upperCenter = add(pose.upperCenter, correction)
   pose.yaw = pose.lockedYaw
-}
-
-function connectionStiffness(value: number): number {
-  const normalized = clampNumber(value / 100, 0, 1)
-  return normalized * normalized
-}
-
-function rotationFreedom(params: CellParams, axis: 'x' | 'y' | 'z'): number {
-  if (axis === 'x') return 1 - connectionStiffness(params.rotationXStiffness)
-  if (axis === 'y') return 1 - connectionStiffness(params.rotationYStiffness)
-  return 1 - connectionStiffness(params.rotationZStiffness)
-}
-
-function rotationFreedomVector(params: CellParams): Vec3 {
-  return [rotationFreedom(params, 'x'), rotationFreedom(params, 'y'), rotationFreedom(params, 'z')]
 }
 
 function isPerimeterCell(row: number, col: number, rows: number, columns: number): boolean {

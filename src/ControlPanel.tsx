@@ -31,23 +31,6 @@ const numericInputs: Array<{
   { key: 'octagonFaceRatio', label: 'octagonFaceRatio', step: 0.05, min: 0.1, max: 4 },
 ]
 
-type StiffnessInput = {
-  key: keyof Pick<
-    CellParams,
-    | 'rotationXStiffness'
-    | 'rotationYStiffness'
-    | 'rotationZStiffness'
-    | 'linkageBendStiffness'
-  >
-  axis: 'x' | 'y' | 'z'
-}
-
-const rotationStiffnessInputs: StiffnessInput[] = [
-  { key: 'rotationXStiffness', axis: 'x' },
-  { key: 'rotationYStiffness', axis: 'y' },
-  { key: 'rotationZStiffness', axis: 'z' },
-]
-
 export default function ControlPanel({
   grid,
   params,
@@ -66,10 +49,6 @@ export default function ControlPanel({
   const columns = grid[0]?.length ?? 0
 
   const setNumber = (key: (typeof numericInputs)[number]['key'], value: number) => {
-    onParamsChange({ ...params, [key]: value })
-  }
-
-  const setConstraintNumber = (key: StiffnessInput['key'], value: number) => {
     onParamsChange({ ...params, [key]: value })
   }
 
@@ -151,65 +130,6 @@ export default function ControlPanel({
         <button type="button" className="secondary wide" onClick={onReferenceWave}>
           Layer-stripe reference
         </button>
-      </section>
-
-      <section className="panel-section">
-        <div className="section-heading">
-          <h2>constraints</h2>
-          <span>solver</span>
-        </div>
-        <div className="constraint-grid">
-          <div className="constraint-field">
-            <span className="field-title">rotation stiffness</span>
-            <span className="field-note">0 free rotation / 100 locked rotation</span>
-            <div className="axis-control-list">
-              {rotationStiffnessInputs.map((input) => (
-                <label key={input.key} className="axis-control">
-                  <span>{input.axis}</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={params[input.key]}
-                    onChange={(event) => setConstraintNumber(input.key, Number(event.target.value))}
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={params[input.key]}
-                    onChange={(event) => setConstraintNumber(input.key, Number(event.target.value))}
-                  />
-                </label>
-              ))}
-            </div>
-          </div>
-          <div className="constraint-field">
-            <span className="field-title">
-              linkage bend stiffness
-              <span>{params.linkageBendStiffness}</span>
-            </span>
-            <span className="field-note">0 bend propagates / 100 isolated legs</span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={1}
-              value={params.linkageBendStiffness}
-              onChange={(event) => setConstraintNumber('linkageBendStiffness', Number(event.target.value))}
-            />
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={1}
-              value={params.linkageBendStiffness}
-              onChange={(event) => setConstraintNumber('linkageBendStiffness', Number(event.target.value))}
-            />
-          </div>
-        </div>
       </section>
 
       <section className="panel-section">

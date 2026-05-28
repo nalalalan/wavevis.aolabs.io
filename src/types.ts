@@ -23,10 +23,6 @@ export type CellParams = {
   linkLength: number
   plateSize: number
   octagonFaceRatio: number
-  rotationXStiffness: number
-  rotationYStiffness: number
-  rotationZStiffness: number
-  linkageBendStiffness: number
   showLabels: boolean
   animate: boolean
   constrainPerimeter: boolean
