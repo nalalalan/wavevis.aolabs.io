@@ -267,8 +267,8 @@ export function layerStack(state: CellState, params: CellParams, time = 0) {
 }
 
 export function buildArrayLayout(grid: CellGrid, params: CellParams, time = 0): CellLayout[][] {
-  const poses = buildInitialPoses(grid, params, time)
   const planarStrip = isPlanarStrip(grid)
+  const poses = planarStrip ? buildPlanarStripPoses(grid, params, time) : buildInitialPoses(grid, params, time)
   if (!planarStrip) solveConnectorPoses(grid, params, poses)
 
   const layout = buildLayoutFromPoses(grid, params, poses)
@@ -322,6 +322,134 @@ function buildInitialPoses(grid: CellGrid, params: CellParams, time: number): Ce
       }
     }),
   )
+}
+
+function buildPlanarStripPoses(grid: CellGrid, params: CellParams, time: number): CellPose[][] {
+  const rows = grid.length
+  const columns = grid[0]?.length ?? 0
+  const alongAxis: AxisName = columns >= rows ? 'x' : 'y'
+  const primaryCount = alongAxis === 'x' ? columns : rows
+  const crossCount = alongAxis === 'x' ? rows : columns
+  const bendSteps = smoothStripBendSteps(grid, params, time, alongAxis, primaryCount, crossCount)
+  const angles = stripCellAngles(bendSteps)
+  const centerline = stripCenterline(grid, params, time, alongAxis, primaryCount, crossCount, angles)
+  const crossCenters = cumulativeCenters(crossCount, () => nominalCellPitch(params))
+
+  return Array.from({ length: rows }, (_, row) =>
+    Array.from({ length: columns }, (_, col) => {
+      const state = grid[row][col]
+      const primaryIndex = alongAxis === 'x' ? col : row
+      const crossIndex = alongAxis === 'x' ? row : col
+      const lowerTarget = layerHeight(state, 'lower', params, time)
+      const upperTarget = layerHeight(state, 'upper', params, time)
+      const centerSpan = Math.max((lowerTarget + upperTarget) / 2, 0.0001)
+      const angle = angles[primaryIndex]
+      const normalAlong = -Math.sin(angle)
+      const normalZ = Math.cos(angle)
+      const center = centerline[primaryIndex]
+      const crossCenter = crossCenters[crossIndex] ?? 0
+      const lowerAlong = center[0] - normalAlong * centerSpan * 0.5
+      const upperAlong = center[0] + normalAlong * centerSpan * 0.5
+      const lowerZ = center[1] - normalZ * centerSpan * 0.5
+      const upperZ = center[1] + normalZ * centerSpan * 0.5
+      const lowerCenter: Vec3 = alongAxis === 'x' ? [lowerAlong, crossCenter, lowerZ] : [crossCenter, lowerAlong, lowerZ]
+      const upperCenter: Vec3 = alongAxis === 'x' ? [upperAlong, crossCenter, upperZ] : [crossCenter, upperAlong, upperZ]
+      const locked = params.constrainPerimeter && isPerimeterCell(row, col, rows, columns)
+      const lockedLowerCenter = perimeterAnchorCenter(row, col, rows, columns, params, 'lower')
+      const lockedUpperCenter = perimeterAnchorCenter(row, col, rows, columns, params, 'upper')
+
+      return {
+        lowerCenter: locked ? [...lockedLowerCenter] : lowerCenter,
+        upperCenter: locked ? [...lockedUpperCenter] : upperCenter,
+        lowerTarget,
+        upperTarget,
+        lowerHeight: lowerTarget,
+        upperHeight: upperTarget,
+        yaw: 0,
+        yawTarget: 0,
+        locked,
+        lockedLowerCenter,
+        lockedUpperCenter,
+        lockedYaw: 0,
+      }
+    }),
+  )
+}
+
+function smoothStripBendSteps(
+  grid: CellGrid,
+  params: CellParams,
+  time: number,
+  alongAxis: AxisName,
+  primaryCount: number,
+  crossCount: number,
+): number[] {
+  const raw = Array.from({ length: primaryCount }, (_, index) => {
+    let sum = 0
+    for (let crossIndex = 0; crossIndex < crossCount; crossIndex += 1) {
+      const state = alongAxis === 'x' ? grid[crossIndex][index] : grid[index][crossIndex]
+      sum += layerOffset(state, 'lower', params, time) - layerOffset(state, 'upper', params, time)
+    }
+
+    return sum / Math.max(crossCount, 1)
+  })
+
+  const bendGain = 0.42
+  const displacementRatio = clampNumber((params.hOff - params.hOn) / Math.max(params.hOff, 0.0001), 0, 1)
+  const maxStep = 0.22 + displacementRatio * 0.36
+
+  return raw.map((value, index) => {
+    const prev = raw[Math.max(index - 1, 0)]
+    const next = raw[Math.min(index + 1, raw.length - 1)]
+    const smoothed = prev * 0.22 + value * 0.56 + next * 0.22
+    return clampNumber(smoothed * bendGain, -maxStep, maxStep)
+  })
+}
+
+function stripCellAngles(bendSteps: number[]): number[] {
+  if (bendSteps.length === 0) return []
+
+  const angles = Array.from({ length: bendSteps.length }, () => 0)
+  for (let index = 1; index < bendSteps.length; index += 1) {
+    angles[index] = angles[index - 1] + (bendSteps[index - 1] + bendSteps[index]) * 0.5
+  }
+
+  const mean = angles.reduce((sum, angle) => sum + angle, 0) / angles.length
+  return angles.map((angle) => clampNumber(angle - mean, -Math.PI * 0.82, Math.PI * 0.82))
+}
+
+function stripCenterline(
+  grid: CellGrid,
+  params: CellParams,
+  time: number,
+  alongAxis: AxisName,
+  primaryCount: number,
+  crossCount: number,
+  angles: number[],
+): Array<[number, number]> {
+  if (primaryCount <= 0) return []
+
+  const averageOffsets = Array.from({ length: primaryCount }, (_, index) => {
+    let sum = 0
+    for (let crossIndex = 0; crossIndex < crossCount; crossIndex += 1) {
+      const state = alongAxis === 'x' ? grid[crossIndex][index] : grid[index][crossIndex]
+      sum += (layerOffset(state, 'lower', params, time) + layerOffset(state, 'upper', params, time)) * 0.5
+    }
+
+    return sum / Math.max(crossCount, 1)
+  })
+
+  const centers: Array<[number, number]> = [[0, 0]]
+  for (let index = 1; index < primaryCount; index += 1) {
+    const gap = averageOffsets[index - 1] + averageOffsets[index]
+    const angle = (angles[index - 1] + angles[index]) * 0.5
+    const previous = centers[index - 1]
+    centers[index] = [previous[0] + Math.cos(angle) * gap, previous[1] + Math.sin(angle) * gap]
+  }
+
+  const originAlong = (centers[0][0] + centers[centers.length - 1][0]) * 0.5
+  const minZ = Math.min(...centers.map((center) => center[1]))
+  return centers.map((center) => [center[0] - originAlong, center[1] - minZ])
 }
 
 function buildLayoutFromPoses(grid: CellGrid, params: CellParams, poses: CellPose[][]): CellLayout[][] {
