@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "check:geometry": "node scripts/check-geometry-invariants.cjs",
     "deploy": "npm run build && gh-pages -d dist -b gh-pages",
     "lint": "eslint .",
     "preview": "vite preview"

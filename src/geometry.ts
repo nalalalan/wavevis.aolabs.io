@@ -274,7 +274,6 @@ export function buildArrayLayout(grid: CellGrid, params: CellParams, time = 0): 
   const layout = buildLayoutFromPoses(grid, params, poses)
   normalizeLayoutFloor(layout)
   populateSymmetricNodes(layout)
-  coupleConnectorNodes(layout)
   return layout
 }
 
@@ -415,7 +414,7 @@ function stripCellAngles(bendSteps: number[]): number[] {
   }
 
   const mean = angles.reduce((sum, angle) => sum + angle, 0) / angles.length
-  return angles.map((angle) => clampNumber(angle - mean, -Math.PI * 0.82, Math.PI * 0.82))
+  return angles.map((angle) => clampNumber(angle - mean, -Math.PI * 0.46, Math.PI * 0.46))
 }
 
 function stripCenterline(
@@ -706,42 +705,6 @@ function populateSymmetricNodes(layout: CellLayout[][]): void {
   )
 }
 
-function coupleConnectorNodes(layout: CellLayout[][]): void {
-  const rows = layout.length
-  const columns = layout[0]?.length ?? 0
-
-  const couplePair = (a: Vec3, b: Vec3) => {
-    const delta = subtract(b, a)
-    const currentLength = vectorLength(delta)
-    const midpoint = scale(add(a, b), 0.5)
-    const direction = currentLength > 0.0001 ? scale(delta, 1 / currentLength) : [1, 0, 0] as Vec3
-    const half = 0
-    const nextA = subtract(midpoint, scale(direction, half))
-    const nextB = add(midpoint, scale(direction, half))
-
-    a[0] = nextA[0]
-    a[1] = nextA[1]
-    a[2] = nextA[2]
-    b[0] = nextB[0]
-    b[1] = nextB[1]
-    b[2] = nextB[2]
-  }
-
-  for (let row = 0; row < rows; row += 1) {
-    for (let col = 0; col < columns - 1; col += 1) {
-      couplePair(layout[row][col].nodes.lower.px, layout[row][col + 1].nodes.lower.nx)
-      couplePair(layout[row][col].nodes.upper.px, layout[row][col + 1].nodes.upper.nx)
-    }
-  }
-
-  for (let row = 0; row < rows - 1; row += 1) {
-    for (let col = 0; col < columns; col += 1) {
-      couplePair(layout[row][col].nodes.lower.py, layout[row + 1][col].nodes.lower.ny)
-      couplePair(layout[row][col].nodes.upper.py, layout[row + 1][col].nodes.upper.ny)
-    }
-  }
-}
-
 function normalizeLayoutFloor(layout: CellLayout[][]): void {
   const minZ = Math.min(...layout.flatMap((row) => row.map((cell) => Math.min(cell.bottom[2], cell.middle[2], cell.top[2]))), 0)
   if (Math.abs(minZ) <= 0.0001) return
@@ -762,9 +725,9 @@ function shiftCell(cell: CellLayout, amount: number): void {
 }
 
 // Kinematic model: every layer keeps the Sarrus link length fixed by deriving
-// side-node offset from the current layer height. Adjacent cells are then
-// settled at connector boundaries so side nodes remain coupled instead of
-// drawing stretched connector spans.
+// side-node offset from the current layer height. Connector constraints move
+// whole cell poses and layer centers; final rendering never snaps a side node
+// independently, because that would fake connector closure by stretching legs.
 // Connections are solved with free rotation and bend propagation. Individual
 // side nodes are never pulled independently, so each cell remains symmetric and
 // all same-cell legs keep the same length.
@@ -818,7 +781,7 @@ function hasActuatedCells(grid: CellGrid): boolean {
 function isPlanarStrip(grid: CellGrid): boolean {
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
-  return Math.max(rows, columns) >= 2 && (rows <= 2 || columns <= 2)
+  return Math.max(rows, columns) >= 4 && (rows <= 2 || columns <= 2)
 }
 
 function isOverhangSurface(grid: CellGrid, params: CellParams): boolean {
