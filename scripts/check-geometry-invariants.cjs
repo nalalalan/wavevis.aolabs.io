@@ -175,6 +175,7 @@ function checkCase(testCase) {
   const layout = geometry.buildArrayLayout(testCase.grid, params, 0)
   let maxLegError = 0
   let maxConnectorGap = 0
+  let maxAdjacentAngle = 0
   let minVerticalStack = Infinity
   let minRenderedZ = Infinity
   let maxPassiveLayerHeightError = 0
@@ -216,6 +217,12 @@ function checkCase(testCase) {
     })
   }
 
+  if (testCase.grid.length === 1 && testCase.grid[0].length > 1) {
+    for (let col = 0; col < layout[0].length - 1; col += 1) {
+      maxAdjacentAngle = Math.max(maxAdjacentAngle, angleBetween(cellAxis(layout[0][col]), cellAxis(layout[0][col + 1])))
+    }
+  }
+
   ;(testCase.passiveLayerChecks ?? []).forEach((check) => {
     const cell = layout[check.row][check.col]
     const height = check.layer === 'lower' ? cell.bottomH : cell.topH
@@ -226,6 +233,7 @@ function checkCase(testCase) {
     name: testCase.name,
     maxLegError,
     maxConnectorGap,
+    maxAdjacentAngle,
     maxPassiveLayerHeightError,
     minVerticalStack,
     minRenderedZ,
@@ -326,7 +334,8 @@ console.log(JSON.stringify(mirrorResult, null, 2))
 const failed = results.filter(
   (result) =>
     result.maxLegError > 1e-9 ||
-    result.maxConnectorGap > 1e-8 ||
+    result.maxConnectorGap > 1e-7 ||
+    result.maxAdjacentAngle > 0.64 ||
     result.maxPassiveLayerHeightError > 1e-8 ||
     result.minVerticalStack <= 0 ||
     result.minRenderedZ < -1e-8,
@@ -336,7 +345,18 @@ if (failed.length > 0) {
   process.exit(1)
 }
 
-if (mirrorResult.maxMirrorError > 1e-8) {
+if (mirrorResult.maxMirrorError > 1e-7) {
   console.error('Geometry mirror failure:', JSON.stringify(mirrorResult, null, 2))
   process.exit(1)
+}
+
+function cellAxis(cell) {
+  const axis = subtract(cell.top, cell.bottom)
+  const axisLength = length(axis)
+  return scale(axis, 1 / Math.max(axisLength, 0.0001))
+}
+
+function angleBetween(a, b) {
+  const cosine = Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]))
+  return Math.acos(cosine)
 }

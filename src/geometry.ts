@@ -470,7 +470,7 @@ function solvePassiveLayerHeights(grid: CellGrid, params: CellParams, time: numb
     contactHeights = rebalanceStripHeightsForContact(contactHeights.lower, contactHeights.upper, params, compatibilityTarget)
   }
 
-  return contactHeights
+  return enforceStripBodyClearance(grid, params, contactHeights)
 }
 
 function targetLayerHeights(grid: CellGrid, params: CellParams, time: number): LayerHeightFields {
@@ -550,6 +550,63 @@ function projectLayerPairForContact(lowerHeight: number, upperHeight: number, pa
   }
 
   return [lower, upper]
+}
+
+function enforceStripBodyClearance(grid: CellGrid, params: CellParams, heights: LayerHeightFields): LayerHeightFields {
+  const rows = grid.length
+  const columns = grid[0]?.length ?? 0
+  const alongAxis: AxisName = columns >= rows ? 'x' : 'y'
+  const primaryCount = alongAxis === 'x' ? columns : rows
+  const crossCount = alongAxis === 'x' ? rows : columns
+  const maxAdjacentAngle = stripBodyClearanceAngleLimit(params)
+  let next = cloneHeightFields(heights)
+
+  // Strip contact is a hard node-to-node rule, but the cells are not zero-width
+  // mathematical bars. If exact actuation would fold adjacent octagonal bodies
+  // through each other, relax the resultant layer split before rendering.
+  for (let pass = 0; pass < 8; pass += 1) {
+    const angles = exactStripCellAngles(params, alongAxis, primaryCount, crossCount, next)
+    const worst = maxAdjacentAngleDelta(angles)
+    if (worst <= maxAdjacentAngle) break
+
+    const severity = clampNumber((worst - maxAdjacentAngle) / Math.max(worst, 0.0001), 0, 1)
+    blendLayerSplitTowardClearance(next, 0.18 + severity * 0.34)
+    const compatibilityTarget = averageCompatibilityMeasure(buildCompatibilityDerivativeField(next.lower, next.upper, params))
+    next = rebalanceStripHeightsForContact(next.lower, next.upper, params, compatibilityTarget)
+  }
+
+  return next
+}
+
+function cloneHeightFields(fields: LayerHeightFields): LayerHeightFields {
+  return {
+    lower: cloneHeightField(fields.lower),
+    upper: cloneHeightField(fields.upper),
+  }
+}
+
+function maxAdjacentAngleDelta(angles: number[]): number {
+  let worst = 0
+  for (let index = 0; index < angles.length - 1; index += 1) {
+    worst = Math.max(worst, Math.abs(angles[index + 1] - angles[index]))
+  }
+  return worst
+}
+
+function blendLayerSplitTowardClearance(fields: LayerHeightFields, strength: number): void {
+  fields.lower.forEach((row, rowIndex) =>
+    row.forEach((lowerHeight, colIndex) => {
+      const upperHeight = fields.upper[rowIndex][colIndex]
+      const averageHeight = (lowerHeight + upperHeight) * 0.5
+      fields.lower[rowIndex][colIndex] = lowerHeight + (averageHeight - lowerHeight) * strength
+      fields.upper[rowIndex][colIndex] = upperHeight + (averageHeight - upperHeight) * strength
+    }),
+  )
+}
+
+function stripBodyClearanceAngleLimit(params: Pick<CellParams, 'linkLength' | 'plateSize'>): number {
+  const bodyToLegRatio = params.plateSize / Math.max(params.linkLength, 0.0001)
+  return clampNumber(0.72 - bodyToLegRatio * 0.1, 0.54, 0.76)
 }
 
 function layerCompressionDemand(state: CellState, layer: LayerName, params: CellParams, time: number): number {
