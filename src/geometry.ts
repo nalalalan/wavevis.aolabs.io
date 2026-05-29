@@ -268,7 +268,8 @@ export function layerStack(state: CellState, params: CellParams, time = 0) {
 
 export function buildArrayLayout(grid: CellGrid, params: CellParams, time = 0): CellLayout[][] {
   const poses = buildInitialPoses(grid, params, time)
-  solveConnectorPoses(grid, params, poses)
+  const planarStrip = isPlanarStrip(grid)
+  if (!planarStrip) solveConnectorPoses(grid, params, poses)
 
   const layout = buildLayoutFromPoses(grid, params, poses)
   normalizeLayoutFloor(layout)
@@ -639,22 +640,24 @@ function shiftCell(cell: CellLayout, amount: number): void {
 // Connections are solved with free rotation and bend propagation. Individual
 // side nodes are never pulled independently, so each cell remains symmetric and
 // all same-cell legs keep the same length.
+// One/two-cell-wide strips skip this 3D projection pass and use the deterministic
+// initial planar layout instead. That avoids high-displacement corkscrew modes
+// where a strip can satisfy connector pulls by twisting out of plane.
 function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose[][]): void {
   if (!hasActuatedCells(grid)) return
 
   const constraints = buildConnectorConstraints(grid)
   const cellCount = grid.length * (grid[0]?.length ?? 0)
-  const stripPlanar = isLongPlanarStrip(grid)
   const overhangSurface = isOverhangSurface(grid, params)
-  const baseSettlePasses = overhangSurface ? 72 : stripPlanar ? 72 : cellCount > 2500 ? 3 : cellCount > 900 ? 8 : cellCount > 225 ? 18 : 56
-  const settlePasses = params.constrainPerimeter || stripPlanar ? baseSettlePasses : Math.min(baseSettlePasses, 28)
-  const finalPasses = overhangSurface ? 72 : stripPlanar ? 72 : cellCount > 2500 ? 4 : cellCount > 900 ? 8 : Math.max(12, Math.floor(settlePasses * 0.65))
+  const baseSettlePasses = overhangSurface ? 72 : cellCount > 2500 ? 3 : cellCount > 900 ? 8 : cellCount > 225 ? 18 : 56
+  const settlePasses = params.constrainPerimeter ? baseSettlePasses : Math.min(baseSettlePasses, 28)
+  const finalPasses = overhangSurface ? 72 : cellCount > 2500 ? 4 : cellCount > 900 ? 8 : Math.max(12, Math.floor(settlePasses * 0.65))
 
   for (let pass = 0; pass < settlePasses; pass += 1) {
     const layout = buildLayoutFromPoses(grid, params, poses)
 
     constraints.forEach((constraint) => {
-      projectConnectorConstraint(poses, layout, constraint, params, overhangSurface || stripPlanar ? 0.62 : 0.28, true, false)
+      projectConnectorConstraint(poses, layout, constraint, params, overhangSurface ? 0.62 : 0.28, true, false)
     })
 
     poses.forEach((row) =>
@@ -669,7 +672,7 @@ function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose
   for (let pass = 0; pass < finalPasses; pass += 1) {
     const layout = buildLayoutFromPoses(grid, params, poses)
     constraints.forEach((constraint) => {
-      projectConnectorConstraint(poses, layout, constraint, params, overhangSurface || stripPlanar ? 0.74 : 0.34, true, pass > finalPasses * 0.35)
+      projectConnectorConstraint(poses, layout, constraint, params, overhangSurface ? 0.74 : 0.34, true, pass > finalPasses * 0.35)
     })
     poses.forEach((row) =>
       row.forEach((pose) => {
@@ -684,9 +687,10 @@ function hasActuatedCells(grid: CellGrid): boolean {
   return grid.some((row) => row.some((state) => state !== CELL_STATES.OFF))
 }
 
-function isLongPlanarStrip(grid: CellGrid): boolean {
+function isPlanarStrip(grid: CellGrid): boolean {
   const rows = grid.length
-  return rows >= 1 && rows <= 2 && (grid[0]?.length ?? 0) >= 8
+  const columns = grid[0]?.length ?? 0
+  return Math.max(rows, columns) >= 2 && (rows <= 2 || columns <= 2)
 }
 
 function isOverhangSurface(grid: CellGrid, params: CellParams): boolean {
@@ -857,8 +861,8 @@ function rotatePoseYawTowardNodeMove(
   const radius = subtract(sideNodePositionFromLayout(layout, layer, side), center)
   const tangent = cross([0, 0, 1], radius)
   const tangentLengthSq = Math.max(dot(tangent, tangent), 0.0001)
-  const yawDelta = clampNumber((dot(desiredMove, tangent) / tangentLengthSq) * strength, -0.035, 0.035)
-  const maxYaw = Math.PI
+  const yawDelta = clampNumber((dot(desiredMove, tangent) / tangentLengthSq) * strength, -0.008, 0.008)
+  const maxYaw = Math.PI / 10
   pose.yaw = clampNumber(pose.yaw + yawDelta, pose.yawTarget - maxYaw, pose.yawTarget + maxYaw)
 }
 
@@ -926,9 +930,23 @@ function projectPoseSpan(pose: CellPose, params: CellParams): void {
   pose.lowerCenter = add(pose.lowerCenter, targetCorrection)
   pose.upperCenter = add(pose.upperCenter, scale(targetCorrection, -1))
 
+  preventPoseInversion(pose, params)
+
   if (pose.locked) {
     pinLockedPose(pose)
   }
+}
+
+function preventPoseInversion(pose: CellPose, params: Pick<CellParams, 'hOff' | 'hOn'>): void {
+  if (pose.locked) return
+
+  const minVerticalSpan = Math.min(Math.max(params.hOn, 0.15) * 0.2, Math.max(params.hOff, 0.25) * 0.08)
+  const verticalSpan = pose.upperCenter[2] - pose.lowerCenter[2]
+  if (verticalSpan >= minVerticalSpan) return
+
+  const midZ = (pose.lowerCenter[2] + pose.upperCenter[2]) * 0.5
+  pose.lowerCenter[2] = midZ - minVerticalSpan * 0.5
+  pose.upperCenter[2] = midZ + minVerticalSpan * 0.5
 }
 
 function maxTotalSpan(params: Pick<CellParams, 'linkLength'>, lowerRatio: number, upperRatio: number): number {
