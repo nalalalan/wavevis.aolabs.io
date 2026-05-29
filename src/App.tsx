@@ -6,10 +6,6 @@ import {
   DEFAULT_COLUMNS,
   DEFAULT_PARAMS,
   DEFAULT_ROWS,
-  OVERHANG_PARAMS,
-  REFERENCE_WAVE_PARAMS,
-  createOverhangGrid,
-  createReferenceWaveGrid,
   createGrid,
   nextCellState,
   randomGrid,
@@ -69,26 +65,6 @@ function App() {
     setDraftGrid(randomGrid(rows, columns))
   }
 
-  const setReferenceWave = () => {
-    const nextGrid = createReferenceWaveGrid()
-    const nextParams = sanitizeParams(REFERENCE_WAVE_PARAMS)
-    setPanelWidth((current) => Math.max(current, 650))
-    setDraftParams(nextParams)
-    setAppliedParams(nextParams)
-    setDraftGrid(nextGrid)
-    setAppliedGrid(nextGrid.map((row) => [...row]))
-  }
-
-  const setOverhangWave = () => {
-    const nextGrid = createOverhangGrid()
-    const nextParams = sanitizeParams(OVERHANG_PARAMS)
-    setPanelWidth((current) => Math.max(current, 650))
-    setDraftParams(nextParams)
-    setAppliedParams(nextParams)
-    setDraftGrid(nextGrid)
-    setAppliedGrid(nextGrid.map((row) => [...row]))
-  }
-
   const startPanelResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
     event.preventDefault()
     const startX = event.clientX
@@ -127,8 +103,6 @@ function App() {
         onReset={resetAllOff}
         onRandomize={randomize}
         onDefault={setDefault}
-        onOverhangWave={setOverhangWave}
-        onReferenceWave={setReferenceWave}
       />
       <button
         type="button"

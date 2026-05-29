@@ -143,25 +143,6 @@ export const DEFAULT_PARAMS: CellParams = {
   ...DEFAULT_PARAM_SEED,
 }
 
-export const REFERENCE_WAVE_COLUMNS = 33
-
-export const REFERENCE_WAVE_PARAMS: CellParams = {
-  ...DEFAULT_PARAMS,
-  constrainPerimeter: false,
-}
-
-export const OVERHANG_ROWS = 5
-export const OVERHANG_COLUMNS = 21
-
-export const OVERHANG_PARAMS: CellParams = {
-  ...DEFAULT_PARAMS,
-  hOn: 0.82,
-  linkLength: 1.35,
-  plateSize: 1.38,
-  animate: true,
-  constrainPerimeter: true,
-}
-
 export function createGrid(rows: number, columns: number, fill: CellState = CELL_STATES.OFF): CellGrid {
   return Array.from({ length: clampInteger(rows, 1, 100) }, () =>
     Array.from({ length: clampInteger(columns, 1, 100) }, () => fill),
@@ -181,44 +162,6 @@ export function randomGrid(rows: number, columns: number): CellGrid {
   return Array.from({ length: rows }, () =>
     Array.from({ length: columns }, () => Math.floor(Math.random() * STATE_META.length) as CellState),
   )
-}
-
-export function createReferenceWaveGrid(): CellGrid {
-  const grid = createGrid(1, REFERENCE_WAVE_COLUMNS, CELL_STATES.OFF)
-
-  for (let col = 11; col <= 30; col += 1) {
-    grid[0][col] = CELL_STATES.BEND_DOWN
-  }
-
-  for (let col = 0; col <= 10; col += 1) {
-    grid[0][col] = CELL_STATES.BEND_UP
-  }
-
-  for (let col = 15; col < REFERENCE_WAVE_COLUMNS; col += 1) {
-    grid[0][col] = isUpperActuated(grid[0][col]) ? CELL_STATES.EXPAND : CELL_STATES.BEND_UP
-  }
-
-  return grid
-}
-
-export function createOverhangGrid(): CellGrid {
-  const grid = createGrid(OVERHANG_ROWS, OVERHANG_COLUMNS, CELL_STATES.OFF)
-
-  for (let row = 1; row < OVERHANG_ROWS - 1; row += 1) {
-    for (let col = 2; col <= 8; col += 1) {
-      grid[row][col] = CELL_STATES.BEND_UP
-    }
-
-    for (let col = 9; col <= 12; col += 1) {
-      grid[row][col] = CELL_STATES.EXPAND
-    }
-
-    for (let col = 13; col <= 17; col += 1) {
-      grid[row][col] = CELL_STATES.BEND_DOWN
-    }
-  }
-
-  return grid
 }
 
 export function sanitizeParams(params: CellParams): CellParams {

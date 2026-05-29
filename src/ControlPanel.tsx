@@ -13,8 +13,6 @@ type ControlPanelProps = {
   onReset: () => void
   onRandomize: () => void
   onDefault: () => void
-  onOverhangWave: () => void
-  onReferenceWave: () => void
 }
 
 const numericInputs: Array<{
@@ -42,8 +40,6 @@ export default function ControlPanel({
   onReset,
   onRandomize,
   onDefault,
-  onOverhangWave,
-  onReferenceWave,
 }: ControlPanelProps) {
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
@@ -123,12 +119,6 @@ export default function ControlPanel({
       <section className="run-row">
         <button type="button" className="primary" onClick={onRun}>
           Run / Update 3D
-        </button>
-        <button type="button" className="secondary wide" onClick={onOverhangWave}>
-          Overhang wave
-        </button>
-        <button type="button" className="secondary wide" onClick={onReferenceWave}>
-          Layer-stripe reference
         </button>
       </section>
 
