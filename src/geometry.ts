@@ -110,6 +110,24 @@ type ConnectorConstraint = {
   layer: LayerName
 }
 
+type HeightCompatibilityConstraint = {
+  aRow: number
+  aCol: number
+  bRow: number
+  bCol: number
+}
+
+type LayerHeightFields = Record<LayerName, number[][]>
+
+type CompatibilityDerivatives = {
+  measure: number
+  offsetDelta: number
+  dMeasureLower: number
+  dMeasureUpper: number
+  dOffsetLower: number
+  dOffsetUpper: number
+}
+
 export function sideNodeOffset(height: number, params: Pick<CellParams, 'linkLength' | 'plateSize'>): number {
   const plateHalf = params.plateSize / 2
   const verticalHalfSpan = height / 2
@@ -268,7 +286,10 @@ export function layerStack(state: CellState, params: CellParams, time = 0) {
 
 export function buildArrayLayout(grid: CellGrid, params: CellParams, time = 0): CellLayout[][] {
   const planarStrip = isPlanarStrip(grid)
-  const poses = planarStrip ? buildPlanarStripPoses(grid, params, time) : buildInitialPoses(grid, params, time)
+  const layerHeights = solvePassiveLayerHeights(grid, params, time, planarStrip)
+  const poses = planarStrip
+    ? buildPlanarStripPoses(grid, params, layerHeights)
+    : buildInitialPoses(grid, params, layerHeights)
   if (!planarStrip) solveConnectorPoses(grid, params, poses)
 
   const layout = buildLayoutFromPoses(grid, params, poses)
@@ -277,19 +298,18 @@ export function buildArrayLayout(grid: CellGrid, params: CellParams, time = 0): 
   return layout
 }
 
-function buildInitialPoses(grid: CellGrid, params: CellParams, time: number): CellPose[][] {
+function buildInitialPoses(grid: CellGrid, params: CellParams, layerHeights: LayerHeightFields): CellPose[][] {
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
-  const lowerX = buildLayerAxisCenters(grid, params, 'lower', 'x', time)
-  const upperX = buildLayerAxisCenters(grid, params, 'upper', 'x', time)
-  const lowerY = buildLayerAxisCenters(grid, params, 'lower', 'y', time)
-  const upperY = buildLayerAxisCenters(grid, params, 'upper', 'y', time)
+  const lowerX = buildLayerAxisCentersFromHeights(layerHeights.lower, params, 'x')
+  const upperX = buildLayerAxisCentersFromHeights(layerHeights.upper, params, 'x')
+  const lowerY = buildLayerAxisCentersFromHeights(layerHeights.lower, params, 'y')
+  const upperY = buildLayerAxisCentersFromHeights(layerHeights.upper, params, 'y')
 
   return Array.from({ length: rows }, (_, row) =>
     Array.from({ length: columns }, (_, col) => {
-      const state = grid[row][col]
-      const lowerTarget = layerHeight(state, 'lower', params, time)
-      const upperTarget = layerHeight(state, 'upper', params, time)
+      const lowerTarget = layerHeights.lower[row][col]
+      const upperTarget = layerHeights.upper[row][col]
       const centerSpan = Math.max((lowerTarget + upperTarget) / 2, 0.0001)
       const centerDx = upperX[row][col] - lowerX[row][col]
       const centerDy = upperY[row][col] - lowerY[row][col]
@@ -323,26 +343,24 @@ function buildInitialPoses(grid: CellGrid, params: CellParams, time: number): Ce
   )
 }
 
-function buildPlanarStripPoses(grid: CellGrid, params: CellParams, time: number): CellPose[][] {
+function buildPlanarStripPoses(grid: CellGrid, params: CellParams, stripHeights: LayerHeightFields): CellPose[][] {
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
   const alongAxis: AxisName = columns >= rows ? 'x' : 'y'
   const primaryCount = alongAxis === 'x' ? columns : rows
   const crossCount = alongAxis === 'x' ? rows : columns
-  const stripHeights = buildStripLayerHeights(grid, params, time, alongAxis)
   const angles = exactStripCellAngles(params, alongAxis, primaryCount, crossCount, stripHeights)
   const lowerCenterline = exactStripLowerCenterline(params, alongAxis, primaryCount, crossCount, angles, stripHeights)
   const crossCenters = cumulativeCenters(crossCount, () => nominalCellPitch(params))
 
   return Array.from({ length: rows }, (_, row) =>
     Array.from({ length: columns }, (_, col) => {
-      const state = grid[row][col]
       const primaryIndex = alongAxis === 'x' ? col : row
       const crossIndex = alongAxis === 'x' ? row : col
-      const lowerTarget = layerHeight(state, 'lower', params, time)
-      const upperTarget = layerHeight(state, 'upper', params, time)
       const lowerHeight = stripHeights.lower[row][col]
       const upperHeight = stripHeights.upper[row][col]
+      const lowerTarget = lowerHeight
+      const upperTarget = upperHeight
       const centerSpan = Math.max((lowerHeight + upperHeight) / 2, 0.0001)
       const angle = angles[primaryIndex]
       const axisAlong = Math.sin(angle)
@@ -377,77 +395,113 @@ function buildPlanarStripPoses(grid: CellGrid, params: CellParams, time: number)
   )
 }
 
-function buildStripLayerHeights(grid: CellGrid, params: CellParams, time: number, alongAxis: AxisName): Record<LayerName, number[][]> {
-  const lower = buildStripLayerHeightMap(grid, params, time, alongAxis, 'lower')
-  const upper = buildStripLayerHeightMap(grid, params, time, alongAxis, 'upper')
-  const compatibilityTarget = stripCompatibilityTarget(lower, upper, params)
+function solvePassiveLayerHeights(grid: CellGrid, params: CellParams, time: number, enforceStripContact: boolean): LayerHeightFields {
+  const targets = targetLayerHeights(grid, params, time)
+  if (!hasActuatedCells(grid)) return targets
 
-  return rebalanceStripHeightsForContact(lower, upper, params, compatibilityTarget)
-}
-
-function buildStripLayerHeightMap(
-  grid: CellGrid,
-  params: CellParams,
-  time: number,
-  alongAxis: AxisName,
-  layer: LayerName,
-): number[][] {
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
+  const lower = cloneHeightField(targets.lower)
+  const upper = cloneHeightField(targets.upper)
+  const lowerStiffness = buildLayerStiffnessMap(grid, params, time, 'lower')
+  const upperStiffness = buildLayerStiffnessMap(grid, params, time, 'upper')
+  const constraints = buildHeightCompatibilityConstraints(rows, columns)
+  const passCount = enforceStripContact ? 96 : rows * columns > 2500 ? 28 : rows * columns > 900 ? 42 : 72
+  const compatibilityStiffness = enforceStripContact ? 42 : 20
+  const bodyShearStiffness = 7.5
+  const minHeight = minimumSolvedLayerHeight(params)
 
-  return Array.from({ length: rows }, (_, row) =>
-    Array.from({ length: columns }, (_, col) => {
-      const baseHeight = clampLayerHeight(layerHeight(grid[row][col], layer, params, time), params)
-      const selfCompression = layerCompressionDemand(grid[row][col], layer, params, time)
-      if (selfCompression > 0.0001) return baseHeight
+  // This is the passive expansion model. Each layer starts at its requested EM
+  // height, then a small energy solve lets OFF layers compress when that reduces
+  // connector incompatibility or same-cell body shear. EM-on layers are stiffer,
+  // so they stay close to hOn unless the connector constraints have no cleaner
+  // solution. The rendered links still get their length from the final height,
+  // so the solve can only change resultant height/angle, never link length.
+  for (let pass = 0; pass < passCount; pass += 1) {
+    const stats = buildCompatibilityDerivativeField(lower, upper, params)
+    const gradients = emptyGradientFields(rows, columns)
+    const denominators = emptyGradientFields(rows, columns, 1)
 
-      const primaryIndex = alongAxis === 'x' ? col : row
-      const crossIndex = alongAxis === 'x' ? row : col
-      const directPull = Math.max(
-        stripLayerCompressionAt(grid, layer, params, time, alongAxis, primaryIndex - 1, crossIndex),
-        stripLayerCompressionAt(grid, layer, params, time, alongAxis, primaryIndex + 1, crossIndex),
-      )
-      const nextPull = Math.max(
-        stripLayerCompressionAt(grid, layer, params, time, alongAxis, primaryIndex - 2, crossIndex),
-        stripLayerCompressionAt(grid, layer, params, time, alongAxis, primaryIndex + 2, crossIndex),
-      )
-      const crossPull = Math.max(
-        stripLayerCompressionAt(grid, layer, params, time, alongAxis, primaryIndex, crossIndex - 1),
-        stripLayerCompressionAt(grid, layer, params, time, alongAxis, primaryIndex, crossIndex + 1),
-      )
-      const coupledLayer = layer === 'lower' ? 'upper' : 'lower'
-      const coupledSelfPull = layerCompressionDemand(grid[row][col], coupledLayer, params, time)
-      const coupledDirectPull = Math.max(
-        stripLayerCompressionAt(grid, coupledLayer, params, time, alongAxis, primaryIndex - 1, crossIndex),
-        stripLayerCompressionAt(grid, coupledLayer, params, time, alongAxis, primaryIndex + 1, crossIndex),
-      )
-      const coupledNextPull = Math.max(
-        stripLayerCompressionAt(grid, coupledLayer, params, time, alongAxis, primaryIndex - 2, crossIndex),
-        stripLayerCompressionAt(grid, coupledLayer, params, time, alongAxis, primaryIndex + 2, crossIndex),
-      )
-      const coupledCrossPull = Math.max(
-        stripLayerCompressionAt(grid, coupledLayer, params, time, alongAxis, primaryIndex, crossIndex - 1),
-        stripLayerCompressionAt(grid, coupledLayer, params, time, alongAxis, primaryIndex, crossIndex + 1),
-      )
-      const sameLayerPull = directPull * 0.48 + nextPull * 0.16 + crossPull * 0.24
-      const bodyPull = coupledSelfPull * 0.18 + coupledDirectPull * 0.42 + coupledNextPull * 0.12 + coupledCrossPull * 0.18
-      const passivePull = clampNumber(Math.max(sameLayerPull, bodyPull), 0, 0.56)
+    for (let row = 0; row < rows; row += 1) {
+      for (let col = 0; col < columns; col += 1) {
+        addHeightTargetGradient(gradients, denominators, 'lower', row, col, lower[row][col], targets.lower[row][col], lowerStiffness[row][col])
+        addHeightTargetGradient(gradients, denominators, 'upper', row, col, upper[row][col], targets.upper[row][col], upperStiffness[row][col])
+        addSameCellShearGradient(gradients, denominators, stats[row][col], row, col, bodyShearStiffness)
+      }
+    }
 
-      return baseHeight + (params.hOn - baseHeight) * passivePull
-    }),
-  )
-}
+    if (enforceStripContact) {
+      const targetMeasure = averageCompatibilityMeasure(stats)
+      for (let row = 0; row < rows; row += 1) {
+        for (let col = 0; col < columns; col += 1) {
+          addCompatibilityTargetGradient(gradients, denominators, stats[row][col], row, col, targetMeasure, compatibilityStiffness)
+        }
+      }
+    } else {
+      constraints.forEach((constraint) => {
+        const a = stats[constraint.aRow][constraint.aCol]
+        const b = stats[constraint.bRow][constraint.bCol]
+        addCompatibilityPairGradient(gradients, denominators, a, b, constraint, compatibilityStiffness)
+      })
+    }
 
-function stripCompatibilityTarget(lower: number[][], upper: number[][], params: CellParams): number {
-  let target = Infinity
-
-  for (let row = 0; row < lower.length; row += 1) {
-    for (let col = 0; col < (lower[row]?.length ?? 0); col += 1) {
-      target = Math.min(target, stripCompatibilityMeasure(lower[row][col], upper[row][col], params))
+    const baseStep = pass < passCount * 0.45 ? 0.075 : 0.045
+    for (let row = 0; row < rows; row += 1) {
+      for (let col = 0; col < columns; col += 1) {
+        lower[row][col] = clampNumber(
+          lower[row][col] - (gradients.lower[row][col] / denominators.lower[row][col]) * baseStep,
+          minHeight,
+          params.linkLength * 2,
+        )
+        upper[row][col] = clampNumber(
+          upper[row][col] - (gradients.upper[row][col] / denominators.upper[row][col]) * baseStep,
+          minHeight,
+          params.linkLength * 2,
+        )
+      }
     }
   }
 
-  return Number.isFinite(target) ? target : params.linkLength
+  if (!enforceStripContact) return { lower, upper }
+
+  let contactHeights: LayerHeightFields = { lower, upper }
+  for (let pass = 0; pass < 3; pass += 1) {
+    const compatibilityTarget = averageCompatibilityMeasure(buildCompatibilityDerivativeField(contactHeights.lower, contactHeights.upper, params))
+    contactHeights = rebalanceStripHeightsForContact(contactHeights.lower, contactHeights.upper, params, compatibilityTarget)
+  }
+
+  return contactHeights
+}
+
+function targetLayerHeights(grid: CellGrid, params: CellParams, time: number): LayerHeightFields {
+  const rows = grid.length
+  const columns = grid[0]?.length ?? 0
+
+  return {
+    lower: Array.from({ length: rows }, (_, row) =>
+      Array.from({ length: columns }, (_, col) => clampLayerHeight(layerHeight(grid[row][col], 'lower', params, time), params)),
+    ),
+    upper: Array.from({ length: rows }, (_, row) =>
+      Array.from({ length: columns }, (_, col) => clampLayerHeight(layerHeight(grid[row][col], 'upper', params, time), params)),
+    ),
+  }
+}
+
+function cloneHeightField(field: number[][]): number[][] {
+  return field.map((row) => [...row])
+}
+
+function buildLayerStiffnessMap(grid: CellGrid, params: CellParams, time: number, layer: LayerName): number[][] {
+  const rows = grid.length
+  const columns = grid[0]?.length ?? 0
+  const actuatedStiffness = 32
+  const passiveStiffness = 1
+
+  return Array.from({ length: rows }, (_, row) =>
+    Array.from({ length: columns }, (_, col) =>
+      layerCompressionDemand(grid[row][col], layer, params, time) > 0.0001 ? actuatedStiffness : passiveStiffness,
+    ),
+  )
 }
 
 function rebalanceStripHeightsForContact(
@@ -458,68 +512,185 @@ function rebalanceStripHeightsForContact(
 ): Record<LayerName, number[][]> {
   return {
     lower: lower.map((row, rowIndex) =>
-      row.map((lowerHeight, colIndex) => rebalanceLayerPairForContact(lowerHeight, upper[rowIndex][colIndex], params, target)[0]),
+      row.map((lowerHeight, colIndex) => projectLayerPairForContact(lowerHeight, upper[rowIndex][colIndex], params, target)[0]),
     ),
     upper: upper.map((row, rowIndex) =>
-      row.map((upperHeight, colIndex) => rebalanceLayerPairForContact(lower[rowIndex][colIndex], upperHeight, params, target)[1]),
+      row.map((upperHeight, colIndex) => projectLayerPairForContact(lower[rowIndex][colIndex], upperHeight, params, target)[1]),
     ),
   }
 }
 
-function rebalanceLayerPairForContact(lowerHeight: number, upperHeight: number, params: CellParams, target: number): [number, number] {
-  const currentMeasure = stripCompatibilityMeasure(lowerHeight, upperHeight, params)
-  if (Math.abs(currentMeasure - target) <= 0.000001) return [lowerHeight, upperHeight]
+function projectLayerPairForContact(lowerHeight: number, upperHeight: number, params: CellParams, target: number): [number, number] {
+  let lower = lowerHeight
+  let upper = upperHeight
+  const minHeight = minimumSolvedLayerHeight(params)
 
-  const balancedHeight = clampLayerHeight(target, params)
-  let low = 0
-  let high = 1
+  for (let pass = 0; pass < 48; pass += 1) {
+    const derivatives = compatibilityDerivatives(lower, upper, params)
+    const error = derivatives.measure - target
+    if (Math.abs(error) <= 0.0000001) break
 
-  for (let pass = 0; pass < 28; pass += 1) {
-    const mid = (low + high) * 0.5
-    const testLower = lowerHeight + (balancedHeight - lowerHeight) * mid
-    const testUpper = upperHeight + (balancedHeight - upperHeight) * mid
-    const measure = stripCompatibilityMeasure(testLower, testUpper, params)
+    let lowerDerivative = derivatives.dMeasureLower
+    let upperDerivative = derivatives.dMeasureUpper
+    const maxHeight = params.linkLength * 2
+    const lowerStepDirection = -error * lowerDerivative
+    const upperStepDirection = -error * upperDerivative
 
-    if (currentMeasure > target ? measure > target : measure < target) {
-      low = mid
-    } else {
-      high = mid
+    if ((lower >= maxHeight - 0.000001 && lowerStepDirection > 0) || (lower <= minHeight + 0.000001 && lowerStepDirection < 0)) {
+      lowerDerivative = 0
     }
+
+    if ((upper >= maxHeight - 0.000001 && upperStepDirection > 0) || (upper <= minHeight + 0.000001 && upperStepDirection < 0)) {
+      upperDerivative = 0
+    }
+
+    const denominator = Math.max(lowerDerivative ** 2 + upperDerivative ** 2, 0.0001)
+    lower = clampNumber(lower - (error * lowerDerivative) / denominator, minHeight, maxHeight)
+    upper = clampNumber(upper - (error * upperDerivative) / denominator, minHeight, maxHeight)
   }
 
-  const mix = high
-  return [
-    clampLayerHeight(lowerHeight + (balancedHeight - lowerHeight) * mix, params),
-    clampLayerHeight(upperHeight + (balancedHeight - upperHeight) * mix, params),
-  ]
-}
-
-function stripCompatibilityMeasure(lowerHeight: number, upperHeight: number, params: CellParams): number {
-  const centerSpan = Math.max((lowerHeight + upperHeight) * 0.5, 0.0001)
-  const offsetDelta = sideNodeOffset(upperHeight, params) - sideNodeOffset(lowerHeight, params)
-  return Math.hypot(centerSpan, offsetDelta)
-}
-
-function stripLayerCompressionAt(
-  grid: CellGrid,
-  layer: LayerName,
-  params: CellParams,
-  time: number,
-  alongAxis: AxisName,
-  primaryIndex: number,
-  crossIndex: number,
-): number {
-  const row = alongAxis === 'x' ? crossIndex : primaryIndex
-  const col = alongAxis === 'x' ? primaryIndex : crossIndex
-  const state = grid[row]?.[col]
-  if (state === undefined) return 0
-
-  return layerCompressionDemand(state, layer, params, time)
+  return [lower, upper]
 }
 
 function layerCompressionDemand(state: CellState, layer: LayerName, params: CellParams, time: number): number {
   const span = Math.max(params.hOff - params.hOn, 0.0001)
   return clampNumber((params.hOff - layerHeight(state, layer, params, time)) / span, 0, 1)
+}
+
+function buildHeightCompatibilityConstraints(rows: number, columns: number): HeightCompatibilityConstraint[] {
+  const constraints: HeightCompatibilityConstraint[] = []
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < columns - 1; col += 1) {
+      constraints.push({ aRow: row, aCol: col, bRow: row, bCol: col + 1 })
+    }
+  }
+
+  for (let row = 0; row < rows - 1; row += 1) {
+    for (let col = 0; col < columns; col += 1) {
+      constraints.push({ aRow: row, aCol: col, bRow: row + 1, bCol: col })
+    }
+  }
+
+  return constraints
+}
+
+function buildCompatibilityDerivativeField(lower: number[][], upper: number[][], params: CellParams): CompatibilityDerivatives[][] {
+  return lower.map((row, rowIndex) =>
+    row.map((lowerHeight, colIndex) => compatibilityDerivatives(lowerHeight, upper[rowIndex][colIndex], params)),
+  )
+}
+
+function compatibilityDerivatives(lowerHeight: number, upperHeight: number, params: CellParams): CompatibilityDerivatives {
+  const centerSpan = Math.max((lowerHeight + upperHeight) * 0.5, 0.0001)
+  const lowerOffsetDerivative = sideNodeOffsetDerivative(lowerHeight, params)
+  const upperOffsetDerivative = sideNodeOffsetDerivative(upperHeight, params)
+  const offsetDelta = sideNodeOffset(upperHeight, params) - sideNodeOffset(lowerHeight, params)
+  const measure = Math.max(Math.hypot(centerSpan, offsetDelta), 0.0001)
+
+  return {
+    measure,
+    offsetDelta,
+    dMeasureLower: (centerSpan * 0.5 - offsetDelta * lowerOffsetDerivative) / measure,
+    dMeasureUpper: (centerSpan * 0.5 + offsetDelta * upperOffsetDerivative) / measure,
+    dOffsetLower: lowerOffsetDerivative,
+    dOffsetUpper: upperOffsetDerivative,
+  }
+}
+
+function sideNodeOffsetDerivative(height: number, params: Pick<CellParams, 'linkLength'>): number {
+  const lateralSpan = Math.sqrt(Math.max(params.linkLength ** 2 - (height / 2) ** 2, 0))
+  const safeLateralSpan = Math.max(lateralSpan, 0.04)
+  return -height / (4 * safeLateralSpan)
+}
+
+function averageCompatibilityMeasure(stats: CompatibilityDerivatives[][]): number {
+  let sum = 0
+  let count = 0
+
+  stats.forEach((row) =>
+    row.forEach((cell) => {
+      sum += cell.measure
+      count += 1
+    }),
+  )
+
+  return count > 0 ? sum / count : 0
+}
+
+function emptyGradientFields(rows: number, columns: number, fill = 0): LayerHeightFields {
+  return {
+    lower: Array.from({ length: rows }, () => Array.from({ length: columns }, () => fill)),
+    upper: Array.from({ length: rows }, () => Array.from({ length: columns }, () => fill)),
+  }
+}
+
+function addHeightTargetGradient(
+  gradients: LayerHeightFields,
+  denominators: LayerHeightFields,
+  layer: LayerName,
+  row: number,
+  col: number,
+  height: number,
+  target: number,
+  stiffness: number,
+): void {
+  gradients[layer][row][col] += 2 * stiffness * (height - target)
+  denominators[layer][row][col] += stiffness
+}
+
+function addSameCellShearGradient(
+  gradients: LayerHeightFields,
+  denominators: LayerHeightFields,
+  stats: CompatibilityDerivatives,
+  row: number,
+  col: number,
+  stiffness: number,
+): void {
+  gradients.lower[row][col] += 2 * stiffness * stats.offsetDelta * -stats.dOffsetLower
+  gradients.upper[row][col] += 2 * stiffness * stats.offsetDelta * stats.dOffsetUpper
+  denominators.lower[row][col] += stiffness * Math.max(stats.dOffsetLower ** 2, 0.12)
+  denominators.upper[row][col] += stiffness * Math.max(stats.dOffsetUpper ** 2, 0.12)
+}
+
+function addCompatibilityTargetGradient(
+  gradients: LayerHeightFields,
+  denominators: LayerHeightFields,
+  stats: CompatibilityDerivatives,
+  row: number,
+  col: number,
+  targetMeasure: number,
+  stiffness: number,
+): void {
+  const diff = stats.measure - targetMeasure
+  gradients.lower[row][col] += 2 * stiffness * diff * stats.dMeasureLower
+  gradients.upper[row][col] += 2 * stiffness * diff * stats.dMeasureUpper
+  denominators.lower[row][col] += stiffness * Math.max(stats.dMeasureLower ** 2, 0.12)
+  denominators.upper[row][col] += stiffness * Math.max(stats.dMeasureUpper ** 2, 0.12)
+}
+
+function addCompatibilityPairGradient(
+  gradients: LayerHeightFields,
+  denominators: LayerHeightFields,
+  a: CompatibilityDerivatives,
+  b: CompatibilityDerivatives,
+  constraint: HeightCompatibilityConstraint,
+  stiffness: number,
+): void {
+  const diff = a.measure - b.measure
+
+  gradients.lower[constraint.aRow][constraint.aCol] += 2 * stiffness * diff * a.dMeasureLower
+  gradients.upper[constraint.aRow][constraint.aCol] += 2 * stiffness * diff * a.dMeasureUpper
+  gradients.lower[constraint.bRow][constraint.bCol] -= 2 * stiffness * diff * b.dMeasureLower
+  gradients.upper[constraint.bRow][constraint.bCol] -= 2 * stiffness * diff * b.dMeasureUpper
+  denominators.lower[constraint.aRow][constraint.aCol] += stiffness * Math.max(a.dMeasureLower ** 2, 0.12)
+  denominators.upper[constraint.aRow][constraint.aCol] += stiffness * Math.max(a.dMeasureUpper ** 2, 0.12)
+  denominators.lower[constraint.bRow][constraint.bCol] += stiffness * Math.max(b.dMeasureLower ** 2, 0.12)
+  denominators.upper[constraint.bRow][constraint.bCol] += stiffness * Math.max(b.dMeasureUpper ** 2, 0.12)
+}
+
+function minimumSolvedLayerHeight(params: Pick<CellParams, 'hOn' | 'linkLength'>): number {
+  return clampNumber(params.hOn, 0.15, params.linkLength * 2)
 }
 
 function exactStripCellAngles(
@@ -646,7 +817,7 @@ function buildLayoutFromPoses(grid: CellGrid, params: CellParams, poses: CellPos
       const centerDelta = subtract(pose.upperCenter, pose.lowerCenter)
       const centerDistance = Math.max(vectorLength(centerDelta), 0.0001)
       const axis = normalize(centerDelta)
-      const actualTotal = Math.min(centerDistance * 2, maxTotalSpan(params, lowerRatio, upperRatio))
+      const actualTotal = Math.min(targetTotal, centerDistance * 2, maxTotalSpan(params, lowerRatio, upperRatio))
       const bottomH = actualTotal * lowerRatio
       const topH = actualTotal * upperRatio
       const lowerCenter = pose.lowerCenter
@@ -774,36 +945,22 @@ function clampNumber(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Number.isFinite(value) ? value : min))
 }
 
-function buildLayerAxisCenters(
-  grid: CellGrid,
-  params: CellParams,
-  layer: LayerName,
-  axis: AxisName,
-  time: number,
-): number[][] {
-  const rows = grid.length
-  const columns = grid[0]?.length ?? 0
+function buildLayerAxisCentersFromHeights(heights: number[][], params: CellParams, axis: AxisName): number[][] {
+  const rows = heights.length
+  const columns = heights[0]?.length ?? 0
 
   if (axis === 'x') {
     return Array.from({ length: rows }, (_, row) => {
-      const centers = cumulativeCenters(columns, (col) => layerPitch(grid[row][col], grid[row][col + 1], layer, params, time))
+      const centers = cumulativeCenters(columns, (col) => sideNodeOffset(heights[row][col], params) + sideNodeOffset(heights[row][col + 1], params))
       return Array.from({ length: columns }, (_, col) => centers[col])
     })
   }
 
   const centersByColumn = Array.from({ length: columns }, (_, col) =>
-    cumulativeCenters(rows, (row) => layerPitch(grid[row][col], grid[row + 1][col], layer, params, time)),
+    cumulativeCenters(rows, (row) => sideNodeOffset(heights[row][col], params) + sideNodeOffset(heights[row + 1][col], params)),
   )
 
   return Array.from({ length: rows }, (_, row) => Array.from({ length: columns }, (_, col) => centersByColumn[col][row]))
-}
-
-function layerPitch(a: CellState, b: CellState, layer: LayerName, params: CellParams, time: number): number {
-  return layerOffset(a, layer, params, time) + layerOffset(b, layer, params, time)
-}
-
-function layerOffset(state: CellState, layer: LayerName, params: CellParams, time: number): number {
-  return sideNodeOffset(layerHeight(state, layer, params, time), params)
 }
 
 function cumulativeCenters(count: number, gap: (index: number) => number): number[] {

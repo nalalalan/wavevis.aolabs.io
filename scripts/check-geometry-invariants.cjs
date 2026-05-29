@@ -48,12 +48,22 @@ const cases = [
       [CELL_STATES.BEND_UP, CELL_STATES.OFF],
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
+    passiveLayerChecks: [
+      { row: 0, col: 0, layer: 'upper', maxHeight: 1.95 },
+      { row: 0, col: 1, layer: 'lower', maxHeight: 1.8 },
+      { row: 1, col: 0, layer: 'upper', maxHeight: 1.8 },
+    ],
   },
   {
     name: '2x2 one bend down',
     grid: [
       [CELL_STATES.BEND_DOWN, CELL_STATES.OFF],
       [CELL_STATES.OFF, CELL_STATES.OFF],
+    ],
+    passiveLayerChecks: [
+      { row: 0, col: 0, layer: 'lower', maxHeight: 1.95 },
+      { row: 0, col: 1, layer: 'upper', maxHeight: 1.8 },
+      { row: 1, col: 0, layer: 'lower', maxHeight: 1.8 },
     ],
   },
   {
