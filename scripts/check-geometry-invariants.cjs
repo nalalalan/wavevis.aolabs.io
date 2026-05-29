@@ -48,6 +48,7 @@ const cases = [
       [CELL_STATES.BEND_UP, CELL_STATES.OFF],
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
+    minAdjacentCenterDistance: 1.8,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'upper', maxHeight: 2.05 },
       { row: 0, col: 1, layer: 'lower', maxHeight: 2.05 },
@@ -60,6 +61,7 @@ const cases = [
       [CELL_STATES.BEND_DOWN, CELL_STATES.OFF],
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
+    minAdjacentCenterDistance: 1.6,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'lower', maxHeight: 2.05 },
       { row: 0, col: 1, layer: 'upper', maxHeight: 2.05 },
@@ -210,7 +212,9 @@ function checkCase(testCase) {
   const layout = geometry.buildArrayLayout(testCase.grid, params, 0)
   let maxLegError = 0
   let maxConnectorGap = 0
+  let maxAllConnectorGap = 0
   let maxAdjacentAngle = 0
+  let minAdjacentCenterDistance = Infinity
   let minVerticalStack = Infinity
   let minRenderedZ = Infinity
   let maxPassiveLayerHeightError = 0
@@ -252,6 +256,30 @@ function checkCase(testCase) {
     })
   }
 
+  layout.forEach((row, rowIndex) => {
+    for (let col = 0; col < row.length - 1; col += 1) {
+      ;['lower', 'upper'].forEach((layer) => {
+        const start = geometry.sideNodePositionFromLayout(row[col], layer, 'px')
+        const end = geometry.sideNodePositionFromLayout(row[col + 1], layer, 'nx')
+        maxAllConnectorGap = Math.max(maxAllConnectorGap, length(subtract(end, start)))
+      })
+      minAdjacentCenterDistance = Math.min(minAdjacentCenterDistance, length(subtract(row[col].lowerCenter, row[col + 1].lowerCenter)))
+      minAdjacentCenterDistance = Math.min(minAdjacentCenterDistance, length(subtract(row[col].upperCenter, row[col + 1].upperCenter)))
+    }
+
+    if (rowIndex < layout.length - 1) {
+      for (let col = 0; col < row.length; col += 1) {
+        ;['lower', 'upper'].forEach((layer) => {
+          const start = geometry.sideNodePositionFromLayout(row[col], layer, 'py')
+          const end = geometry.sideNodePositionFromLayout(layout[rowIndex + 1][col], layer, 'ny')
+          maxAllConnectorGap = Math.max(maxAllConnectorGap, length(subtract(end, start)))
+        })
+        minAdjacentCenterDistance = Math.min(minAdjacentCenterDistance, length(subtract(row[col].lowerCenter, layout[rowIndex + 1][col].lowerCenter)))
+        minAdjacentCenterDistance = Math.min(minAdjacentCenterDistance, length(subtract(row[col].upperCenter, layout[rowIndex + 1][col].upperCenter)))
+      }
+    }
+  })
+
   if (testCase.grid.length <= 2 && testCase.grid[0].length > 1) {
     layout.forEach((row) => {
       for (let col = 0; col < row.length - 1; col += 1) {
@@ -276,7 +304,9 @@ function checkCase(testCase) {
     name: testCase.name,
     maxLegError,
     maxConnectorGap,
+    maxAllConnectorGap,
     maxAdjacentAngle,
+    minAdjacentCenterDistance,
     maxPassiveLayerHeightError,
     minVerticalStack,
     minRenderedZ,
@@ -378,6 +408,7 @@ const failed = results.filter(
   (result) =>
     result.maxLegError > 1e-9 ||
     result.maxConnectorGap > 1e-7 ||
+    result.minAdjacentCenterDistance < (cases.find((testCase) => testCase.name === result.name)?.minAdjacentCenterDistance ?? 0) ||
     result.maxAdjacentAngle > 0.64 ||
     (cases.find((testCase) => testCase.name === result.name)?.minMaxAdjacentAngle ?? 0) > result.maxAdjacentAngle ||
     result.maxPassiveLayerHeightError > 1e-8 ||

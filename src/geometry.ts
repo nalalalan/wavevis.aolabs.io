@@ -290,7 +290,11 @@ export function buildArrayLayout(grid: CellGrid, params: CellParams, time = 0): 
   const poses = planarStrip
     ? buildPlanarStripPoses(grid, params, layerHeights)
     : buildInitialPoses(grid, params, layerHeights)
-  if (!planarStrip) solveConnectorPoses(grid, params, poses)
+  // A 2x2 patch has both x and y connector directions but too few cells to
+  // distribute the conflict smoothly. The iterative surface projection can pull
+  // the thick octagonal bodies into each other, so small patches keep the
+  // kinematic spacing from the layer-height solve instead of over-closing.
+  if (!planarStrip && !isSmallSurfacePatch(grid)) solveConnectorPoses(grid, params, poses)
 
   const layout = buildLayoutFromPoses(grid, params, poses)
   normalizeLayoutFloor(layout, params)
@@ -351,7 +355,7 @@ function buildPlanarStripPoses(grid: CellGrid, params: CellParams, stripHeights:
   const crossCount = alongAxis === 'x' ? rows : columns
   const angles = exactStripCellAngles(params, alongAxis, primaryCount, crossCount, stripHeights)
   const lowerCenterline = exactStripLowerCenterline(params, alongAxis, primaryCount, crossCount, angles, stripHeights)
-  const crossCenters = cumulativeCenters(crossCount, () => nominalCellPitch(params))
+  const crossCenters = stripCrossCenters(params, alongAxis, primaryCount, crossCount, stripHeights)
 
   return Array.from({ length: rows }, (_, row) =>
     Array.from({ length: columns }, (_, col) => {
@@ -844,6 +848,38 @@ function averageStripLayerOffset(
   return offset / Math.max(crossCount, 1)
 }
 
+function stripCrossCenters(
+  params: CellParams,
+  alongAxis: AxisName,
+  primaryCount: number,
+  crossCount: number,
+  stripHeights: Record<LayerName, number[][]>,
+): number[] {
+  if (crossCount <= 0) return []
+
+  // Two-cell-wide strips still use the planar strip chain along their long axis.
+  // Across the short axis, use the largest actual side-node reach so parallel
+  // strips do not get packed into each other when one layer expands.
+  return cumulativeCenters(crossCount, (crossIndex) => {
+    let spacing = nominalCellPitch(params)
+
+    for (let primaryIndex = 0; primaryIndex < primaryCount; primaryIndex += 1) {
+      const aRow = alongAxis === 'x' ? crossIndex : primaryIndex
+      const aCol = alongAxis === 'x' ? primaryIndex : crossIndex
+      const bRow = alongAxis === 'x' ? crossIndex + 1 : primaryIndex
+      const bCol = alongAxis === 'x' ? primaryIndex : crossIndex + 1
+
+      spacing = Math.max(
+        spacing,
+        sideNodeOffset(stripHeights.lower[aRow][aCol], params) + sideNodeOffset(stripHeights.lower[bRow][bCol], params),
+        sideNodeOffset(stripHeights.upper[aRow][aCol], params) + sideNodeOffset(stripHeights.upper[bRow][bCol], params),
+      )
+    }
+
+    return spacing
+  })
+}
+
 function stripUpperTransferVector(angle: number, centerSpan: number, offsetDelta: number): [number, number] {
   const axis = stripAxisVector2(angle)
   const side = stripSideVector2(angle)
@@ -1151,9 +1187,9 @@ function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose
   const constraints = buildConnectorConstraints(grid)
   const cellCount = grid.length * (grid[0]?.length ?? 0)
   const overhangSurface = isOverhangSurface(grid, params)
-  const baseSettlePasses = overhangSurface ? 72 : cellCount > 2500 ? 3 : cellCount > 900 ? 8 : cellCount > 225 ? 18 : 56
+  const baseSettlePasses = overhangSurface ? 72 : cellCount <= 16 ? 140 : cellCount > 2500 ? 3 : cellCount > 900 ? 8 : cellCount > 225 ? 18 : 56
   const settlePasses = params.constrainPerimeter ? baseSettlePasses : Math.min(baseSettlePasses, 28)
-  const finalPasses = overhangSurface ? 72 : cellCount > 2500 ? 4 : cellCount > 900 ? 8 : Math.max(12, Math.floor(settlePasses * 0.65))
+  const finalPasses = overhangSurface ? 72 : cellCount <= 16 ? 120 : cellCount > 2500 ? 4 : cellCount > 900 ? 8 : Math.max(12, Math.floor(settlePasses * 0.65))
 
   for (let pass = 0; pass < settlePasses; pass += 1) {
     const layout = buildLayoutFromPoses(grid, params, poses)
@@ -1174,7 +1210,15 @@ function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose
   for (let pass = 0; pass < finalPasses; pass += 1) {
     const layout = buildLayoutFromPoses(grid, params, poses)
     constraints.forEach((constraint) => {
-      projectConnectorConstraint(poses, layout, constraint, params, overhangSurface ? 0.74 : 0.34, true, pass > finalPasses * 0.35)
+      projectConnectorConstraint(
+        poses,
+        layout,
+        constraint,
+        params,
+        overhangSurface ? 0.74 : cellCount <= 16 ? 0.48 : 0.34,
+        true,
+        cellCount <= 16 ? false : pass > finalPasses * 0.35,
+      )
     })
     poses.forEach((row) =>
       row.forEach((pose) => {
@@ -1189,10 +1233,18 @@ function hasActuatedCells(grid: CellGrid): boolean {
   return grid.some((row) => row.some((state) => state !== CELL_STATES.OFF))
 }
 
+function isSmallSurfacePatch(grid: CellGrid): boolean {
+  const rows = grid.length
+  const columns = grid[0]?.length ?? 0
+  return rows <= 2 && columns <= 2
+}
+
 function isPlanarStrip(grid: CellGrid): boolean {
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
-  return (rows <= 2 && columns >= 2) || (columns <= 2 && rows >= 2)
+  const oneCellWide = (rows === 1 && columns >= 2) || (columns === 1 && rows >= 2)
+  const longTwoCellWideStrip = (rows === 2 && columns >= 3) || (columns === 2 && rows >= 3)
+  return oneCellWide || longTwoCellWideStrip
 }
 
 function isOverhangSurface(grid: CellGrid, params: CellParams): boolean {
