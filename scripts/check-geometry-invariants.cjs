@@ -144,6 +144,30 @@ const cases = [
       ],
     ],
   },
+  {
+    name: '1x6 center pair bend up',
+    grid: [[
+      CELL_STATES.OFF,
+      CELL_STATES.OFF,
+      CELL_STATES.BEND_UP,
+      CELL_STATES.BEND_UP,
+      CELL_STATES.OFF,
+      CELL_STATES.OFF,
+    ]],
+    checkStripContact: true,
+  },
+  {
+    name: '1x6 center pair bend down',
+    grid: [[
+      CELL_STATES.OFF,
+      CELL_STATES.OFF,
+      CELL_STATES.BEND_DOWN,
+      CELL_STATES.BEND_DOWN,
+      CELL_STATES.OFF,
+      CELL_STATES.OFF,
+    ]],
+    checkStripContact: true,
+  },
 ]
 
 function checkCase(testCase) {
@@ -152,11 +176,15 @@ function checkCase(testCase) {
   let maxLegError = 0
   let maxConnectorGap = 0
   let minVerticalStack = Infinity
+  let minRenderedZ = Infinity
   let maxPassiveLayerHeightError = 0
 
   layout.forEach((row) => {
     row.forEach((cell) => {
       minVerticalStack = Math.min(minVerticalStack, cell.middle[2] - cell.bottom[2], cell.top[2] - cell.middle[2])
+      ;[cell.bottom, cell.middle, cell.top].forEach((point) => {
+        minRenderedZ = Math.min(minRenderedZ, point[2])
+      })
 
       ;['lower', 'upper'].forEach((layer) => {
         const lowCenter = layer === 'lower' ? cell.bottom : cell.middle
@@ -165,6 +193,7 @@ function checkCase(testCase) {
         geometry.SIDE_NAMES.forEach((side) => {
           const sideVector = geometry.sideVectorFromLayout(cell, side)
           const node = geometry.sideNodePositionFromLayout(cell, layer, side)
+          minRenderedZ = Math.min(minRenderedZ, node[2])
           const lowAnchor = add(lowCenter, scale(sideVector, params.plateSize / 2))
           const highAnchor = add(highCenter, scale(sideVector, params.plateSize / 2))
 
@@ -199,20 +228,115 @@ function checkCase(testCase) {
     maxConnectorGap,
     maxPassiveLayerHeightError,
     minVerticalStack,
+    minRenderedZ,
   }
 }
 
 const results = cases.map(checkCase)
 console.log(JSON.stringify(results, null, 2))
 
+function maxLayoutZ(layout) {
+  let maxZ = -Infinity
+  layout.forEach((row) =>
+    row.forEach((cell) => {
+      ;[cell.bottom, cell.middle, cell.top].forEach((point) => {
+        maxZ = Math.max(maxZ, point[2])
+      })
+      ;['lower', 'upper'].forEach((layer) =>
+        geometry.SIDE_NAMES.forEach((side) => {
+          maxZ = Math.max(maxZ, geometry.sideNodePositionFromLayout(cell, layer, side)[2])
+        }),
+      )
+    }),
+  )
+  return maxZ
+}
+
+function minLayoutZ(layout) {
+  let minZ = Infinity
+  layout.forEach((row) =>
+    row.forEach((cell) => {
+      ;[cell.bottom, cell.middle, cell.top].forEach((point) => {
+        minZ = Math.min(minZ, point[2])
+      })
+      ;['lower', 'upper'].forEach((layer) =>
+        geometry.SIDE_NAMES.forEach((side) => {
+          minZ = Math.min(minZ, geometry.sideNodePositionFromLayout(cell, layer, side)[2])
+        }),
+      )
+    }),
+  )
+  return minZ
+}
+
+function mirrorZError(a, b, mirrorSum) {
+  return Math.abs(a[2] - (mirrorSum - b[2]))
+}
+
+function checkCenterPairMirror() {
+  const params = geometry.DEFAULT_PARAMS
+  const bendUp = geometry.buildArrayLayout([[
+    CELL_STATES.OFF,
+    CELL_STATES.OFF,
+    CELL_STATES.BEND_UP,
+    CELL_STATES.BEND_UP,
+    CELL_STATES.OFF,
+    CELL_STATES.OFF,
+  ]], params, 0)
+  const bendDown = geometry.buildArrayLayout([[
+    CELL_STATES.OFF,
+    CELL_STATES.OFF,
+    CELL_STATES.BEND_DOWN,
+    CELL_STATES.BEND_DOWN,
+    CELL_STATES.OFF,
+    CELL_STATES.OFF,
+  ]], params, 0)
+  const minZ = Math.min(minLayoutZ(bendUp), minLayoutZ(bendDown))
+  const maxZ = Math.max(maxLayoutZ(bendUp), maxLayoutZ(bendDown))
+  const mirrorSum = minZ + maxZ
+  let maxMirrorError = Math.max(Math.abs(maxLayoutZ(bendUp) - maxLayoutZ(bendDown)), Math.abs(minLayoutZ(bendUp) - minLayoutZ(bendDown)))
+
+  for (let col = 0; col < bendUp[0].length; col += 1) {
+    const up = bendUp[0][col]
+    const down = bendDown[0][col]
+    maxMirrorError = Math.max(
+      maxMirrorError,
+      mirrorZError(up.bottom, down.top, mirrorSum),
+      mirrorZError(up.middle, down.middle, mirrorSum),
+      mirrorZError(up.top, down.bottom, mirrorSum),
+      mirrorZError(up.lowerCenter, down.upperCenter, mirrorSum),
+      mirrorZError(up.upperCenter, down.lowerCenter, mirrorSum),
+    )
+
+    geometry.SIDE_NAMES.forEach((side) => {
+      maxMirrorError = Math.max(
+        maxMirrorError,
+        mirrorZError(up.nodes.lower[side], down.nodes.upper[side], mirrorSum),
+        mirrorZError(up.nodes.upper[side], down.nodes.lower[side], mirrorSum),
+      )
+    })
+  }
+
+  return { name: '1x6 center pair bend up/down mirror', maxMirrorError }
+}
+
+const mirrorResult = checkCenterPairMirror()
+console.log(JSON.stringify(mirrorResult, null, 2))
+
 const failed = results.filter(
   (result) =>
     result.maxLegError > 1e-9 ||
     result.maxConnectorGap > 1e-8 ||
     result.maxPassiveLayerHeightError > 1e-8 ||
-    result.minVerticalStack <= 0,
+    result.minVerticalStack <= 0 ||
+    result.minRenderedZ < -1e-8,
 )
 if (failed.length > 0) {
   console.error('Geometry invariant failure:', JSON.stringify(failed, null, 2))
+  process.exit(1)
+}
+
+if (mirrorResult.maxMirrorError > 1e-8) {
+  console.error('Geometry mirror failure:', JSON.stringify(mirrorResult, null, 2))
   process.exit(1)
 }

@@ -293,7 +293,7 @@ export function buildArrayLayout(grid: CellGrid, params: CellParams, time = 0): 
   if (!planarStrip) solveConnectorPoses(grid, params, poses)
 
   const layout = buildLayoutFromPoses(grid, params, poses)
-  normalizeLayoutFloor(layout)
+  normalizeLayoutFloor(layout, params)
   populateSymmetricNodes(layout)
   return layout
 }
@@ -1041,13 +1041,27 @@ function populateSymmetricNodes(layout: CellLayout[][]): void {
   )
 }
 
-function normalizeLayoutFloor(layout: CellLayout[][]): void {
-  const minZ = Math.min(...layout.flatMap((row) => row.map((cell) => Math.min(cell.bottom[2], cell.middle[2], cell.top[2]))), 0)
-  if (Math.abs(minZ) <= 0.0001) return
+function normalizeLayoutFloor(layout: CellLayout[][], params: Pick<CellParams, 'plateSize'>): void {
+  const minZ = Math.min(
+    ...layout.flatMap((row) =>
+      row.flatMap((cell) => [
+        cell.bottom[2],
+        cell.middle[2],
+        cell.top[2],
+        ...SIDE_NAMES.flatMap((side) => [cell.nodes.lower[side][2], cell.nodes.upper[side][2]]),
+      ]),
+    ),
+    0,
+  )
+  // The floor is only a reference plane. It should never become an accidental
+  // contact constraint that makes a vertically mirrored bend look clipped.
+  const visualFloorClearance = Math.max(0.12, params.plateSize * 0.28)
+  const shiftAmount = visualFloorClearance - minZ
+  if (Math.abs(shiftAmount) <= 0.0001) return
 
   layout.forEach((row) =>
     row.forEach((cell) => {
-      shiftCell(cell, -minZ)
+      shiftCell(cell, shiftAmount)
     }),
   )
 }
@@ -1058,6 +1072,10 @@ function shiftCell(cell: CellLayout, amount: number): void {
   cell.top = shiftZ(cell.top, amount)
   cell.lowerCenter = shiftZ(cell.lowerCenter, amount)
   cell.upperCenter = shiftZ(cell.upperCenter, amount)
+  SIDE_NAMES.forEach((side) => {
+    cell.nodes.lower[side] = shiftZ(cell.nodes.lower[side], amount)
+    cell.nodes.upper[side] = shiftZ(cell.nodes.upper[side], amount)
+  })
 }
 
 // Kinematic model: every layer keeps the Sarrus link length fixed by deriving
