@@ -378,17 +378,11 @@ function buildPlanarStripPoses(grid: CellGrid, params: CellParams, time: number)
 }
 
 function buildStripLayerHeights(grid: CellGrid, params: CellParams, time: number, alongAxis: AxisName): Record<LayerName, number[][]> {
-  const baseLower = buildStripBaseLayerHeightMap(grid, params, time, 'lower')
-  const baseUpper = buildStripBaseLayerHeightMap(grid, params, time, 'upper')
-  const compatibilityTarget = stripCompatibilityTarget(baseLower, baseUpper, params)
   const lower = buildStripLayerHeightMap(grid, params, time, alongAxis, 'lower')
   const upper = buildStripLayerHeightMap(grid, params, time, alongAxis, 'upper')
+  const compatibilityTarget = stripCompatibilityTarget(lower, upper, params)
 
   return rebalanceStripHeightsForContact(lower, upper, params, compatibilityTarget)
-}
-
-function buildStripBaseLayerHeightMap(grid: CellGrid, params: CellParams, time: number, layer: LayerName): number[][] {
-  return grid.map((row) => row.map((state) => clampLayerHeight(layerHeight(state, layer, params, time), params)))
 }
 
 function buildStripLayerHeightMap(
@@ -422,6 +416,7 @@ function buildStripLayerHeightMap(
         stripLayerCompressionAt(grid, layer, params, time, alongAxis, primaryIndex, crossIndex + 1),
       )
       const coupledLayer = layer === 'lower' ? 'upper' : 'lower'
+      const coupledSelfPull = layerCompressionDemand(grid[row][col], coupledLayer, params, time)
       const coupledDirectPull = Math.max(
         stripLayerCompressionAt(grid, coupledLayer, params, time, alongAxis, primaryIndex - 1, crossIndex),
         stripLayerCompressionAt(grid, coupledLayer, params, time, alongAxis, primaryIndex + 1, crossIndex),
@@ -435,7 +430,7 @@ function buildStripLayerHeightMap(
         stripLayerCompressionAt(grid, coupledLayer, params, time, alongAxis, primaryIndex, crossIndex + 1),
       )
       const sameLayerPull = directPull * 0.48 + nextPull * 0.16 + crossPull * 0.24
-      const bodyPull = coupledDirectPull * 0.42 + coupledNextPull * 0.12 + coupledCrossPull * 0.18
+      const bodyPull = coupledSelfPull * 0.18 + coupledDirectPull * 0.42 + coupledNextPull * 0.12 + coupledCrossPull * 0.18
       const passivePull = clampNumber(Math.max(sameLayerPull, bodyPull), 0, 0.56)
 
       return baseHeight + (params.hOn - baseHeight) * passivePull
@@ -965,6 +960,7 @@ function hasActuatedCells(grid: CellGrid): boolean {
 function isPlanarStrip(grid: CellGrid): boolean {
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
+  if ((rows === 1 && columns >= 2) || (columns === 1 && rows >= 2)) return true
   return Math.max(rows, columns) >= 4 && (rows <= 2 || columns <= 2)
 }
 

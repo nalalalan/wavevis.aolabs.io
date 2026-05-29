@@ -57,6 +57,17 @@ const cases = [
     ],
   },
   {
+    name: '1x2 edge bend passive upper pull',
+    grid: [[
+      CELL_STATES.BEND_UP,
+      CELL_STATES.OFF,
+    ]],
+    checkStripContact: true,
+    passiveLayerChecks: [
+      { row: 0, col: 0, layer: 'upper', maxHeight: 1.9 },
+    ],
+  },
+  {
     name: '1x10 mixed strip',
     grid: [[
       CELL_STATES.OFF,
@@ -131,6 +142,7 @@ function checkCase(testCase) {
   let maxLegError = 0
   let maxConnectorGap = 0
   let minVerticalStack = Infinity
+  let maxPassiveLayerHeightError = 0
 
   layout.forEach((row) => {
     row.forEach((cell) => {
@@ -165,10 +177,17 @@ function checkCase(testCase) {
     })
   }
 
+  ;(testCase.passiveLayerChecks ?? []).forEach((check) => {
+    const cell = layout[check.row][check.col]
+    const height = check.layer === 'lower' ? cell.bottomH : cell.topH
+    maxPassiveLayerHeightError = Math.max(maxPassiveLayerHeightError, Math.max(0, height - check.maxHeight))
+  })
+
   return {
     name: testCase.name,
     maxLegError,
     maxConnectorGap,
+    maxPassiveLayerHeightError,
     minVerticalStack,
   }
 }
@@ -176,7 +195,13 @@ function checkCase(testCase) {
 const results = cases.map(checkCase)
 console.log(JSON.stringify(results, null, 2))
 
-const failed = results.filter((result) => result.maxLegError > 1e-9 || result.maxConnectorGap > 1e-8 || result.minVerticalStack <= 0)
+const failed = results.filter(
+  (result) =>
+    result.maxLegError > 1e-9 ||
+    result.maxConnectorGap > 1e-8 ||
+    result.maxPassiveLayerHeightError > 1e-8 ||
+    result.minVerticalStack <= 0,
+)
 if (failed.length > 0) {
   console.error('Geometry invariant failure:', JSON.stringify(failed, null, 2))
   process.exit(1)
