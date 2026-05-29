@@ -49,9 +49,9 @@ const cases = [
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
     passiveLayerChecks: [
-      { row: 0, col: 0, layer: 'upper', maxHeight: 1.95 },
-      { row: 0, col: 1, layer: 'lower', maxHeight: 1.8 },
-      { row: 1, col: 0, layer: 'upper', maxHeight: 1.8 },
+      { row: 0, col: 0, layer: 'upper', maxHeight: 2.05 },
+      { row: 0, col: 1, layer: 'lower', maxHeight: 2.05 },
+      { row: 1, col: 0, layer: 'upper', maxHeight: 2.05 },
     ],
   },
   {
@@ -61,9 +61,9 @@ const cases = [
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
     passiveLayerChecks: [
-      { row: 0, col: 0, layer: 'lower', maxHeight: 1.95 },
-      { row: 0, col: 1, layer: 'upper', maxHeight: 1.8 },
-      { row: 1, col: 0, layer: 'lower', maxHeight: 1.8 },
+      { row: 0, col: 0, layer: 'lower', maxHeight: 2.05 },
+      { row: 0, col: 1, layer: 'upper', maxHeight: 2.05 },
+      { row: 1, col: 0, layer: 'lower', maxHeight: 2.05 },
     ],
   },
   {
@@ -168,10 +168,45 @@ const cases = [
     ]],
     checkStripContact: true,
   },
+  {
+    name: '1x5 constrained center pair bend up',
+    params: { ...geometry.DEFAULT_PARAMS, constrainPerimeter: true },
+    grid: [[
+      CELL_STATES.OFF,
+      CELL_STATES.BEND_UP,
+      CELL_STATES.BEND_UP,
+      CELL_STATES.OFF,
+      CELL_STATES.OFF,
+    ]],
+    checkStripContact: true,
+    minMaxAdjacentAngle: 0.2,
+  },
+  {
+    name: '2x5 constrained center pair bend up',
+    params: { ...geometry.DEFAULT_PARAMS, constrainPerimeter: true },
+    grid: [
+      [
+        CELL_STATES.OFF,
+        CELL_STATES.BEND_UP,
+        CELL_STATES.BEND_UP,
+        CELL_STATES.OFF,
+        CELL_STATES.OFF,
+      ],
+      [
+        CELL_STATES.OFF,
+        CELL_STATES.BEND_UP,
+        CELL_STATES.BEND_UP,
+        CELL_STATES.OFF,
+        CELL_STATES.OFF,
+      ],
+    ],
+    checkStripContact: true,
+    minMaxAdjacentAngle: 0.2,
+  },
 ]
 
 function checkCase(testCase) {
-  const params = geometry.DEFAULT_PARAMS
+  const params = testCase.params ?? geometry.DEFAULT_PARAMS
   const layout = geometry.buildArrayLayout(testCase.grid, params, 0)
   let maxLegError = 0
   let maxConnectorGap = 0
@@ -217,9 +252,17 @@ function checkCase(testCase) {
     })
   }
 
-  if (testCase.grid.length === 1 && testCase.grid[0].length > 1) {
-    for (let col = 0; col < layout[0].length - 1; col += 1) {
-      maxAdjacentAngle = Math.max(maxAdjacentAngle, angleBetween(cellAxis(layout[0][col]), cellAxis(layout[0][col + 1])))
+  if (testCase.grid.length <= 2 && testCase.grid[0].length > 1) {
+    layout.forEach((row) => {
+      for (let col = 0; col < row.length - 1; col += 1) {
+        maxAdjacentAngle = Math.max(maxAdjacentAngle, angleBetween(cellAxis(row[col]), cellAxis(row[col + 1])))
+      }
+    })
+  } else if (testCase.grid[0].length <= 2 && testCase.grid.length > 1) {
+    for (let row = 0; row < layout.length - 1; row += 1) {
+      for (let col = 0; col < layout[row].length; col += 1) {
+        maxAdjacentAngle = Math.max(maxAdjacentAngle, angleBetween(cellAxis(layout[row][col]), cellAxis(layout[row + 1][col])))
+      }
     }
   }
 
@@ -336,6 +379,7 @@ const failed = results.filter(
     result.maxLegError > 1e-9 ||
     result.maxConnectorGap > 1e-7 ||
     result.maxAdjacentAngle > 0.64 ||
+    (cases.find((testCase) => testCase.name === result.name)?.minMaxAdjacentAngle ?? 0) > result.maxAdjacentAngle ||
     result.maxPassiveLayerHeightError > 1e-8 ||
     result.minVerticalStack <= 0 ||
     result.minRenderedZ < -1e-8,

@@ -321,7 +321,7 @@ function buildInitialPoses(grid: CellGrid, params: CellParams, layerHeights: Lay
         lowerY[row][col] + axis[1] * centerSpan,
         axis[2] * (lowerTarget * 0.5 + centerSpan),
       ]
-      const locked = params.constrainPerimeter && isPerimeterCell(row, col, rows, columns)
+      const locked = params.constrainPerimeter && isConstrainedCell(row, col, rows, columns)
       const lockedLowerCenter = perimeterAnchorCenter(row, col, rows, columns, params, 'lower')
       const lockedUpperCenter = perimeterAnchorCenter(row, col, rows, columns, params, 'upper')
 
@@ -373,7 +373,7 @@ function buildPlanarStripPoses(grid: CellGrid, params: CellParams, stripHeights:
       const upperZ = lowerZ + axisZ * centerSpan
       const lowerCenter: Vec3 = alongAxis === 'x' ? [lowerAlong, crossCenter, lowerZ] : [crossCenter, lowerAlong, lowerZ]
       const upperCenter: Vec3 = alongAxis === 'x' ? [upperAlong, crossCenter, upperZ] : [crossCenter, upperAlong, upperZ]
-      const locked = params.constrainPerimeter && isPerimeterCell(row, col, rows, columns)
+      const locked = false
       const lockedLowerCenter = perimeterAnchorCenter(row, col, rows, columns, params, 'lower')
       const lockedUpperCenter = perimeterAnchorCenter(row, col, rows, columns, params, 'upper')
 
@@ -1192,8 +1192,7 @@ function hasActuatedCells(grid: CellGrid): boolean {
 function isPlanarStrip(grid: CellGrid): boolean {
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
-  if ((rows === 1 && columns >= 2) || (columns === 1 && rows >= 2)) return true
-  return Math.max(rows, columns) >= 4 && (rows <= 2 || columns <= 2)
+  return (rows <= 2 && columns >= 2) || (columns <= 2 && rows >= 2)
 }
 
 function isOverhangSurface(grid: CellGrid, params: CellParams): boolean {
@@ -1470,8 +1469,21 @@ function pinLockedPose(pose: CellPose): void {
   pose.yaw = pose.lockedYaw
 }
 
+function isConstrainedCell(row: number, col: number, rows: number, columns: number): boolean {
+  if (rows >= 3 && columns >= 3) return isPerimeterCell(row, col, rows, columns)
+
+  const alongAxis: AxisName = columns >= rows ? 'x' : 'y'
+  const primaryCount = alongAxis === 'x' ? columns : rows
+  return isStripEndCell(row, col, alongAxis, primaryCount)
+}
+
 function isPerimeterCell(row: number, col: number, rows: number, columns: number): boolean {
   return row === 0 || col === 0 || row === rows - 1 || col === columns - 1
+}
+
+function isStripEndCell(row: number, col: number, alongAxis: AxisName, primaryCount: number): boolean {
+  const primaryIndex = alongAxis === 'x' ? col : row
+  return primaryIndex === 0 || primaryIndex === primaryCount - 1
 }
 
 function perimeterAnchorCenter(row: number, col: number, rows: number, columns: number, params: CellParams, layer: LayerName): Vec3 {
