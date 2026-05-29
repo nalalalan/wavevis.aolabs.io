@@ -70,6 +70,29 @@ const cases = [
       CELL_STATES.OFF,
       CELL_STATES.OFF,
     ]],
+    checkStripContact: true,
+  },
+  {
+    name: '1x5 edge bend strip contact',
+    grid: [[
+      CELL_STATES.BEND_UP,
+      CELL_STATES.OFF,
+      CELL_STATES.OFF,
+      CELL_STATES.OFF,
+      CELL_STATES.OFF,
+    ]],
+    checkStripContact: true,
+  },
+  {
+    name: '1x5 center bend strip contact',
+    grid: [[
+      CELL_STATES.OFF,
+      CELL_STATES.OFF,
+      CELL_STATES.BEND_UP,
+      CELL_STATES.OFF,
+      CELL_STATES.OFF,
+    ]],
+    checkStripContact: true,
   },
   {
     name: '2x10 mixed strip',
@@ -106,6 +129,7 @@ function checkCase(testCase) {
   const params = geometry.DEFAULT_PARAMS
   const layout = geometry.buildArrayLayout(testCase.grid, params, 0)
   let maxLegError = 0
+  let maxConnectorGap = 0
   let minVerticalStack = Infinity
 
   layout.forEach((row) => {
@@ -129,9 +153,22 @@ function checkCase(testCase) {
     })
   })
 
+  if (testCase.checkStripContact) {
+    layout.forEach((row) => {
+      for (let col = 0; col < row.length - 1; col += 1) {
+        ;['lower', 'upper'].forEach((layer) => {
+          const start = geometry.sideNodePositionFromLayout(row[col], layer, 'px')
+          const end = geometry.sideNodePositionFromLayout(row[col + 1], layer, 'nx')
+          maxConnectorGap = Math.max(maxConnectorGap, length(subtract(end, start)))
+        })
+      }
+    })
+  }
+
   return {
     name: testCase.name,
     maxLegError,
+    maxConnectorGap,
     minVerticalStack,
   }
 }
@@ -139,7 +176,7 @@ function checkCase(testCase) {
 const results = cases.map(checkCase)
 console.log(JSON.stringify(results, null, 2))
 
-const failed = results.filter((result) => result.maxLegError > 1e-9 || result.minVerticalStack <= 0)
+const failed = results.filter((result) => result.maxLegError > 1e-9 || result.maxConnectorGap > 1e-8 || result.minVerticalStack <= 0)
 if (failed.length > 0) {
   console.error('Geometry invariant failure:', JSON.stringify(failed, null, 2))
   process.exit(1)

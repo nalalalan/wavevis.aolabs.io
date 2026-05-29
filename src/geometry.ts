@@ -329,9 +329,9 @@ function buildPlanarStripPoses(grid: CellGrid, params: CellParams, time: number)
   const alongAxis: AxisName = columns >= rows ? 'x' : 'y'
   const primaryCount = alongAxis === 'x' ? columns : rows
   const crossCount = alongAxis === 'x' ? rows : columns
-  const bendSteps = smoothStripBendSteps(grid, params, time, alongAxis, primaryCount, crossCount)
-  const angles = stripCellAngles(bendSteps)
-  const centerline = stripCenterline(grid, params, time, alongAxis, primaryCount, crossCount, angles)
+  const stripHeights = buildStripLayerHeights(grid, params, time, alongAxis)
+  const angles = exactStripCellAngles(params, alongAxis, primaryCount, crossCount, stripHeights)
+  const lowerCenterline = exactStripLowerCenterline(params, alongAxis, primaryCount, crossCount, angles, stripHeights)
   const crossCenters = cumulativeCenters(crossCount, () => nominalCellPitch(params))
 
   return Array.from({ length: rows }, (_, row) =>
@@ -341,16 +341,18 @@ function buildPlanarStripPoses(grid: CellGrid, params: CellParams, time: number)
       const crossIndex = alongAxis === 'x' ? row : col
       const lowerTarget = layerHeight(state, 'lower', params, time)
       const upperTarget = layerHeight(state, 'upper', params, time)
-      const centerSpan = Math.max((lowerTarget + upperTarget) / 2, 0.0001)
+      const lowerHeight = stripHeights.lower[row][col]
+      const upperHeight = stripHeights.upper[row][col]
+      const centerSpan = Math.max((lowerHeight + upperHeight) / 2, 0.0001)
       const angle = angles[primaryIndex]
-      const normalAlong = -Math.sin(angle)
-      const normalZ = Math.cos(angle)
-      const center = centerline[primaryIndex]
+      const axisAlong = Math.sin(angle)
+      const axisZ = Math.cos(angle)
+      const lowerCenterFromChain = lowerCenterline[primaryIndex]
       const crossCenter = crossCenters[crossIndex] ?? 0
-      const lowerAlong = center[0] - normalAlong * centerSpan * 0.5
-      const upperAlong = center[0] + normalAlong * centerSpan * 0.5
-      const lowerZ = center[1] - normalZ * centerSpan * 0.5
-      const upperZ = center[1] + normalZ * centerSpan * 0.5
+      const lowerAlong = lowerCenterFromChain[0]
+      const lowerZ = lowerCenterFromChain[1]
+      const upperAlong = lowerAlong + axisAlong * centerSpan
+      const upperZ = lowerZ + axisZ * centerSpan
       const lowerCenter: Vec3 = alongAxis === 'x' ? [lowerAlong, crossCenter, lowerZ] : [crossCenter, lowerAlong, lowerZ]
       const upperCenter: Vec3 = alongAxis === 'x' ? [upperAlong, crossCenter, upperZ] : [crossCenter, upperAlong, upperZ]
       const locked = params.constrainPerimeter && isPerimeterCell(row, col, rows, columns)
@@ -362,8 +364,8 @@ function buildPlanarStripPoses(grid: CellGrid, params: CellParams, time: number)
         upperCenter: locked ? [...lockedUpperCenter] : upperCenter,
         lowerTarget,
         upperTarget,
-        lowerHeight: lowerTarget,
-        upperHeight: upperTarget,
+        lowerHeight,
+        upperHeight,
         yaw: 0,
         yawTarget: 0,
         locked,
@@ -375,80 +377,262 @@ function buildPlanarStripPoses(grid: CellGrid, params: CellParams, time: number)
   )
 }
 
-function smoothStripBendSteps(
+function buildStripLayerHeights(grid: CellGrid, params: CellParams, time: number, alongAxis: AxisName): Record<LayerName, number[][]> {
+  const baseLower = buildStripBaseLayerHeightMap(grid, params, time, 'lower')
+  const baseUpper = buildStripBaseLayerHeightMap(grid, params, time, 'upper')
+  const compatibilityTarget = stripCompatibilityTarget(baseLower, baseUpper, params)
+  const lower = buildStripLayerHeightMap(grid, params, time, alongAxis, 'lower')
+  const upper = buildStripLayerHeightMap(grid, params, time, alongAxis, 'upper')
+
+  return rebalanceStripHeightsForContact(lower, upper, params, compatibilityTarget)
+}
+
+function buildStripBaseLayerHeightMap(grid: CellGrid, params: CellParams, time: number, layer: LayerName): number[][] {
+  return grid.map((row) => row.map((state) => clampLayerHeight(layerHeight(state, layer, params, time), params)))
+}
+
+function buildStripLayerHeightMap(
   grid: CellGrid,
   params: CellParams,
   time: number,
   alongAxis: AxisName,
-  primaryCount: number,
-  crossCount: number,
-): number[] {
-  const raw = Array.from({ length: primaryCount }, (_, index) => {
-    let sum = 0
-    for (let crossIndex = 0; crossIndex < crossCount; crossIndex += 1) {
-      const state = alongAxis === 'x' ? grid[crossIndex][index] : grid[index][crossIndex]
-      sum += layerOffset(state, 'lower', params, time) - layerOffset(state, 'upper', params, time)
-    }
+  layer: LayerName,
+): number[][] {
+  const rows = grid.length
+  const columns = grid[0]?.length ?? 0
 
-    return sum / Math.max(crossCount, 1)
-  })
+  return Array.from({ length: rows }, (_, row) =>
+    Array.from({ length: columns }, (_, col) => {
+      const baseHeight = clampLayerHeight(layerHeight(grid[row][col], layer, params, time), params)
+      const selfCompression = layerCompressionDemand(grid[row][col], layer, params, time)
+      if (selfCompression > 0.0001) return baseHeight
 
-  const bendGain = 0.42
-  const displacementRatio = clampNumber((params.hOff - params.hOn) / Math.max(params.hOff, 0.0001), 0, 1)
-  const maxStep = 0.22 + displacementRatio * 0.36
+      const primaryIndex = alongAxis === 'x' ? col : row
+      const crossIndex = alongAxis === 'x' ? row : col
+      const directPull = Math.max(
+        stripLayerCompressionAt(grid, layer, params, time, alongAxis, primaryIndex - 1, crossIndex),
+        stripLayerCompressionAt(grid, layer, params, time, alongAxis, primaryIndex + 1, crossIndex),
+      )
+      const nextPull = Math.max(
+        stripLayerCompressionAt(grid, layer, params, time, alongAxis, primaryIndex - 2, crossIndex),
+        stripLayerCompressionAt(grid, layer, params, time, alongAxis, primaryIndex + 2, crossIndex),
+      )
+      const crossPull = Math.max(
+        stripLayerCompressionAt(grid, layer, params, time, alongAxis, primaryIndex, crossIndex - 1),
+        stripLayerCompressionAt(grid, layer, params, time, alongAxis, primaryIndex, crossIndex + 1),
+      )
+      const coupledLayer = layer === 'lower' ? 'upper' : 'lower'
+      const coupledDirectPull = Math.max(
+        stripLayerCompressionAt(grid, coupledLayer, params, time, alongAxis, primaryIndex - 1, crossIndex),
+        stripLayerCompressionAt(grid, coupledLayer, params, time, alongAxis, primaryIndex + 1, crossIndex),
+      )
+      const coupledNextPull = Math.max(
+        stripLayerCompressionAt(grid, coupledLayer, params, time, alongAxis, primaryIndex - 2, crossIndex),
+        stripLayerCompressionAt(grid, coupledLayer, params, time, alongAxis, primaryIndex + 2, crossIndex),
+      )
+      const coupledCrossPull = Math.max(
+        stripLayerCompressionAt(grid, coupledLayer, params, time, alongAxis, primaryIndex, crossIndex - 1),
+        stripLayerCompressionAt(grid, coupledLayer, params, time, alongAxis, primaryIndex, crossIndex + 1),
+      )
+      const sameLayerPull = directPull * 0.48 + nextPull * 0.16 + crossPull * 0.24
+      const bodyPull = coupledDirectPull * 0.42 + coupledNextPull * 0.12 + coupledCrossPull * 0.18
+      const passivePull = clampNumber(Math.max(sameLayerPull, bodyPull), 0, 0.56)
 
-  return raw.map((value, index) => {
-    const prev = raw[Math.max(index - 1, 0)]
-    const next = raw[Math.min(index + 1, raw.length - 1)]
-    const smoothed = prev * 0.22 + value * 0.56 + next * 0.22
-    return clampNumber(smoothed * bendGain, -maxStep, maxStep)
-  })
+      return baseHeight + (params.hOn - baseHeight) * passivePull
+    }),
+  )
 }
 
-function stripCellAngles(bendSteps: number[]): number[] {
-  if (bendSteps.length === 0) return []
+function stripCompatibilityTarget(lower: number[][], upper: number[][], params: CellParams): number {
+  let target = Infinity
 
-  const angles = Array.from({ length: bendSteps.length }, () => 0)
-  for (let index = 1; index < bendSteps.length; index += 1) {
-    angles[index] = angles[index - 1] + (bendSteps[index - 1] + bendSteps[index]) * 0.5
+  for (let row = 0; row < lower.length; row += 1) {
+    for (let col = 0; col < (lower[row]?.length ?? 0); col += 1) {
+      target = Math.min(target, stripCompatibilityMeasure(lower[row][col], upper[row][col], params))
+    }
+  }
+
+  return Number.isFinite(target) ? target : params.linkLength
+}
+
+function rebalanceStripHeightsForContact(
+  lower: number[][],
+  upper: number[][],
+  params: CellParams,
+  target: number,
+): Record<LayerName, number[][]> {
+  return {
+    lower: lower.map((row, rowIndex) =>
+      row.map((lowerHeight, colIndex) => rebalanceLayerPairForContact(lowerHeight, upper[rowIndex][colIndex], params, target)[0]),
+    ),
+    upper: upper.map((row, rowIndex) =>
+      row.map((upperHeight, colIndex) => rebalanceLayerPairForContact(lower[rowIndex][colIndex], upperHeight, params, target)[1]),
+    ),
+  }
+}
+
+function rebalanceLayerPairForContact(lowerHeight: number, upperHeight: number, params: CellParams, target: number): [number, number] {
+  const currentMeasure = stripCompatibilityMeasure(lowerHeight, upperHeight, params)
+  if (Math.abs(currentMeasure - target) <= 0.000001) return [lowerHeight, upperHeight]
+
+  const balancedHeight = clampLayerHeight(target, params)
+  let low = 0
+  let high = 1
+
+  for (let pass = 0; pass < 28; pass += 1) {
+    const mid = (low + high) * 0.5
+    const testLower = lowerHeight + (balancedHeight - lowerHeight) * mid
+    const testUpper = upperHeight + (balancedHeight - upperHeight) * mid
+    const measure = stripCompatibilityMeasure(testLower, testUpper, params)
+
+    if (currentMeasure > target ? measure > target : measure < target) {
+      low = mid
+    } else {
+      high = mid
+    }
+  }
+
+  const mix = high
+  return [
+    clampLayerHeight(lowerHeight + (balancedHeight - lowerHeight) * mix, params),
+    clampLayerHeight(upperHeight + (balancedHeight - upperHeight) * mix, params),
+  ]
+}
+
+function stripCompatibilityMeasure(lowerHeight: number, upperHeight: number, params: CellParams): number {
+  const centerSpan = Math.max((lowerHeight + upperHeight) * 0.5, 0.0001)
+  const offsetDelta = sideNodeOffset(upperHeight, params) - sideNodeOffset(lowerHeight, params)
+  return Math.hypot(centerSpan, offsetDelta)
+}
+
+function stripLayerCompressionAt(
+  grid: CellGrid,
+  layer: LayerName,
+  params: CellParams,
+  time: number,
+  alongAxis: AxisName,
+  primaryIndex: number,
+  crossIndex: number,
+): number {
+  const row = alongAxis === 'x' ? crossIndex : primaryIndex
+  const col = alongAxis === 'x' ? primaryIndex : crossIndex
+  const state = grid[row]?.[col]
+  if (state === undefined) return 0
+
+  return layerCompressionDemand(state, layer, params, time)
+}
+
+function layerCompressionDemand(state: CellState, layer: LayerName, params: CellParams, time: number): number {
+  const span = Math.max(params.hOff - params.hOn, 0.0001)
+  return clampNumber((params.hOff - layerHeight(state, layer, params, time)) / span, 0, 1)
+}
+
+function exactStripCellAngles(
+  params: CellParams,
+  alongAxis: AxisName,
+  primaryCount: number,
+  crossCount: number,
+  stripHeights: Record<LayerName, number[][]>,
+): number[] {
+  if (primaryCount <= 0) return []
+
+  const descriptors = Array.from({ length: primaryCount }, (_, index) => averageStripDescriptor(params, alongAxis, index, crossCount, stripHeights))
+  const angles = Array.from({ length: primaryCount }, () => 0)
+
+  for (let index = 1; index < primaryCount; index += 1) {
+    const previous = descriptors[index - 1]
+    const current = descriptors[index]
+    const transfer = stripUpperTransferVector(angles[index - 1], previous.centerSpan, previous.offsetDelta)
+    const currentPhase = Math.atan2(current.offsetDelta, current.centerSpan)
+    angles[index] = Math.atan2(transfer[0], transfer[1]) + currentPhase
   }
 
   const mean = angles.reduce((sum, angle) => sum + angle, 0) / angles.length
   return angles.map((angle) => clampNumber(angle - mean, -Math.PI * 0.46, Math.PI * 0.46))
 }
 
-function stripCenterline(
-  grid: CellGrid,
+function exactStripLowerCenterline(
   params: CellParams,
-  time: number,
   alongAxis: AxisName,
   primaryCount: number,
   crossCount: number,
   angles: number[],
+  stripHeights: Record<LayerName, number[][]>,
 ): Array<[number, number]> {
   if (primaryCount <= 0) return []
 
-  const averageOffsets = Array.from({ length: primaryCount }, (_, index) => {
-    let sum = 0
-    for (let crossIndex = 0; crossIndex < crossCount; crossIndex += 1) {
-      const state = alongAxis === 'x' ? grid[crossIndex][index] : grid[index][crossIndex]
-      sum += (layerOffset(state, 'lower', params, time) + layerOffset(state, 'upper', params, time)) * 0.5
-    }
-
-    return sum / Math.max(crossCount, 1)
-  })
-
   const centers: Array<[number, number]> = [[0, 0]]
   for (let index = 1; index < primaryCount; index += 1) {
-    const gap = averageOffsets[index - 1] + averageOffsets[index]
-    const angle = (angles[index - 1] + angles[index]) * 0.5
+    const previousOffset = averageStripLayerOffset(params, alongAxis, index - 1, crossCount, stripHeights, 'lower')
+    const currentOffset = averageStripLayerOffset(params, alongAxis, index, crossCount, stripHeights, 'lower')
     const previous = centers[index - 1]
-    centers[index] = [previous[0] + Math.cos(angle) * gap, previous[1] + Math.sin(angle) * gap]
+    const previousSide = stripSideVector2(angles[index - 1])
+    const currentSide = stripSideVector2(angles[index])
+    centers[index] = [
+      previous[0] + previousSide[0] * previousOffset + currentSide[0] * currentOffset,
+      previous[1] + previousSide[1] * previousOffset + currentSide[1] * currentOffset,
+    ]
   }
 
   const originAlong = (centers[0][0] + centers[centers.length - 1][0]) * 0.5
   const minZ = Math.min(...centers.map((center) => center[1]))
   return centers.map((center) => [center[0] - originAlong, center[1] - minZ])
+}
+
+function averageStripDescriptor(
+  params: CellParams,
+  alongAxis: AxisName,
+  primaryIndex: number,
+  crossCount: number,
+  stripHeights: Record<LayerName, number[][]>,
+): { centerSpan: number; offsetDelta: number } {
+  let centerSpan = 0
+  let offsetDelta = 0
+
+  for (let crossIndex = 0; crossIndex < crossCount; crossIndex += 1) {
+    const row = alongAxis === 'x' ? crossIndex : primaryIndex
+    const col = alongAxis === 'x' ? primaryIndex : crossIndex
+    const lowerHeight = stripHeights.lower[row][col]
+    const upperHeight = stripHeights.upper[row][col]
+    centerSpan += (lowerHeight + upperHeight) * 0.5
+    offsetDelta += sideNodeOffset(upperHeight, params) - sideNodeOffset(lowerHeight, params)
+  }
+
+  const divisor = Math.max(crossCount, 1)
+  return { centerSpan: centerSpan / divisor, offsetDelta: offsetDelta / divisor }
+}
+
+function averageStripLayerOffset(
+  params: CellParams,
+  alongAxis: AxisName,
+  primaryIndex: number,
+  crossCount: number,
+  stripHeights: Record<LayerName, number[][]>,
+  layer: LayerName,
+): number {
+  let offset = 0
+
+  for (let crossIndex = 0; crossIndex < crossCount; crossIndex += 1) {
+    const row = alongAxis === 'x' ? crossIndex : primaryIndex
+    const col = alongAxis === 'x' ? primaryIndex : crossIndex
+    offset += sideNodeOffset(stripHeights[layer][row][col], params)
+  }
+
+  return offset / Math.max(crossCount, 1)
+}
+
+function stripUpperTransferVector(angle: number, centerSpan: number, offsetDelta: number): [number, number] {
+  const axis = stripAxisVector2(angle)
+  const side = stripSideVector2(angle)
+  return [axis[0] * centerSpan + side[0] * offsetDelta, axis[1] * centerSpan + side[1] * offsetDelta]
+}
+
+function stripAxisVector2(angle: number): [number, number] {
+  return [Math.sin(angle), Math.cos(angle)]
+}
+
+function stripSideVector2(angle: number): [number, number] {
+  return [Math.cos(angle), -Math.sin(angle)]
 }
 
 function buildLayoutFromPoses(grid: CellGrid, params: CellParams, poses: CellPose[][]): CellLayout[][] {
