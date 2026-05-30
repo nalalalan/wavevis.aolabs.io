@@ -49,7 +49,7 @@ const cases = [
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
     minAdjacentCenterDistance: 1.8,
-    maxAllConnectorGap: 0.18,
+    maxAllConnectorGap: 0.085,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'upper', maxHeight: 2.05 },
       { row: 0, col: 1, layer: 'lower', maxHeight: 2.05 },
@@ -63,7 +63,7 @@ const cases = [
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
     minAdjacentCenterDistance: 1.6,
-    maxAllConnectorGap: 0.18,
+    maxAllConnectorGap: 0.085,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'lower', maxHeight: 2.05 },
       { row: 0, col: 1, layer: 'upper', maxHeight: 2.05 },

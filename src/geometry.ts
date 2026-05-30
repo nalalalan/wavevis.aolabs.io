@@ -1131,7 +1131,7 @@ function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose
   const overhangSurface = isOverhangSurface(grid, params)
   const baseSettlePasses = overhangSurface ? 72 : cellCount <= 16 ? 140 : cellCount > 2500 ? 3 : cellCount > 900 ? 8 : cellCount > 225 ? 18 : 56
   const settlePasses = params.constrainPerimeter ? baseSettlePasses : Math.min(baseSettlePasses, 28)
-  const finalPasses = overhangSurface ? 72 : cellCount <= 16 ? 120 : cellCount > 2500 ? 4 : cellCount > 900 ? 8 : Math.max(12, Math.floor(settlePasses * 0.65))
+  const finalPasses = overhangSurface ? 72 : cellCount <= 16 ? 180 : cellCount > 2500 ? 4 : cellCount > 900 ? 8 : Math.max(12, Math.floor(settlePasses * 0.65))
 
   for (let pass = 0; pass < settlePasses; pass += 1) {
     const layout = buildLayoutFromPoses(grid, params, poses)
@@ -1159,7 +1159,7 @@ function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose
         params,
         overhangSurface ? 0.74 : cellCount <= 16 ? 0.48 : 0.34,
         true,
-        cellCount <= 16 ? false : pass > finalPasses * 0.35,
+        cellCount <= 16 ? pass > finalPasses * 0.55 : pass > finalPasses * 0.35,
       )
     })
     poses.forEach((row) =>
@@ -1247,9 +1247,9 @@ function projectConnectorConstraint(
   const maxCorrection = Math.max(nominalCellPitch(params), params.linkLength, params.plateSize) * 0.42
   const correctionLength = clampNumber(currentLength * 0.5 * strength, -maxCorrection, maxCorrection)
   const correction = scale(direction, correctionLength)
-  // Node-to-node connectors are hard couplings in the visual model. Solver
-  // relaxation can tilt/yaw cells or relax layer height, but it cannot leave a
-  // connector stretched between separated side nodes.
+  // Node-to-node connectors are direct contacts in the visual model. Solver
+  // relaxation can tilt/yaw cells or relax layer height, but the renderer does
+  // not add an extra bridge piece between adjacent cells.
   const couplingCorrection = correction
   const aCanMove = !aPose.locked
   const bCanMove = !bPose.locked
