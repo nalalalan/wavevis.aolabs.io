@@ -41,6 +41,12 @@ const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
 const scale = (a, scalar) => [a[0] * scalar, a[1] * scalar, a[2] * scalar]
 const length = (a) => Math.hypot(a[0], a[1], a[2])
 
+// Surface patches should share a small amount of passive expansion through
+// neighbors. These bounds catch both failure modes: zero passive sharing at the
+// full off height and runaway passive expansion that makes OFF cells look
+// actuated.
+const passiveSharedLayerBand = { minHeight: 1.82, maxHeight: 1.95 }
+
 const cases = [
   {
     name: '2x2 one bend up',
@@ -53,12 +59,12 @@ const cases = [
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'lower', minHeight: 0.49, maxHeight: 0.52 },
       { row: 0, col: 0, layer: 'upper', minHeight: 1.95, maxHeight: 2.05 },
-      { row: 0, col: 1, layer: 'lower', minHeight: 1.82, maxHeight: 2.05 },
-      { row: 0, col: 1, layer: 'upper', minHeight: 1.82, maxHeight: 2.05 },
-      { row: 1, col: 0, layer: 'lower', minHeight: 1.82, maxHeight: 2.05 },
-      { row: 1, col: 0, layer: 'upper', minHeight: 1.82, maxHeight: 2.05 },
-      { row: 1, col: 1, layer: 'lower', minHeight: 1.82, maxHeight: 2.05 },
-      { row: 1, col: 1, layer: 'upper', minHeight: 1.82, maxHeight: 2.05 },
+      { row: 0, col: 1, layer: 'lower', ...passiveSharedLayerBand },
+      { row: 0, col: 1, layer: 'upper', ...passiveSharedLayerBand },
+      { row: 1, col: 0, layer: 'lower', ...passiveSharedLayerBand },
+      { row: 1, col: 0, layer: 'upper', ...passiveSharedLayerBand },
+      { row: 1, col: 1, layer: 'lower', ...passiveSharedLayerBand },
+      { row: 1, col: 1, layer: 'upper', ...passiveSharedLayerBand },
     ],
   },
   {
@@ -72,12 +78,12 @@ const cases = [
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'lower', minHeight: 1.95, maxHeight: 2.05 },
       { row: 0, col: 0, layer: 'upper', minHeight: 0.49, maxHeight: 0.52 },
-      { row: 0, col: 1, layer: 'lower', minHeight: 1.82, maxHeight: 2.05 },
-      { row: 0, col: 1, layer: 'upper', minHeight: 1.82, maxHeight: 2.05 },
-      { row: 1, col: 0, layer: 'lower', minHeight: 1.82, maxHeight: 2.05 },
-      { row: 1, col: 0, layer: 'upper', minHeight: 1.82, maxHeight: 2.05 },
-      { row: 1, col: 1, layer: 'lower', minHeight: 1.82, maxHeight: 2.05 },
-      { row: 1, col: 1, layer: 'upper', minHeight: 1.82, maxHeight: 2.05 },
+      { row: 0, col: 1, layer: 'lower', ...passiveSharedLayerBand },
+      { row: 0, col: 1, layer: 'upper', ...passiveSharedLayerBand },
+      { row: 1, col: 0, layer: 'lower', ...passiveSharedLayerBand },
+      { row: 1, col: 0, layer: 'upper', ...passiveSharedLayerBand },
+      { row: 1, col: 1, layer: 'lower', ...passiveSharedLayerBand },
+      { row: 1, col: 1, layer: 'upper', ...passiveSharedLayerBand },
     ],
   },
   {

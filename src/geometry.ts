@@ -41,6 +41,8 @@ export const STATE_META = [
 
 export const SIDE_NAMES: SideName[] = ['px', 'nx', 'py', 'ny']
 
+const PASSIVE_RESULTANT_RELAXATION_RATIO = 0.08
+
 const CELL_STATE_SEQUENCE = [
   CELL_STATES.OFF,
   CELL_STATES.BEND_UP,
@@ -850,11 +852,12 @@ function buildLayoutFromPoses(grid: CellGrid, params: CellParams, poses: CellPos
       const centerDelta = subtract(pose.upperCenter, pose.lowerCenter)
       const centerDistance = Math.max(vectorLength(centerDelta), 0.0001)
       const axis = normalize(centerDelta)
-      // Height is an actuation state, not the main connector-error budget. Give
-      // the renderer only a small worst-case height-relaxation band, then spend
-      // the remaining mismatch through tilt/yaw; otherwise OFF neighbors look
-      // passively actuated by adjacent cells.
-      const minimumResultantTotal = targetTotal * 0.92
+      // Height is an actuation state, not the main connector-error budget. The
+      // array should share a little passive expansion through connected cells,
+      // but only within this small resultant-height band; the remaining
+      // mismatch is spent through whole-cell tilt/yaw so neighbors do not look
+      // fully actuated just because one cell moved.
+      const minimumResultantTotal = targetTotal * (1 - PASSIVE_RESULTANT_RELAXATION_RATIO)
       const actualTotal = Math.min(
         targetTotal,
         maxTotalSpan(params, lowerRatio, upperRatio),
