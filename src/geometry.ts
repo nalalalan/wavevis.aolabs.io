@@ -344,6 +344,7 @@ function buildPlanarStripPoses(grid: CellGrid, params: CellParams, stripHeights:
 function solvePassiveLayerHeights(grid: CellGrid, params: CellParams, time: number, enforceStripContact: boolean): LayerHeightFields {
   const targets = targetLayerHeights(grid, params, time)
   if (!hasActuatedCells(grid)) return targets
+  if (!enforceStripContact) return targets
 
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
@@ -357,12 +358,9 @@ function solvePassiveLayerHeights(grid: CellGrid, params: CellParams, time: numb
   const bodyShearStiffness = 7.5
   const minHeight = minimumSolvedLayerHeight(params)
 
-  // This is the passive expansion model. Each layer starts at its requested EM
-  // height, then a small energy solve lets OFF layers compress when that reduces
-  // connector incompatibility or same-cell body shear. EM-on layers are stiffer,
-  // so they stay close to hOn unless the connector constraints have no cleaner
-  // solution. The rendered links still get their length from the final height,
-  // so the solve can only change resultant height/angle, never link length.
+  // This strip-only compatibility solve preserves direct node contact along a
+  // 1D chain. Surface patches spend connector error through pose tilt/rotation
+  // first, because otherwise neighboring OFF cells look passively actuated.
   for (let pass = 0; pass < passCount; pass += 1) {
     const stats = buildCompatibilityDerivativeField(lower, upper, params)
     const gradients = emptyGradientFields(rows, columns)
@@ -852,7 +850,16 @@ function buildLayoutFromPoses(grid: CellGrid, params: CellParams, poses: CellPos
       const centerDelta = subtract(pose.upperCenter, pose.lowerCenter)
       const centerDistance = Math.max(vectorLength(centerDelta), 0.0001)
       const axis = normalize(centerDelta)
-      const actualTotal = Math.min(targetTotal, centerDistance * 2, maxTotalSpan(params, lowerRatio, upperRatio))
+      // Height is an actuation state, not the main connector-error budget. Give
+      // the renderer only a small worst-case height-relaxation band, then spend
+      // the remaining mismatch through tilt/yaw; otherwise OFF neighbors look
+      // passively actuated by adjacent cells.
+      const minimumResultantTotal = targetTotal * 0.92
+      const actualTotal = Math.min(
+        targetTotal,
+        maxTotalSpan(params, lowerRatio, upperRatio),
+        Math.max(minimumResultantTotal, centerDistance * 2),
+      )
       const bottomH = actualTotal * lowerRatio
       const topH = actualTotal * upperRatio
       const lowerCenter = pose.lowerCenter
@@ -1159,7 +1166,7 @@ function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose
         params,
         overhangSurface ? 0.74 : cellCount <= 16 ? 0.48 : 0.34,
         true,
-        cellCount <= 16 ? pass > finalPasses * 0.55 : pass > finalPasses * 0.35,
+        cellCount <= 16 ? false : pass > finalPasses * 0.65,
       )
     })
     poses.forEach((row) =>
@@ -1250,7 +1257,8 @@ function projectConnectorConstraint(
   // Node-to-node connectors are direct contacts in the visual model. Solver
   // relaxation can tilt/yaw cells or relax layer height, but the renderer does
   // not add an extra bridge piece between adjacent cells.
-  const couplingCorrection = correction
+  const bodyCorrection = scale(correction, 0.58)
+  const couplingCorrection = scale(correction, 0.18)
   const aCanMove = !aPose.locked
   const bCanMove = !bPose.locked
   const aScale = aCanMove && bCanMove ? 1 : aCanMove ? 2 : 0
@@ -1266,6 +1274,8 @@ function projectConnectorConstraint(
     rotatePoseTiltTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -bRotationScale), strength * 0.31, 1)
     rotatePoseYawTowardNodeMove(bPose, bLayout, constraint.layer, constraint.bSide, scale(correction, -bRotationScale), strength * 0.5)
   }
+  movePoseBody(aPose, scale(bodyCorrection, aScale))
+  movePoseBody(bPose, scale(bodyCorrection, -bScale))
   movePoseLayer(aPose, constraint.layer, scale(couplingCorrection, aScale))
   movePoseLayer(bPose, constraint.layer, scale(couplingCorrection, -bScale))
   if (allowHeightFlex) {
@@ -1301,6 +1311,12 @@ function movePoseLayer(pose: CellPose, layer: LayerName, correction: Vec3): void
   } else {
     pose.upperCenter = add(pose.upperCenter, correction)
   }
+}
+
+function movePoseBody(pose: CellPose, correction: Vec3): void {
+  if (pose.locked) return
+  pose.lowerCenter = add(pose.lowerCenter, correction)
+  pose.upperCenter = add(pose.upperCenter, correction)
 }
 
 function relaxPoseLayerHeightTowardNodeMove(

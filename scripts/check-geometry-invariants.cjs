@@ -48,12 +48,17 @@ const cases = [
       [CELL_STATES.BEND_UP, CELL_STATES.OFF],
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
-    minAdjacentCenterDistance: 1.8,
-    maxAllConnectorGap: 0.085,
+    minAdjacentCenterDistance: 1.45,
+    maxAllConnectorGap: 0.42,
     passiveLayerChecks: [
-      { row: 0, col: 0, layer: 'upper', maxHeight: 2.05 },
-      { row: 0, col: 1, layer: 'lower', maxHeight: 2.05 },
-      { row: 1, col: 0, layer: 'upper', maxHeight: 2.05 },
+      { row: 0, col: 0, layer: 'lower', minHeight: 0.49, maxHeight: 0.52 },
+      { row: 0, col: 0, layer: 'upper', minHeight: 1.95, maxHeight: 2.05 },
+      { row: 0, col: 1, layer: 'lower', minHeight: 1.82, maxHeight: 2.05 },
+      { row: 0, col: 1, layer: 'upper', minHeight: 1.82, maxHeight: 2.05 },
+      { row: 1, col: 0, layer: 'lower', minHeight: 1.82, maxHeight: 2.05 },
+      { row: 1, col: 0, layer: 'upper', minHeight: 1.82, maxHeight: 2.05 },
+      { row: 1, col: 1, layer: 'lower', minHeight: 1.82, maxHeight: 2.05 },
+      { row: 1, col: 1, layer: 'upper', minHeight: 1.82, maxHeight: 2.05 },
     ],
   },
   {
@@ -62,12 +67,17 @@ const cases = [
       [CELL_STATES.BEND_DOWN, CELL_STATES.OFF],
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
-    minAdjacentCenterDistance: 1.6,
-    maxAllConnectorGap: 0.085,
+    minAdjacentCenterDistance: 1.45,
+    maxAllConnectorGap: 0.42,
     passiveLayerChecks: [
-      { row: 0, col: 0, layer: 'lower', maxHeight: 2.05 },
-      { row: 0, col: 1, layer: 'upper', maxHeight: 2.05 },
-      { row: 1, col: 0, layer: 'lower', maxHeight: 2.05 },
+      { row: 0, col: 0, layer: 'lower', minHeight: 1.95, maxHeight: 2.05 },
+      { row: 0, col: 0, layer: 'upper', minHeight: 0.49, maxHeight: 0.52 },
+      { row: 0, col: 1, layer: 'lower', minHeight: 1.82, maxHeight: 2.05 },
+      { row: 0, col: 1, layer: 'upper', minHeight: 1.82, maxHeight: 2.05 },
+      { row: 1, col: 0, layer: 'lower', minHeight: 1.82, maxHeight: 2.05 },
+      { row: 1, col: 0, layer: 'upper', minHeight: 1.82, maxHeight: 2.05 },
+      { row: 1, col: 1, layer: 'lower', minHeight: 1.82, maxHeight: 2.05 },
+      { row: 1, col: 1, layer: 'upper', minHeight: 1.82, maxHeight: 2.05 },
     ],
   },
   {
@@ -299,7 +309,11 @@ function checkCase(testCase) {
   ;(testCase.passiveLayerChecks ?? []).forEach((check) => {
     const cell = layout[check.row][check.col]
     const height = check.layer === 'lower' ? cell.bottomH : cell.topH
-    maxPassiveLayerHeightError = Math.max(maxPassiveLayerHeightError, Math.max(0, height - check.maxHeight))
+    maxPassiveLayerHeightError = Math.max(
+      maxPassiveLayerHeightError,
+      Math.max(0, height - (check.maxHeight ?? Infinity)),
+      Math.max(0, (check.minHeight ?? -Infinity) - height),
+    )
   })
 
   return {
