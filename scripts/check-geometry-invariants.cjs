@@ -46,6 +46,7 @@ const length = (a) => Math.hypot(a[0], a[1], a[2])
 // full off height and runaway passive expansion that makes OFF cells look
 // actuated.
 const passiveSharedLayerBand = { minHeight: 1.82, maxHeight: 1.95 }
+const clickedCompanionLayerBand = { minHeight: 1.9, maxHeight: 1.95 }
 
 const cases = [
   {
@@ -55,10 +56,10 @@ const cases = [
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
     minAdjacentCenterDistance: 1.45,
-    maxAllConnectorGap: 0.42,
+    maxAllConnectorGap: 0.44,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'lower', minHeight: 0.49, maxHeight: 0.52 },
-      { row: 0, col: 0, layer: 'upper', minHeight: 1.95, maxHeight: 2.05 },
+      { row: 0, col: 0, layer: 'upper', ...clickedCompanionLayerBand },
       { row: 0, col: 1, layer: 'lower', ...passiveSharedLayerBand },
       { row: 0, col: 1, layer: 'upper', ...passiveSharedLayerBand },
       { row: 1, col: 0, layer: 'lower', ...passiveSharedLayerBand },
@@ -74,9 +75,9 @@ const cases = [
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
     minAdjacentCenterDistance: 1.45,
-    maxAllConnectorGap: 0.42,
+    maxAllConnectorGap: 0.44,
     passiveLayerChecks: [
-      { row: 0, col: 0, layer: 'lower', minHeight: 1.95, maxHeight: 2.05 },
+      { row: 0, col: 0, layer: 'lower', ...clickedCompanionLayerBand },
       { row: 0, col: 0, layer: 'upper', minHeight: 0.49, maxHeight: 0.52 },
       { row: 0, col: 1, layer: 'lower', ...passiveSharedLayerBand },
       { row: 0, col: 1, layer: 'upper', ...passiveSharedLayerBand },

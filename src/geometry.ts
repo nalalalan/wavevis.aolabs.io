@@ -42,6 +42,7 @@ export const STATE_META = [
 export const SIDE_NAMES: SideName[] = ['px', 'nx', 'py', 'ny']
 
 const PASSIVE_RESULTANT_RELAXATION_RATIO = 0.08
+const COMPANION_PASSIVE_RELAXATION_RATIO = 0.04
 
 const CELL_STATE_SEQUENCE = [
   CELL_STATES.OFF,
@@ -346,7 +347,7 @@ function buildPlanarStripPoses(grid: CellGrid, params: CellParams, stripHeights:
 function solvePassiveLayerHeights(grid: CellGrid, params: CellParams, time: number, enforceStripContact: boolean): LayerHeightFields {
   const targets = targetLayerHeights(grid, params, time)
   if (!hasActuatedCells(grid)) return targets
-  if (!enforceStripContact) return targets
+  if (!enforceStripContact) return seedSurfaceCompanionPassiveExpansion(grid, params, targets)
 
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
@@ -417,6 +418,35 @@ function solvePassiveLayerHeights(grid: CellGrid, params: CellParams, time: numb
   }
 
   return enforceStripBodyClearance(grid, params, contactHeights)
+}
+
+function seedSurfaceCompanionPassiveExpansion(grid: CellGrid, params: CellParams, targets: LayerHeightFields): LayerHeightFields {
+  const rows = grid.length
+  const columns = grid[0]?.length ?? 0
+  if (rows * columns <= 1) return targets
+
+  const lower = cloneHeightField(targets.lower)
+  const upper = cloneHeightField(targets.upper)
+  const relaxedOffHeight = clampLayerHeight(clampLayerHeight(params.hOff, params) * (1 - COMPANION_PASSIVE_RELAXATION_RATIO), params)
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < columns; col += 1) {
+      const state = grid[row][col]
+      const lowerActuated = isLowerActuated(state)
+      const upperActuated = isUpperActuated(state)
+      if (lowerActuated === upperActuated) continue
+
+      // A single-layer actuation still pulls on the unpowered layer through the
+      // shared middle plate and neighboring connector field. Seed the companion
+      // layer with a smaller bounded passive allowance than connected OFF
+      // neighbors; the actual solve still keeps the powered layer at its EM
+      // target.
+      if (lowerActuated) upper[row][col] = Math.min(upper[row][col], relaxedOffHeight)
+      else lower[row][col] = Math.min(lower[row][col], relaxedOffHeight)
+    }
+  }
+
+  return { lower, upper }
 }
 
 function targetLayerHeights(grid: CellGrid, params: CellParams, time: number): LayerHeightFields {
