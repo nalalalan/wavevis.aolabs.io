@@ -49,6 +49,7 @@ const cases = [
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
     minAdjacentCenterDistance: 1.8,
+    maxAllConnectorGap: 0.18,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'upper', maxHeight: 2.05 },
       { row: 0, col: 1, layer: 'lower', maxHeight: 2.05 },
@@ -62,6 +63,7 @@ const cases = [
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
     minAdjacentCenterDistance: 1.6,
+    maxAllConnectorGap: 0.18,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'lower', maxHeight: 2.05 },
       { row: 0, col: 1, layer: 'upper', maxHeight: 2.05 },
@@ -408,6 +410,7 @@ const failed = results.filter(
   (result) =>
     result.maxLegError > 1e-9 ||
     result.maxConnectorGap > 1e-7 ||
+    result.maxAllConnectorGap > (cases.find((testCase) => testCase.name === result.name)?.maxAllConnectorGap ?? Infinity) ||
     result.minAdjacentCenterDistance < (cases.find((testCase) => testCase.name === result.name)?.minAdjacentCenterDistance ?? 0) ||
     result.maxAdjacentAngle > 0.64 ||
     (cases.find((testCase) => testCase.name === result.name)?.minMaxAdjacentAngle ?? 0) > result.maxAdjacentAngle ||

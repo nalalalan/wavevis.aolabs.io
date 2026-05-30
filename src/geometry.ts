@@ -233,11 +233,10 @@ export function buildArrayLayout(grid: CellGrid, params: CellParams, time = 0): 
   const poses = planarStrip
     ? buildPlanarStripPoses(grid, params, layerHeights)
     : buildInitialPoses(grid, params, layerHeights)
-  // A 2x2 patch has both x and y connector directions but too few cells to
-  // distribute the conflict smoothly. The iterative surface projection can pull
-  // the thick octagonal bodies into each other, so small patches keep the
-  // kinematic spacing from the layer-height solve instead of over-closing.
-  if (!planarStrip && !isSmallSurfacePatch(grid)) solveConnectorPoses(grid, params, poses)
+  // Surface patches, including 2x2, still need the connector solve. Skipping it
+  // leaves adjacent side nodes separated even though the individual legs remain
+  // the right length.
+  if (!planarStrip) solveConnectorPoses(grid, params, poses)
 
   const layout = buildLayoutFromPoses(grid, params, poses)
   normalizeLayoutFloor(layout, params)
@@ -1174,12 +1173,6 @@ function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose
 
 function hasActuatedCells(grid: CellGrid): boolean {
   return grid.some((row) => row.some((state) => state !== CELL_STATES.OFF))
-}
-
-function isSmallSurfacePatch(grid: CellGrid): boolean {
-  const rows = grid.length
-  const columns = grid[0]?.length ?? 0
-  return rows <= 2 && columns <= 2
 }
 
 function isPlanarStrip(grid: CellGrid): boolean {
