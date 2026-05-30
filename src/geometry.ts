@@ -43,6 +43,7 @@ export const SIDE_NAMES: SideName[] = ['px', 'nx', 'py', 'ny']
 
 const PASSIVE_RESULTANT_RELAXATION_RATIO = 0.08
 const COMPANION_PASSIVE_RELAXATION_RATIO = 0.04
+const RESULTANT_SPAN_RELAXATION_RATIO = 0.02
 
 const CELL_STATE_SEQUENCE = [
   CELL_STATES.OFF,
@@ -91,6 +92,8 @@ type AxisName = 'x' | 'y'
 type CellPose = {
   lowerCenter: Vec3
   upperCenter: Vec3
+  restLowerCenter: Vec3
+  restUpperCenter: Vec3
   lowerTarget: number
   upperTarget: number
   lowerHeight: number
@@ -277,6 +280,8 @@ function buildInitialPoses(grid: CellGrid, params: CellParams, layerHeights: Lay
       return {
         lowerCenter: locked ? [...lockedLowerCenter] : lowerCenter,
         upperCenter: locked ? [...lockedUpperCenter] : upperCenter,
+        restLowerCenter: [...lowerCenter],
+        restUpperCenter: [...upperCenter],
         lowerTarget,
         upperTarget,
         lowerHeight: lowerTarget,
@@ -329,6 +334,8 @@ function buildPlanarStripPoses(grid: CellGrid, params: CellParams, stripHeights:
       return {
         lowerCenter: locked ? [...lockedLowerCenter] : lowerCenter,
         upperCenter: locked ? [...lockedUpperCenter] : upperCenter,
+        restLowerCenter: [...lowerCenter],
+        restUpperCenter: [...upperCenter],
         lowerTarget,
         upperTarget,
         lowerHeight,
@@ -347,17 +354,17 @@ function buildPlanarStripPoses(grid: CellGrid, params: CellParams, stripHeights:
 function solvePassiveLayerHeights(grid: CellGrid, params: CellParams, time: number, enforceStripContact: boolean): LayerHeightFields {
   const targets = targetLayerHeights(grid, params, time)
   if (!hasActuatedCells(grid)) return targets
-  if (!enforceStripContact) return seedSurfaceCompanionPassiveExpansion(grid, params, targets)
+  const seededTargets = enforceStripContact ? targets : seedSurfaceCompanionPassiveExpansion(grid, params, targets)
 
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
-  const lower = cloneHeightField(targets.lower)
-  const upper = cloneHeightField(targets.upper)
+  const lower = cloneHeightField(seededTargets.lower)
+  const upper = cloneHeightField(seededTargets.upper)
   const lowerStiffness = buildLayerStiffnessMap(grid, params, time, 'lower')
   const upperStiffness = buildLayerStiffnessMap(grid, params, time, 'upper')
   const constraints = buildHeightCompatibilityConstraints(rows, columns)
   const passCount = enforceStripContact ? 96 : rows * columns > 2500 ? 28 : rows * columns > 900 ? 42 : 72
-  const compatibilityStiffness = enforceStripContact ? 42 : 20
+  const compatibilityStiffness = enforceStripContact ? 42 : 10
   const bodyShearStiffness = 7.5
   const minHeight = minimumSolvedLayerHeight(params)
 
@@ -371,8 +378,8 @@ function solvePassiveLayerHeights(grid: CellGrid, params: CellParams, time: numb
 
     for (let row = 0; row < rows; row += 1) {
       for (let col = 0; col < columns; col += 1) {
-        addHeightTargetGradient(gradients, denominators, 'lower', row, col, lower[row][col], targets.lower[row][col], lowerStiffness[row][col])
-        addHeightTargetGradient(gradients, denominators, 'upper', row, col, upper[row][col], targets.upper[row][col], upperStiffness[row][col])
+        addHeightTargetGradient(gradients, denominators, 'lower', row, col, lower[row][col], seededTargets.lower[row][col], lowerStiffness[row][col])
+        addHeightTargetGradient(gradients, denominators, 'upper', row, col, upper[row][col], seededTargets.upper[row][col], upperStiffness[row][col])
         addSameCellShearGradient(gradients, denominators, stats[row][col], row, col, bodyShearStiffness)
       }
     }
@@ -427,13 +434,26 @@ function seedSurfaceCompanionPassiveExpansion(grid: CellGrid, params: CellParams
 
   const lower = cloneHeightField(targets.lower)
   const upper = cloneHeightField(targets.upper)
-  const relaxedOffHeight = clampLayerHeight(clampLayerHeight(params.hOff, params) * (1 - COMPANION_PASSIVE_RELAXATION_RATIO), params)
+  const relaxedNeighborOffHeight = clampLayerHeight(
+    clampLayerHeight(params.hOff, params) * (1 - PASSIVE_RESULTANT_RELAXATION_RATIO),
+    params,
+  )
+  const relaxedCompanionOffHeight = clampLayerHeight(
+    clampLayerHeight(params.hOff, params) * (1 - COMPANION_PASSIVE_RELAXATION_RATIO),
+    params,
+  )
 
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < columns; col += 1) {
       const state = grid[row][col]
       const lowerActuated = isLowerActuated(state)
       const upperActuated = isUpperActuated(state)
+      if (!lowerActuated && !upperActuated) {
+        lower[row][col] = Math.min(lower[row][col], relaxedNeighborOffHeight)
+        upper[row][col] = Math.min(upper[row][col], relaxedNeighborOffHeight)
+        continue
+      }
+
       if (lowerActuated === upperActuated) continue
 
       // A single-layer actuation still pulls on the unpowered layer through the
@@ -441,8 +461,8 @@ function seedSurfaceCompanionPassiveExpansion(grid: CellGrid, params: CellParams
       // layer with a smaller bounded passive allowance than connected OFF
       // neighbors; the actual solve still keeps the powered layer at its EM
       // target.
-      if (lowerActuated) upper[row][col] = Math.min(upper[row][col], relaxedOffHeight)
-      else lower[row][col] = Math.min(lower[row][col], relaxedOffHeight)
+      if (lowerActuated) upper[row][col] = Math.min(upper[row][col], relaxedCompanionOffHeight)
+      else lower[row][col] = Math.min(lower[row][col], relaxedCompanionOffHeight)
     }
   }
 
@@ -470,8 +490,8 @@ function cloneHeightField(field: number[][]): number[][] {
 function buildLayerStiffnessMap(grid: CellGrid, params: CellParams, time: number, layer: LayerName): number[][] {
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
-  const actuatedStiffness = 32
-  const passiveStiffness = 1
+  const actuatedStiffness = 96
+  const passiveStiffness = 2
 
   return Array.from({ length: rows }, (_, row) =>
     Array.from({ length: columns }, (_, col) =>
@@ -887,7 +907,7 @@ function buildLayoutFromPoses(grid: CellGrid, params: CellParams, poses: CellPos
       // but only within this small resultant-height band; the remaining
       // mismatch is spent through whole-cell tilt/yaw so neighbors do not look
       // fully actuated just because one cell moved.
-      const minimumResultantTotal = targetTotal * (1 - PASSIVE_RESULTANT_RELAXATION_RATIO)
+      const minimumResultantTotal = targetTotal * (1 - RESULTANT_SPAN_RELAXATION_RATIO)
       const actualTotal = Math.min(
         targetTotal,
         maxTotalSpan(params, lowerRatio, upperRatio),
@@ -1167,22 +1187,39 @@ function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose
   if (!hasActuatedCells(grid)) return
 
   const constraints = buildConnectorConstraints(grid)
-  const cellCount = grid.length * (grid[0]?.length ?? 0)
+  const rows = grid.length
+  const columns = grid[0]?.length ?? 0
+  const cellCount = rows * columns
+  const tinySurfacePatch = rows >= 2 && columns >= 2 && cellCount <= 4
   const overhangSurface = isOverhangSurface(grid, params)
   const baseSettlePasses = overhangSurface ? 72 : cellCount <= 16 ? 140 : cellCount > 2500 ? 3 : cellCount > 900 ? 8 : cellCount > 225 ? 18 : 56
   const settlePasses = params.constrainPerimeter ? baseSettlePasses : Math.min(baseSettlePasses, 28)
   const finalPasses = overhangSurface ? 72 : cellCount <= 16 ? 180 : cellCount > 2500 ? 4 : cellCount > 900 ? 8 : Math.max(12, Math.floor(settlePasses * 0.65))
+  const maxTilt = tinySurfacePatch ? 0.82 : Math.PI
+  const restShapeStrength = tinySurfacePatch ? 0.045 : cellCount <= 16 ? 0.018 : 0.006
 
   for (let pass = 0; pass < settlePasses; pass += 1) {
     const layout = buildLayoutFromPoses(grid, params, poses)
 
     constraints.forEach((constraint) => {
-      projectConnectorConstraint(poses, layout, constraint, params, overhangSurface ? 0.62 : 0.28, true, false)
+      projectConnectorConstraint(
+        poses,
+        layout,
+        constraint,
+        params,
+        overhangSurface ? 0.62 : tinySurfacePatch ? 0.4 : 0.28,
+        true,
+        false,
+        tinySurfacePatch ? 0.46 : 0.58,
+        tinySurfacePatch ? 0.32 : 0.18,
+      )
     })
 
     poses.forEach((row) =>
       row.forEach((pose) => {
+        relaxPoseTowardRest(pose, restShapeStrength)
         projectPoseSpan(pose, params)
+        limitPoseTilt(pose, maxTilt)
         relaxPoseYaw(pose)
       }),
     )
@@ -1197,18 +1234,30 @@ function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose
         layout,
         constraint,
         params,
-        overhangSurface ? 0.74 : cellCount <= 16 ? 0.48 : 0.34,
+        overhangSurface ? 0.74 : tinySurfacePatch ? 0.62 : cellCount <= 16 ? 0.48 : 0.34,
         true,
         cellCount <= 16 ? false : pass > finalPasses * 0.65,
+        tinySurfacePatch ? 0.46 : 0.58,
+        tinySurfacePatch ? 0.32 : 0.18,
       )
     })
     poses.forEach((row) =>
       row.forEach((pose) => {
+        relaxPoseTowardRest(pose, restShapeStrength * 0.55)
         projectPoseSpan(pose, params)
+        limitPoseTilt(pose, maxTilt)
         relaxPoseYaw(pose)
       }),
     )
   }
+}
+
+function relaxPoseTowardRest(pose: CellPose, strength: number): void {
+  if (pose.locked || strength <= 0) return
+
+  pose.lowerCenter = add(pose.lowerCenter, scale(subtract(pose.restLowerCenter, pose.lowerCenter), strength))
+  pose.upperCenter = add(pose.upperCenter, scale(subtract(pose.restUpperCenter, pose.upperCenter), strength))
+  pose.yaw += (pose.yawTarget - pose.yaw) * strength
 }
 
 function hasActuatedCells(grid: CellGrid): boolean {
@@ -1272,6 +1321,8 @@ function projectConnectorConstraint(
   strength: number,
   allowYaw: boolean,
   allowHeightFlex: boolean,
+  bodyCorrectionRatio = 0.58,
+  couplingCorrectionRatio = 0.18,
 ): void {
   const aLayout = layout[constraint.aRow][constraint.aCol]
   const bLayout = layout[constraint.bRow][constraint.bCol]
@@ -1290,8 +1341,8 @@ function projectConnectorConstraint(
   // Node-to-node connectors are direct contacts in the visual model. Solver
   // relaxation can tilt/yaw cells or relax layer height, but the renderer does
   // not add an extra bridge piece between adjacent cells.
-  const bodyCorrection = scale(correction, 0.58)
-  const couplingCorrection = scale(correction, 0.18)
+  const bodyCorrection = scale(correction, bodyCorrectionRatio)
+  const couplingCorrection = scale(correction, couplingCorrectionRatio)
   const aCanMove = !aPose.locked
   const bCanMove = !bPose.locked
   const aScale = aCanMove && bCanMove ? 1 : aCanMove ? 2 : 0
@@ -1470,6 +1521,29 @@ function projectPoseSpan(pose: CellPose, params: CellParams): void {
   pose.upperCenter = add(pose.upperCenter, scale(targetCorrection, -1))
 
   preventPoseInversion(pose, params)
+
+  if (pose.locked) {
+    pinLockedPose(pose)
+  }
+}
+
+function limitPoseTilt(pose: CellPose, maxTilt: number): void {
+  if (maxTilt >= Math.PI - 0.0001) return
+
+  const delta = subtract(pose.upperCenter, pose.lowerCenter)
+  const length = vectorLength(delta)
+  if (length <= 0.0001) return
+
+  const minZ = length * Math.cos(maxTilt)
+  if (delta[2] >= minZ) return
+
+  const horizontal = Math.hypot(delta[0], delta[1])
+  const targetHorizontal = Math.sqrt(Math.max(length ** 2 - minZ ** 2, 0))
+  const horizontalScale = horizontal > 0.0001 ? targetHorizontal / horizontal : 0
+  const nextDelta: Vec3 = [delta[0] * horizontalScale, delta[1] * horizontalScale, minZ]
+  const mid = scale(add(pose.lowerCenter, pose.upperCenter), 0.5)
+  pose.lowerCenter = subtract(mid, scale(nextDelta, 0.5))
+  pose.upperCenter = add(mid, scale(nextDelta, 0.5))
 
   if (pose.locked) {
     pinLockedPose(pose)

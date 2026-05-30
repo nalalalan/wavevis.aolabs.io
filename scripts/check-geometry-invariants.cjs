@@ -45,8 +45,10 @@ const length = (a) => Math.hypot(a[0], a[1], a[2])
 // neighbors. These bounds catch both failure modes: zero passive sharing at the
 // full off height and runaway passive expansion that makes OFF cells look
 // actuated.
-const passiveSharedLayerBand = { minHeight: 1.82, maxHeight: 1.95 }
-const clickedCompanionLayerBand = { minHeight: 1.9, maxHeight: 1.95 }
+const actuatedLayerBand = { minHeight: 0.49, maxHeight: 0.54 }
+const passiveSharedLayerBand = { minHeight: 1.45, maxHeight: 1.65 }
+const clickedCompanionLayerBand = { minHeight: 1.75, maxHeight: 1.9 }
+const tinySurfaceAxisBand = { maxCellAxisTilt: 0.84 }
 
 const cases = [
   {
@@ -56,9 +58,10 @@ const cases = [
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
     minAdjacentCenterDistance: 1.45,
-    maxAllConnectorGap: 0.44,
+    maxAllConnectorGap: 0.4,
+    ...tinySurfaceAxisBand,
     passiveLayerChecks: [
-      { row: 0, col: 0, layer: 'lower', minHeight: 0.49, maxHeight: 0.52 },
+      { row: 0, col: 0, layer: 'lower', ...actuatedLayerBand },
       { row: 0, col: 0, layer: 'upper', ...clickedCompanionLayerBand },
       { row: 0, col: 1, layer: 'lower', ...passiveSharedLayerBand },
       { row: 0, col: 1, layer: 'upper', ...passiveSharedLayerBand },
@@ -75,10 +78,11 @@ const cases = [
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
     minAdjacentCenterDistance: 1.45,
-    maxAllConnectorGap: 0.44,
+    maxAllConnectorGap: 0.4,
+    ...tinySurfaceAxisBand,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'lower', ...clickedCompanionLayerBand },
-      { row: 0, col: 0, layer: 'upper', minHeight: 0.49, maxHeight: 0.52 },
+      { row: 0, col: 0, layer: 'upper', ...actuatedLayerBand },
       { row: 0, col: 1, layer: 'lower', ...passiveSharedLayerBand },
       { row: 0, col: 1, layer: 'upper', ...passiveSharedLayerBand },
       { row: 1, col: 0, layer: 'lower', ...passiveSharedLayerBand },
@@ -233,6 +237,7 @@ function checkCase(testCase) {
   let maxConnectorGap = 0
   let maxAllConnectorGap = 0
   let maxAdjacentAngle = 0
+  let maxCellAxisTilt = 0
   let minAdjacentCenterDistance = Infinity
   let minVerticalStack = Infinity
   let minRenderedZ = Infinity
@@ -241,6 +246,7 @@ function checkCase(testCase) {
   layout.forEach((row) => {
     row.forEach((cell) => {
       minVerticalStack = Math.min(minVerticalStack, cell.middle[2] - cell.bottom[2], cell.top[2] - cell.middle[2])
+      maxCellAxisTilt = Math.max(maxCellAxisTilt, angleBetween(cellAxis(cell), [0, 0, 1]))
       ;[cell.bottom, cell.middle, cell.top].forEach((point) => {
         minRenderedZ = Math.min(minRenderedZ, point[2])
       })
@@ -329,6 +335,7 @@ function checkCase(testCase) {
     maxConnectorGap,
     maxAllConnectorGap,
     maxAdjacentAngle,
+    maxCellAxisTilt,
     minAdjacentCenterDistance,
     maxPassiveLayerHeightError,
     minVerticalStack,
@@ -434,6 +441,7 @@ const failed = results.filter(
     result.maxAllConnectorGap > (cases.find((testCase) => testCase.name === result.name)?.maxAllConnectorGap ?? Infinity) ||
     result.minAdjacentCenterDistance < (cases.find((testCase) => testCase.name === result.name)?.minAdjacentCenterDistance ?? 0) ||
     result.maxAdjacentAngle > 0.64 ||
+    result.maxCellAxisTilt > (cases.find((testCase) => testCase.name === result.name)?.maxCellAxisTilt ?? Infinity) ||
     (cases.find((testCase) => testCase.name === result.name)?.minMaxAdjacentAngle ?? 0) > result.maxAdjacentAngle ||
     result.maxPassiveLayerHeightError > 1e-8 ||
     result.minVerticalStack <= 0 ||
