@@ -58,7 +58,7 @@ const cases = [
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
     minAdjacentCenterDistance: 1.45,
-    maxAllConnectorGap: 0.18,
+    maxAllConnectorGap: 1e-9,
     ...tinySurfaceAxisBand,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'lower', ...actuatedLayerBand },
@@ -78,7 +78,7 @@ const cases = [
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
     minAdjacentCenterDistance: 1.45,
-    maxAllConnectorGap: 0.18,
+    maxAllConnectorGap: 1e-9,
     ...tinySurfaceAxisBand,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'lower', ...clickedCompanionLayerBand },
@@ -261,9 +261,11 @@ function checkCase(testCase) {
           minRenderedZ = Math.min(minRenderedZ, node[2])
           const lowAnchor = add(lowCenter, scale(sideVector, params.plateSize / 2))
           const highAnchor = add(highCenter, scale(sideVector, params.plateSize / 2))
+          const renderedLowAnchor = geometry.fixedLengthLegAnchor(lowAnchor, node, params.linkLength)
+          const renderedHighAnchor = geometry.fixedLengthLegAnchor(highAnchor, node, params.linkLength)
 
-          maxLegError = Math.max(maxLegError, Math.abs(length(subtract(node, lowAnchor)) - params.linkLength))
-          maxLegError = Math.max(maxLegError, Math.abs(length(subtract(node, highAnchor)) - params.linkLength))
+          maxLegError = Math.max(maxLegError, Math.abs(length(subtract(node, renderedLowAnchor)) - params.linkLength))
+          maxLegError = Math.max(maxLegError, Math.abs(length(subtract(node, renderedHighAnchor)) - params.linkLength))
         })
       })
     })

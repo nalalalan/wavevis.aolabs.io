@@ -235,18 +235,73 @@ export function layerStack(state: CellState, params: CellParams, time = 0) {
 
 export function buildArrayLayout(grid: CellGrid, params: CellParams, time = 0): CellLayout[][] {
   const planarStrip = isPlanarStrip(grid)
+  const tinySurfacePatch = isTinySurfacePatch(grid)
   const layerHeights = solvePassiveLayerHeights(grid, params, time, planarStrip)
   const poses = planarStrip
     ? buildPlanarStripPoses(grid, params, layerHeights)
+    : tinySurfacePatch
+      ? buildTinySurfacePoses(grid, params, layerHeights)
     : buildInitialPoses(grid, params, layerHeights)
   // The renderer does not draw bridge pieces between cells. Non-strip patches
   // run the pose projection so corresponding side endpoints meet directly.
-  if (!planarStrip) solveConnectorPoses(grid, params, poses)
+  if (!planarStrip && !tinySurfacePatch) solveConnectorPoses(grid, params, poses)
 
   const layout = buildLayoutFromPoses(grid, params, poses)
   normalizeLayoutFloor(layout, params)
   populateSymmetricNodes(layout)
+  collapseSharedConnectorNodes(grid, layout)
   return layout
+}
+
+function buildTinySurfacePoses(grid: CellGrid, params: CellParams, layerHeights: LayerHeightFields): CellPose[][] {
+  const rows = grid.length
+  const columns = grid[0]?.length ?? 0
+  const lowerX = buildLayerAxisCentersFromHeights(layerHeights.lower, params, 'x')
+  const upperX = buildLayerAxisCentersFromHeights(layerHeights.upper, params, 'x')
+  const lowerY = buildLayerAxisCentersFromHeights(layerHeights.lower, params, 'y')
+  const upperY = buildLayerAxisCentersFromHeights(layerHeights.upper, params, 'y')
+  const pitch = tinySurfacePitch(layerHeights, params)
+  const tiltShare = 0.32
+
+  return Array.from({ length: rows }, (_, row) =>
+    Array.from({ length: columns }, (_, col) => {
+      const lowerTarget = layerHeights.lower[row][col]
+      const upperTarget = layerHeights.upper[row][col]
+      const centerSpan = Math.max((lowerTarget + upperTarget) / 2, 0.0001)
+      const baseX = (col - (columns - 1) * 0.5) * pitch
+      const baseY = (row - (rows - 1) * 0.5) * pitch
+      const requestedDx = (upperX[row][col] - lowerX[row][col]) * tiltShare
+      const requestedDy = (upperY[row][col] - lowerY[row][col]) * tiltShare
+      const requestedPlanar = Math.hypot(requestedDx, requestedDy)
+      const maxPlanar = centerSpan * 0.62
+      const planarScale = requestedPlanar > maxPlanar && requestedPlanar > 0.0001 ? maxPlanar / requestedPlanar : 1
+      const centerDx = requestedDx * planarScale
+      const centerDy = requestedDy * planarScale
+      const centerDz = Math.sqrt(Math.max(centerSpan ** 2 - centerDx ** 2 - centerDy ** 2, 0))
+      const lowerCenter: Vec3 = [baseX, baseY, lowerTarget * 0.5]
+      const upperCenter: Vec3 = [baseX + centerDx, baseY + centerDy, lowerTarget * 0.5 + centerDz]
+      const locked = params.constrainPerimeter && isConstrainedCell(row, col, rows, columns)
+      const lockedLowerCenter = perimeterAnchorCenter(row, col, rows, columns, params, 'lower')
+      const lockedUpperCenter = perimeterAnchorCenter(row, col, rows, columns, params, 'upper')
+
+      return {
+        lowerCenter: locked ? [...lockedLowerCenter] : lowerCenter,
+        upperCenter: locked ? [...lockedUpperCenter] : upperCenter,
+        restLowerCenter: [...lowerCenter],
+        restUpperCenter: [...upperCenter],
+        lowerTarget,
+        upperTarget,
+        lowerHeight: lowerTarget,
+        upperHeight: upperTarget,
+        yaw: 0,
+        yawTarget: 0,
+        locked,
+        lockedLowerCenter,
+        lockedUpperCenter,
+        lockedYaw: 0,
+      }
+    }),
+  )
 }
 
 function buildInitialPoses(grid: CellGrid, params: CellParams, layerHeights: LayerHeightFields): CellPose[][] {
@@ -969,6 +1024,13 @@ export function sideNodePositionFromLayout(layout: CellLayout, layer: LayerName,
   return layout.nodes[layer][side]
 }
 
+export function fixedLengthLegAnchor(anchor: Vec3, node: Vec3, linkLength: number): Vec3 {
+  const direction = subtract(anchor, node)
+  const distance = vectorLength(direction)
+  if (distance <= 0.0001) return [...anchor]
+  return add(node, scale(direction, linkLength / distance))
+}
+
 export function sideVectorFromLayout(layout: CellLayout, side: SideName): Vec3 {
   const axis = normalize(subtract(layout.top, layout.bottom))
   const yawSeed: Vec3 = [Math.cos(layout.yaw), Math.sin(layout.yaw), 0]
@@ -1055,6 +1117,19 @@ function buildLayerAxisCentersFromHeights(heights: number[][], params: CellParam
   )
 
   return Array.from({ length: rows }, (_, row) => Array.from({ length: columns }, (_, col) => centersByColumn[col][row]))
+}
+
+function tinySurfacePitch(layerHeights: LayerHeightFields, params: CellParams): number {
+  let widestOffset = 0
+  ;(['lower', 'upper'] as LayerName[]).forEach((layer) => {
+    layerHeights[layer].forEach((row) => {
+      row.forEach((height) => {
+        widestOffset = Math.max(widestOffset, sideNodeOffset(height, params))
+      })
+    })
+  })
+
+  return Math.max(nominalCellPitch(params), widestOffset * 2 + params.plateSize * 0.2)
 }
 
 function cumulativeCenters(count: number, gap: (index: number) => number): number[] {
@@ -1158,6 +1233,31 @@ function normalizeLayoutFloor(layout: CellLayout[][], params: Pick<CellParams, '
       shiftCell(cell, shiftAmount)
     }),
   )
+}
+
+function collapseSharedConnectorNodes(grid: CellGrid, layout: CellLayout[][]): void {
+  const rows = grid.length
+  const columns = grid[0]?.length ?? 0
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < columns - 1; col += 1) {
+      shareConnectorNode(layout[row][col], 'px', layout[row][col + 1], 'nx')
+    }
+  }
+
+  for (let row = 0; row < rows - 1; row += 1) {
+    for (let col = 0; col < columns; col += 1) {
+      shareConnectorNode(layout[row][col], 'py', layout[row + 1][col], 'ny')
+    }
+  }
+}
+
+function shareConnectorNode(a: CellLayout, aSide: SideName, b: CellLayout, bSide: SideName): void {
+  ;(['lower', 'upper'] as LayerName[]).forEach((layer) => {
+    const shared = scale(add(a.nodes[layer][aSide], b.nodes[layer][bSide]), 0.5)
+    a.nodes[layer][aSide] = shared
+    b.nodes[layer][bSide] = shared
+  })
 }
 
 function shiftCell(cell: CellLayout, amount: number): void {
@@ -1269,6 +1369,12 @@ function isPlanarStrip(grid: CellGrid): boolean {
   const oneCellWide = (rows === 1 && columns >= 2) || (columns === 1 && rows >= 2)
   const longTwoCellWideStrip = (rows === 2 && columns >= 3) || (columns === 2 && rows >= 3)
   return oneCellWide || longTwoCellWideStrip
+}
+
+function isTinySurfacePatch(grid: CellGrid): boolean {
+  const rows = grid.length
+  const columns = grid[0]?.length ?? 0
+  return rows >= 2 && columns >= 2 && rows * columns <= 4
 }
 
 function isOverhangSurface(grid: CellGrid, params: CellParams): boolean {
