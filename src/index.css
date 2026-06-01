@@ -130,26 +130,8 @@ button {
 .app-mark {
   width: 34px;
   height: 34px;
-  display: grid;
-  place-items: center;
   border-radius: 9px;
-  background: #25221e;
-  position: relative;
-  overflow: hidden;
-}
-
-.app-mark span {
-  position: absolute;
-  width: 23px;
-  height: 5px;
-  border-radius: 999px;
-  background: #f4efe7;
-  transform: rotate(28deg);
-}
-
-.app-mark span:last-child {
-  background: #ff8a2a;
-  transform: rotate(-28deg);
+  display: block;
 }
 
 h1,

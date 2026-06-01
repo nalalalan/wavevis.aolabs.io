@@ -55,10 +55,7 @@ export default function ControlPanel({
           <span className="ao-dot" aria-hidden="true">
             ao
           </span>
-          <span className="app-mark" aria-hidden="true">
-            <span />
-            <span />
-          </span>
+          <img className="app-mark" src="./favicon.svg" alt="" aria-hidden="true" />
           <h1>wavevis.aolabs.io</h1>
         </div>
         <p>double-layer Sarrus cell array</p>
