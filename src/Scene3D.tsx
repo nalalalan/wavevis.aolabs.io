@@ -1,10 +1,9 @@
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { Suspense, useMemo, useState, type ReactNode } from 'react'
-import DoubleLayerCell, { PlankSegment } from './DoubleLayerCell'
-import { buildArrayLayout, layoutBounds, nominalCellPitch, sideNodePositionFromLayout, type CellLayout } from './geometry'
-import { linkageColor, linkageWidth } from './renderStyle'
-import { CELL_STATES, type CellGrid, type CellParams, type LayerName, type Vec3 } from './types'
+import { Suspense, useMemo, useState } from 'react'
+import DoubleLayerCell from './DoubleLayerCell'
+import { buildArrayLayout, layoutBounds, nominalCellPitch } from './geometry'
+import { CELL_STATES, type CellGrid, type CellParams, type Vec3 } from './types'
 
 type Scene3DProps = {
   grid: CellGrid
@@ -64,57 +63,6 @@ function ArrayModel({ grid, params }: Scene3DProps) {
         row.map((state, colIndex) => (
           <DoubleLayerCell key={`${rowIndex}-${colIndex}`} row={rowIndex} col={colIndex} state={state} params={params} layout={layout[rowIndex][colIndex]} />
         )),
-      )}
-      <InterCellConnectors grid={grid} params={params} layout={layout} />
-    </group>
-  )
-}
-
-function InterCellConnectors({ grid, params, layout }: Scene3DProps & { layout: CellLayout[][] }) {
-  const connectorWidth = linkageWidth(params.plateSize, params.octagonFaceRatio)
-  const widthHint: Vec3 = [0, 0, 1]
-  const layers: LayerName[] = ['lower', 'upper']
-
-  return (
-    <group>
-      {grid.flatMap((row, rowIndex) =>
-        row.flatMap((_, colIndex) => {
-          const segments: ReactNode[] = []
-
-          if (colIndex < row.length - 1) {
-            layers.forEach((layer) => {
-              segments.push(
-                <PlankSegment
-                  key={`x-${rowIndex}-${colIndex}-${layer}`}
-                  start={sideNodePositionFromLayout(layout[rowIndex][colIndex], layer, 'px')}
-                  end={sideNodePositionFromLayout(layout[rowIndex][colIndex + 1], layer, 'nx')}
-                  width={connectorWidth}
-                  thickness={0.044}
-                  widthHint={widthHint}
-                  color={linkageColor}
-                />,
-              )
-            })
-          }
-
-          if (rowIndex < grid.length - 1) {
-            layers.forEach((layer) => {
-              segments.push(
-                <PlankSegment
-                  key={`y-${rowIndex}-${colIndex}-${layer}`}
-                  start={sideNodePositionFromLayout(layout[rowIndex][colIndex], layer, 'py')}
-                  end={sideNodePositionFromLayout(layout[rowIndex + 1][colIndex], layer, 'ny')}
-                  width={connectorWidth}
-                  thickness={0.044}
-                  widthHint={widthHint}
-                  color={linkageColor}
-                />,
-              )
-            })
-          }
-
-          return segments
-        }),
       )}
     </group>
   )

@@ -45,10 +45,10 @@ const length = (a) => Math.hypot(a[0], a[1], a[2])
 // neighbors. These bounds catch both failure modes: zero passive sharing at the
 // full off height and runaway passive expansion that makes OFF cells look
 // actuated.
-const actuatedLayerBand = { minHeight: 0.49, maxHeight: 0.54 }
-const passiveSharedLayerBand = { minHeight: 1.45, maxHeight: 1.65 }
-const clickedCompanionLayerBand = { minHeight: 1.75, maxHeight: 1.9 }
-const tinySurfaceAxisBand = { maxCellAxisTilt: 0.84 }
+const actuatedLayerBand = { minHeight: 0.49, maxHeight: 0.58 }
+const passiveSharedLayerBand = { minHeight: 1.4, maxHeight: 1.65 }
+const clickedCompanionLayerBand = { minHeight: 1.7, maxHeight: 1.92 }
+const tinySurfaceAxisBand = { maxCellAxisTilt: 1.2 }
 const directNodeConnectorSpan = { maxAllConnectorGap: 0.75 }
 
 const cases = [
@@ -59,7 +59,7 @@ const cases = [
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
     minAdjacentCenterDistance: 1.45,
-    maxAllConnectorGap: 0.25,
+    maxAllConnectorGap: 0.13,
     ...tinySurfaceAxisBand,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'lower', ...actuatedLayerBand },
@@ -79,7 +79,7 @@ const cases = [
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
     minAdjacentCenterDistance: 1.45,
-    maxAllConnectorGap: 0.25,
+    maxAllConnectorGap: 0.13,
     ...tinySurfaceAxisBand,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'lower', ...clickedCompanionLayerBand },

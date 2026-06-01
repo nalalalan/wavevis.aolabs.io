@@ -235,73 +235,18 @@ export function layerStack(state: CellState, params: CellParams, time = 0) {
 
 export function buildArrayLayout(grid: CellGrid, params: CellParams, time = 0): CellLayout[][] {
   const planarStrip = isPlanarStrip(grid)
-  const tinySurfacePatch = isTinySurfacePatch(grid)
   const layerHeights = solvePassiveLayerHeights(grid, params, time, planarStrip)
   const poses = planarStrip
     ? buildPlanarStripPoses(grid, params, layerHeights)
-    : tinySurfacePatch
-      ? buildTinySurfacePoses(grid, params, layerHeights)
     : buildInitialPoses(grid, params, layerHeights)
-  // Inter-cell pieces are direct node-to-node planks. Non-strip patches still
-  // run pose projection first so those planks stay short while cell legs remain
-  // attached to the real plate edges.
+  // Non-strip patches run pose projection toward direct side-node contact while
+  // cell legs stay attached to their real plate edges.
   if (!planarStrip) solveConnectorPoses(grid, params, poses)
 
   const layout = buildLayoutFromPoses(grid, params, poses)
   normalizeLayoutFloor(layout, params)
   populateSymmetricNodes(layout)
   return layout
-}
-
-function buildTinySurfacePoses(grid: CellGrid, params: CellParams, layerHeights: LayerHeightFields): CellPose[][] {
-  const rows = grid.length
-  const columns = grid[0]?.length ?? 0
-  const lowerX = buildLayerAxisCentersFromHeights(layerHeights.lower, params, 'x')
-  const upperX = buildLayerAxisCentersFromHeights(layerHeights.upper, params, 'x')
-  const lowerY = buildLayerAxisCentersFromHeights(layerHeights.lower, params, 'y')
-  const upperY = buildLayerAxisCentersFromHeights(layerHeights.upper, params, 'y')
-  const pitch = tinySurfacePitch(layerHeights, params)
-  const tiltShare = 0.32
-
-  return Array.from({ length: rows }, (_, row) =>
-    Array.from({ length: columns }, (_, col) => {
-      const lowerTarget = layerHeights.lower[row][col]
-      const upperTarget = layerHeights.upper[row][col]
-      const centerSpan = Math.max((lowerTarget + upperTarget) / 2, 0.0001)
-      const baseX = (col - (columns - 1) * 0.5) * pitch
-      const baseY = (row - (rows - 1) * 0.5) * pitch
-      const requestedDx = (upperX[row][col] - lowerX[row][col]) * tiltShare
-      const requestedDy = (upperY[row][col] - lowerY[row][col]) * tiltShare
-      const requestedPlanar = Math.hypot(requestedDx, requestedDy)
-      const maxPlanar = centerSpan * 0.62
-      const planarScale = requestedPlanar > maxPlanar && requestedPlanar > 0.0001 ? maxPlanar / requestedPlanar : 1
-      const centerDx = requestedDx * planarScale
-      const centerDy = requestedDy * planarScale
-      const centerDz = Math.sqrt(Math.max(centerSpan ** 2 - centerDx ** 2 - centerDy ** 2, 0))
-      const lowerCenter: Vec3 = [baseX, baseY, lowerTarget * 0.5]
-      const upperCenter: Vec3 = [baseX + centerDx, baseY + centerDy, lowerTarget * 0.5 + centerDz]
-      const locked = params.constrainPerimeter && isConstrainedCell(row, col, rows, columns)
-      const lockedLowerCenter = perimeterAnchorCenter(row, col, rows, columns, params, 'lower')
-      const lockedUpperCenter = perimeterAnchorCenter(row, col, rows, columns, params, 'upper')
-
-      return {
-        lowerCenter: locked ? [...lockedLowerCenter] : lowerCenter,
-        upperCenter: locked ? [...lockedUpperCenter] : upperCenter,
-        restLowerCenter: [...lowerCenter],
-        restUpperCenter: [...upperCenter],
-        lowerTarget,
-        upperTarget,
-        lowerHeight: lowerTarget,
-        upperHeight: upperTarget,
-        yaw: 0,
-        yawTarget: 0,
-        locked,
-        lockedLowerCenter,
-        lockedUpperCenter,
-        lockedYaw: 0,
-      }
-    }),
-  )
 }
 
 function buildInitialPoses(grid: CellGrid, params: CellParams, layerHeights: LayerHeightFields): CellPose[][] {
@@ -1112,19 +1057,6 @@ function buildLayerAxisCentersFromHeights(heights: number[][], params: CellParam
   return Array.from({ length: rows }, (_, row) => Array.from({ length: columns }, (_, col) => centersByColumn[col][row]))
 }
 
-function tinySurfacePitch(layerHeights: LayerHeightFields, params: CellParams): number {
-  let widestOffset = 0
-  ;(['lower', 'upper'] as LayerName[]).forEach((layer) => {
-    layerHeights[layer].forEach((row) => {
-      row.forEach((height) => {
-        widestOffset = Math.max(widestOffset, sideNodeOffset(height, params))
-      })
-    })
-  })
-
-  return Math.max(nominalCellPitch(params), widestOffset * 2 + params.plateSize * 0.2)
-}
-
 function cumulativeCenters(count: number, gap: (index: number) => number): number[] {
   if (count <= 0) return []
 
@@ -1243,7 +1175,7 @@ function shiftCell(cell: CellLayout, amount: number): void {
 // Kinematic model: every layer keeps the Sarrus link length fixed by deriving
 // side-node offset from the current layer height. Connector constraints move
 // whole cell poses and layer centers. The renderer does not draw bridge pieces
-// between cells; adjacent side endpoints must solve as the same point.
+// between cells; adjacent side endpoints are solved toward direct contact.
 // Connections are solved with free rotation and bend propagation. Individual
 // side nodes are never pulled independently, so each cell remains symmetric and
 // all same-cell legs keep the same length.
@@ -1262,7 +1194,7 @@ function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose
   const baseSettlePasses = overhangSurface ? 72 : cellCount <= 16 ? 140 : cellCount > 2500 ? 3 : cellCount > 900 ? 8 : cellCount > 225 ? 18 : 56
   const settlePasses = params.constrainPerimeter ? baseSettlePasses : Math.min(baseSettlePasses, 28)
   const finalPasses = overhangSurface ? 72 : cellCount <= 16 ? 180 : cellCount > 2500 ? 4 : cellCount > 900 ? 8 : Math.max(12, Math.floor(settlePasses * 0.65))
-  const maxTilt = tinySurfacePatch ? 0.82 : Math.PI
+  const maxTilt = tinySurfacePatch ? 1.18 : Math.PI
   const restShapeStrength = tinySurfacePatch ? 0.045 : cellCount <= 16 ? 0.018 : 0.006
 
   for (let pass = 0; pass < settlePasses; pass += 1) {
@@ -1317,6 +1249,188 @@ function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose
       }),
     )
   }
+
+  if (tinySurfacePatch) {
+    solveTinySurfaceNodeContact(grid, params, poses, constraints)
+  }
+}
+
+function solveTinySurfaceNodeContact(grid: CellGrid, params: CellParams, poses: CellPose[][], constraints: ConnectorConstraint[]): void {
+  const variables = tinySurfaceVariables(poses)
+  let bestPoses = clonePoseGrid(poses)
+  let bestScore = tinySurfaceContactScore(grid, params, bestPoses, constraints).score
+  let translationStep = 0.09
+  let yawStep = 0.055
+  let heightStep = 0.018
+
+  for (let sweep = 0; sweep < 144; sweep += 1) {
+    let improved = false
+
+    variables.forEach((variable) => {
+      const step = variable.kind === 'yaw' ? yawStep : variable.kind === 'height' ? heightStep : translationStep
+      let accepted = false
+
+      ;([1, -1] as const).forEach((direction) => {
+        if (accepted) return
+
+        const candidate = clonePoseGrid(bestPoses)
+        adjustTinySurfaceVariable(candidate, variable, step * direction, params)
+        normalizePoseGrid(candidate, params)
+        const next = tinySurfaceContactScore(grid, params, candidate, constraints)
+
+        if (next.score < bestScore - 0.0000000001) {
+          bestPoses = candidate
+          bestScore = next.score
+          improved = true
+          accepted = true
+        }
+      })
+    })
+
+    const best = tinySurfaceContactScore(grid, params, bestPoses, constraints)
+    if (best.maxGap <= 0.0000005) break
+
+    if (!improved || sweep % 18 === 17) {
+      translationStep *= 0.78
+      yawStep *= 0.78
+      heightStep *= 0.78
+    }
+  }
+
+  copyPoseGridInto(poses, bestPoses)
+}
+
+type TinySurfaceVariable =
+  | { kind: 'center'; row: number; col: number; center: 'lowerCenter' | 'upperCenter'; axis: 0 | 1 | 2 }
+  | { kind: 'yaw'; row: number; col: number }
+  | { kind: 'height'; row: number; col: number; layer: 'lowerHeight' | 'upperHeight' }
+
+function tinySurfaceVariables(poses: CellPose[][]): TinySurfaceVariable[] {
+  const variables: TinySurfaceVariable[] = []
+
+  poses.forEach((row, rowIndex) =>
+    row.forEach((pose, colIndex) => {
+      if (pose.locked) return
+
+      ;(['lowerCenter', 'upperCenter'] as const).forEach((center) => {
+        ;([0, 1, 2] as const).forEach((axis) => {
+          variables.push({ kind: 'center', row: rowIndex, col: colIndex, center, axis })
+        })
+      })
+
+      variables.push({ kind: 'yaw', row: rowIndex, col: colIndex })
+      variables.push({ kind: 'height', row: rowIndex, col: colIndex, layer: 'lowerHeight' })
+      variables.push({ kind: 'height', row: rowIndex, col: colIndex, layer: 'upperHeight' })
+    }),
+  )
+
+  return variables
+}
+
+function adjustTinySurfaceVariable(poses: CellPose[][], variable: TinySurfaceVariable, amount: number, params: CellParams): void {
+  const pose = poses[variable.row][variable.col]
+  if (pose.locked) return
+
+  if (variable.kind === 'center') {
+    pose[variable.center][variable.axis] += amount
+    return
+  }
+
+  if (variable.kind === 'yaw') {
+    pose.yaw += amount
+    return
+  }
+
+  const target = variable.layer === 'lowerHeight' ? pose.lowerTarget : pose.upperTarget
+  const allowance = Math.max(0.028, Math.min(0.04, Math.abs(params.hOff - params.hOn) * 0.016))
+  pose[variable.layer] = clampNumber(clampLayerHeight(pose[variable.layer] + amount, params), target - allowance, target + allowance)
+}
+
+function tinySurfaceContactScore(
+  grid: CellGrid,
+  params: CellParams,
+  poses: CellPose[][],
+  constraints: ConnectorConstraint[],
+): { score: number; maxGap: number } {
+  const candidate = clonePoseGrid(poses)
+  const layout = buildLayoutFromPoses(grid, params, candidate)
+  let contactError = 0
+  let maxGap = 0
+  let shapePenalty = 0
+
+  constraints.forEach((constraint) => {
+    const start = sideNodePositionFromLayout(layout[constraint.aRow][constraint.aCol], constraint.layer, constraint.aSide)
+    const end = sideNodePositionFromLayout(layout[constraint.bRow][constraint.bCol], constraint.layer, constraint.bSide)
+    const gap = vectorLength(subtract(end, start))
+    contactError += gap ** 2
+    maxGap = Math.max(maxGap, gap)
+  })
+
+  candidate.forEach((row) =>
+    row.forEach((pose) => {
+      const axis = subtract(pose.upperCenter, pose.lowerCenter)
+      const axisLength = Math.max(vectorLength(axis), 0.0001)
+      const verticalRatio = axis[2] / axisLength
+      const minVerticalRatio = 0.12
+      if (verticalRatio < minVerticalRatio) shapePenalty += (minVerticalRatio - verticalRatio) ** 2 * 2.5
+
+      shapePenalty += ((pose.lowerHeight - pose.lowerTarget) / Math.max(params.hOff, 0.5)) ** 2 * 0.018
+      shapePenalty += ((pose.upperHeight - pose.upperTarget) / Math.max(params.hOff, 0.5)) ** 2 * 0.018
+      shapePenalty += vectorLength(subtract(pose.lowerCenter, pose.restLowerCenter)) ** 2 * 0.0008
+      shapePenalty += vectorLength(subtract(pose.upperCenter, pose.restUpperCenter)) ** 2 * 0.0008
+      shapePenalty += (pose.yaw - pose.yawTarget) ** 2 * 0.002
+    }),
+  )
+
+  return {
+    score: contactError * 240 + maxGap ** 2 * 640 + shapePenalty,
+    maxGap,
+  }
+}
+
+function normalizePoseGrid(poses: CellPose[][], params: CellParams): void {
+  poses.forEach((row) =>
+    row.forEach((pose) => {
+      projectPoseSpan(pose, params)
+      preventPoseInversion(pose, params)
+    }),
+  )
+}
+
+function clonePoseGrid(poses: CellPose[][]): CellPose[][] {
+  return poses.map((row) =>
+    row.map((pose) => ({
+      ...pose,
+      lowerCenter: [...pose.lowerCenter],
+      upperCenter: [...pose.upperCenter],
+      restLowerCenter: [...pose.restLowerCenter],
+      restUpperCenter: [...pose.restUpperCenter],
+      lockedLowerCenter: [...pose.lockedLowerCenter],
+      lockedUpperCenter: [...pose.lockedUpperCenter],
+    })),
+  )
+}
+
+function copyPoseGridInto(target: CellPose[][], source: CellPose[][]): void {
+  target.forEach((row, rowIndex) =>
+    row.forEach((pose, colIndex) => {
+      const next = source[rowIndex][colIndex]
+      pose.lowerCenter = [...next.lowerCenter]
+      pose.upperCenter = [...next.upperCenter]
+      pose.restLowerCenter = [...next.restLowerCenter]
+      pose.restUpperCenter = [...next.restUpperCenter]
+      pose.lowerTarget = next.lowerTarget
+      pose.upperTarget = next.upperTarget
+      pose.lowerHeight = next.lowerHeight
+      pose.upperHeight = next.upperHeight
+      pose.yaw = next.yaw
+      pose.yawTarget = next.yawTarget
+      pose.locked = next.locked
+      pose.lockedLowerCenter = [...next.lockedLowerCenter]
+      pose.lockedUpperCenter = [...next.lockedUpperCenter]
+      pose.lockedYaw = next.lockedYaw
+    }),
+  )
 }
 
 function relaxPoseTowardRest(pose: CellPose, strength: number): void {
@@ -1337,12 +1451,6 @@ function isPlanarStrip(grid: CellGrid): boolean {
   const oneCellWide = (rows === 1 && columns >= 2) || (columns === 1 && rows >= 2)
   const longTwoCellWideStrip = (rows === 2 && columns >= 3) || (columns === 2 && rows >= 3)
   return oneCellWide || longTwoCellWideStrip
-}
-
-function isTinySurfacePatch(grid: CellGrid): boolean {
-  const rows = grid.length
-  const columns = grid[0]?.length ?? 0
-  return rows >= 2 && columns >= 2 && rows * columns <= 4
 }
 
 function isOverhangSurface(grid: CellGrid, params: CellParams): boolean {
@@ -1412,8 +1520,8 @@ function projectConnectorConstraint(
   const correctionLength = clampNumber(currentLength * 0.5 * strength, -maxCorrection, maxCorrection)
   const correction = scale(direction, correctionLength)
   // Node-to-node connectors are direct contacts in the visual model. Solver
-  // relaxation can tilt/yaw cells or relax layer height, then the renderer spans
-  // any remaining endpoint mismatch with a single direct node-to-node plank.
+  // relaxation can tilt/yaw cells or relax layer height, but the renderer does
+  // not add filler bars between cells.
   const bodyCorrection = scale(correction, bodyCorrectionRatio)
   const couplingCorrection = scale(correction, couplingCorrectionRatio)
   const aCanMove = !aPose.locked
