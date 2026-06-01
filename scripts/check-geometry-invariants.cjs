@@ -58,7 +58,7 @@ const cases = [
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
     minAdjacentCenterDistance: 1.45,
-    maxAllConnectorGap: 0.4,
+    maxAllConnectorGap: 0.18,
     ...tinySurfaceAxisBand,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'lower', ...actuatedLayerBand },
@@ -78,7 +78,7 @@ const cases = [
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
     minAdjacentCenterDistance: 1.45,
-    maxAllConnectorGap: 0.4,
+    maxAllConnectorGap: 0.18,
     ...tinySurfaceAxisBand,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'lower', ...clickedCompanionLayerBand },

@@ -9,5 +9,5 @@ export function octagonHalfLegSide(plateSize: number, octagonFaceRatio: number):
 }
 
 export function linkageWidth(plateSize: number, octagonFaceRatio: number): number {
-  return octagonHalfLegSide(plateSize, octagonFaceRatio) * 2
+  return octagonHalfLegSide(plateSize, octagonFaceRatio) * 1.18
 }

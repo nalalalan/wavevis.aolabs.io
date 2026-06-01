@@ -1,7 +1,7 @@
 import { useMemo, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import ControlPanel from './ControlPanel'
 import Scene3D from './Scene3D'
-import { CELL_STATES, type CellParams, type CellState } from './types'
+import { CELL_STATES, type CellGrid, type CellParams, type CellState } from './types'
 import {
   DEFAULT_COLUMNS,
   DEFAULT_PARAMS,
@@ -14,10 +14,11 @@ import {
 } from './geometry'
 
 function App() {
-  const [draftParams, setDraftParams] = useState<CellParams>(DEFAULT_PARAMS)
-  const [draftGrid, setDraftGrid] = useState(() => createGrid(DEFAULT_ROWS, DEFAULT_COLUMNS))
-  const [appliedParams, setAppliedParams] = useState<CellParams>(DEFAULT_PARAMS)
-  const [appliedGrid, setAppliedGrid] = useState(() => createGrid(DEFAULT_ROWS, DEFAULT_COLUMNS))
+  const [initialConfig] = useState(() => readInitialConfig())
+  const [draftParams, setDraftParams] = useState<CellParams>(initialConfig.params)
+  const [draftGrid, setDraftGrid] = useState(() => initialConfig.grid)
+  const [appliedParams, setAppliedParams] = useState<CellParams>(initialConfig.params)
+  const [appliedGrid, setAppliedGrid] = useState(() => initialConfig.grid)
   const [panelWidth, setPanelWidth] = useState(390)
 
   const safeDraftParams = useMemo(() => sanitizeParams(draftParams), [draftParams])
@@ -117,6 +118,49 @@ function App() {
 }
 
 export default App
+
+function readInitialConfig(): { params: CellParams; grid: CellGrid } {
+  if (typeof window === 'undefined') {
+    return { params: DEFAULT_PARAMS, grid: createGrid(DEFAULT_ROWS, DEFAULT_COLUMNS) }
+  }
+
+  const search = new URLSearchParams(window.location.search)
+  const rows = readIntegerParam(search, 'rows', DEFAULT_ROWS, 1, 100)
+  const columns = readIntegerParam(search, 'cols', DEFAULT_COLUMNS, 1, 100)
+  const params = sanitizeParams({
+    ...DEFAULT_PARAMS,
+    hOff: readNumberParam(search, 'hOff', DEFAULT_PARAMS.hOff),
+    hOn: readNumberParam(search, 'hOn', DEFAULT_PARAMS.hOn),
+    linkLength: readNumberParam(search, 'linkLength', DEFAULT_PARAMS.linkLength),
+    plateSize: readNumberParam(search, 'plateSize', DEFAULT_PARAMS.plateSize),
+    octagonFaceRatio: readNumberParam(search, 'octagonFaceRatio', DEFAULT_PARAMS.octagonFaceRatio),
+    constrainPerimeter: search.get('constrainPerimeter') === '1',
+  })
+  const grid = createGrid(rows, columns)
+  const states = search.get('states') ?? ''
+
+  for (let index = 0; index < Math.min(states.length, rows * columns); index += 1) {
+    const state = Number(states[index])
+    if (state >= CELL_STATES.OFF && state <= CELL_STATES.EXPAND) {
+      grid[Math.floor(index / columns)][index % columns] = state as CellState
+    }
+  }
+
+  return { params, grid }
+}
+
+function readIntegerParam(search: URLSearchParams, name: string, fallback: number, min: number, max: number): number {
+  if (!search.has(name)) return fallback
+  const value = Number(search.get(name))
+  if (!Number.isFinite(value)) return fallback
+  return Math.min(max, Math.max(min, Math.round(value)))
+}
+
+function readNumberParam(search: URLSearchParams, name: string, fallback: number): number {
+  if (!search.has(name)) return fallback
+  const value = Number(search.get(name))
+  return Number.isFinite(value) ? value : fallback
+}
 
 function stateKey(params: CellParams, grid: CellState[][]): string {
   return [

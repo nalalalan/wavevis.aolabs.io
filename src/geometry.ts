@@ -239,9 +239,8 @@ export function buildArrayLayout(grid: CellGrid, params: CellParams, time = 0): 
   const poses = planarStrip
     ? buildPlanarStripPoses(grid, params, layerHeights)
     : buildInitialPoses(grid, params, layerHeights)
-  // Surface patches, including 2x2, still need the connector solve. Skipping it
-  // leaves adjacent side nodes separated even though the individual legs remain
-  // the right length.
+  // The renderer does not draw bridge pieces between cells. Non-strip patches
+  // run the pose projection so corresponding side endpoints meet directly.
   if (!planarStrip) solveConnectorPoses(grid, params, poses)
 
   const layout = buildLayoutFromPoses(grid, params, poses)
@@ -364,7 +363,7 @@ function solvePassiveLayerHeights(grid: CellGrid, params: CellParams, time: numb
   const upperStiffness = buildLayerStiffnessMap(grid, params, time, 'upper')
   const constraints = buildHeightCompatibilityConstraints(rows, columns)
   const passCount = enforceStripContact ? 96 : rows * columns > 2500 ? 28 : rows * columns > 900 ? 42 : 72
-  const compatibilityStiffness = enforceStripContact ? 42 : 10
+  const compatibilityStiffness = enforceStripContact ? 42 : 16
   const bodyShearStiffness = 7.5
   const minHeight = minimumSolvedLayerHeight(params)
 
@@ -1175,8 +1174,8 @@ function shiftCell(cell: CellLayout, amount: number): void {
 
 // Kinematic model: every layer keeps the Sarrus link length fixed by deriving
 // side-node offset from the current layer height. Connector constraints move
-// whole cell poses and layer centers; final rendering never snaps a side node
-// independently, because that would fake connector closure by stretching legs.
+// whole cell poses and layer centers. The renderer does not draw bridge pieces
+// between cells; adjacent side endpoints must solve as the same point.
 // Connections are solved with free rotation and bend propagation. Individual
 // side nodes are never pulled independently, so each cell remains symmetric and
 // all same-cell legs keep the same length.
