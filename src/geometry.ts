@@ -242,14 +242,14 @@ export function buildArrayLayout(grid: CellGrid, params: CellParams, time = 0): 
     : tinySurfacePatch
       ? buildTinySurfacePoses(grid, params, layerHeights)
     : buildInitialPoses(grid, params, layerHeights)
-  // The renderer does not draw bridge pieces between cells. Non-strip patches
-  // run the pose projection so corresponding side endpoints meet directly.
-  if (!planarStrip && !tinySurfacePatch) solveConnectorPoses(grid, params, poses)
+  // Inter-cell pieces are direct node-to-node planks. Non-strip patches still
+  // run pose projection first so those planks stay short while cell legs remain
+  // attached to the real plate edges.
+  if (!planarStrip) solveConnectorPoses(grid, params, poses)
 
   const layout = buildLayoutFromPoses(grid, params, poses)
   normalizeLayoutFloor(layout, params)
   populateSymmetricNodes(layout)
-  collapseSharedConnectorNodes(grid, layout)
   return layout
 }
 
@@ -1024,13 +1024,6 @@ export function sideNodePositionFromLayout(layout: CellLayout, layer: LayerName,
   return layout.nodes[layer][side]
 }
 
-export function fixedLengthLegAnchor(anchor: Vec3, node: Vec3, linkLength: number): Vec3 {
-  const direction = subtract(anchor, node)
-  const distance = vectorLength(direction)
-  if (distance <= 0.0001) return [...anchor]
-  return add(node, scale(direction, linkLength / distance))
-}
-
 export function sideVectorFromLayout(layout: CellLayout, side: SideName): Vec3 {
   const axis = normalize(subtract(layout.top, layout.bottom))
   const yawSeed: Vec3 = [Math.cos(layout.yaw), Math.sin(layout.yaw), 0]
@@ -1235,31 +1228,6 @@ function normalizeLayoutFloor(layout: CellLayout[][], params: Pick<CellParams, '
   )
 }
 
-function collapseSharedConnectorNodes(grid: CellGrid, layout: CellLayout[][]): void {
-  const rows = grid.length
-  const columns = grid[0]?.length ?? 0
-
-  for (let row = 0; row < rows; row += 1) {
-    for (let col = 0; col < columns - 1; col += 1) {
-      shareConnectorNode(layout[row][col], 'px', layout[row][col + 1], 'nx')
-    }
-  }
-
-  for (let row = 0; row < rows - 1; row += 1) {
-    for (let col = 0; col < columns; col += 1) {
-      shareConnectorNode(layout[row][col], 'py', layout[row + 1][col], 'ny')
-    }
-  }
-}
-
-function shareConnectorNode(a: CellLayout, aSide: SideName, b: CellLayout, bSide: SideName): void {
-  ;(['lower', 'upper'] as LayerName[]).forEach((layer) => {
-    const shared = scale(add(a.nodes[layer][aSide], b.nodes[layer][bSide]), 0.5)
-    a.nodes[layer][aSide] = shared
-    b.nodes[layer][bSide] = shared
-  })
-}
-
 function shiftCell(cell: CellLayout, amount: number): void {
   cell.bottom = shiftZ(cell.bottom, amount)
   cell.middle = shiftZ(cell.middle, amount)
@@ -1444,8 +1412,8 @@ function projectConnectorConstraint(
   const correctionLength = clampNumber(currentLength * 0.5 * strength, -maxCorrection, maxCorrection)
   const correction = scale(direction, correctionLength)
   // Node-to-node connectors are direct contacts in the visual model. Solver
-  // relaxation can tilt/yaw cells or relax layer height, but the renderer does
-  // not add an extra bridge piece between adjacent cells.
+  // relaxation can tilt/yaw cells or relax layer height, then the renderer spans
+  // any remaining endpoint mismatch with a single direct node-to-node plank.
   const bodyCorrection = scale(correction, bodyCorrectionRatio)
   const couplingCorrection = scale(correction, couplingCorrectionRatio)
   const aCanMove = !aPose.locked

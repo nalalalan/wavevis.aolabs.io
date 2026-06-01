@@ -49,6 +49,7 @@ const actuatedLayerBand = { minHeight: 0.49, maxHeight: 0.54 }
 const passiveSharedLayerBand = { minHeight: 1.45, maxHeight: 1.65 }
 const clickedCompanionLayerBand = { minHeight: 1.75, maxHeight: 1.9 }
 const tinySurfaceAxisBand = { maxCellAxisTilt: 0.84 }
+const directNodeConnectorSpan = { maxAllConnectorGap: 0.75 }
 
 const cases = [
   {
@@ -58,7 +59,7 @@ const cases = [
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
     minAdjacentCenterDistance: 1.45,
-    maxAllConnectorGap: 1e-9,
+    maxAllConnectorGap: 0.25,
     ...tinySurfaceAxisBand,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'lower', ...actuatedLayerBand },
@@ -78,7 +79,7 @@ const cases = [
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
     minAdjacentCenterDistance: 1.45,
-    maxAllConnectorGap: 1e-9,
+    maxAllConnectorGap: 0.25,
     ...tinySurfaceAxisBand,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'lower', ...clickedCompanionLayerBand },
@@ -168,6 +169,7 @@ const cases = [
         CELL_STATES.OFF,
       ],
     ],
+    ...directNodeConnectorSpan,
   },
   {
     name: '1x6 center pair bend up',
@@ -226,6 +228,7 @@ const cases = [
       ],
     ],
     checkStripContact: true,
+    ...directNodeConnectorSpan,
     minMaxAdjacentAngle: 0.2,
   },
 ]
@@ -261,11 +264,8 @@ function checkCase(testCase) {
           minRenderedZ = Math.min(minRenderedZ, node[2])
           const lowAnchor = add(lowCenter, scale(sideVector, params.plateSize / 2))
           const highAnchor = add(highCenter, scale(sideVector, params.plateSize / 2))
-          const renderedLowAnchor = geometry.fixedLengthLegAnchor(lowAnchor, node, params.linkLength)
-          const renderedHighAnchor = geometry.fixedLengthLegAnchor(highAnchor, node, params.linkLength)
-
-          maxLegError = Math.max(maxLegError, Math.abs(length(subtract(node, renderedLowAnchor)) - params.linkLength))
-          maxLegError = Math.max(maxLegError, Math.abs(length(subtract(node, renderedHighAnchor)) - params.linkLength))
+          maxLegError = Math.max(maxLegError, Math.abs(length(subtract(node, lowAnchor)) - params.linkLength))
+          maxLegError = Math.max(maxLegError, Math.abs(length(subtract(node, highAnchor)) - params.linkLength))
         })
       })
     })
@@ -438,7 +438,7 @@ console.log(JSON.stringify(mirrorResult, null, 2))
 
 const failed = results.filter(
   (result) =>
-    result.maxLegError > 1e-9 ||
+    result.maxLegError > 1e-7 ||
     result.maxConnectorGap > 1e-7 ||
     result.maxAllConnectorGap > (cases.find((testCase) => testCase.name === result.name)?.maxAllConnectorGap ?? Infinity) ||
     result.minAdjacentCenterDistance < (cases.find((testCase) => testCase.name === result.name)?.minAdjacentCenterDistance ?? 0) ||

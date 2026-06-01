@@ -5,7 +5,6 @@ import { CELL_STATES, type CellParams, type CellState, type LayerName, type Vec3
 import {
   SIDE_NAMES,
   type CellLayout,
-  fixedLengthLegAnchor,
   isLowerActuated,
   isUpperActuated,
   plateNormal,
@@ -157,7 +156,6 @@ export default function DoubleLayerCell({ row, col, state, params, layout }: Dou
         layout={layout}
         plateHalf={plateHalf}
         plankWidth={linkageWidth(params.plateSize, params.octagonFaceRatio)}
-        linkLength={params.linkLength}
       />
       <LayerLinks
         layer="upper"
@@ -166,7 +164,6 @@ export default function DoubleLayerCell({ row, col, state, params, layout }: Dou
         layout={layout}
         plateHalf={plateHalf}
         plankWidth={linkageWidth(params.plateSize, params.octagonFaceRatio)}
-        linkLength={params.linkLength}
       />
 
       <CylinderSegment start={layout.bottom} end={layout.middle} radius={0.052} color={lowerOn ? '#ff8a2a' : emOffColor} />
@@ -238,7 +235,6 @@ function LayerLinks({
   layout,
   plateHalf,
   plankWidth,
-  linkLength,
 }: {
   layer: LayerName
   lowCenter: Vec3
@@ -246,7 +242,6 @@ function LayerLinks({
   layout: CellLayout
   plateHalf: number
   plankWidth: number
-  linkLength: number
 }) {
   const layerAxis = normalizeVec(subtractVec(highCenter, lowCenter))
 
@@ -266,12 +261,10 @@ function LayerLinks({
           highCenter[1] + sideVector[1] * plateHalf,
           highCenter[2] + sideVector[2] * plateHalf,
         ]
-        const lowLegAnchor = fixedLengthLegAnchor(lowAnchor, node, linkLength)
-        const highLegAnchor = fixedLengthLegAnchor(highAnchor, node, linkLength)
         return (
           <group key={`${layer}-${side}`}>
-            <PlankSegment start={lowLegAnchor} end={node} width={plankWidth} thickness={0.044} widthHint={widthHint} color={linkageColor} />
-            <PlankSegment start={node} end={highLegAnchor} width={plankWidth} thickness={0.044} widthHint={widthHint} color={linkageColor} />
+            <PlankSegment start={lowAnchor} end={node} width={plankWidth} thickness={0.044} widthHint={widthHint} color={linkageColor} />
+            <PlankSegment start={node} end={highAnchor} width={plankWidth} thickness={0.044} widthHint={widthHint} color={linkageColor} />
           </group>
         )
       })}
