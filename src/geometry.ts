@@ -88,6 +88,8 @@ export type LayoutBounds = {
   span: Vec3
 }
 
+export type ContactNodeOverrides = Record<LayerName, Partial<Record<SideName, Vec3>>>
+
 type AxisName = 'x' | 'y'
 
 type CellPose = {
@@ -125,17 +127,6 @@ type HeightCompatibilityConstraint = {
 }
 
 type LayerHeightFields = Record<LayerName, number[][]>
-
-type PlateLevel = 'bottom' | 'middle' | 'top'
-
-type CellPair = {
-  aRow: number
-  aCol: number
-  bRow: number
-  bCol: number
-  fallbackX: number
-  fallbackY: number
-}
 
 type CompatibilityDerivatives = {
   measure: number
@@ -1018,6 +1009,38 @@ export function sideNodePositionFromLayout(layout: CellLayout, layer: LayerName,
   return layout.nodes[layer][side]
 }
 
+export function buildContactNodeOverrides(layout: CellLayout[][]): ContactNodeOverrides[][] {
+  const rows = layout.length
+  const columns = layout[0]?.length ?? 0
+  const overrides = Array.from({ length: rows }, () =>
+    Array.from({ length: columns }, () => ({ lower: {}, upper: {} }) as ContactNodeOverrides),
+  )
+
+  // Adjacent cells render from one shared node. This keeps connector contact
+  // node-to-node without drawing filler bars or spreading cells apart.
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < columns - 1; col += 1) {
+      ;(['lower', 'upper'] as const).forEach((layer) => {
+        const shared = midpoint(layout[row][col].nodes[layer].px, layout[row][col + 1].nodes[layer].nx)
+        overrides[row][col][layer].px = shared
+        overrides[row][col + 1][layer].nx = shared
+      })
+    }
+  }
+
+  for (let row = 0; row < rows - 1; row += 1) {
+    for (let col = 0; col < columns; col += 1) {
+      ;(['lower', 'upper'] as const).forEach((layer) => {
+        const shared = midpoint(layout[row][col].nodes[layer].py, layout[row + 1][col].nodes[layer].ny)
+        overrides[row][col][layer].py = shared
+        overrides[row + 1][col][layer].ny = shared
+      })
+    }
+  }
+
+  return overrides
+}
+
 export function sideVectorFromLayout(layout: CellLayout, side: SideName): Vec3 {
   const axis = normalize(subtract(layout.top, layout.bottom))
   const yawSeed: Vec3 = [Math.cos(layout.yaw), Math.sin(layout.yaw), 0]
@@ -1120,6 +1143,10 @@ function cumulativeCenters(count: number, gap: (index: number) => number): numbe
 
 function add(a: Vec3, b: Vec3): Vec3 {
   return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+}
+
+function midpoint(a: Vec3, b: Vec3): Vec3 {
+  return [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5, (a[2] + b[2]) * 0.5]
 }
 
 function subtract(a: Vec3, b: Vec3): Vec3 {
@@ -1302,8 +1329,6 @@ function solveConnectorPoses(grid: CellGrid, params: CellParams, poses: CellPose
   if (tinySurfacePatch) {
     solveTinySurfaceNodeContact(grid, params, poses, constraints)
   }
-
-  resolvePlateClearance(grid, params, poses, tinySurfacePatch ? 72 : cellCount <= 16 ? 28 : 8, tinySurfacePatch ? 0.72 : 0.42)
 }
 
 function solveTinySurfaceNodeContact(grid: CellGrid, params: CellParams, poses: CellPose[][], constraints: ConnectorConstraint[]): void {
@@ -1405,7 +1430,6 @@ function tinySurfaceContactScore(
 ): { score: number; maxGap: number; maxPlateOverlap: number } {
   const candidate = clonePoseGrid(poses)
   const layout = buildLayoutFromPoses(grid, params, candidate)
-  const plateClearance = plateClearanceStats(layout, params)
   let contactError = 0
   let maxGap = 0
   let shapePenalty = 0
@@ -1435,157 +1459,10 @@ function tinySurfaceContactScore(
   )
 
   return {
-    score: contactError * 180 + maxGap ** 2 * 360 + plateClearance.penalty * 5200 + plateClearance.maxOverlap ** 2 * 9000 + shapePenalty,
+    score: contactError * 180 + maxGap ** 2 * 360 + shapePenalty,
     maxGap,
-    maxPlateOverlap: plateClearance.maxOverlap,
+    maxPlateOverlap: 0,
   }
-}
-
-function resolvePlateClearance(grid: CellGrid, params: CellParams, poses: CellPose[][], passes: number, strength: number): void {
-  const rows = grid.length
-  const columns = grid[0]?.length ?? 0
-  const pairs = buildPlateClearancePairs(rows, columns)
-  const minDistance = plateClearanceDistance(params)
-  if (pairs.length === 0) return
-
-  for (let pass = 0; pass < passes; pass += 1) {
-    const layout = buildLayoutFromPoses(grid, params, poses)
-    let maxOverlap = 0
-
-    pairs.forEach((pair) => {
-      const aPose = poses[pair.aRow][pair.aCol]
-      const bPose = poses[pair.bRow][pair.bCol]
-      if (aPose.locked && bPose.locked) return
-
-      const aCell = layout[pair.aRow][pair.aCol]
-      const bCell = layout[pair.bRow][pair.bCol]
-      let worstOverlap = 0
-      let directionX = pair.fallbackX
-      let directionY = pair.fallbackY
-
-      PLATE_LEVELS.forEach((aLevel) => {
-        const aPlate = platePoint(aCell, aLevel)
-        PLATE_LEVELS.forEach((bLevel) => {
-          const bPlate = platePoint(bCell, bLevel)
-          const dx = bPlate[0] - aPlate[0]
-          const dy = bPlate[1] - aPlate[1]
-          const horizontal = Math.hypot(dx, dy)
-          const overlap = minDistance - horizontal
-          if (overlap <= worstOverlap) return
-
-          worstOverlap = overlap
-          if (horizontal > 0.0001) {
-            directionX = dx / horizontal
-            directionY = dy / horizontal
-          }
-        })
-      })
-
-      if (worstOverlap <= 0) return
-
-      maxOverlap = Math.max(maxOverlap, worstOverlap)
-      const correction: Vec3 = [directionX * worstOverlap * 0.5 * strength, directionY * worstOverlap * 0.5 * strength, 0]
-      const aCanMove = !aPose.locked
-      const bCanMove = !bPose.locked
-      const aScale = aCanMove && bCanMove ? 1 : aCanMove ? 2 : 0
-      const bScale = aCanMove && bCanMove ? 1 : bCanMove ? 2 : 0
-
-      movePoseBody(aPose, scale(correction, -aScale))
-      movePoseBody(bPose, scale(correction, bScale))
-    })
-
-    poses.forEach((row) =>
-      row.forEach((pose) => {
-        projectPoseSpan(pose, params)
-        preventPoseInversion(pose, params)
-      }),
-    )
-
-    if (maxOverlap <= 0.0005) break
-  }
-}
-
-const PLATE_LEVELS: PlateLevel[] = ['bottom', 'middle', 'top']
-
-function plateClearanceStats(layout: CellLayout[][], params: CellParams): { maxOverlap: number; penalty: number } {
-  const pairs = buildPlateClearancePairs(layout.length, layout[0]?.length ?? 0)
-  const minDistance = plateClearanceDistance(params)
-  let maxOverlap = 0
-  let penalty = 0
-
-  pairs.forEach((pair) => {
-    const aCell = layout[pair.aRow][pair.aCol]
-    const bCell = layout[pair.bRow][pair.bCol]
-
-    PLATE_LEVELS.forEach((aLevel) => {
-      const aPlate = platePoint(aCell, aLevel)
-      PLATE_LEVELS.forEach((bLevel) => {
-        const bPlate = platePoint(bCell, bLevel)
-        const horizontal = Math.hypot(bPlate[0] - aPlate[0], bPlate[1] - aPlate[1])
-        const overlap = minDistance - horizontal
-        if (overlap <= 0) return
-
-        maxOverlap = Math.max(maxOverlap, overlap)
-        penalty += overlap ** 2
-      })
-    })
-  })
-
-  return { maxOverlap, penalty }
-}
-
-function buildPlateClearancePairs(rows: number, columns: number): CellPair[] {
-  const pairs: CellPair[] = []
-  const cellCount = rows * columns
-
-  if (cellCount <= 64) {
-    for (let aIndex = 0; aIndex < cellCount; aIndex += 1) {
-      const aRow = Math.floor(aIndex / columns)
-      const aCol = aIndex % columns
-      for (let bIndex = aIndex + 1; bIndex < cellCount; bIndex += 1) {
-        const bRow = Math.floor(bIndex / columns)
-        const bCol = bIndex % columns
-        const fallback = normalizeHorizontal(bCol - aCol, bRow - aRow)
-        pairs.push({ aRow, aCol, bRow, bCol, fallbackX: fallback[0], fallbackY: fallback[1] })
-      }
-    }
-    return pairs
-  }
-
-  ;([
-    [0, 1],
-    [1, 0],
-    [1, 1],
-    [1, -1],
-  ] as Array<[number, number]>).forEach(([rowOffset, colOffset]) => {
-    for (let row = 0; row < rows; row += 1) {
-      for (let col = 0; col < columns; col += 1) {
-        const bRow = row + rowOffset
-        const bCol = col + colOffset
-        if (bRow < 0 || bRow >= rows || bCol < 0 || bCol >= columns) continue
-        const fallback = normalizeHorizontal(colOffset, rowOffset)
-        pairs.push({ aRow: row, aCol: col, bRow, bCol, fallbackX: fallback[0], fallbackY: fallback[1] })
-      }
-    }
-  })
-
-  return pairs
-}
-
-function normalizeHorizontal(x: number, y: number): [number, number] {
-  const length = Math.hypot(x, y)
-  if (length <= 0.0001) return [1, 0]
-  return [x / length, y / length]
-}
-
-function platePoint(cell: CellLayout, level: PlateLevel): Vec3 {
-  if (level === 'bottom') return cell.bottom
-  if (level === 'middle') return cell.middle
-  return cell.top
-}
-
-function plateClearanceDistance(params: Pick<CellParams, 'plateSize'>): number {
-  return params.plateSize * 1.08
 }
 
 function normalizePoseGrid(poses: CellPose[][], params: CellParams): void {

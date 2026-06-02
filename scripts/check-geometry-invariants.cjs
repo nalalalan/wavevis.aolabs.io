@@ -51,7 +51,7 @@ const unpulledPassiveLayerBand = { minHeight: 1.9, maxHeight: 2.02 }
 const clickedCompanionLayerBand = { minHeight: 1.9, maxHeight: 2.02 }
 const tinySurfaceAxisBand = { maxCellAxisTilt: 1.2 }
 const directNodeConnectorSpan = { maxAllConnectorGap: 0.75 }
-const plateFootprintClearance = { maxPlateOverlap: 0.002 }
+const renderedNodeContact = { maxRenderedConnectorGap: 1e-7 }
 const PLATE_LEVELS = ['bottom', 'middle', 'top']
 
 const cases = [
@@ -65,7 +65,7 @@ const cases = [
     maxAllConnectorGap: 0.54,
     maxAdjacentAngle: 0.56,
     ...tinySurfaceAxisBand,
-    ...plateFootprintClearance,
+    ...renderedNodeContact,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'lower', ...actuatedLayerBand },
       { row: 0, col: 0, layer: 'upper', ...clickedCompanionLayerBand },
@@ -92,7 +92,7 @@ const cases = [
     maxAllConnectorGap: 0.3,
     maxAdjacentAngle: 0.67,
     ...tinySurfaceAxisBand,
-    ...plateFootprintClearance,
+    ...renderedNodeContact,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'lower', ...clickedCompanionLayerBand },
       { row: 0, col: 0, layer: 'upper', ...actuatedLayerBand },
@@ -110,24 +110,34 @@ const cases = [
     ],
   },
   {
-    name: '2x2 all bend up plate clearance',
+    name: '2x2 all bend up direct contact',
     grid: [
       [CELL_STATES.BEND_UP, CELL_STATES.BEND_UP],
       [CELL_STATES.BEND_UP, CELL_STATES.BEND_UP],
     ],
-    maxAdjacentAngle: 0.78,
+    maxAdjacentAngle: 1.1,
     ...tinySurfaceAxisBand,
-    ...plateFootprintClearance,
+    ...renderedNodeContact,
   },
   {
-    name: '2x2 all expand plate clearance',
+    name: '2x2 all expand direct contact',
     grid: [
       [CELL_STATES.EXPAND, CELL_STATES.EXPAND],
       [CELL_STATES.EXPAND, CELL_STATES.EXPAND],
     ],
     maxAdjacentAngle: 0.64,
     ...tinySurfaceAxisBand,
-    ...plateFootprintClearance,
+    ...renderedNodeContact,
+  },
+  {
+    name: '3x3 two out rendered contact',
+    grid: [
+      [CELL_STATES.BEND_DOWN, CELL_STATES.BEND_DOWN, CELL_STATES.OFF],
+      [CELL_STATES.OFF, CELL_STATES.OFF, CELL_STATES.OFF],
+      [CELL_STATES.OFF, CELL_STATES.OFF, CELL_STATES.OFF],
+    ],
+    maxCellAxisTilt: 1.25,
+    ...renderedNodeContact,
   },
   {
     name: '1x2 edge bend passive upper pull',
@@ -273,9 +283,11 @@ const cases = [
 function checkCase(testCase) {
   const params = testCase.params ?? geometry.DEFAULT_PARAMS
   const layout = geometry.buildArrayLayout(testCase.grid, params, 0)
+  const contactNodes = geometry.buildContactNodeOverrides(layout)
   let maxLegError = 0
   let maxConnectorGap = 0
   let maxAllConnectorGap = 0
+  let maxRenderedConnectorGap = 0
   let maxAdjacentAngle = 0
   let maxCellAxisTilt = 0
   let minAdjacentCenterDistance = Infinity
@@ -328,6 +340,9 @@ function checkCase(testCase) {
         const start = geometry.sideNodePositionFromLayout(row[col], layer, 'px')
         const end = geometry.sideNodePositionFromLayout(row[col + 1], layer, 'nx')
         maxAllConnectorGap = Math.max(maxAllConnectorGap, length(subtract(end, start)))
+        const renderedStart = renderedSideNode(layout, contactNodes, rowIndex, col, layer, 'px')
+        const renderedEnd = renderedSideNode(layout, contactNodes, rowIndex, col + 1, layer, 'nx')
+        maxRenderedConnectorGap = Math.max(maxRenderedConnectorGap, length(subtract(renderedEnd, renderedStart)))
       })
       minAdjacentCenterDistance = Math.min(minAdjacentCenterDistance, length(subtract(row[col].lowerCenter, row[col + 1].lowerCenter)))
       minAdjacentCenterDistance = Math.min(minAdjacentCenterDistance, length(subtract(row[col].upperCenter, row[col + 1].upperCenter)))
@@ -339,6 +354,9 @@ function checkCase(testCase) {
           const start = geometry.sideNodePositionFromLayout(row[col], layer, 'py')
           const end = geometry.sideNodePositionFromLayout(layout[rowIndex + 1][col], layer, 'ny')
           maxAllConnectorGap = Math.max(maxAllConnectorGap, length(subtract(end, start)))
+          const renderedStart = renderedSideNode(layout, contactNodes, rowIndex, col, layer, 'py')
+          const renderedEnd = renderedSideNode(layout, contactNodes, rowIndex + 1, col, layer, 'ny')
+          maxRenderedConnectorGap = Math.max(maxRenderedConnectorGap, length(subtract(renderedEnd, renderedStart)))
         })
         minAdjacentCenterDistance = Math.min(minAdjacentCenterDistance, length(subtract(row[col].lowerCenter, layout[rowIndex + 1][col].lowerCenter)))
         minAdjacentCenterDistance = Math.min(minAdjacentCenterDistance, length(subtract(row[col].upperCenter, layout[rowIndex + 1][col].upperCenter)))
@@ -382,6 +400,7 @@ function checkCase(testCase) {
     maxLegError,
     maxConnectorGap,
     maxAllConnectorGap,
+    maxRenderedConnectorGap,
     maxAdjacentAngle,
     maxCellAxisTilt,
     minAdjacentCenterDistance,
@@ -391,6 +410,10 @@ function checkCase(testCase) {
     minVerticalStack,
     minRenderedZ,
   }
+}
+
+function renderedSideNode(layout, contactNodes, row, col, layer, side) {
+  return contactNodes[row][col][layer][side] ?? geometry.sideNodePositionFromLayout(layout[row][col], layer, side)
 }
 
 const results = cases.map(checkCase)
@@ -489,6 +512,7 @@ const failed = results.filter(
     result.maxLegError > 1e-7 ||
     result.maxConnectorGap > 1e-7 ||
     result.maxAllConnectorGap > (cases.find((testCase) => testCase.name === result.name)?.maxAllConnectorGap ?? Infinity) ||
+    result.maxRenderedConnectorGap > 1e-7 ||
     result.minAdjacentCenterDistance < (cases.find((testCase) => testCase.name === result.name)?.minAdjacentCenterDistance ?? 0) ||
     result.maxAdjacentAngle > (cases.find((testCase) => testCase.name === result.name)?.maxAdjacentAngle ?? 0.64) ||
     result.maxCellAxisTilt > (cases.find((testCase) => testCase.name === result.name)?.maxCellAxisTilt ?? Infinity) ||

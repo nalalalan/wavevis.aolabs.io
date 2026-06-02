@@ -2,7 +2,7 @@ import { OrbitControls, PerspectiveCamera } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Suspense, useMemo, useState } from 'react'
 import DoubleLayerCell from './DoubleLayerCell'
-import { buildArrayLayout, layoutBounds, nominalCellPitch } from './geometry'
+import { buildArrayLayout, buildContactNodeOverrides, layoutBounds, nominalCellPitch } from './geometry'
 import { CELL_STATES, type CellGrid, type CellParams, type Vec3 } from './types'
 
 type Scene3DProps = {
@@ -56,12 +56,21 @@ function ArrayModel({ grid, params }: Scene3DProps) {
 
   const layoutTime = params.animate ? time : 0
   const layout = useMemo(() => buildArrayLayout(grid, params, layoutTime), [grid, params, layoutTime])
+  const contactNodes = useMemo(() => buildContactNodeOverrides(layout), [layout])
 
   return (
     <group>
       {grid.map((row, rowIndex) =>
         row.map((state, colIndex) => (
-          <DoubleLayerCell key={`${rowIndex}-${colIndex}`} row={rowIndex} col={colIndex} state={state} params={params} layout={layout[rowIndex][colIndex]} />
+          <DoubleLayerCell
+            key={`${rowIndex}-${colIndex}`}
+            row={rowIndex}
+            col={colIndex}
+            state={state}
+            params={params}
+            layout={layout[rowIndex][colIndex]}
+            contactNodes={contactNodes[rowIndex][colIndex]}
+          />
         )),
       )}
     </group>

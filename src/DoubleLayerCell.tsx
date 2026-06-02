@@ -5,6 +5,7 @@ import { CELL_STATES, type CellParams, type CellState, type LayerName, type Vec3
 import {
   SIDE_NAMES,
   type CellLayout,
+  type ContactNodeOverrides,
   isLowerActuated,
   isUpperActuated,
   plateNormal,
@@ -20,6 +21,7 @@ type DoubleLayerCellProps = {
   state: CellState
   params: CellParams
   layout: CellLayout
+  contactNodes: ContactNodeOverrides
 }
 
 type SegmentProps = {
@@ -126,7 +128,7 @@ export function PlankSegment({ start, end, width, thickness = 0.045, color, opac
   )
 }
 
-export default function DoubleLayerCell({ row, col, state, params, layout }: DoubleLayerCellProps) {
+export default function DoubleLayerCell({ row, col, state, params, layout, contactNodes }: DoubleLayerCellProps) {
   const plateHalf = params.plateSize / 2
   const plateThickness = 0.1
   const plateXAxis = sideVectorFromLayout(layout, 'px')
@@ -154,6 +156,7 @@ export default function DoubleLayerCell({ row, col, state, params, layout }: Dou
         lowCenter={layout.bottom}
         highCenter={layout.middle}
         layout={layout}
+        contactNodes={contactNodes}
         plateHalf={plateHalf}
         plankWidth={linkageWidth(params.plateSize, params.octagonFaceRatio)}
       />
@@ -162,6 +165,7 @@ export default function DoubleLayerCell({ row, col, state, params, layout }: Dou
         lowCenter={layout.middle}
         highCenter={layout.top}
         layout={layout}
+        contactNodes={contactNodes}
         plateHalf={plateHalf}
         plankWidth={linkageWidth(params.plateSize, params.octagonFaceRatio)}
       />
@@ -233,6 +237,7 @@ function LayerLinks({
   lowCenter,
   highCenter,
   layout,
+  contactNodes,
   plateHalf,
   plankWidth,
 }: {
@@ -240,6 +245,7 @@ function LayerLinks({
   lowCenter: Vec3
   highCenter: Vec3
   layout: CellLayout
+  contactNodes: ContactNodeOverrides
   plateHalf: number
   plankWidth: number
 }) {
@@ -249,7 +255,7 @@ function LayerLinks({
     <>
       {SIDE_NAMES.map((side) => {
         const sideVector = sideVectorFromLayout(layout, side)
-        const node = sideNodePositionFromLayout(layout, layer, side)
+        const node = contactNodes[layer][side] ?? sideNodePositionFromLayout(layout, layer, side)
         const widthHint = normalizeVec(crossVec(layerAxis, sideVector))
         const lowAnchor: Vec3 = [
           lowCenter[0] + sideVector[0] * plateHalf,
