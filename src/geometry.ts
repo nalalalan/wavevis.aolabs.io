@@ -41,7 +41,8 @@ export const STATE_META = [
 
 export const SIDE_NAMES: SideName[] = ['px', 'nx', 'py', 'ny']
 
-const PASSIVE_RESULTANT_RELAXATION_RATIO = 0.08
+const PASSIVE_LAYER_RELAXATION_RATIO = 0.08
+const PASSIVE_LAYER_RELAXATION_DECAY = 0.52
 const COMPANION_PASSIVE_RELAXATION_RATIO = 0.04
 const RESULTANT_SPAN_RELAXATION_RATIO = 0.02
 
@@ -353,7 +354,7 @@ function buildPlanarStripPoses(grid: CellGrid, params: CellParams, stripHeights:
 function solvePassiveLayerHeights(grid: CellGrid, params: CellParams, time: number, enforceStripContact: boolean): LayerHeightFields {
   const targets = targetLayerHeights(grid, params, time)
   if (!hasActuatedCells(grid)) return targets
-  const seededTargets = enforceStripContact ? targets : seedSurfaceCompanionPassiveExpansion(grid, params, targets)
+  const seededTargets = enforceStripContact ? targets : seedSurfaceLayerSpecificPassiveExpansion(grid, params, targets)
 
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
@@ -363,8 +364,8 @@ function solvePassiveLayerHeights(grid: CellGrid, params: CellParams, time: numb
   const upperStiffness = buildLayerStiffnessMap(grid, params, time, 'upper')
   const constraints = buildHeightCompatibilityConstraints(rows, columns)
   const passCount = enforceStripContact ? 96 : rows * columns > 2500 ? 28 : rows * columns > 900 ? 42 : 72
-  const compatibilityStiffness = enforceStripContact ? 42 : 16
-  const bodyShearStiffness = 7.5
+  const compatibilityStiffness = enforceStripContact ? 42 : 0
+  const bodyShearStiffness = enforceStripContact ? 7.5 : 0
   const minHeight = minimumSolvedLayerHeight(params)
 
   // This strip-only compatibility solve preserves direct node contact along a
@@ -379,7 +380,7 @@ function solvePassiveLayerHeights(grid: CellGrid, params: CellParams, time: numb
       for (let col = 0; col < columns; col += 1) {
         addHeightTargetGradient(gradients, denominators, 'lower', row, col, lower[row][col], seededTargets.lower[row][col], lowerStiffness[row][col])
         addHeightTargetGradient(gradients, denominators, 'upper', row, col, upper[row][col], seededTargets.upper[row][col], upperStiffness[row][col])
-        addSameCellShearGradient(gradients, denominators, stats[row][col], row, col, bodyShearStiffness)
+        if (bodyShearStiffness > 0) addSameCellShearGradient(gradients, denominators, stats[row][col], row, col, bodyShearStiffness)
       }
     }
 
@@ -390,7 +391,7 @@ function solvePassiveLayerHeights(grid: CellGrid, params: CellParams, time: numb
           addCompatibilityTargetGradient(gradients, denominators, stats[row][col], row, col, targetMeasure, compatibilityStiffness)
         }
       }
-    } else {
+    } else if (compatibilityStiffness > 0) {
       constraints.forEach((constraint) => {
         const a = stats[constraint.aRow][constraint.aCol]
         const b = stats[constraint.bRow][constraint.bCol]
@@ -426,17 +427,13 @@ function solvePassiveLayerHeights(grid: CellGrid, params: CellParams, time: numb
   return enforceStripBodyClearance(grid, params, contactHeights)
 }
 
-function seedSurfaceCompanionPassiveExpansion(grid: CellGrid, params: CellParams, targets: LayerHeightFields): LayerHeightFields {
+function seedSurfaceLayerSpecificPassiveExpansion(grid: CellGrid, params: CellParams, targets: LayerHeightFields): LayerHeightFields {
   const rows = grid.length
   const columns = grid[0]?.length ?? 0
   if (rows * columns <= 1) return targets
 
   const lower = cloneHeightField(targets.lower)
   const upper = cloneHeightField(targets.upper)
-  const relaxedNeighborOffHeight = clampLayerHeight(
-    clampLayerHeight(params.hOff, params) * (1 - PASSIVE_RESULTANT_RELAXATION_RATIO),
-    params,
-  )
   const relaxedCompanionOffHeight = clampLayerHeight(
     clampLayerHeight(params.hOff, params) * (1 - COMPANION_PASSIVE_RELAXATION_RATIO),
     params,
@@ -447,12 +444,6 @@ function seedSurfaceCompanionPassiveExpansion(grid: CellGrid, params: CellParams
       const state = grid[row][col]
       const lowerActuated = isLowerActuated(state)
       const upperActuated = isUpperActuated(state)
-      if (!lowerActuated && !upperActuated) {
-        lower[row][col] = Math.min(lower[row][col], relaxedNeighborOffHeight)
-        upper[row][col] = Math.min(upper[row][col], relaxedNeighborOffHeight)
-        continue
-      }
-
       if (lowerActuated === upperActuated) continue
 
       // A single-layer actuation still pulls on the unpowered layer through the
@@ -465,7 +456,54 @@ function seedSurfaceCompanionPassiveExpansion(grid: CellGrid, params: CellParams
     }
   }
 
+  seedPassiveLayerFromActuatedNeighbors(grid, params, lower, 'lower')
+  seedPassiveLayerFromActuatedNeighbors(grid, params, upper, 'upper')
+
   return { lower, upper }
+}
+
+function seedPassiveLayerFromActuatedNeighbors(grid: CellGrid, params: CellParams, heights: number[][], layer: LayerName): void {
+  const rows = grid.length
+  const columns = grid[0]?.length ?? 0
+  const distance = Array.from({ length: rows }, () => Array.from({ length: columns }, () => Infinity))
+  const queue: Array<[number, number]> = []
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < columns; col += 1) {
+      const actuated = layer === 'lower' ? isLowerActuated(grid[row][col]) : isUpperActuated(grid[row][col])
+      if (!actuated) continue
+      distance[row][col] = 0
+      queue.push([row, col])
+    }
+  }
+
+  for (let index = 0; index < queue.length; index += 1) {
+    const [row, col] = queue[index]
+    const nextDistance = distance[row][col] + 1
+    ;([
+      [row - 1, col],
+      [row + 1, col],
+      [row, col - 1],
+      [row, col + 1],
+    ] as Array<[number, number]>).forEach(([nextRow, nextCol]) => {
+      if (nextRow < 0 || nextRow >= rows || nextCol < 0 || nextCol >= columns) return
+      if (distance[nextRow][nextCol] <= nextDistance) return
+      distance[nextRow][nextCol] = nextDistance
+      queue.push([nextRow, nextCol])
+    })
+  }
+
+  const offHeight = clampLayerHeight(params.hOff, params)
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < columns; col += 1) {
+      if (distance[row][col] <= 0 || !Number.isFinite(distance[row][col])) continue
+      const actuated = layer === 'lower' ? isLowerActuated(grid[row][col]) : isUpperActuated(grid[row][col])
+      if (actuated) continue
+
+      const ratio = PASSIVE_LAYER_RELAXATION_RATIO * PASSIVE_LAYER_RELAXATION_DECAY ** (distance[row][col] - 1)
+      heights[row][col] = Math.min(heights[row][col], clampLayerHeight(offHeight * (1 - ratio), params))
+    }
+  }
 }
 
 function targetLayerHeights(grid: CellGrid, params: CellParams, time: number): LayerHeightFields {

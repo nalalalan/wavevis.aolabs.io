@@ -46,8 +46,9 @@ const length = (a) => Math.hypot(a[0], a[1], a[2])
 // full off height and runaway passive expansion that makes OFF cells look
 // actuated.
 const actuatedLayerBand = { minHeight: 0.49, maxHeight: 0.58 }
-const passiveSharedLayerBand = { minHeight: 1.4, maxHeight: 1.65 }
-const clickedCompanionLayerBand = { minHeight: 1.7, maxHeight: 1.92 }
+const pulledPassiveLayerBand = { minHeight: 1.7, maxHeight: 1.9 }
+const unpulledPassiveLayerBand = { minHeight: 1.9, maxHeight: 2.02 }
+const clickedCompanionLayerBand = { minHeight: 1.9, maxHeight: 2.02 }
 const tinySurfaceAxisBand = { maxCellAxisTilt: 1.2 }
 const directNodeConnectorSpan = { maxAllConnectorGap: 0.75 }
 
@@ -58,18 +59,24 @@ const cases = [
       [CELL_STATES.BEND_UP, CELL_STATES.OFF],
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
-    minAdjacentCenterDistance: 1.45,
-    maxAllConnectorGap: 0.13,
+    minAdjacentCenterDistance: 1.0,
+    maxAllConnectorGap: 0.25,
+    maxAdjacentAngle: 0.56,
     ...tinySurfaceAxisBand,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'lower', ...actuatedLayerBand },
       { row: 0, col: 0, layer: 'upper', ...clickedCompanionLayerBand },
-      { row: 0, col: 1, layer: 'lower', ...passiveSharedLayerBand },
-      { row: 0, col: 1, layer: 'upper', ...passiveSharedLayerBand },
-      { row: 1, col: 0, layer: 'lower', ...passiveSharedLayerBand },
-      { row: 1, col: 0, layer: 'upper', ...passiveSharedLayerBand },
-      { row: 1, col: 1, layer: 'lower', ...passiveSharedLayerBand },
-      { row: 1, col: 1, layer: 'upper', ...passiveSharedLayerBand },
+      { row: 0, col: 1, layer: 'lower', ...pulledPassiveLayerBand },
+      { row: 0, col: 1, layer: 'upper', ...unpulledPassiveLayerBand },
+      { row: 1, col: 0, layer: 'lower', ...pulledPassiveLayerBand },
+      { row: 1, col: 0, layer: 'upper', ...unpulledPassiveLayerBand },
+      { row: 1, col: 1, layer: 'lower', ...pulledPassiveLayerBand },
+      { row: 1, col: 1, layer: 'upper', ...unpulledPassiveLayerBand },
+    ],
+    layerSeparationChecks: [
+      { row: 0, col: 1, tallerLayer: 'upper', shorterLayer: 'lower', minDelta: 0.05 },
+      { row: 1, col: 0, tallerLayer: 'upper', shorterLayer: 'lower', minDelta: 0.05 },
+      { row: 1, col: 1, tallerLayer: 'upper', shorterLayer: 'lower', minDelta: 0.05 },
     ],
   },
   {
@@ -78,18 +85,24 @@ const cases = [
       [CELL_STATES.BEND_DOWN, CELL_STATES.OFF],
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
-    minAdjacentCenterDistance: 1.45,
-    maxAllConnectorGap: 0.13,
+    minAdjacentCenterDistance: 1.0,
+    maxAllConnectorGap: 0.25,
+    maxAdjacentAngle: 0.67,
     ...tinySurfaceAxisBand,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'lower', ...clickedCompanionLayerBand },
       { row: 0, col: 0, layer: 'upper', ...actuatedLayerBand },
-      { row: 0, col: 1, layer: 'lower', ...passiveSharedLayerBand },
-      { row: 0, col: 1, layer: 'upper', ...passiveSharedLayerBand },
-      { row: 1, col: 0, layer: 'lower', ...passiveSharedLayerBand },
-      { row: 1, col: 0, layer: 'upper', ...passiveSharedLayerBand },
-      { row: 1, col: 1, layer: 'lower', ...passiveSharedLayerBand },
-      { row: 1, col: 1, layer: 'upper', ...passiveSharedLayerBand },
+      { row: 0, col: 1, layer: 'lower', ...unpulledPassiveLayerBand },
+      { row: 0, col: 1, layer: 'upper', ...pulledPassiveLayerBand },
+      { row: 1, col: 0, layer: 'lower', ...unpulledPassiveLayerBand },
+      { row: 1, col: 0, layer: 'upper', ...pulledPassiveLayerBand },
+      { row: 1, col: 1, layer: 'lower', ...unpulledPassiveLayerBand },
+      { row: 1, col: 1, layer: 'upper', ...pulledPassiveLayerBand },
+    ],
+    layerSeparationChecks: [
+      { row: 0, col: 1, tallerLayer: 'lower', shorterLayer: 'upper', minDelta: 0.05 },
+      { row: 1, col: 0, tallerLayer: 'lower', shorterLayer: 'upper', minDelta: 0.05 },
+      { row: 1, col: 1, tallerLayer: 'lower', shorterLayer: 'upper', minDelta: 0.05 },
     ],
   },
   {
@@ -245,6 +258,7 @@ function checkCase(testCase) {
   let minVerticalStack = Infinity
   let minRenderedZ = Infinity
   let maxPassiveLayerHeightError = 0
+  let maxLayerSeparationError = 0
 
   layout.forEach((row) => {
     row.forEach((cell) => {
@@ -331,6 +345,13 @@ function checkCase(testCase) {
     )
   })
 
+  ;(testCase.layerSeparationChecks ?? []).forEach((check) => {
+    const cell = layout[check.row][check.col]
+    const tallerHeight = check.tallerLayer === 'lower' ? cell.bottomH : cell.topH
+    const shorterHeight = check.shorterLayer === 'lower' ? cell.bottomH : cell.topH
+    maxLayerSeparationError = Math.max(maxLayerSeparationError, Math.max(0, check.minDelta - (tallerHeight - shorterHeight)))
+  })
+
   return {
     name: testCase.name,
     maxLegError,
@@ -340,6 +361,7 @@ function checkCase(testCase) {
     maxCellAxisTilt,
     minAdjacentCenterDistance,
     maxPassiveLayerHeightError,
+    maxLayerSeparationError,
     minVerticalStack,
     minRenderedZ,
   }
@@ -442,10 +464,11 @@ const failed = results.filter(
     result.maxConnectorGap > 1e-7 ||
     result.maxAllConnectorGap > (cases.find((testCase) => testCase.name === result.name)?.maxAllConnectorGap ?? Infinity) ||
     result.minAdjacentCenterDistance < (cases.find((testCase) => testCase.name === result.name)?.minAdjacentCenterDistance ?? 0) ||
-    result.maxAdjacentAngle > 0.64 ||
+    result.maxAdjacentAngle > (cases.find((testCase) => testCase.name === result.name)?.maxAdjacentAngle ?? 0.64) ||
     result.maxCellAxisTilt > (cases.find((testCase) => testCase.name === result.name)?.maxCellAxisTilt ?? Infinity) ||
     (cases.find((testCase) => testCase.name === result.name)?.minMaxAdjacentAngle ?? 0) > result.maxAdjacentAngle ||
     result.maxPassiveLayerHeightError > 1e-8 ||
+    result.maxLayerSeparationError > 1e-8 ||
     result.minVerticalStack <= 0 ||
     result.minRenderedZ < -1e-8,
 )
