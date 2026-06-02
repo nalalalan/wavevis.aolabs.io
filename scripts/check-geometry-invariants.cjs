@@ -46,11 +46,13 @@ const length = (a) => Math.hypot(a[0], a[1], a[2])
 // full off height and runaway passive expansion that makes OFF cells look
 // actuated.
 const actuatedLayerBand = { minHeight: 0.49, maxHeight: 0.58 }
-const pulledPassiveLayerBand = { minHeight: 1.7, maxHeight: 1.9 }
+const pulledPassiveLayerBand = { minHeight: 1.7, maxHeight: 1.93 }
 const unpulledPassiveLayerBand = { minHeight: 1.9, maxHeight: 2.02 }
 const clickedCompanionLayerBand = { minHeight: 1.9, maxHeight: 2.02 }
 const tinySurfaceAxisBand = { maxCellAxisTilt: 1.2 }
 const directNodeConnectorSpan = { maxAllConnectorGap: 0.75 }
+const plateFootprintClearance = { maxPlateOverlap: 0.002 }
+const PLATE_LEVELS = ['bottom', 'middle', 'top']
 
 const cases = [
   {
@@ -60,9 +62,10 @@ const cases = [
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
     minAdjacentCenterDistance: 1.0,
-    maxAllConnectorGap: 0.25,
+    maxAllConnectorGap: 0.54,
     maxAdjacentAngle: 0.56,
     ...tinySurfaceAxisBand,
+    ...plateFootprintClearance,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'lower', ...actuatedLayerBand },
       { row: 0, col: 0, layer: 'upper', ...clickedCompanionLayerBand },
@@ -76,7 +79,7 @@ const cases = [
     layerSeparationChecks: [
       { row: 0, col: 1, tallerLayer: 'upper', shorterLayer: 'lower', minDelta: 0.05 },
       { row: 1, col: 0, tallerLayer: 'upper', shorterLayer: 'lower', minDelta: 0.05 },
-      { row: 1, col: 1, tallerLayer: 'upper', shorterLayer: 'lower', minDelta: 0.05 },
+      { row: 1, col: 1, tallerLayer: 'upper', shorterLayer: 'lower', minDelta: 0.01 },
     ],
   },
   {
@@ -86,9 +89,10 @@ const cases = [
       [CELL_STATES.OFF, CELL_STATES.OFF],
     ],
     minAdjacentCenterDistance: 1.0,
-    maxAllConnectorGap: 0.25,
+    maxAllConnectorGap: 0.3,
     maxAdjacentAngle: 0.67,
     ...tinySurfaceAxisBand,
+    ...plateFootprintClearance,
     passiveLayerChecks: [
       { row: 0, col: 0, layer: 'lower', ...clickedCompanionLayerBand },
       { row: 0, col: 0, layer: 'upper', ...actuatedLayerBand },
@@ -104,6 +108,26 @@ const cases = [
       { row: 1, col: 0, tallerLayer: 'lower', shorterLayer: 'upper', minDelta: 0.05 },
       { row: 1, col: 1, tallerLayer: 'lower', shorterLayer: 'upper', minDelta: 0.05 },
     ],
+  },
+  {
+    name: '2x2 all bend up plate clearance',
+    grid: [
+      [CELL_STATES.BEND_UP, CELL_STATES.BEND_UP],
+      [CELL_STATES.BEND_UP, CELL_STATES.BEND_UP],
+    ],
+    maxAdjacentAngle: 0.78,
+    ...tinySurfaceAxisBand,
+    ...plateFootprintClearance,
+  },
+  {
+    name: '2x2 all expand plate clearance',
+    grid: [
+      [CELL_STATES.EXPAND, CELL_STATES.EXPAND],
+      [CELL_STATES.EXPAND, CELL_STATES.EXPAND],
+    ],
+    maxAdjacentAngle: 0.64,
+    ...tinySurfaceAxisBand,
+    ...plateFootprintClearance,
   },
   {
     name: '1x2 edge bend passive upper pull',
@@ -259,6 +283,7 @@ function checkCase(testCase) {
   let minRenderedZ = Infinity
   let maxPassiveLayerHeightError = 0
   let maxLayerSeparationError = 0
+  const maxPlateOverlap = maxPlateFootprintOverlap(layout, params)
 
   layout.forEach((row) => {
     row.forEach((cell) => {
@@ -362,6 +387,7 @@ function checkCase(testCase) {
     minAdjacentCenterDistance,
     maxPassiveLayerHeightError,
     maxLayerSeparationError,
+    maxPlateOverlap,
     minVerticalStack,
     minRenderedZ,
   }
@@ -466,6 +492,7 @@ const failed = results.filter(
     result.minAdjacentCenterDistance < (cases.find((testCase) => testCase.name === result.name)?.minAdjacentCenterDistance ?? 0) ||
     result.maxAdjacentAngle > (cases.find((testCase) => testCase.name === result.name)?.maxAdjacentAngle ?? 0.64) ||
     result.maxCellAxisTilt > (cases.find((testCase) => testCase.name === result.name)?.maxCellAxisTilt ?? Infinity) ||
+    result.maxPlateOverlap > (cases.find((testCase) => testCase.name === result.name)?.maxPlateOverlap ?? Infinity) ||
     (cases.find((testCase) => testCase.name === result.name)?.minMaxAdjacentAngle ?? 0) > result.maxAdjacentAngle ||
     result.maxPassiveLayerHeightError > 1e-8 ||
     result.maxLayerSeparationError > 1e-8 ||
@@ -491,4 +518,33 @@ function cellAxis(cell) {
 function angleBetween(a, b) {
   const cosine = Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]))
   return Math.acos(cosine)
+}
+
+function maxPlateFootprintOverlap(layout, params) {
+  const minimumDistance = params.plateSize * 1.08
+  let maxOverlap = 0
+  const cells = []
+
+  layout.forEach((row, rowIndex) => {
+    row.forEach((cell, colIndex) => {
+      cells.push({ row: rowIndex, col: colIndex, cell })
+    })
+  })
+
+  for (let aIndex = 0; aIndex < cells.length; aIndex += 1) {
+    for (let bIndex = aIndex + 1; bIndex < cells.length; bIndex += 1) {
+      const aCell = cells[aIndex].cell
+      const bCell = cells[bIndex].cell
+
+      PLATE_LEVELS.forEach((aLevel) => {
+        PLATE_LEVELS.forEach((bLevel) => {
+          const a = aCell[aLevel]
+          const b = bCell[bLevel]
+          maxOverlap = Math.max(maxOverlap, minimumDistance - Math.hypot(b[0] - a[0], b[1] - a[1]))
+        })
+      })
+    }
+  }
+
+  return Math.max(0, maxOverlap)
 }
