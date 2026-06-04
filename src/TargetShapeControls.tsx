@@ -66,8 +66,8 @@ export default function TargetShapeControls({
           <h2>basic</h2>
         </div>
         <div className="two-col">
-          <NumberInput label="rows" value={config.rows} min={2} max={60} step={1} onChange={(value) => setNumber('rows', value)} />
-          <NumberInput label="columns" value={config.columns} min={2} max={60} step={1} onChange={(value) => setNumber('columns', value)} />
+          <NumberInput label="rows" value={config.rows} min={2} max={72} step={1} onChange={(value) => setNumber('rows', value)} />
+          <NumberInput label="columns" value={config.columns} min={2} max={72} step={1} onChange={(value) => setNumber('columns', value)} />
           <NumberInput label="spacing" value={config.spacing} min={0.05} max={20} step={0.05} onChange={(value) => setNumber('spacing', value)} />
           <label>
             target preset
@@ -90,8 +90,8 @@ export default function TargetShapeControls({
               <option value="up">up</option>
             </select>
           </label>
-          <NumberInput label="bend angle deg" value={config.bendAngleDeg} min={-220} max={220} step={1} onChange={(value) => setNumber('bendAngleDeg', value)} />
-          <NumberInput label="support fraction" value={config.supportFraction} min={0} max={0.9} step={0.01} onChange={(value) => setNumber('supportFraction', value)} />
+          <NumberInput label="bend angle deg" value={config.bendAngleDeg} min={-180} max={180} step={1} onChange={(value) => setNumber('bendAngleDeg', value)} />
+          <NumberInput label="left flat water" value={config.supportFraction} min={0.06} max={0.5} step={0.01} onChange={(value) => setNumber('supportFraction', value)} />
           <button type="button" className="primary compact-primary" onClick={onRun}>
             Run / Update
           </button>

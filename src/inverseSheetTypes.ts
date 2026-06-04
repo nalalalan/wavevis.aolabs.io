@@ -143,6 +143,7 @@ export type MetricsSummary = {
   maxNormalRotationDeg: number
   meanNormalRotationDeg: number
   maxPlanarityError: number
+  overhangAmount: number
   maxDihedralDeg: number
   meanDihedralDeg: number
   maxDisplacement: number

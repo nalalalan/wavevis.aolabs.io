@@ -39,22 +39,22 @@ export function legendForMode(model: LatticeModel): LegendInfo {
 }
 
 export function colorForEdge(metric: EdgeMetric, model: LatticeModel): string {
-  if (!model.config.showHeatmap) return '#7d766d'
+  if (!model.config.showHeatmap) return '#5d554f'
 
   if (model.config.colorMode === 'edgeStrain') return signedColor(metric.strain, strainColorClamp(model))
   if (model.config.colorMode === 'edgeRotation') return heatColor(metric.edgeRotationDeg, Math.max(model.summary.maxEdgeRotationDeg, 1))
   if (model.config.colorMode === 'combinedCost') return heatColor(metric.localCombinedCost, maxLocalCost(model))
-  return '#7d766d'
+  return '#5d554f'
 }
 
 export function colorForNode(metric: NodeMetric, model: LatticeModel): string {
-  if (!model.config.showHeatmap) return '#f2f1ee'
+  if (!model.config.showHeatmap) return '#565f62'
 
   if (model.config.colorMode === 'nodeBend') return heatColor(metric.nodeBendDeg, Math.max(model.summary.maxBendDeg, 1))
   if (model.config.colorMode === 'shear') return heatColor(metric.shearDeg ?? 0, Math.max(model.summary.maxShearDeg, 1))
   if (model.config.colorMode === 'displacement') return heatColor(metric.displacement, Math.max(model.summary.maxDisplacement, 0.01))
   if (model.config.colorMode === 'combinedCost') return heatColor(metric.localCombinedCost, maxLocalCost(model))
-  return '#f2f1ee'
+  return '#565f62'
 }
 
 export function colorForQuad(metric: QuadMetric, model: LatticeModel, dihedralContribution = 0): string {

@@ -19,6 +19,7 @@ const metricRows: Array<{ key: keyof MetricsSummary; label: string; format: 'str
   { key: 'meanDihedralDeg', label: 'mean dihedral angle', format: 'deg' },
   { key: 'maxAreaExpansion', label: 'max area change', format: 'strain' },
   { key: 'meanAbsAreaChange', label: 'mean abs area change', format: 'strain' },
+  { key: 'overhangAmount', label: 'overhang amount', format: 'length' },
   { key: 'maxDisplacement', label: 'max displacement', format: 'length' },
   { key: 'meanDisplacement', label: 'mean displacement', format: 'length' },
   { key: 'combinedCost', label: 'combined cost', format: 'cost' },

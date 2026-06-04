@@ -37,7 +37,7 @@ export default function LatticeViewer3D({ model, selected, viewRequest }: Lattic
         </Suspense>
         <SceneGrid bounds={model.bounds} />
         <AxisLabels bounds={model.bounds} />
-        <CameraRig bounds={model.bounds} viewRequest={viewRequest} />
+        <CameraRig model={model} selected={selected} viewRequest={viewRequest} />
       </Canvas>
     </section>
   )
@@ -49,12 +49,13 @@ function LatticeModelGroup({ model, selected }: { model: LatticeModel; selected:
   const nodeMetricById = useMemo(() => new Map(model.nodeMetrics.map((metric) => [metric.nodeId, metric])), [model.nodeMetrics])
   const quadMetricById = useMemo(() => new Map(model.quadMetrics.map((metric) => [metric.quadId, metric])), [model.quadMetrics])
   const dihedralByQuad = useMemo(() => buildDihedralByQuad(model.dihedralMetrics), [model.dihedralMetrics])
-  const edgeGeometry = useMemo(() => buildEdgeGeometry(model, nodeById, edgeMetricById), [model, nodeById, edgeMetricById])
   const restGhostGeometry = useMemo(() => buildRestGhostGeometry(model, nodeById), [model, nodeById])
   const surfaceGeometry = useMemo(() => buildSurfaceGeometry(model, nodeById, quadMetricById, dihedralByQuad), [model, nodeById, quadMetricById, dihedralByQuad])
   const labelsVisible = model.config.showLabels && model.config.rows <= 15 && model.config.columns <= 15
-  const nodeSize = Math.max(model.config.spacing * (model.config.rows > 30 || model.config.columns > 30 ? 0.035 : 0.055), 0.018)
-  const surfaceOpacity = model.config.rows > 30 || model.config.columns > 30 ? 0.34 : 0.48
+  const largeGrid = model.config.rows > 30 || model.config.columns > 30
+  const nodeSize = Math.max(model.config.spacing * (largeGrid ? 0.085 : 0.075), 0.026)
+  const edgeRadius = Math.max(model.config.spacing * (largeGrid ? 0.032 : 0.026), 0.014)
+  const surfaceOpacity = largeGrid ? 0.3 : 0.42
 
   return (
     <group>
@@ -68,11 +69,7 @@ function LatticeModelGroup({ model, selected }: { model: LatticeModel; selected:
           <meshStandardMaterial vertexColors side={THREE.DoubleSide} transparent opacity={surfaceOpacity} roughness={0.78} metalness={0.02} />
         </mesh>
       )}
-      {model.config.showEdges && (
-        <lineSegments geometry={edgeGeometry}>
-          <lineBasicMaterial vertexColors transparent opacity={0.96} />
-        </lineSegments>
-      )}
+      {model.config.showEdges && <EdgeInstances model={model} nodes={nodeById} metrics={edgeMetricById} radius={edgeRadius} />}
       {model.config.showNodes && <NodeInstances model={model} nodeMetrics={nodeMetricById} nodeSize={nodeSize} />}
       {labelsVisible && <NodeLabels nodes={model.nodes} />}
       <SelectedHighlight selected={selected} model={model} nodeById={nodeById} />
@@ -91,7 +88,7 @@ function NodeInstances({
 }) {
   const ref = useRef<THREE.InstancedMesh>(null)
   const geometry = useMemo(() => new THREE.SphereGeometry(1, model.config.rows > 30 || model.config.columns > 30 ? 8 : 14, 8), [model.config.columns, model.config.rows])
-  const material = useMemo(() => new THREE.MeshStandardMaterial({ roughness: 0.58, metalness: 0.04 }), [])
+  const material = useMemo(() => new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.58, metalness: 0.04 }), [])
 
   useLayoutEffect(() => {
     if (!ref.current) return
@@ -113,6 +110,53 @@ function NodeInstances({
   return (
     <instancedMesh ref={ref} args={[geometry, material, model.nodes.length]} />
   )
+}
+
+function EdgeInstances({
+  model,
+  nodes,
+  metrics,
+  radius,
+}: {
+  model: LatticeModel
+  nodes: Map<string, LatticeNode>
+  metrics: Map<string, EdgeMetric>
+  radius: number
+}) {
+  const ref = useRef<THREE.InstancedMesh>(null)
+  const geometry = useMemo(() => new THREE.CylinderGeometry(1, 1, 1, model.config.rows > 30 || model.config.columns > 30 ? 7 : 10), [model.config.columns, model.config.rows])
+  const material = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.54, metalness: 0.03 }),
+    [],
+  )
+
+  useLayoutEffect(() => {
+    if (!ref.current) return
+
+    const dummy = new THREE.Object3D()
+    const yAxis = new THREE.Vector3(0, 1, 0)
+    model.edges.forEach((edge, index) => {
+      const nodeA = nodes.get(edge.nodeA)
+      const nodeB = nodes.get(edge.nodeB)
+      const start = new THREE.Vector3(...(nodeA?.currentPosition ?? ([0, 0, 0] as Vec3)))
+      const end = new THREE.Vector3(...(nodeB?.currentPosition ?? ([0, 0, 0] as Vec3)))
+      const direction = new THREE.Vector3().subVectors(end, start)
+      const length = Math.max(direction.length(), 0.000001)
+      const metric = metrics.get(edge.id)
+      const color = new THREE.Color(metric ? colorForEdge(metric, model) : '#5d554f')
+
+      dummy.position.addVectors(start, end).multiplyScalar(0.5)
+      dummy.quaternion.setFromUnitVectors(yAxis, direction.normalize())
+      dummy.scale.set(radius, length, radius)
+      dummy.updateMatrix()
+      ref.current?.setMatrixAt(index, dummy.matrix)
+      ref.current?.setColorAt(index, color)
+    })
+    ref.current.instanceMatrix.needsUpdate = true
+    if (ref.current.instanceColor) ref.current.instanceColor.needsUpdate = true
+  }, [metrics, model, nodes, radius])
+
+  return <instancedMesh ref={ref} args={[geometry, material, model.edges.length]} />
 }
 
 function NodeLabels({ nodes }: { nodes: LatticeNode[] }) {
@@ -261,23 +305,36 @@ function AxisLabels({ bounds }: { bounds: LatticeBounds }) {
   )
 }
 
-function CameraRig({ bounds, viewRequest }: { bounds: LatticeBounds; viewRequest: CameraViewRequest }) {
+function CameraRig({
+  model,
+  selected,
+  viewRequest,
+}: {
+  model: LatticeModel
+  selected: SelectedElement
+  viewRequest: CameraViewRequest
+}) {
   const cameraRef = useRef<THREE.PerspectiveCamera>(null)
   const controlsRef = useRef<OrbitControlsImpl | null>(null)
+  const selectedKey = selected ? `${selected.kind}:${selected.id}` : 'none'
 
   useEffect(() => {
     const camera = cameraRef.current
     if (!camera) return
 
+    const { bounds } = model
     const maxSpan = Math.max(bounds.span[0], bounds.span[1], bounds.span[2], 2)
-    const distance = maxSpan * 1.75
-    const target = new THREE.Vector3(...bounds.center)
+    const focus = focusForSelected(model, selected)
+    const distance = focus
+      ? Math.max(focus.radius * 7.5, model.config.spacing * 12, maxSpan * 0.22)
+      : maxSpan * 1.75
+    const target = focus ? focus.center : new THREE.Vector3(...bounds.center)
     const position =
       viewRequest.view === 'top'
-        ? new THREE.Vector3(bounds.center[0], bounds.center[1], bounds.center[2] + distance)
+        ? new THREE.Vector3(target.x, target.y, target.z + distance)
         : viewRequest.view === 'side'
-          ? new THREE.Vector3(bounds.center[0], bounds.center[1] - distance, bounds.center[2] + distance * 0.16)
-          : new THREE.Vector3(bounds.center[0] + distance * 0.95, bounds.center[1] - distance * 0.9, bounds.center[2] + distance * 0.55)
+          ? new THREE.Vector3(target.x, target.y - distance, target.z)
+          : new THREE.Vector3(target.x + distance * 0.95, target.y - distance * 0.9, target.z + distance * 0.55)
 
     camera.position.copy(position)
     if (viewRequest.view === 'top') {
@@ -287,13 +344,14 @@ function CameraRig({ bounds, viewRequest }: { bounds: LatticeBounds; viewRequest
     }
     camera.lookAt(target)
 
+    camera.fov = focus ? 32 : viewRequest.view === 'side' ? 34 : 42
     camera.near = 0.01
     camera.far = Math.max(distance * 8, 100)
     camera.updateProjectionMatrix()
 
     controlsRef.current?.target.copy(target)
     controlsRef.current?.update()
-  }, [bounds, viewRequest.version, viewRequest.view])
+  }, [model, selected, selectedKey, viewRequest.version, viewRequest.view])
 
   return (
     <>
@@ -303,26 +361,50 @@ function CameraRig({ bounds, viewRequest }: { bounds: LatticeBounds; viewRequest
   )
 }
 
-function buildEdgeGeometry(model: LatticeModel, nodes: Map<string, LatticeNode>, metrics: Map<string, EdgeMetric>): THREE.BufferGeometry {
-  const positions = new Float32Array(model.edges.length * 2 * 3)
-  const colors = new Float32Array(model.edges.length * 2 * 3)
+function focusForSelected(
+  model: LatticeModel,
+  selected: SelectedElement,
+): { center: THREE.Vector3; radius: number } | null {
+  if (!selected) return null
 
-  model.edges.forEach((edge, index) => {
-    const nodeA = nodes.get(edge.nodeA)
-    const nodeB = nodes.get(edge.nodeB)
-    const metric = metrics.get(edge.id)
-    const color = new THREE.Color(metric ? colorForEdge(metric, model) : '#7d766d')
+  const nodeById = new Map(model.nodes.map((node) => [node.id, node]))
+  let positions: Vec3[]
 
-    writeVec(positions, index * 6, nodeA?.currentPosition ?? [0, 0, 0])
-    writeVec(positions, index * 6 + 3, nodeB?.currentPosition ?? [0, 0, 0])
-    writeColor(colors, index * 6, color)
-    writeColor(colors, index * 6 + 3, color)
-  })
+  if (selected.kind === 'node') {
+    const node = nodeById.get(selected.id)
+    positions = node ? [node.currentPosition] : []
+  } else if (selected.kind === 'edge') {
+    const edge = model.edges.find((candidate) => candidate.id === selected.id)
+    const nodeA = edge ? nodeById.get(edge.nodeA) : undefined
+    const nodeB = edge ? nodeById.get(edge.nodeB) : undefined
+    positions = nodeA && nodeB ? [nodeA.currentPosition, nodeB.currentPosition] : []
+  } else if (selected.kind === 'quad') {
+    const quad = model.quads.find((candidate) => candidate.id === selected.id)
+    positions = quad ? quad.nodeIds.map((id) => nodeById.get(id)?.currentPosition).filter(Boolean) as Vec3[] : []
+  } else {
+    const pair = model.dihedralPairs.find((candidate) => candidate.id === selected.id)
+    const quads = pair
+      ? [model.quads.find((quad) => quad.id === pair.quadA), model.quads.find((quad) => quad.id === pair.quadB)]
+      : []
+    positions = quads
+      .filter(Boolean)
+      .flatMap((quad) => (quad as LatticeQuad).nodeIds)
+      .map((id) => nodeById.get(id)?.currentPosition)
+      .filter(Boolean) as Vec3[]
+  }
 
-  const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-  return geometry
+  if (!positions.length) return null
+
+  const center = positions
+    .map((position) => new THREE.Vector3(...position))
+    .reduce((sum, position) => sum.add(position), new THREE.Vector3())
+    .multiplyScalar(1 / positions.length)
+  const radius = Math.max(
+    ...positions.map((position) => new THREE.Vector3(...position).distanceTo(center)),
+    model.config.spacing * 1.25,
+  )
+
+  return { center, radius }
 }
 
 function buildRestGhostGeometry(model: LatticeModel, nodes: Map<string, LatticeNode>): THREE.BufferGeometry {

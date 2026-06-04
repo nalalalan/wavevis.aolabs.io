@@ -30,18 +30,18 @@ export const COLOR_MODES: Array<{ value: ColorMode; label: string }> = [
 ]
 
 export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
-  rows: 32,
-  columns: 32,
-  spacing: 0.5,
+  rows: 44,
+  columns: 44,
+  spacing: 0.36,
   targetPreset: 'overhang',
   morph: 1,
   verticalDirection: 'up',
-  bendAngleDeg: 155,
-  supportFraction: 0.18,
+  bendAngleDeg: 172,
+  supportFraction: 0.14,
   radiusMode: 'autoPreserveLength',
   bendRadius: 4,
-  horizontalOffset: 0.9,
-  smoothing: 0.76,
+  horizontalOffset: 1.25,
+  smoothing: 0.86,
   widthScale: 1,
   strainWeight: 1,
   bendWeight: 0.02,
@@ -67,17 +67,17 @@ export function sanitizeInverseSheetConfig(input: LooseConfig = {}): InverseShee
   const raw: LooseConfig = { ...DEFAULT_INVERSE_SHEET_CONFIG, ...input }
 
   return {
-    rows: readInteger(raw.rows, DEFAULT_INVERSE_SHEET_CONFIG.rows, 2, 60),
-    columns: readInteger(raw.columns, DEFAULT_INVERSE_SHEET_CONFIG.columns, 2, 60),
+    rows: readInteger(raw.rows, DEFAULT_INVERSE_SHEET_CONFIG.rows, 2, 72),
+    columns: readInteger(raw.columns, DEFAULT_INVERSE_SHEET_CONFIG.columns, 2, 72),
     spacing: readNumber(raw.spacing, DEFAULT_INVERSE_SHEET_CONFIG.spacing, 0.05, 20),
     targetPreset: readOneOf(raw.targetPreset, TARGET_PRESETS, DEFAULT_INVERSE_SHEET_CONFIG.targetPreset),
     morph: readNumber(raw.morph, DEFAULT_INVERSE_SHEET_CONFIG.morph, 0, 1),
     verticalDirection: readOneOf(raw.verticalDirection, VERTICAL_DIRECTIONS, DEFAULT_INVERSE_SHEET_CONFIG.verticalDirection),
-    bendAngleDeg: readNumber(raw.bendAngleDeg, DEFAULT_INVERSE_SHEET_CONFIG.bendAngleDeg, -220, 220),
-    supportFraction: readNumber(raw.supportFraction, DEFAULT_INVERSE_SHEET_CONFIG.supportFraction, 0, 0.9),
+    bendAngleDeg: readNumber(raw.bendAngleDeg, DEFAULT_INVERSE_SHEET_CONFIG.bendAngleDeg, -180, 180),
+    supportFraction: readNumber(raw.supportFraction, DEFAULT_INVERSE_SHEET_CONFIG.supportFraction, 0.06, 0.5),
     radiusMode: readOneOf(raw.radiusMode, RADIUS_MODES, DEFAULT_INVERSE_SHEET_CONFIG.radiusMode),
     bendRadius: readNumber(raw.bendRadius, DEFAULT_INVERSE_SHEET_CONFIG.bendRadius, 0.1, 100),
-    horizontalOffset: readNumber(raw.horizontalOffset, DEFAULT_INVERSE_SHEET_CONFIG.horizontalOffset, -100, 100),
+    horizontalOffset: readNumber(raw.horizontalOffset, DEFAULT_INVERSE_SHEET_CONFIG.horizontalOffset, 0, 100),
     smoothing: readNumber(raw.smoothing, DEFAULT_INVERSE_SHEET_CONFIG.smoothing, 0, 1),
     widthScale: readNumber(raw.widthScale, DEFAULT_INVERSE_SHEET_CONFIG.widthScale, 0.2, 3),
     strainWeight: readNumber(raw.strainWeight, DEFAULT_INVERSE_SHEET_CONFIG.strainWeight, 0, 100),
@@ -107,7 +107,7 @@ export function buildInverseSheetModel(input: LooseConfig = {}): LatticeModel {
   const dihedralMetricsRaw = dihedralPairs.map((pair) => measureDihedral(pair, quadNormals))
   const dihedralByQuad = buildDihedralContributionByQuad(dihedralMetricsRaw)
   const nodeMetricsRaw = nodes.map((node) => measureNode(node, config, nodeById))
-  const summaryBase = summarizeMetrics(edgeMetricsRaw, nodeMetricsRaw, quadMetricsRaw, dihedralMetricsRaw)
+  const summaryBase = summarizeMetrics(edgeMetricsRaw, nodeMetricsRaw, quadMetricsRaw, dihedralMetricsRaw, nodes)
   const summary: MetricsSummary = {
     ...summaryBase,
     combinedCost:
@@ -142,6 +142,7 @@ export function runInverseSheetSanityChecks(): string[] {
   const zeroed = buildInverseSheetModel({ bendAngleDeg: 0, horizontalOffset: 0 })
   const twoByTwo = buildInverseSheetModel({ rows: 2, columns: 2 })
   const defaultOverhang = buildInverseSheetModel(DEFAULT_INVERSE_SHEET_CONFIG)
+  const highBendLowFlatSpan = buildInverseSheetModel({ supportFraction: 0.02, bendAngleDeg: 220 })
   const twelveByTwelve = buildInverseSheetModel({ rows: 12, columns: 12 })
   const fortyByForty = buildInverseSheetModel({ rows: 40, columns: 40 })
 
@@ -152,6 +153,9 @@ export function runInverseSheetSanityChecks(): string[] {
   if (twoByTwo.nodes.length !== 4 || twoByTwo.quads.length !== 1) failures.push('2x2 grid did not build')
   if (fortyByForty.nodes.some((node) => !isFiniteVec(node.currentPosition))) failures.push('40x40 produced invalid node positions')
   if (!boundaryNodesStayFlat(defaultOverhang)) failures.push('default overhang boundary should stay fixed and flat')
+  if (!boundaryNodesStayFlat(highBendLowFlatSpan)) failures.push('clamped high-bend overhang boundary should stay fixed and flat')
+  if (!centerlineBackfoldIsBounded(highBendLowFlatSpan)) failures.push('high-bend overhang centerline should not fold backward globally')
+  if (defaultOverhang.summary.overhangAmount <= 0) failures.push('default overhang should report a positive horizontal projection')
 
   return failures
 }
@@ -173,6 +177,21 @@ function boundaryNodesStayFlat(model: LatticeModel): boolean {
       Math.abs(node.currentPosition[2]) <= tolerance
     )
   })
+}
+
+function centerlineBackfoldIsBounded(model: LatticeModel): boolean {
+  const row = Math.floor((model.config.rows - 1) / 2)
+  const centerline = model.nodes
+    .filter((node) => node.row === row)
+    .sort((a, b) => a.col - b.col)
+  const tolerance = -model.config.spacing * 0.45
+
+  for (let index = 0; index < centerline.length - 1; index += 1) {
+    const deltaX = centerline[index + 1].currentPosition[0] - centerline[index].currentPosition[0]
+    if (deltaX < tolerance) return false
+  }
+
+  return true
 }
 
 function buildNodes(config: InverseSheetConfig): LatticeNode[] {
@@ -219,54 +238,63 @@ function overhangTargetPosition(
   const rowsDenominator = Math.max(config.rows - 1, 1)
   const u = col / columnsDenominator
   const t = row / rowsDenominator
-  const rootX = config.supportFraction * totalWidth
+  const gridDenominator = Math.max(rowsDenominator, columnsDenominator)
   const verticalSign = config.verticalDirection === 'up' ? 1 : -1
   const bendAngleRad = (config.bendAngleDeg * Math.PI) / 180
-  const flatRim = Math.min(0.07, Math.max(0.8 / Math.max(config.rows - 1, config.columns - 1), 0.03))
-  const blendRim = Math.min(0.56, flatRim + 0.51)
+  const flatRim = Math.min(0.078, Math.max(2.05 / gridDenominator, 0.035))
+  const blendRim = Math.min(0.52, flatRim + lerpNumber(0.34, 0.46, config.smoothing))
   const rimY = edgeRamp(t, flatRim, blendRim) * edgeRamp(1 - t, flatRim, blendRim)
-  const rimX = edgeRamp(u, flatRim, blendRim) * edgeRamp(1 - u, flatRim, blendRim)
-  const rimMask = rimX * rimY
+  const rimX = edgeRamp(u, flatRim, Math.min(0.42, flatRim + 0.27)) * edgeRamp(1 - u, flatRim, Math.min(0.42, flatRim + 0.27))
+  const activityMask = rimX * rimY
 
   if (Math.abs(bendAngleRad) <= 0.000001 && Math.abs(config.horizontalOffset) <= 0.000001) {
     return [rest[0], rest[1] * config.widthScale, 0]
   }
 
-  if (rimMask <= 0.000001 || u <= config.supportFraction) {
+  if (activityMask <= 0.000001) {
     return [rest[0], rest[1] * config.widthScale, 0]
   }
 
-  const v = clampNumber((u - config.supportFraction) / Math.max(1 - config.supportFraction, 0.000001), 0, 1)
-  const sLinear = v
-  const sSmooth = v * v * (3 - 2 * v)
-  const s = lerpNumber(sLinear, sSmooth, config.smoothing)
-  const remainingLength = Math.max(totalWidth - rootX, config.spacing)
+  const leftFlatSpan = Math.max(config.supportFraction, flatRim)
+  if (u <= leftFlatSpan) {
+    return [rest[0], rest[1] * config.widthScale, 0]
+  }
+
+  const remainingU = Math.max(1 - flatRim - leftFlatSpan, 0.000001)
+  const profileU = clampNumber((u - leftFlatSpan) / remainingU, 0, 1)
+  const eased = lerpNumber(profileU, smootherStep(profileU), 0.18 + config.smoothing * 0.28)
+  const remainingLength = Math.max(totalWidth * remainingU, config.spacing)
   const effectiveRadius =
     config.radiusMode === 'autoPreserveLength'
       ? Math.max(0.1, remainingLength / Math.max(Math.abs(bendAngleRad), 0.001))
       : Math.max(config.bendRadius, 0.1)
-  const bendMagnitude = clampNumber(Math.abs(config.bendAngleDeg) / 180, 0, 1.35)
-  const waveProgress = smootherStep(s)
-  const waveEnvelope = Math.sin(Math.PI * waveProgress)
-  const flatTangentEnvelope = Math.max(waveEnvelope, 0) ** 0.82
-  const curlWindow =
-    smootherStep(clampNumber((waveProgress - 0.38) / 0.36, 0, 1)) *
-    (1 - smootherStep(clampNumber((waveProgress - 0.98) / 0.25, 0, 1)))
-  const heightRatio = 0.22 + 0.06 * bendMagnitude
+  const bendMagnitude = clampNumber(Math.abs(config.bendAngleDeg) / 180, 0, 1)
+  const rise = smootherStep((profileU - 0.02) / 0.56)
+  const fall = 1 - smootherStep((profileU - 0.55) / 0.43)
+  const crestShelf = smoothWindow(profileU, 0.34, 0.78)
+  const lipDrop = smootherStep((profileU - 0.62) / 0.28)
+  const heightProfile = Math.max(0, rise * fall * (1 + crestShelf * 0.08 - lipDrop * 0.1))
+  const heightRatio = 0.155 + 0.045 * bendMagnitude
   const waveHeight = Math.min(
-    remainingLength * 0.34,
-    Math.max(config.spacing, Math.min(remainingLength * heightRatio, effectiveRadius * 0.74)),
+    remainingLength * 0.28,
+    Math.max(config.spacing * 2, Math.min(remainingLength * heightRatio, effectiveRadius * 0.72)),
   )
-  const forwardReach = config.horizontalOffset + remainingLength * 0.04 * bendMagnitude
-  const curlBack = remainingLength * 0.32 * bendMagnitude
+  const projectionReach = Math.min(
+    remainingLength * 0.29,
+    Math.max(config.horizontalOffset, config.spacing * 2) + remainingLength * (0.085 + bendMagnitude * 0.09),
+  )
+  const broadFlow = projectionReach * 0.26 * smoothWindow(eased, 0.04, 0.98)
+  const crestPush = projectionReach * 0.62 * smootherStep((eased - 0.18) / 0.62) * (1 - smootherStep((eased - 0.93) / 0.07))
+  const lipReturn = projectionReach * (0.4 + bendMagnitude * 0.14) * smootherStep((eased - 0.58) / 0.26) * (1 - smootherStep((eased - 0.98) / 0.02))
+  const horizontalProjection = broadFlow + crestPush - lipReturn
   const yCenter = totalHeight * 0.5
   const yFromCenter = rest[1] - yCenter
-  const widthPinch = 1 - rimMask * 0.012 * flatTangentEnvelope
+  const widthPinch = 1 - activityMask * 0.022 * heightProfile
 
   return [
-    rest[0] + rimMask * (forwardReach * waveEnvelope - curlBack * curlWindow),
+    rest[0] + activityMask * horizontalProjection,
     yCenter + yFromCenter * config.widthScale * widthPinch,
-    verticalSign * rimMask * waveHeight * flatTangentEnvelope,
+    verticalSign * activityMask * waveHeight * heightProfile,
   ]
 }
 
@@ -444,6 +472,7 @@ function summarizeMetrics(
   nodes: NodeMetric[],
   quads: QuadMetric[],
   dihedrals: DihedralMetric[],
+  latticeNodes: LatticeNode[],
 ): MetricsSummary {
   const strains = edges.map((edge) => edge.strain)
   const rotations = edges.map((edge) => edge.edgeRotationDeg)
@@ -472,12 +501,22 @@ function summarizeMetrics(
     maxNormalRotationDeg: maxValue(normalRotations),
     meanNormalRotationDeg: mean(normalRotations),
     maxPlanarityError: maxValue(planarity),
+    overhangAmount: measureOverhangAmount(latticeNodes),
     maxDihedralDeg: maxValue(dihedralValues),
     meanDihedralDeg: mean(dihedralValues),
     maxDisplacement: maxValue(displacements),
     meanDisplacement: mean(displacements),
     combinedCost: 0,
   }
+}
+
+function measureOverhangAmount(nodes: LatticeNode[]): number {
+  const maxLift = maxValue(nodes.map((node) => Math.abs(node.currentPosition[2])), (value) => value, 0)
+  if (maxLift <= 0.000001) return 0
+
+  const liftedNodes = nodes.filter((node) => Math.abs(node.currentPosition[2]) >= maxLift * 0.24)
+  const horizontalProjection = liftedNodes.map((node) => Math.abs(node.currentPosition[0] - node.restPosition[0]))
+  return maxValue(horizontalProjection, (value) => value, 0)
 }
 
 function addEdgeLocalCosts(metrics: EdgeMetric[], config: InverseSheetConfig): EdgeMetric[] {
@@ -623,6 +662,12 @@ function lerpNumber(a: number, b: number, amount: number): number {
 function smootherStep(value: number): number {
   const t = clampNumber(value, 0, 1)
   return t * t * t * (t * (t * 6 - 15) + 10)
+}
+
+function smoothWindow(value: number, start: number, end: number): number {
+  const center = (start + end) * 0.5
+  return smootherStep((value - start) / Math.max(center - start, 0.000001)) *
+    (1 - smootherStep((value - center) / Math.max(end - center, 0.000001)))
 }
 
 function edgeRamp(distanceFromEdge: number, flatRim: number, blendRim: number): number {
