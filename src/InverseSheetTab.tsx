@@ -66,9 +66,12 @@ export default function InverseSheetTab({ activeTab, onTabChange, resizeHandle }
     setStatus(null)
   }
 
-  const focusElement = (next: SelectedElement) => {
+  const focusWorstElement = (next: SelectedElement) => {
     setSelected(next)
-    setPickedEdges(next?.kind === 'edge' ? [next.id] : [])
+    setPickedEdges((current) => {
+      if (next?.kind !== 'edge') return []
+      return [...current.filter((id) => id !== next.id), next.id].slice(-2)
+    })
     setFocusRequest((current) => ({ selected: next, version: current.version + 1 }))
   }
 
@@ -104,7 +107,7 @@ export default function InverseSheetTab({ activeTab, onTabChange, resizeHandle }
         {status && <p className="control-status">{status}</p>}
         <EdgePickPanel model={model} pickedEdges={pickedEdges} />
         <DeformationMetricsPanel summary={model.summary} />
-        <WorstElementsPanel model={model} selected={selected} onSelect={focusElement} />
+        <WorstElementsPanel model={model} selected={selected} onSelect={focusWorstElement} />
       </aside>
       {resizeHandle}
       <LatticeViewer3D
@@ -200,7 +203,8 @@ function formatPercent(value: number): string {
   if (!Number.isFinite(value)) return '0%'
   const percent = value * 100
   const sign = percent > 0 ? '+' : ''
-  return `${sign}${percent.toFixed(1).replace(/\.0$/, '')}% strain`
+  const kind = value >= 0 ? 'tensile' : 'compressive'
+  return `${kind} ${sign}${percent.toFixed(1).replace(/\.0$/, '')}%`
 }
 
 function formatAngle(value: number): string {

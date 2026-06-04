@@ -12,7 +12,7 @@ type TargetShapeControlsProps = {
   onImportConfigText: (text: string) => void
 }
 
-type NumberKey = 'rows' | 'columns' | 'morph' | 'horizontalOffset' | 'height'
+type NumberKey = 'rows' | 'columns' | 'morph' | 'horizontalOffset' | 'height' | 'overhangWidth' | 'curl'
 type BooleanKey = 'showSurface' | 'showRestGhost' | 'showNodes' | 'showEdges'
 
 export default function TargetShapeControls({
@@ -51,28 +51,19 @@ export default function TargetShapeControls({
         <div className="two-col">
           <NumberInput label="rows" value={config.rows} min={2} max={72} step={1} onChange={(value) => setNumber('rows', value)} />
           <NumberInput label="columns" value={config.columns} min={2} max={72} step={1} onChange={(value) => setNumber('columns', value)} />
-          <NumberInput
-            label="overhang amount"
-            value={config.horizontalOffset}
-            min={0}
-            max={24}
-            step={0.25}
-            onChange={(value) => setNumber('horizontalOffset', value)}
-          />
-          <NumberInput
-            label="height"
-            value={config.height}
-            min={0}
-            max={24}
-            step={0.25}
-            onChange={(value) => setNumber('height', value)}
-          />
-          <button type="button" className="primary compact-primary" onClick={onRun}>
-            Run / Update
-          </button>
         </div>
 
-        <RangeInput label="morph" value={config.morph} min={0} max={1} step={0.01} onChange={(value) => setNumber('morph', value)} />
+        <div className="slider-stack">
+          <RangeInput label="morph" value={config.morph} min={0} max={1} step={0.01} onChange={(value) => setNumber('morph', value)} />
+          <RangeInput label="curl" value={config.curl} min={0} max={1} step={0.01} onChange={(value) => setNumber('curl', value)} />
+          <RangeInput label="width" value={config.overhangWidth} min={0} max={72} step={0.5} onChange={(value) => setNumber('overhangWidth', value)} />
+          <RangeInput label="height" value={config.height} min={0} max={24} step={0.25} onChange={(value) => setNumber('height', value)} />
+          <RangeInput label="overhang" value={config.horizontalOffset} min={0} max={32} step={0.25} onChange={(value) => setNumber('horizontalOffset', value)} />
+        </div>
+
+        <button type="button" className="primary compact-primary" onClick={onRun}>
+          Run / Update
+        </button>
 
         <div className="display-mode-group" aria-label="result display">
           <span>results display</span>

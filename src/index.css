@@ -404,6 +404,13 @@ select:focus-visible {
   width: 100%;
   min-height: 36px;
   align-self: end;
+  margin-top: 10px;
+}
+
+.slider-stack {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
 }
 
 .range-label {
@@ -566,6 +573,52 @@ select:focus-visible {
   justify-content: space-between;
   color: #3e3932;
   line-height: 1;
+}
+
+.scene-callout {
+  min-width: 120px;
+  max-width: 190px;
+  padding: 8px 10px;
+  border: 1px solid rgba(37, 34, 30, 0.18);
+  border-left: 4px solid #b8afa4;
+  border-radius: 7px;
+  background: rgba(255, 250, 242, 0.96);
+  box-shadow: 0 12px 28px rgba(37, 34, 30, 0.18);
+  color: #25221e;
+  font-size: 12px;
+  line-height: 1.25;
+  pointer-events: none;
+}
+
+.scene-callout.viewport-callout {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 8;
+}
+
+.scene-callout span,
+.scene-callout em {
+  display: block;
+  color: #6c655d;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.scene-callout strong {
+  display: block;
+  margin-top: 2px;
+  color: #25221e;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.scene-callout.tensile {
+  border-left-color: #ef2400;
+}
+
+.scene-callout.compressive {
+  border-left-color: #0638ff;
 }
 
 .inverse-note {

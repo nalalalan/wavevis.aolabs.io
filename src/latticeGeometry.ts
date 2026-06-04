@@ -39,8 +39,10 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   supportFraction: 0.14,
   radiusMode: 'autoPreserveLength',
   bendRadius: 4,
-  horizontalOffset: 7,
+  horizontalOffset: 14,
   height: 7,
+  overhangWidth: 32,
+  curl: 0.72,
   smoothing: 0.86,
   widthScale: 1,
   strainWeight: 1,
@@ -76,8 +78,10 @@ export function sanitizeInverseSheetConfig(input: LooseConfig = {}): InverseShee
     supportFraction: DEFAULT_INVERSE_SHEET_CONFIG.supportFraction,
     radiusMode: readOneOf(raw.radiusMode, RADIUS_MODES, DEFAULT_INVERSE_SHEET_CONFIG.radiusMode),
     bendRadius: readNumber(raw.bendRadius, DEFAULT_INVERSE_SHEET_CONFIG.bendRadius, 0.1, 100),
-    horizontalOffset: readNumber(raw.horizontalOffset, DEFAULT_INVERSE_SHEET_CONFIG.horizontalOffset, 0, 24),
+    horizontalOffset: readNumber(raw.horizontalOffset, DEFAULT_INVERSE_SHEET_CONFIG.horizontalOffset, 0, 32),
     height: readNumber(raw.height, DEFAULT_INVERSE_SHEET_CONFIG.height, 0, 24),
+    overhangWidth: readNumber(raw.overhangWidth, DEFAULT_INVERSE_SHEET_CONFIG.overhangWidth, 0, 72),
+    curl: readNumber(raw.curl, DEFAULT_INVERSE_SHEET_CONFIG.curl, 0, 1),
     smoothing: readNumber(raw.smoothing, DEFAULT_INVERSE_SHEET_CONFIG.smoothing, 0, 1),
     widthScale: 1,
     strainWeight: readNumber(raw.strainWeight, DEFAULT_INVERSE_SHEET_CONFIG.strainWeight, 0, 100),
@@ -143,9 +147,11 @@ export function runInverseSheetSanityChecks(): string[] {
   const flatHeight = buildInverseSheetModel({ horizontalOffset: 0, height: 0 })
   const twoByTwo = buildInverseSheetModel({ rows: 2, columns: 2 })
   const defaultOverhang = buildInverseSheetModel(DEFAULT_INVERSE_SHEET_CONFIG)
-  const highOverhang = buildInverseSheetModel({ horizontalOffset: 24 })
+  const highOverhang = buildInverseSheetModel({ horizontalOffset: 32 })
   const lowWave = buildInverseSheetModel({ horizontalOffset: 9, height: 4 })
   const tallWave = buildInverseSheetModel({ horizontalOffset: 9, height: 10 })
+  const narrowWave = buildInverseSheetModel({ overhangWidth: 12 })
+  const wideWave = buildInverseSheetModel({ overhangWidth: 36 })
   const twelveByTwelve = buildInverseSheetModel({ rows: 12, columns: 12 })
   const fortyByForty = buildInverseSheetModel({ rows: 40, columns: 40 })
 
@@ -158,12 +164,16 @@ export function runInverseSheetSanityChecks(): string[] {
   if (fortyByForty.nodes.some((node) => !isFiniteVec(node.currentPosition))) failures.push('40x40 produced invalid node positions')
   if (!boundaryNodesStayFlat(defaultOverhang)) failures.push('default overhang boundary should stay fixed and flat')
   if (!boundaryNodesStayFlat(highOverhang)) failures.push('high-overhang boundary should stay fixed and flat')
-  if (!centerlineBackfoldIsBounded(highOverhang)) failures.push('high-overhang centerline should not fold backward globally')
+  if (!centerlineBackfoldIsBounded(highOverhang)) failures.push('high-overhang curl should stay bounded')
   if (defaultOverhang.summary.overhangAmount <= 0) failures.push('default overhang should report a positive horizontal projection')
   if (Math.abs(lowWave.summary.overhangAmount - tallWave.summary.overhangAmount) > 0.000001) {
     failures.push('changing height should not change measured horizontal overhang amount')
   }
   if (tallWave.summary.maxHeight <= lowWave.summary.maxHeight + 1) failures.push('height control should change vertical wave height')
+  if (!boundaryNodesStayFlat(narrowWave)) failures.push('narrow overhang boundary should stay fixed and flat')
+  if (measureActiveRowCount(wideWave) <= measureActiveRowCount(narrowWave)) {
+    failures.push('overhang width control should change the active wave width')
+  }
 
   return failures
 }
@@ -192,7 +202,7 @@ function centerlineBackfoldIsBounded(model: LatticeModel): boolean {
   const centerline = model.nodes
     .filter((node) => node.row === row)
     .sort((a, b) => a.col - b.col)
-  const tolerance = -model.config.spacing * 0.85
+  const tolerance = -Math.max(model.config.spacing * 1.1, model.summary.overhangAmount * 0.2)
 
   for (let index = 0; index < centerline.length - 1; index += 1) {
     const deltaX = centerline[index + 1].currentPosition[0] - centerline[index].currentPosition[0]
@@ -200,6 +210,17 @@ function centerlineBackfoldIsBounded(model: LatticeModel): boolean {
   }
 
   return true
+}
+
+function measureActiveRowCount(model: LatticeModel): number {
+  const rowHasLift = new Set<number>()
+  const maxHeight = Math.max(model.summary.maxHeight, 0.000001)
+
+  model.nodes.forEach((node) => {
+    if (node.currentPosition[2] >= maxHeight * 0.1) rowHasLift.add(node.row)
+  })
+
+  return rowHasLift.size
 }
 
 function buildNodes(config: InverseSheetConfig): LatticeNode[] {
@@ -212,7 +233,7 @@ function buildNodes(config: InverseSheetConfig): LatticeNode[] {
     for (let col = 0; col < config.columns; col += 1) {
       const uncenteredRest: Vec3 = [col * config.spacing, row * config.spacing, 0]
       const restPosition: Vec3 = [uncenteredRest[0] - totalWidth / 2, uncenteredRest[1] - totalHeight / 2, 0]
-      const targetUncentered = overhangTargetPosition(uncenteredRest, row, col, config, totalWidth, totalHeight)
+      const targetUncentered = overhangTargetPosition(uncenteredRest, col, config, totalWidth, totalHeight)
       const targetPosition: Vec3 = [
         targetUncentered[0] - totalWidth / 2,
         targetUncentered[1] - targetHeight / 2,
@@ -236,7 +257,6 @@ function buildNodes(config: InverseSheetConfig): LatticeNode[] {
 
 function overhangTargetPosition(
   rest: Vec3,
-  row: number,
   col: number,
   config: InverseSheetConfig,
   totalWidth: number,
@@ -245,11 +265,10 @@ function overhangTargetPosition(
   const columnsDenominator = Math.max(config.columns - 1, 1)
   const rowsDenominator = Math.max(config.rows - 1, 1)
   const u = col / columnsDenominator
-  const t = row / rowsDenominator
   const gridDenominator = Math.max(rowsDenominator, columnsDenominator)
   const flatRim = Math.min(0.12, Math.max(3.4 / gridDenominator, 0.055))
   const blendRim = Math.min(0.42, flatRim + lerpNumber(0.24, 0.34, config.smoothing))
-  const rimY = edgeRamp(t, flatRim, blendRim) * edgeRamp(1 - t, flatRim, blendRim)
+  const rimY = transverseWaveMask(rest[1], totalHeight, config, flatRim, blendRim)
   const rimX = edgeRamp(u, flatRim, Math.min(0.48, flatRim + 0.34)) * edgeRamp(1 - u, flatRim, Math.min(0.48, flatRim + 0.34))
   const activityMask = rimX * rimY
 
@@ -271,14 +290,11 @@ function overhangTargetPosition(
   const profileU = clampNumber((u - profileStart) / remainingU, 0, 1)
   const eased = lerpNumber(profileU, smootherStep(profileU), 0.18 + config.smoothing * 0.28)
   const remainingLength = Math.max(totalWidth * remainingU, config.spacing)
-  const overhangAmount = Math.min(config.horizontalOffset, remainingLength * 0.3)
-  const rise = smootherStep((profileU - 0.02) / 0.5)
-  const fall = 1 - smootherStep((profileU - 0.7) / 0.28)
-  const heightProfile = rise * fall
+  const curl = clampNumber(config.curl, 0, 1)
+  const overhangAmount = Math.min(config.horizontalOffset, remainingLength * 0.78)
+  const heightProfile = loopProfile(eased, lerpNumber(0.62, 0.5, curl), lerpNumber(2.65, 1.95, curl))
   const waveHeight = Math.min(config.height, remainingLength * 0.42)
-  const curlRise = smootherStep((eased - 0.01) / 0.48)
-  const curlReturn = 1 - smootherStep((eased - 0.58) / 0.4)
-  const horizontalProjection = overhangAmount * curlRise * curlReturn
+  const horizontalProjection = overhangAmount * loopProfile(eased, lerpNumber(0.72, 0.55, curl), lerpNumber(2.75, 1.85, curl))
   const yCenter = totalHeight * 0.5
   const yFromCenter = rest[1] - yCenter
 
@@ -287,6 +303,43 @@ function overhangTargetPosition(
     yCenter + yFromCenter * config.widthScale,
     activityMask * waveHeight * heightProfile,
   ]
+}
+
+function loopProfile(value: number, peak: number, power: number): number {
+  const t = clampNumber(value, 0, 1)
+  const safePeak = clampNumber(peak, 0.1, 0.9)
+  const local =
+    t < safePeak
+      ? 0.5 * (t / safePeak)
+      : 0.5 + 0.5 * ((t - safePeak) / Math.max(1 - safePeak, 0.000001))
+
+  return Math.pow(Math.max(Math.sin(Math.PI * local), 0), power)
+}
+
+function transverseWaveMask(
+  y: number,
+  totalHeight: number,
+  config: InverseSheetConfig,
+  flatRim: number,
+  blendRim: number,
+): number {
+  const yCenter = totalHeight * 0.5
+  const edgeMask = edgeRamp(y / Math.max(totalHeight, 0.000001), flatRim, blendRim) *
+    edgeRamp(1 - y / Math.max(totalHeight, 0.000001), flatRim, blendRim)
+  const maxHalfWidth = Math.max(totalHeight * (0.5 - flatRim), config.spacing)
+  const requestedHalfWidth = Math.min(config.overhangWidth * 0.5, maxHalfWidth)
+
+  if (requestedHalfWidth <= 0.000001) return 0
+
+  const fadeWidth = Math.min(
+    Math.max(config.spacing * 2.5, totalHeight * lerpNumber(0.06, 0.12, config.smoothing)),
+    requestedHalfWidth,
+  )
+  const coreHalfWidth = Math.max(requestedHalfWidth - fadeWidth, 0)
+  const distanceFromCenter = Math.abs(y - yCenter)
+  const widthMask = 1 - smootherStep((distanceFromCenter - coreHalfWidth) / Math.max(fadeWidth, 0.000001))
+
+  return edgeMask * widthMask
 }
 
 function buildEdges(rows: number, columns: number): LatticeEdge[] {

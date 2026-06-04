@@ -1,4 +1,4 @@
-import { Billboard, OrbitControls, PerspectiveCamera, Text } from '@react-three/drei'
+import { Billboard, Html, OrbitControls, PerspectiveCamera, Text } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
@@ -43,8 +43,30 @@ export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequ
         <AxisLabels bounds={model.bounds} />
         <CameraRig model={model} viewRequest={viewRequest} focusRequest={focusRequest} />
       </Canvas>
+      <ViewerSelectionCallout selected={selected} pickedEdges={pickedEdges} model={model} />
       {model.config.showHeatmap && <SceneColorBar model={model} />}
     </section>
+  )
+}
+
+function ViewerSelectionCallout({
+  selected,
+  pickedEdges,
+  model,
+}: {
+  selected: SelectedElement
+  pickedEdges: string[]
+  model: LatticeModel
+}) {
+  const details = viewerCalloutDetails(model, selected, pickedEdges)
+  if (!details) return null
+
+  return (
+    <div className={`scene-callout viewport-callout ${details.kind}`}>
+      <span>{details.title}</span>
+      <strong>{details.value}</strong>
+      {details.detail && <em>{details.detail}</em>}
+    </div>
   )
 }
 
@@ -97,7 +119,116 @@ function LatticeModelGroup({
       {model.config.showNodes && <NodeInstances model={model} nodeMetrics={nodeMetricById} nodeSize={nodeSize} />}
       {labelsVisible && <NodeLabels nodes={model.nodes} />}
       <SelectedHighlight selected={selected} model={model} nodeById={nodeById} />
+      <SelectionCallout selected={selected} pickedEdges={pickedEdges} model={model} nodeById={nodeById} />
     </group>
+  )
+}
+
+function viewerCalloutDetails(
+  model: LatticeModel,
+  selected: SelectedElement,
+  pickedEdges: string[],
+): { kind: 'tensile' | 'compressive' | 'neutral'; title: string; value: string; detail?: string } | null {
+  const edgeId = selected?.kind === 'edge' ? selected.id : pickedEdges[pickedEdges.length - 1]
+
+  if (edgeId) {
+    const metric = model.edgeMetrics.find((candidate) => candidate.edgeId === edgeId)
+    if (!metric) return null
+
+    const angle = pickedEdges.length === 2 ? edgeAngle(model, pickedEdges[0], pickedEdges[1]) : null
+    const kind = metric.strain >= 0 ? 'tensile' : 'compressive'
+
+    return {
+      kind,
+      title: `${kind} strain`,
+      value: formatSignedPercent(metric.strain),
+      detail: angle !== null ? `angle ${formatAngle(angle)}` : undefined,
+    }
+  }
+
+  if (!selected) return null
+
+  if (selected.kind === 'node') {
+    const metric = model.nodeMetrics.find((candidate) => candidate.nodeId === selected.id)
+    if (!metric) return null
+
+    return {
+      kind: 'neutral',
+      title: 'node displacement',
+      value: `URES ${formatLength(metric.displacement)}`,
+      detail: `bend ${formatAngle(metric.nodeBendDeg)}`,
+    }
+  }
+
+  if (selected.kind === 'quad') {
+    const metric = model.quadMetrics.find((candidate) => candidate.quadId === selected.id)
+    if (!metric) return null
+
+    return {
+      kind: 'neutral',
+      title: metric.areaChange >= 0 ? 'area expansion' : 'area compression',
+      value: formatSignedPercent(metric.areaChange),
+      detail: `normal ${formatAngle(metric.normalRotationDeg)}`,
+    }
+  }
+
+  const metric = model.dihedralMetrics.find((candidate) => candidate.pairId === selected.id)
+  if (!metric) return null
+
+  return {
+    kind: 'neutral',
+    title: 'fold angle',
+    value: formatAngle(metric.dihedralDeg),
+  }
+}
+
+function SelectionCallout({
+  selected,
+  pickedEdges,
+  model,
+  nodeById,
+}: {
+  selected: SelectedElement
+  pickedEdges: string[]
+  model: LatticeModel
+  nodeById: Map<string, LatticeNode>
+}) {
+  const edgeId = selected?.kind === 'edge' ? selected.id : pickedEdges[pickedEdges.length - 1]
+
+  if (edgeId) {
+    const edge = model.edges.find((candidate) => candidate.id === edgeId)
+    const metric = model.edgeMetrics.find((candidate) => candidate.edgeId === edgeId)
+    const nodeA = edge ? nodeById.get(edge.nodeA) : undefined
+    const nodeB = edge ? nodeById.get(edge.nodeB) : undefined
+
+    if (edge && metric && nodeA && nodeB) {
+      const position = midpointPosition([nodeA.currentPosition, nodeB.currentPosition], model.config.spacing * 1.25)
+      const kind = metric.strain >= 0 ? 'tensile' : 'compressive'
+      const angle = pickedEdges.length === 2 ? edgeAngle(model, pickedEdges[0], pickedEdges[1]) : null
+
+      return (
+        <Html position={position} center>
+          <div className={`scene-callout ${kind}`}>
+            <span>{kind} strain</span>
+            <strong>{formatSignedPercent(metric.strain)}</strong>
+            {angle !== null && <em>angle {formatAngle(angle)}</em>}
+          </div>
+        </Html>
+      )
+    }
+  }
+
+  const fallback = selected ? selectedCallout(model, selected, nodeById) : null
+  if (!fallback) return null
+
+  return (
+    <Html position={fallback.position} center>
+      <div className="scene-callout neutral">
+        <span>{fallback.title}</span>
+        <strong>{fallback.value}</strong>
+        {fallback.detail && <em>{fallback.detail}</em>}
+      </div>
+    </Html>
   )
 }
 
@@ -492,6 +623,118 @@ function focusForSelected(
   )
 
   return { center, radius }
+}
+
+function selectedCallout(
+  model: LatticeModel,
+  selected: NonNullable<SelectedElement>,
+  nodeById: Map<string, LatticeNode>,
+): { position: Vec3; title: string; value: string; detail?: string } | null {
+  if (selected.kind === 'node') {
+    const node = nodeById.get(selected.id)
+    const metric = model.nodeMetrics.find((candidate) => candidate.nodeId === selected.id)
+    if (!node || !metric) return null
+
+    return {
+      position: [node.currentPosition[0], node.currentPosition[1], node.currentPosition[2] + model.config.spacing * 1.4],
+      title: 'node displacement',
+      value: `URES ${formatLength(metric.displacement)}`,
+      detail: `bend ${formatAngle(metric.nodeBendDeg)}`,
+    }
+  }
+
+  if (selected.kind === 'quad') {
+    const quad = model.quads.find((candidate) => candidate.id === selected.id)
+    const metric = model.quadMetrics.find((candidate) => candidate.quadId === selected.id)
+    if (!quad || !metric) return null
+    const positions = quad.nodeIds.map((nodeId) => nodeById.get(nodeId)?.currentPosition).filter(Boolean) as Vec3[]
+    const areaKind = metric.areaChange >= 0 ? 'area expansion' : 'area compression'
+
+    return {
+      position: midpointPosition(positions, model.config.spacing * 1.2),
+      title: areaKind,
+      value: formatSignedPercent(metric.areaChange),
+      detail: `normal ${formatAngle(metric.normalRotationDeg)}`,
+    }
+  }
+
+  const pair = model.dihedralPairs.find((candidate) => candidate.id === selected.id)
+  const metric = model.dihedralMetrics.find((candidate) => candidate.pairId === selected.id)
+  if (!pair || !metric) return null
+
+  const positions = pair.sharedEdge
+    .split(':')
+    .map((nodeId) => nodeById.get(nodeId)?.currentPosition)
+    .filter(Boolean) as Vec3[]
+
+  return {
+    position: midpointPosition(positions, model.config.spacing * 1.2),
+    title: 'fold angle',
+    value: formatAngle(metric.dihedralDeg),
+  }
+}
+
+function midpointPosition(positions: Vec3[], zOffset: number): Vec3 {
+  if (!positions.length) return [0, 0, zOffset]
+  const center = positions.reduce<Vec3>(
+    (sum, position) => [sum[0] + position[0], sum[1] + position[1], sum[2] + position[2]],
+    [0, 0, 0],
+  )
+  return [
+    center[0] / positions.length,
+    center[1] / positions.length,
+    center[2] / positions.length + zOffset,
+  ]
+}
+
+function edgeAngle(model: LatticeModel, edgeAId: string, edgeBId: string): number | null {
+  const edgeA = model.edges.find((edge) => edge.id === edgeAId)
+  const edgeB = model.edges.find((edge) => edge.id === edgeBId)
+  if (!edgeA || !edgeB) return null
+
+  const vectorA = edgeVector(model, edgeA.nodeA, edgeA.nodeB)
+  const vectorB = edgeVector(model, edgeB.nodeA, edgeB.nodeB)
+  const lengthProduct = lengthVec(vectorA) * lengthVec(vectorB)
+  if (lengthProduct <= 0.000001) return null
+
+  const cosine = Math.min(1, Math.max(-1, dotVec(vectorA, vectorB) / lengthProduct))
+  return (Math.acos(cosine) * 180) / Math.PI
+}
+
+function edgeVector(model: LatticeModel, nodeAId: string, nodeBId: string): Vec3 {
+  const nodeA = model.nodes.find((node) => node.id === nodeAId)
+  const nodeB = model.nodes.find((node) => node.id === nodeBId)
+  if (!nodeA || !nodeB) return [0, 0, 0]
+  return [
+    nodeB.currentPosition[0] - nodeA.currentPosition[0],
+    nodeB.currentPosition[1] - nodeA.currentPosition[1],
+    nodeB.currentPosition[2] - nodeA.currentPosition[2],
+  ]
+}
+
+function lengthVec(vector: Vec3): number {
+  return Math.hypot(vector[0], vector[1], vector[2])
+}
+
+function dotVec(a: Vec3, b: Vec3): number {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+function formatSignedPercent(value: number): string {
+  if (!Number.isFinite(value)) return '0%'
+  const percent = value * 100
+  const sign = percent > 0 ? '+' : ''
+  return `${sign}${percent.toFixed(1).replace(/\.0$/, '')}%`
+}
+
+function formatAngle(value: number): string {
+  if (!Number.isFinite(value)) return '0 deg'
+  return `${value.toFixed(1).replace(/\.0$/, '')} deg`
+}
+
+function formatLength(value: number): string {
+  if (!Number.isFinite(value)) return '0'
+  return value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')
 }
 
 function buildRestGhostGeometry(model: LatticeModel, nodes: Map<string, LatticeNode>): THREE.BufferGeometry {

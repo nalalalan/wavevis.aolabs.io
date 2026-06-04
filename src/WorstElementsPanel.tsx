@@ -159,7 +159,7 @@ function selectedDetail(model: LatticeModel, selected: NonNullable<SelectedEleme
     if (!metric) return null
     return {
       title: `${metric.edgeId} edge`,
-      body: `strain ${formatValue(metric.strain)}, rotation ${formatValue(metric.edgeRotationDeg)} deg, length ${formatValue(metric.currentLength)}.`,
+      body: `${strainLabel(metric.strain)}, rotation ${formatValue(metric.edgeRotationDeg)} deg, length ${formatValue(metric.currentLength)}.`,
     }
   }
 
@@ -192,4 +192,10 @@ function selectedDetail(model: LatticeModel, selected: NonNullable<SelectedEleme
 function formatValue(value: number): string {
   if (!Number.isFinite(value)) return '0'
   return value.toFixed(Math.abs(value) < 1 ? 4 : 2).replace(/0+$/, '').replace(/\.$/, '')
+}
+
+function strainLabel(value: number): string {
+  if (!Number.isFinite(value)) return 'strain 0'
+  const kind = value >= 0 ? 'tensile strain' : 'compressive strain'
+  return `${kind} ${formatValue(value)}`
 }

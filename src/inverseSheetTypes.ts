@@ -30,6 +30,8 @@ export type TargetParams = {
   bendRadius: number
   horizontalOffset: number
   height: number
+  overhangWidth: number
+  curl: number
   smoothing: number
   widthScale: number
   strainWeight: number
