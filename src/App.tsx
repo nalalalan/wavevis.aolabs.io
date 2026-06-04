@@ -1,6 +1,8 @@
 import { useMemo, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import ControlPanel from './ControlPanel'
+import InverseSheetTab from './InverseSheetTab'
 import Scene3D from './Scene3D'
+import type { SimulatorTab } from './SimulatorTabs'
 import { CELL_STATES, type CellGrid, type CellParams, type CellState } from './types'
 import {
   DEFAULT_COLUMNS,
@@ -20,6 +22,7 @@ function App() {
   const [appliedParams, setAppliedParams] = useState<CellParams>(initialConfig.params)
   const [appliedGrid, setAppliedGrid] = useState(() => initialConfig.grid)
   const [panelWidth, setPanelWidth] = useState(390)
+  const [activeTab, setActiveTab] = useState<SimulatorTab>(() => readInitialTab())
 
   const safeDraftParams = useMemo(() => sanitizeParams(draftParams), [draftParams])
   const hasPendingChanges = stateKey(safeDraftParams, draftGrid) !== stateKey(appliedParams, appliedGrid)
@@ -91,28 +94,40 @@ function App() {
     window.addEventListener('pointercancel', stopResize)
   }
 
+  const resizeHandle = (
+    <button
+      type="button"
+      className="panel-resize-handle"
+      aria-label="Resize controls panel"
+      title="Resize controls panel"
+      onPointerDown={startPanelResize}
+    />
+  )
+
   return (
     <main className="app-shell" style={appStyle}>
-      <ControlPanel
-        grid={draftGrid}
-        params={safeDraftParams}
-        hasPendingChanges={hasPendingChanges}
-        onParamsChange={setDraftParams}
-        onRowsColumnsChange={updateGridSize}
-        onCellClick={updateCell}
-        onRun={applyDraftToScene}
-        onReset={resetAllOff}
-        onRandomize={randomize}
-        onDefault={setDefault}
-      />
-      <button
-        type="button"
-        className="panel-resize-handle"
-        aria-label="Resize controls panel"
-        title="Resize controls panel"
-        onPointerDown={startPanelResize}
-      />
-      <Scene3D grid={appliedGrid} params={appliedParams} />
+      {activeTab === 'inverse' ? (
+        <InverseSheetTab activeTab={activeTab} onTabChange={setActiveTab} resizeHandle={resizeHandle} />
+      ) : (
+        <>
+          <ControlPanel
+            grid={draftGrid}
+            params={safeDraftParams}
+            hasPendingChanges={hasPendingChanges}
+            onParamsChange={setDraftParams}
+            onRowsColumnsChange={updateGridSize}
+            onCellClick={updateCell}
+            onRun={applyDraftToScene}
+            onReset={resetAllOff}
+            onRandomize={randomize}
+            onDefault={setDefault}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+          />
+          {resizeHandle}
+          <Scene3D grid={appliedGrid} params={appliedParams} />
+        </>
+      )}
     </main>
   )
 }
@@ -160,6 +175,12 @@ function readNumberParam(search: URLSearchParams, name: string, fallback: number
   if (!search.has(name)) return fallback
   const value = Number(search.get(name))
   return Number.isFinite(value) ? value : fallback
+}
+
+function readInitialTab(): SimulatorTab {
+  if (typeof window === 'undefined') return 'sarrus'
+  const search = new URLSearchParams(window.location.search)
+  return search.get('tab') === 'inverse' ? 'inverse' : 'sarrus'
 }
 
 function stateKey(params: CellParams, grid: CellState[][]): string {
