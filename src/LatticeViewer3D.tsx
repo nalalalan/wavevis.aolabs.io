@@ -16,6 +16,13 @@ import type {
   Vec3,
 } from './inverseSheetTypes'
 import { colorForQuad, legendForMode } from './metricVisuals'
+import {
+  armEndpointForDirection,
+  buildRigidCellMechanism,
+  rigidCellBodyThickness,
+  type CellArmDirection,
+  type RigidCellMechanism,
+} from './rigidCellMechanism'
 
 const inverseLinkageColor = '#111111'
 const inverseCellBodyColor = '#2f3130'
@@ -86,6 +93,7 @@ function LatticeModelGroup({
   const nodeById = useMemo(() => new Map(model.nodes.map((node) => [node.id, node])), [model.nodes])
   const quadMetricById = useMemo(() => new Map(model.quadMetrics.map((metric) => [metric.quadId, metric])), [model.quadMetrics])
   const dihedralByQuad = useMemo(() => buildDihedralByQuad(model.dihedralMetrics), [model.dihedralMetrics])
+  const mechanism = useMemo(() => buildRigidCellMechanism(model), [model])
   const restGhostGeometry = useMemo(() => buildRestGhostGeometry(model, nodeById), [model, nodeById])
   const surfaceGeometry = useMemo(() => buildSurfaceGeometry(model, nodeById, quadMetricById, dihedralByQuad), [model, nodeById, quadMetricById, dihedralByQuad])
   const labelsVisible = model.config.showLabels && model.config.rows <= 15 && model.config.columns <= 15
@@ -106,7 +114,7 @@ function LatticeModelGroup({
           <meshStandardMaterial vertexColors side={THREE.DoubleSide} transparent opacity={surfaceOpacity} roughness={0.78} metalness={0.02} />
         </mesh>
       )}
-      {model.config.showNodes && <RigidCellGlyphs model={model} nodeById={nodeById} />}
+      {model.config.showNodes && <RigidCellGlyphs model={model} mechanism={mechanism} />}
       {model.config.showEdges && (
         <>
           <EdgeHitTargets
@@ -115,11 +123,12 @@ function LatticeModelGroup({
             radius={edgePickRadius}
             onEdgePick={onEdgePick}
           />
-          <ConnectorInstances model={model} nodes={nodeById} radius={connectorSize} />
+          <ConnectorClosureBridges model={model} mechanism={mechanism} radius={connectorSize * 0.58} />
+          <ConnectorInstances model={model} mechanism={mechanism} radius={connectorSize} />
         </>
       )}
       {labelsVisible && <NodeLabels nodes={model.nodes} />}
-      <SelectedHighlight selected={selected} model={model} nodeById={nodeById} />
+      <SelectedHighlight selected={selected} model={model} nodeById={nodeById} mechanism={mechanism} />
       <SelectionCallout selected={selected} pickedEdges={pickedEdges} model={model} nodeById={nodeById} />
     </group>
   )
@@ -235,10 +244,10 @@ function SelectionCallout({
 
 function RigidCellGlyphs({
   model,
-  nodeById,
+  mechanism,
 }: {
   model: LatticeModel
-  nodeById: Map<string, LatticeNode>
+  mechanism: RigidCellMechanism
 }) {
   const armRef = useRef<THREE.InstancedMesh>(null)
   const bodyRef = useRef<THREE.InstancedMesh>(null)
@@ -255,39 +264,29 @@ function RigidCellGlyphs({
     const largeGrid = model.config.rows > 30 || model.config.columns > 30
     const rodWidth = Math.max(model.config.spacing * (largeGrid ? 0.035 : 0.048), 0.014)
     const bodySize = model.config.spacing * (largeGrid ? 0.28 : 0.34)
-    const bodyThickness = cellBodyThickness(model.config.spacing)
+    const bodyThickness = rigidCellBodyThickness(model.config.spacing)
     const matrix = new THREE.Matrix4()
     const dummy = new THREE.Object3D()
     let armIndex = 0
 
-    model.nodes.forEach((node, index) => {
-      const frame = buildNodeFrame(node, nodeById)
-      const center = displayCellCenter(node, frame, model.config.spacing)
+    mechanism.frames.forEach((frame, index) => {
+      const center = toThree(frame.center)
+      const directions: CellArmDirection[] = ['east', 'west', 'north', 'south']
 
-      setBoxInstance(matrix, bodyMesh, index, center, frame.xAxis, frame.yAxis, frame.zAxis, bodySize, bodySize, bodyThickness)
-    })
-
-    model.edges.forEach((edge) => {
-      const nodeA = nodeById.get(edge.nodeA)
-      const nodeB = nodeById.get(edge.nodeB)
-      if (!nodeA || !nodeB) return
-      const connector = connectorPositionForEdge(edge, nodeById, model.config.spacing)
-      const startA = displayCellCenter(nodeA, buildNodeFrame(nodeA, nodeById), model.config.spacing)
-      const startB = displayCellCenter(nodeB, buildNodeFrame(nodeB, nodeById), model.config.spacing)
-
-      setCylinderInstance(dummy, armMesh, armIndex, startA, connector, rodWidth)
-      armIndex += 1
-      setCylinderInstance(dummy, armMesh, armIndex, startB, connector, rodWidth)
-      armIndex += 1
+      setBoxInstance(matrix, bodyMesh, index, center, toThree(frame.xAxis), toThree(frame.yAxis), toThree(frame.zAxis), bodySize, bodySize, bodyThickness)
+      directions.forEach((direction) => {
+        setCylinderInstance(dummy, armMesh, armIndex, center, toThree(armEndpointForDirection(frame, direction)), rodWidth)
+        armIndex += 1
+      })
     })
 
     armMesh.instanceMatrix.needsUpdate = true
     bodyMesh.instanceMatrix.needsUpdate = true
-  }, [model, nodeById])
+  }, [mechanism, model])
 
   return (
     <>
-      <instancedMesh ref={armRef} args={[armGeometry, rodMaterial, model.edges.length * 2]} />
+      <instancedMesh ref={armRef} args={[armGeometry, rodMaterial, model.nodes.length * 4]} />
       <instancedMesh ref={bodyRef} args={[bodyGeometry, bodyMaterial, model.nodes.length]} />
     </>
   )
@@ -295,11 +294,11 @@ function RigidCellGlyphs({
 
 function ConnectorInstances({
   model,
-  nodes,
+  mechanism,
   radius,
 }: {
   model: LatticeModel
-  nodes: Map<string, LatticeNode>
+  mechanism: RigidCellMechanism
   radius: number
 }) {
   const ref = useRef<THREE.InstancedMesh>(null)
@@ -311,13 +310,48 @@ function ConnectorInstances({
 
     const dummy = new THREE.Object3D()
     model.edges.forEach((edge, index) => {
-      dummy.position.copy(connectorPositionForEdge(edge, nodes, model.config.spacing))
+      dummy.position.copy(toThree(mechanism.connectorByEdgeId.get(edge.id) ?? [0, 0, 0]))
       dummy.scale.setScalar(radius)
       dummy.updateMatrix()
       ref.current?.setMatrixAt(index, dummy.matrix)
     })
     ref.current.instanceMatrix.needsUpdate = true
-  }, [model, nodes, radius])
+  }, [mechanism, model.edges, radius])
+
+  return <instancedMesh ref={ref} args={[geometry, material, model.edges.length]} />
+}
+
+function ConnectorClosureBridges({
+  model,
+  mechanism,
+  radius,
+}: {
+  model: LatticeModel
+  mechanism: RigidCellMechanism
+  radius: number
+}) {
+  const ref = useRef<THREE.InstancedMesh>(null)
+  const geometry = useMemo(() => new THREE.CylinderGeometry(1, 1, 1, model.config.rows > 30 || model.config.columns > 30 ? 7 : 10), [model.config.columns, model.config.rows])
+  const material = useMemo(() => new THREE.MeshStandardMaterial({ color: inverseConnectorColor, roughness: 0.55, metalness: 0.03 }), [])
+
+  useLayoutEffect(() => {
+    const mesh = ref.current
+    if (!mesh) return
+
+    const dummy = new THREE.Object3D()
+    model.edges.forEach((edge, index) => {
+      const endpoints = mechanism.endpointsByEdgeId.get(edge.id)
+      if (!endpoints) {
+        dummy.scale.setScalar(0.000001)
+        dummy.updateMatrix()
+        mesh.setMatrixAt(index, dummy.matrix)
+        return
+      }
+
+      setCylinderInstance(dummy, mesh, index, toThree(endpoints.endpointA), toThree(endpoints.endpointB), radius)
+    })
+    mesh.instanceMatrix.needsUpdate = true
+  }, [mechanism, model, radius])
 
   return <instancedMesh ref={ref} args={[geometry, material, model.edges.length]} />
 }
@@ -392,10 +426,12 @@ function SelectedHighlight({
   selected,
   model,
   nodeById,
+  mechanism,
 }: {
   selected: SelectedElement
   model: LatticeModel
   nodeById: Map<string, LatticeNode>
+  mechanism: RigidCellMechanism
 }) {
   if (!selected) return null
 
@@ -404,16 +440,15 @@ function SelectedHighlight({
     const nodeA = edge ? nodeById.get(edge.nodeA) : undefined
     const nodeB = edge ? nodeById.get(edge.nodeB) : undefined
     if (!edge || !nodeA || !nodeB) return null
-    const connectorVector = connectorPositionForEdge(edge, nodeById, model.config.spacing)
-    const connector: Vec3 = [connectorVector.x, connectorVector.y, connectorVector.z]
-    const centerA = displayCellCenter(nodeA, buildNodeFrame(nodeA, nodeById), model.config.spacing)
-    const centerB = displayCellCenter(nodeB, buildNodeFrame(nodeB, nodeById), model.config.spacing)
-    const startA: Vec3 = [centerA.x, centerA.y, centerA.z]
-    const startB: Vec3 = [centerB.x, centerB.y, centerB.z]
+    const frameA = mechanism.frameByNodeId.get(nodeA.id)
+    const frameB = mechanism.frameByNodeId.get(nodeB.id)
+    const endpoints = mechanism.endpointsByEdgeId.get(edge.id)
+    if (!frameA || !frameB || !endpoints) return null
+
     return (
       <>
-        <TubeSegment start={startA} end={connector} radius={0.04} color="#f5d84b" />
-        <TubeSegment start={startB} end={connector} radius={0.04} color="#f5d84b" />
+        <TubeSegment start={frameA.center} end={endpoints.endpointA} radius={0.04} color="#f5d84b" />
+        <TubeSegment start={frameB.center} end={endpoints.endpointB} radius={0.04} color="#f5d84b" />
       </>
     )
   }
@@ -837,93 +872,8 @@ function setCylinderInstance(
   mesh.setMatrixAt(index, dummy.matrix)
 }
 
-function cellBodyThickness(spacing: number): number {
-  return Math.max(spacing * 0.07, 0.022)
-}
-
-function displayCellCenter(node: LatticeNode, frame: ReturnType<typeof buildNodeFrame>, spacing: number): THREE.Vector3 {
-  return new THREE.Vector3(...node.currentPosition).addScaledVector(frame.zAxis, cellBodyThickness(spacing) * 0.72)
-}
-
-function buildNodeFrame(node: LatticeNode, nodeById: Map<string, LatticeNode>): {
-  xAxis: THREE.Vector3
-  yAxis: THREE.Vector3
-  zAxis: THREE.Vector3
-} {
-  const center = new THREE.Vector3(...node.currentPosition)
-  const left = nodeById.get(latticeNodeId(node.row, node.col - 1))
-  const right = nodeById.get(latticeNodeId(node.row, node.col + 1))
-  const down = nodeById.get(latticeNodeId(node.row - 1, node.col))
-  const up = nodeById.get(latticeNodeId(node.row + 1, node.col))
-  const xSeed = axisSeed(center, left?.currentPosition, right?.currentPosition, new THREE.Vector3(1, 0, 0))
-  const ySeed = axisSeed(center, down?.currentPosition, up?.currentPosition, new THREE.Vector3(0, 1, 0))
-  const xAxis = normalizeThreeVector(xSeed, new THREE.Vector3(1, 0, 0))
-  const yProjected = ySeed.clone().addScaledVector(xAxis, -ySeed.dot(xAxis))
-  let yAxis = normalizeThreeVector(yProjected, fallbackPerpendicular(xAxis))
-  let zAxis = normalizeThreeVector(new THREE.Vector3().crossVectors(xAxis, yAxis), new THREE.Vector3(0, 0, 1))
-
-  yAxis = normalizeThreeVector(new THREE.Vector3().crossVectors(zAxis, xAxis), yAxis)
-  zAxis = normalizeThreeVector(new THREE.Vector3().crossVectors(xAxis, yAxis), zAxis)
-
-  return { xAxis, yAxis, zAxis }
-}
-
-function axisSeed(center: THREE.Vector3, negative?: Vec3, positive?: Vec3, fallback = new THREE.Vector3(1, 0, 0)): THREE.Vector3 {
-  if (negative && positive) return new THREE.Vector3(...positive).sub(new THREE.Vector3(...negative))
-  if (positive) return new THREE.Vector3(...positive).sub(center)
-  if (negative) return center.clone().sub(new THREE.Vector3(...negative))
-  return fallback.clone()
-}
-
-function estimateCellCrossLength(node: LatticeNode, nodeById: Map<string, LatticeNode>, fallback: number): number {
-  const center = new THREE.Vector3(...node.currentPosition)
-  const distances = [
-    nodeById.get(latticeNodeId(node.row, node.col - 1)),
-    nodeById.get(latticeNodeId(node.row, node.col + 1)),
-    nodeById.get(latticeNodeId(node.row - 1, node.col)),
-    nodeById.get(latticeNodeId(node.row + 1, node.col)),
-  ]
-    .map((neighbor) => (neighbor ? center.distanceTo(new THREE.Vector3(...neighbor.currentPosition)) : Number.NaN))
-    .filter((distance) => Number.isFinite(distance) && distance > 0.000001)
-
-  if (!distances.length) return fallback
-  return distances.reduce((sum, distance) => sum + distance, 0) / distances.length
-}
-
-function connectorPositionForEdge(edge: LatticeModel['edges'][number], nodeById: Map<string, LatticeNode>, fallback: number): THREE.Vector3 {
-  const nodeA = nodeById.get(edge.nodeA)
-  const nodeB = nodeById.get(edge.nodeB)
-  if (!nodeA || !nodeB) return new THREE.Vector3(0, 0, 0)
-
-  const frameA = buildNodeFrame(nodeA, nodeById)
-  const frameB = buildNodeFrame(nodeB, nodeById)
-  const centerA = displayCellCenter(nodeA, frameA, fallback)
-  const centerB = displayCellCenter(nodeB, frameB, fallback)
-  const halfA = estimateCellCrossLength(nodeA, nodeById, fallback) * 0.5
-  const halfB = estimateCellCrossLength(nodeB, nodeById, fallback) * 0.5
-  const axisA = edge.orientation === 'horizontal' ? frameA.xAxis : frameA.yAxis
-  const axisB = edge.orientation === 'horizontal' ? frameB.xAxis : frameB.yAxis
-  const signA = edge.orientation === 'horizontal'
-    ? Math.sign(nodeB.col - nodeA.col || centerB.x - centerA.x || 1)
-    : Math.sign(nodeB.row - nodeA.row || centerB.y - centerA.y || 1)
-  const signB = -signA
-  const endpointA = centerA.addScaledVector(axisA, halfA * signA)
-  const endpointB = centerB.addScaledVector(axisB, halfB * signB)
-
-  return endpointA.add(endpointB).multiplyScalar(0.5)
-}
-
-function fallbackPerpendicular(axis: THREE.Vector3): THREE.Vector3 {
-  const seed = Math.abs(axis.z) < 0.82 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0)
-  return new THREE.Vector3().crossVectors(seed, axis).normalize()
-}
-
-function normalizeThreeVector(vector: THREE.Vector3, fallback: THREE.Vector3): THREE.Vector3 {
-  return vector.lengthSq() > 0.000001 ? vector.clone().normalize() : fallback.clone().normalize()
-}
-
-function latticeNodeId(row: number, col: number): string {
-  return `n-${row}-${col}`
+function toThree(vector: Vec3): THREE.Vector3 {
+  return new THREE.Vector3(...vector)
 }
 
 function buildRestGhostGeometry(model: LatticeModel, nodes: Map<string, LatticeNode>): THREE.BufferGeometry {

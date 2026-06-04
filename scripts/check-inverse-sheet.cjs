@@ -16,6 +16,7 @@ execFileSync(
     tscRunner,
     'src/inverseSheetTypes.ts',
     'src/latticeGeometry.ts',
+    'src/rigidCellMechanism.ts',
     '--outDir',
     path.relative(root, outDir),
     '--module',
@@ -34,12 +35,14 @@ execFileSync(
 )
 
 const { buildInverseSheetModel, runInverseSheetSanityChecks } = require(path.join(outDir, 'latticeGeometry.js'))
+const { rigidCellMechanismStats } = require(path.join(outDir, 'rigidCellMechanism.js'))
 
 const failures = [...runInverseSheetSanityChecks()]
 const flat0 = summarizeFlatContribution(buildInverseSheetModel({ flatContribution: 0 }))
 const flat1 = summarizeFlatContribution(buildInverseSheetModel({ flatContribution: 1 }))
 const transition0 = buildInverseSheetModel({ smoothing: 0 })
 const transition1 = buildInverseSheetModel({ smoothing: 1 })
+const mechanism = rigidCellMechanismStats(buildInverseSheetModel())
 
 if (!(flat1.flatMeanAbs > flat0.flatMeanAbs * 1.8)) {
   failures.push('flat contribution should increase strain in flat areas')
@@ -57,6 +60,14 @@ if (!(transition1.summary.maxTensileStrain < transition0.summary.maxTensileStrai
   failures.push('higher ground transition should soften the overhang transition')
 }
 
+if (mechanism.maxLegLengthSpread > 0.000001) {
+  failures.push('rigid cell arms should have equal length within each cell')
+}
+
+if (mechanism.maxOrthogonalityErrorDeg > 0.000001) {
+  failures.push('rigid cell arms should remain perpendicular within each cell')
+}
+
 const report = {
   flat0,
   flat1,
@@ -67,6 +78,11 @@ const report = {
   transition1: {
     maxTensileStrain: round(transition1.summary.maxTensileStrain),
     maxEdgeRotationDeg: round(transition1.summary.maxEdgeRotationDeg),
+  },
+  mechanism: {
+    maxLegLengthSpread: round(mechanism.maxLegLengthSpread),
+    maxOrthogonalityErrorDeg: round(mechanism.maxOrthogonalityErrorDeg),
+    maxConnectorEndpointGap: round(mechanism.maxConnectorEndpointGap),
   },
 }
 
