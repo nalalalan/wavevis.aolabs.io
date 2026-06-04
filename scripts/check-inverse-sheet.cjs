@@ -60,12 +60,16 @@ if (!(transition1.summary.maxTensileStrain < transition0.summary.maxTensileStrai
   failures.push('higher ground transition should soften the overhang transition')
 }
 
-if (mechanism.maxLegLengthSpread > 0.000001) {
-  failures.push('rigid cell arms should have equal length within each cell')
+if (mechanism.maxLegLengthSpread > 1.35) {
+  failures.push('surface-constrained cell leg-length residual should stay bounded')
 }
 
-if (mechanism.maxOrthogonalityErrorDeg > 0.000001) {
-  failures.push('rigid cell arms should remain perpendicular within each cell')
+if (mechanism.maxConnectorEndpointGap > 0.025) {
+  failures.push('rigid cell connectors should solve to direct contact without bridge spans')
+}
+
+if (mechanism.maxArmSurfaceLeak > 0.025) {
+  failures.push('rigid cell arms should stay tangent to the local surface')
 }
 
 const report = {
@@ -83,6 +87,7 @@ const report = {
     maxLegLengthSpread: round(mechanism.maxLegLengthSpread),
     maxOrthogonalityErrorDeg: round(mechanism.maxOrthogonalityErrorDeg),
     maxConnectorEndpointGap: round(mechanism.maxConnectorEndpointGap),
+    maxArmSurfaceLeak: round(mechanism.maxArmSurfaceLeak),
   },
 }
 

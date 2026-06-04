@@ -99,7 +99,7 @@ function LatticeModelGroup({
   const labelsVisible = model.config.showLabels && model.config.rows <= 15 && model.config.columns <= 15
   const largeGrid = model.config.rows > 30 || model.config.columns > 30
   const edgePickRadius = Math.max(model.config.spacing * (largeGrid ? 0.08 : 0.09), 0.035)
-  const connectorSize = Math.max(model.config.spacing * (largeGrid ? 0.09 : 0.12), 0.035)
+  const connectorSize = Math.max(model.config.spacing * (largeGrid ? 0.052 : 0.12), 0.026)
   const surfaceOpacity = largeGrid ? 0.3 : 0.42
 
   return (
@@ -123,7 +123,6 @@ function LatticeModelGroup({
             radius={edgePickRadius}
             onEdgePick={onEdgePick}
           />
-          <ConnectorClosureBridges model={model} mechanism={mechanism} radius={connectorSize * 0.58} />
           <ConnectorInstances model={model} mechanism={mechanism} radius={connectorSize} />
         </>
       )}
@@ -262,8 +261,8 @@ function RigidCellGlyphs({
     if (!armMesh || !bodyMesh) return
 
     const largeGrid = model.config.rows > 30 || model.config.columns > 30
-    const rodWidth = Math.max(model.config.spacing * (largeGrid ? 0.035 : 0.048), 0.014)
-    const bodySize = model.config.spacing * (largeGrid ? 0.28 : 0.34)
+    const rodWidth = Math.max(model.config.spacing * (largeGrid ? 0.016 : 0.048), 0.01)
+    const bodySize = model.config.spacing * (largeGrid ? 0.18 : 0.34)
     const bodyThickness = rigidCellBodyThickness(model.config.spacing)
     const matrix = new THREE.Matrix4()
     const dummy = new THREE.Object3D()
@@ -317,41 +316,6 @@ function ConnectorInstances({
     })
     ref.current.instanceMatrix.needsUpdate = true
   }, [mechanism, model.edges, radius])
-
-  return <instancedMesh ref={ref} args={[geometry, material, model.edges.length]} />
-}
-
-function ConnectorClosureBridges({
-  model,
-  mechanism,
-  radius,
-}: {
-  model: LatticeModel
-  mechanism: RigidCellMechanism
-  radius: number
-}) {
-  const ref = useRef<THREE.InstancedMesh>(null)
-  const geometry = useMemo(() => new THREE.CylinderGeometry(1, 1, 1, model.config.rows > 30 || model.config.columns > 30 ? 7 : 10), [model.config.columns, model.config.rows])
-  const material = useMemo(() => new THREE.MeshStandardMaterial({ color: inverseConnectorColor, roughness: 0.55, metalness: 0.03 }), [])
-
-  useLayoutEffect(() => {
-    const mesh = ref.current
-    if (!mesh) return
-
-    const dummy = new THREE.Object3D()
-    model.edges.forEach((edge, index) => {
-      const endpoints = mechanism.endpointsByEdgeId.get(edge.id)
-      if (!endpoints) {
-        dummy.scale.setScalar(0.000001)
-        dummy.updateMatrix()
-        mesh.setMatrixAt(index, dummy.matrix)
-        return
-      }
-
-      setCylinderInstance(dummy, mesh, index, toThree(endpoints.endpointA), toThree(endpoints.endpointB), radius)
-    })
-    mesh.instanceMatrix.needsUpdate = true
-  }, [mechanism, model, radius])
 
   return <instancedMesh ref={ref} args={[geometry, material, model.edges.length]} />
 }
