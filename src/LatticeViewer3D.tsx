@@ -3,22 +3,23 @@ import { Canvas } from '@react-three/fiber'
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
-import { cellBodyColor, connectorColor, linkageColor } from './renderStyle'
 import type {
   CameraFocusRequest,
   CameraViewRequest,
   DihedralMetric,
-  EdgeMetric,
   LatticeBounds,
   LatticeModel,
   LatticeNode,
   LatticeQuad,
-  NodeMetric,
   QuadMetric,
   SelectedElement,
   Vec3,
 } from './inverseSheetTypes'
-import { colorForEdge, colorForNode, colorForQuad, legendForMode } from './metricVisuals'
+import { colorForQuad, legendForMode } from './metricVisuals'
+
+const inverseLinkageColor = '#111111'
+const inverseCellBodyColor = '#2f3130'
+const inverseConnectorColor = '#111111'
 
 type LatticeViewer3DProps = {
   model: LatticeModel
@@ -83,16 +84,13 @@ function LatticeModelGroup({
   onEdgePick: (edgeId: string) => void
 }) {
   const nodeById = useMemo(() => new Map(model.nodes.map((node) => [node.id, node])), [model.nodes])
-  const edgeMetricById = useMemo(() => new Map(model.edgeMetrics.map((metric) => [metric.edgeId, metric])), [model.edgeMetrics])
-  const nodeMetricById = useMemo(() => new Map(model.nodeMetrics.map((metric) => [metric.nodeId, metric])), [model.nodeMetrics])
   const quadMetricById = useMemo(() => new Map(model.quadMetrics.map((metric) => [metric.quadId, metric])), [model.quadMetrics])
   const dihedralByQuad = useMemo(() => buildDihedralByQuad(model.dihedralMetrics), [model.dihedralMetrics])
   const restGhostGeometry = useMemo(() => buildRestGhostGeometry(model, nodeById), [model, nodeById])
   const surfaceGeometry = useMemo(() => buildSurfaceGeometry(model, nodeById, quadMetricById, dihedralByQuad), [model, nodeById, quadMetricById, dihedralByQuad])
   const labelsVisible = model.config.showLabels && model.config.rows <= 15 && model.config.columns <= 15
   const largeGrid = model.config.rows > 30 || model.config.columns > 30
-  const nodeSize = Math.max(model.config.spacing * (largeGrid ? 0.052 : 0.062), 0.02)
-  const edgeRadius = Math.max(model.config.spacing * (largeGrid ? 0.032 : 0.026), 0.014)
+  const edgePickRadius = Math.max(model.config.spacing * (largeGrid ? 0.08 : 0.09), 0.035)
   const connectorSize = Math.max(model.config.spacing * (largeGrid ? 0.09 : 0.12), 0.035)
   const surfaceOpacity = largeGrid ? 0.3 : 0.42
 
@@ -111,18 +109,15 @@ function LatticeModelGroup({
       {model.config.showNodes && <RigidCellGlyphs model={model} nodeById={nodeById} />}
       {model.config.showEdges && (
         <>
-          <EdgeInstances
+          <EdgeHitTargets
             model={model}
             nodes={nodeById}
-            metrics={edgeMetricById}
-            radius={edgeRadius}
-            pickedEdges={pickedEdges}
+            radius={edgePickRadius}
             onEdgePick={onEdgePick}
           />
           <ConnectorInstances model={model} nodes={nodeById} radius={connectorSize} />
         </>
       )}
-      {model.config.showNodes && <NodeInstances model={model} nodeMetrics={nodeMetricById} nodeSize={nodeSize} />}
       {labelsVisible && <NodeLabels nodes={model.nodes} />}
       <SelectedHighlight selected={selected} model={model} nodeById={nodeById} />
       <SelectionCallout selected={selected} pickedEdges={pickedEdges} model={model} nodeById={nodeById} />
@@ -249,8 +244,8 @@ function RigidCellGlyphs({
   const yRodRef = useRef<THREE.InstancedMesh>(null)
   const bodyRef = useRef<THREE.InstancedMesh>(null)
   const geometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
-  const rodMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: linkageColor, roughness: 0.62, metalness: 0.04 }), [])
-  const bodyMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: cellBodyColor, roughness: 0.7, metalness: 0.04 }), [])
+  const rodMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: inverseLinkageColor, roughness: 0.62, metalness: 0.04 }), [])
+  const bodyMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: inverseCellBodyColor, roughness: 0.7, metalness: 0.04 }), [])
 
   useLayoutEffect(() => {
     const xRodMesh = xRodRef.current
@@ -259,7 +254,6 @@ function RigidCellGlyphs({
     if (!xRodMesh || !yRodMesh || !bodyMesh) return
 
     const largeGrid = model.config.rows > 30 || model.config.columns > 30
-    const rodLength = model.config.spacing
     const rodWidth = Math.max(model.config.spacing * (largeGrid ? 0.04 : 0.052), 0.014)
     const bodySize = model.config.spacing * (largeGrid ? 0.28 : 0.34)
     const bodyThickness = Math.max(model.config.spacing * 0.07, 0.022)
@@ -268,6 +262,7 @@ function RigidCellGlyphs({
     model.nodes.forEach((node, index) => {
       const frame = buildNodeFrame(node, nodeById)
       const center = new THREE.Vector3(...node.currentPosition).addScaledVector(frame.zAxis, bodyThickness * 0.72)
+      const rodLength = estimateCellCrossLength(node, nodeById, model.config.spacing)
 
       setBoxInstance(matrix, xRodMesh, index, center, frame.xAxis, frame.yAxis, frame.zAxis, rodLength, rodWidth, rodWidth)
       setBoxInstance(matrix, yRodMesh, index, center, frame.xAxis, frame.yAxis, frame.zAxis, rodWidth, rodLength, rodWidth)
@@ -288,41 +283,6 @@ function RigidCellGlyphs({
   )
 }
 
-function NodeInstances({
-  model,
-  nodeMetrics,
-  nodeSize,
-}: {
-  model: LatticeModel
-  nodeMetrics: Map<string, NodeMetric>
-  nodeSize: number
-}) {
-  const ref = useRef<THREE.InstancedMesh>(null)
-  const geometry = useMemo(() => new THREE.SphereGeometry(1, model.config.rows > 30 || model.config.columns > 30 ? 8 : 14, 8), [model.config.columns, model.config.rows])
-  const material = useMemo(() => new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.58, metalness: 0.04 }), [])
-
-  useLayoutEffect(() => {
-    if (!ref.current) return
-
-    const dummy = new THREE.Object3D()
-    model.nodes.forEach((node, index) => {
-      const metric = nodeMetrics.get(node.id)
-      const color = metric ? colorForNode(metric, model) : '#f2f1ee'
-      dummy.position.set(...node.currentPosition)
-      dummy.scale.setScalar(nodeSize)
-      dummy.updateMatrix()
-      ref.current?.setMatrixAt(index, dummy.matrix)
-      ref.current?.setColorAt(index, new THREE.Color(color))
-    })
-    ref.current.instanceMatrix.needsUpdate = true
-    if (ref.current.instanceColor) ref.current.instanceColor.needsUpdate = true
-  }, [model, nodeMetrics, nodeSize])
-
-  return (
-    <instancedMesh ref={ref} args={[geometry, material, model.nodes.length]} />
-  )
-}
-
 function ConnectorInstances({
   model,
   nodes,
@@ -334,19 +294,14 @@ function ConnectorInstances({
 }) {
   const ref = useRef<THREE.InstancedMesh>(null)
   const geometry = useMemo(() => new THREE.SphereGeometry(1, model.config.rows > 30 || model.config.columns > 30 ? 8 : 14, 8), [model.config.columns, model.config.rows])
-  const material = useMemo(() => new THREE.MeshStandardMaterial({ color: connectorColor, emissive: connectorColor, emissiveIntensity: 0.14, roughness: 0.45, metalness: 0.03 }), [])
+  const material = useMemo(() => new THREE.MeshStandardMaterial({ color: inverseConnectorColor, emissive: inverseConnectorColor, emissiveIntensity: 0.08, roughness: 0.45, metalness: 0.03 }), [])
 
   useLayoutEffect(() => {
     if (!ref.current) return
 
     const dummy = new THREE.Object3D()
     model.edges.forEach((edge, index) => {
-      const nodeA = nodes.get(edge.nodeA)
-      const nodeB = nodes.get(edge.nodeB)
-      const start = new THREE.Vector3(...(nodeA?.currentPosition ?? ([0, 0, 0] as Vec3)))
-      const end = new THREE.Vector3(...(nodeB?.currentPosition ?? ([0, 0, 0] as Vec3)))
-
-      dummy.position.addVectors(start, end).multiplyScalar(0.5)
+      dummy.position.copy(connectorPositionForEdge(edge, nodes, model.config.spacing))
       dummy.scale.setScalar(radius)
       dummy.updateMatrix()
       ref.current?.setMatrixAt(index, dummy.matrix)
@@ -357,25 +312,20 @@ function ConnectorInstances({
   return <instancedMesh ref={ref} args={[geometry, material, model.edges.length]} />
 }
 
-function EdgeInstances({
+function EdgeHitTargets({
   model,
   nodes,
-  metrics,
   radius,
-  pickedEdges,
   onEdgePick,
 }: {
   model: LatticeModel
   nodes: Map<string, LatticeNode>
-  metrics: Map<string, EdgeMetric>
   radius: number
-  pickedEdges: string[]
   onEdgePick: (edgeId: string) => void
 }) {
   const ref = useRef<THREE.InstancedMesh>(null)
-  const pickedEdgeSet = useMemo(() => new Set(pickedEdges), [pickedEdges])
   const geometry = useMemo(() => new THREE.CylinderGeometry(1, 1, 1, model.config.rows > 30 || model.config.columns > 30 ? 7 : 10), [model.config.columns, model.config.rows])
-  const material = useMemo(() => new THREE.MeshBasicMaterial({ color: '#ffffff', vertexColors: true }), [])
+  const material = useMemo(() => new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false }), [])
 
   useLayoutEffect(() => {
     if (!ref.current) return
@@ -389,21 +339,15 @@ function EdgeInstances({
       const end = new THREE.Vector3(...(nodeB?.currentPosition ?? ([0, 0, 0] as Vec3)))
       const direction = new THREE.Vector3().subVectors(end, start)
       const length = Math.max(direction.length(), 0.000001)
-      const metric = metrics.get(edge.id)
-      const color = pickedEdgeSet.has(edge.id)
-        ? new THREE.Color(pickedEdges[0] === edge.id ? '#f5d84b' : '#ff66b3')
-        : new THREE.Color(metric ? colorForEdge(metric, model) : '#5d554f')
 
       dummy.position.addVectors(start, end).multiplyScalar(0.5)
       dummy.quaternion.setFromUnitVectors(yAxis, direction.normalize())
       dummy.scale.set(radius, length, radius)
       dummy.updateMatrix()
       ref.current?.setMatrixAt(index, dummy.matrix)
-      ref.current?.setColorAt(index, color)
     })
     ref.current.instanceMatrix.needsUpdate = true
-    if (ref.current.instanceColor) ref.current.instanceColor.needsUpdate = true
-  }, [metrics, model, nodes, pickedEdgeSet, pickedEdges, radius])
+  }, [model, nodes, radius])
 
   return (
     <instancedMesh
@@ -449,8 +393,15 @@ function SelectedHighlight({
     const edge = model.edges.find((candidate) => candidate.id === selected.id)
     const nodeA = edge ? nodeById.get(edge.nodeA) : undefined
     const nodeB = edge ? nodeById.get(edge.nodeB) : undefined
-    if (!nodeA || !nodeB) return null
-    return <TubeSegment start={nodeA.currentPosition} end={nodeB.currentPosition} radius={0.035} color="#f5d84b" />
+    if (!edge || !nodeA || !nodeB) return null
+    const connectorVector = connectorPositionForEdge(edge, nodeById, model.config.spacing)
+    const connector: Vec3 = [connectorVector.x, connectorVector.y, connectorVector.z]
+    return (
+      <>
+        <TubeSegment start={nodeA.currentPosition} end={connector} radius={0.04} color="#f5d84b" />
+        <TubeSegment start={nodeB.currentPosition} end={connector} radius={0.04} color="#f5d84b" />
+      </>
+    )
   }
 
   if (selected.kind === 'node') {
@@ -876,6 +827,44 @@ function axisSeed(center: THREE.Vector3, negative?: Vec3, positive?: Vec3, fallb
   if (positive) return new THREE.Vector3(...positive).sub(center)
   if (negative) return center.clone().sub(new THREE.Vector3(...negative))
   return fallback.clone()
+}
+
+function estimateCellCrossLength(node: LatticeNode, nodeById: Map<string, LatticeNode>, fallback: number): number {
+  const center = new THREE.Vector3(...node.currentPosition)
+  const distances = [
+    nodeById.get(latticeNodeId(node.row, node.col - 1)),
+    nodeById.get(latticeNodeId(node.row, node.col + 1)),
+    nodeById.get(latticeNodeId(node.row - 1, node.col)),
+    nodeById.get(latticeNodeId(node.row + 1, node.col)),
+  ]
+    .map((neighbor) => (neighbor ? center.distanceTo(new THREE.Vector3(...neighbor.currentPosition)) : Number.NaN))
+    .filter((distance) => Number.isFinite(distance) && distance > 0.000001)
+
+  if (!distances.length) return fallback
+  return distances.reduce((sum, distance) => sum + distance, 0) / distances.length
+}
+
+function connectorPositionForEdge(edge: LatticeModel['edges'][number], nodeById: Map<string, LatticeNode>, fallback: number): THREE.Vector3 {
+  const nodeA = nodeById.get(edge.nodeA)
+  const nodeB = nodeById.get(edge.nodeB)
+  if (!nodeA || !nodeB) return new THREE.Vector3(0, 0, 0)
+
+  const centerA = new THREE.Vector3(...nodeA.currentPosition)
+  const centerB = new THREE.Vector3(...nodeB.currentPosition)
+  const frameA = buildNodeFrame(nodeA, nodeById)
+  const frameB = buildNodeFrame(nodeB, nodeById)
+  const halfA = estimateCellCrossLength(nodeA, nodeById, fallback) * 0.5
+  const halfB = estimateCellCrossLength(nodeB, nodeById, fallback) * 0.5
+  const axisA = edge.orientation === 'horizontal' ? frameA.xAxis : frameA.yAxis
+  const axisB = edge.orientation === 'horizontal' ? frameB.xAxis : frameB.yAxis
+  const signA = edge.orientation === 'horizontal'
+    ? Math.sign(nodeB.col - nodeA.col || centerB.x - centerA.x || 1)
+    : Math.sign(nodeB.row - nodeA.row || centerB.y - centerA.y || 1)
+  const signB = -signA
+  const endpointA = centerA.addScaledVector(axisA, halfA * signA)
+  const endpointB = centerB.addScaledVector(axisB, halfB * signB)
+
+  return endpointA.add(endpointB).multiplyScalar(0.5)
 }
 
 function fallbackPerpendicular(axis: THREE.Vector3): THREE.Vector3 {

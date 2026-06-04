@@ -12,7 +12,7 @@ type TargetShapeControlsProps = {
   onImportConfigText: (text: string) => void
 }
 
-type NumberKey = 'rows' | 'columns' | 'morph' | 'horizontalOffset' | 'height' | 'overhangWidth' | 'curl'
+type NumberKey = 'rows' | 'columns' | 'morph' | 'horizontalOffset' | 'height' | 'overhangWidth' | 'curl' | 'smoothing'
 type BooleanKey = 'showSurface' | 'showRestGhost' | 'showNodes' | 'showEdges'
 
 export default function TargetShapeControls({
@@ -59,6 +59,7 @@ export default function TargetShapeControls({
           <RangeInput label="width" value={config.overhangWidth} min={0} max={72} step={0.5} onChange={(value) => setNumber('overhangWidth', value)} />
           <RangeInput label="height" value={config.height} min={0} max={24} step={0.25} onChange={(value) => setNumber('height', value)} />
           <RangeInput label="overhang" value={config.horizontalOffset} min={0} max={32} step={0.25} onChange={(value) => setNumber('horizontalOffset', value)} />
+          <RangeInput label="ground transition" value={config.smoothing} min={0} max={1} step={0.01} onChange={(value) => setNumber('smoothing', value)} />
         </div>
 
         <button type="button" className="primary compact-primary" onClick={onRun}>
@@ -139,8 +140,8 @@ export default function TargetShapeControls({
 function displayToggleLabel(key: BooleanKey): string {
   if (key === 'showSurface') return 'surface'
   if (key === 'showRestGhost') return 'flat grid'
-  if (key === 'showNodes') return 'nodes'
-  return 'edges'
+  if (key === 'showNodes') return 'cells'
+  return 'connectors'
 }
 
 function NumberInput({

@@ -1,7 +1,5 @@
-export const linkageColor = '#2f3130'
+export const linkageColor = '#ff9fba'
 export const emOffColor = '#b8b2aa'
-export const cellBodyColor = '#4d4b46'
-export const connectorColor = '#22d30f'
 
 export function octagonHalfLegSide(plateSize: number, octagonFaceRatio: number): number {
   const apothem = plateSize / 2

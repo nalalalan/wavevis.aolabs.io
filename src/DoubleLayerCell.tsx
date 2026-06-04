@@ -13,7 +13,7 @@ import {
   sideNodePositionFromLayout,
   stateMeta,
 } from './geometry'
-import { cellBodyColor, connectorColor, emOffColor, linkageColor, linkageWidth, octagonHalfLegSide } from './renderStyle'
+import { emOffColor, linkageColor, linkageWidth, octagonHalfLegSide } from './renderStyle'
 
 type DoubleLayerCellProps = {
   row: number
@@ -56,22 +56,6 @@ const middlePlateMaterial = new THREE.MeshStandardMaterial({
   emissiveIntensity: 0.04,
   roughness: 0.75,
   metalness: 0.04,
-})
-
-const cellBodyMaterial = new THREE.MeshStandardMaterial({
-  color: cellBodyColor,
-  emissive: cellBodyColor,
-  emissiveIntensity: 0.025,
-  roughness: 0.68,
-  metalness: 0.05,
-})
-
-const connectorMaterial = new THREE.MeshStandardMaterial({
-  color: connectorColor,
-  emissive: connectorColor,
-  emissiveIntensity: 0.1,
-  roughness: 0.5,
-  metalness: 0.03,
 })
 
 export function CylinderSegment({ start, end, radius = 0.026, color, opacity = 1 }: SegmentProps) {
@@ -166,7 +150,6 @@ export default function DoubleLayerCell({ row, col, state, params, layout, conta
         material={middlePlateMaterial}
       />
       <Plate center={layout.top} normal={plateNormal(layout, 'top')} xAxis={plateXAxis} size={params.plateSize} faceRatio={params.octagonFaceRatio} thickness={plateThickness} material={plateMaterial} />
-      <RigidCrossCell layout={layout} params={params} />
 
       <LayerLinks
         layer="lower"
@@ -189,7 +172,6 @@ export default function DoubleLayerCell({ row, col, state, params, layout, conta
 
       <CylinderSegment start={layout.bottom} end={layout.middle} radius={0.052} color={lowerOn ? '#ff8a2a' : emOffColor} />
       <CylinderSegment start={layout.middle} end={layout.top} radius={0.052} color={upperOn ? '#ff8a2a' : emOffColor} />
-      <ConnectorMarkers layout={layout} contactNodes={contactNodes} params={params} />
 
       {params.showLabels && (
         <Billboard position={[layout.top[0], layout.top[1], layout.top[2] + 0.35]}>
@@ -206,61 +188,6 @@ export default function DoubleLayerCell({ row, col, state, params, layout, conta
         </mesh>
       )}
     </group>
-  )
-}
-
-function RigidCrossCell({ layout, params }: { layout: CellLayout; params: CellParams }) {
-  const normal = plateNormal(layout, 'middle')
-  const xAxis = sideVectorFromLayout(layout, 'px')
-  const yAxis = sideVectorFromLayout(layout, 'py')
-  const lift = params.plateSize * 0.09
-  const center = addVec(layout.middle, scaleVec(normal, lift))
-  const rodLength = params.plateSize * 1.72
-  const rodRadius = Math.max(params.plateSize * 0.034, 0.018)
-  const blockSize = params.plateSize * 0.44
-  const blockThickness = Math.max(params.plateSize * 0.13, 0.055)
-
-  return (
-    <group>
-      <CylinderSegment start={addVec(center, scaleVec(xAxis, -rodLength / 2))} end={addVec(center, scaleVec(xAxis, rodLength / 2))} radius={rodRadius} color={linkageColor} />
-      <CylinderSegment start={addVec(center, scaleVec(yAxis, -rodLength / 2))} end={addVec(center, scaleVec(yAxis, rodLength / 2))} radius={rodRadius} color={linkageColor} />
-      <OrientedBox
-        center={addVec(center, scaleVec(normal, blockThickness * 0.18))}
-        xAxis={xAxis}
-        yAxis={yAxis}
-        zAxis={normal}
-        size={[blockSize, blockSize, blockThickness]}
-        material={cellBodyMaterial}
-      />
-    </group>
-  )
-}
-
-function ConnectorMarkers({
-  layout,
-  contactNodes,
-  params,
-}: {
-  layout: CellLayout
-  contactNodes: ContactNodeOverrides
-  params: CellParams
-}) {
-  const radius = Math.max(params.plateSize * 0.095, 0.045)
-
-  return (
-    <>
-      {(['lower', 'upper'] as const).flatMap((layer) =>
-        SIDE_NAMES.map((side) => {
-          const node = contactNodes[layer][side] ?? sideNodePositionFromLayout(layout, layer, side)
-          return (
-            <mesh key={`${layer}-${side}`} position={node}>
-              <sphereGeometry args={[radius, 16, 10]} />
-              <primitive object={connectorMaterial} attach="material" />
-            </mesh>
-          )
-        }),
-      )}
-    </>
   )
 }
 
@@ -300,37 +227,6 @@ function Plate({
   return (
     <mesh position={center} quaternion={quaternion}>
       <primitive object={geometry} attach="geometry" />
-      <primitive object={material} attach="material" />
-    </mesh>
-  )
-}
-
-function OrientedBox({
-  center,
-  xAxis,
-  yAxis,
-  zAxis,
-  size,
-  material,
-}: {
-  center: Vec3
-  xAxis: Vec3
-  yAxis: Vec3
-  zAxis: Vec3
-  size: Vec3
-  material: THREE.MeshStandardMaterial
-}) {
-  const quaternion = useMemo(() => {
-    const x = new THREE.Vector3(...xAxis).normalize()
-    const y = new THREE.Vector3(...yAxis).normalize()
-    const z = new THREE.Vector3(...zAxis).normalize()
-    const matrix = new THREE.Matrix4().makeBasis(x, y, z)
-    return new THREE.Quaternion().setFromRotationMatrix(matrix)
-  }, [xAxis, yAxis, zAxis])
-
-  return (
-    <mesh position={center} quaternion={quaternion}>
-      <boxGeometry args={size} />
       <primitive object={material} attach="material" />
     </mesh>
   )
@@ -415,12 +311,4 @@ function normalizeVec(vector: Vec3): Vec3 {
   const length = Math.hypot(vector[0], vector[1], vector[2])
   if (length <= 0.0001) return [0, 1, 0]
   return [vector[0] / length, vector[1] / length, vector[2] / length]
-}
-
-function addVec(a: Vec3, b: Vec3): Vec3 {
-  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
-}
-
-function scaleVec(vector: Vec3, scalar: number): Vec3 {
-  return [vector[0] * scalar, vector[1] * scalar, vector[2] * scalar]
 }

@@ -152,6 +152,8 @@ export function runInverseSheetSanityChecks(): string[] {
   const tallWave = buildInverseSheetModel({ horizontalOffset: 9, height: 10 })
   const narrowWave = buildInverseSheetModel({ overhangWidth: 12 })
   const wideWave = buildInverseSheetModel({ overhangWidth: 36 })
+  const lowCurl = buildInverseSheetModel({ curl: 0 })
+  const highCurl = buildInverseSheetModel({ curl: 1 })
   const twelveByTwelve = buildInverseSheetModel({ rows: 12, columns: 12 })
   const fortyByForty = buildInverseSheetModel({ rows: 40, columns: 40 })
 
@@ -170,6 +172,12 @@ export function runInverseSheetSanityChecks(): string[] {
     failures.push('changing height should not change measured horizontal overhang amount')
   }
   if (tallWave.summary.maxHeight <= lowWave.summary.maxHeight + 1) failures.push('height control should change vertical wave height')
+  if (Math.abs(lowCurl.summary.overhangAmount - highCurl.summary.overhangAmount) > 0.15) {
+    failures.push('curl should not materially change measured horizontal overhang amount')
+  }
+  if (Math.abs(lowCurl.summary.maxHeight - highCurl.summary.maxHeight) > 0.15) {
+    failures.push('curl should not materially change measured wave height')
+  }
   if (!boundaryNodesStayFlat(narrowWave)) failures.push('narrow overhang boundary should stay fixed and flat')
   if (measureActiveRowCount(wideWave) <= measureActiveRowCount(narrowWave)) {
     failures.push('overhang width control should change the active wave width')
@@ -268,8 +276,9 @@ function overhangTargetPosition(
   const gridDenominator = Math.max(rowsDenominator, columnsDenominator)
   const flatRim = Math.min(0.12, Math.max(3.4 / gridDenominator, 0.055))
   const blendRim = Math.min(0.42, flatRim + lerpNumber(0.24, 0.34, config.smoothing))
+  const longitudinalBlendRim = Math.min(0.48, flatRim + lerpNumber(0.22, 0.38, config.smoothing))
   const rimY = transverseWaveMask(rest[1], totalHeight, config, flatRim, blendRim)
-  const rimX = edgeRamp(u, flatRim, Math.min(0.48, flatRim + 0.34)) * edgeRamp(1 - u, flatRim, Math.min(0.48, flatRim + 0.34))
+  const rimX = edgeRamp(u, flatRim, longitudinalBlendRim) * edgeRamp(1 - u, flatRim, longitudinalBlendRim)
   const activityMask = rimX * rimY
 
   if (Math.abs(config.height) <= 0.000001) {
@@ -292,9 +301,9 @@ function overhangTargetPosition(
   const remainingLength = Math.max(totalWidth * remainingU, config.spacing)
   const curl = clampNumber(config.curl, 0, 1)
   const overhangAmount = Math.min(config.horizontalOffset, remainingLength * 0.78)
-  const heightProfile = loopProfile(eased, lerpNumber(0.62, 0.5, curl), lerpNumber(2.65, 1.95, curl))
+  const heightProfile = waveHeightProfile(eased, curl, config.smoothing)
   const waveHeight = Math.min(config.height, remainingLength * 0.42)
-  const horizontalProjection = overhangAmount * loopProfile(eased, lerpNumber(0.72, 0.55, curl), lerpNumber(2.75, 1.85, curl))
+  const horizontalProjection = overhangAmount * curlProjectionProfile(eased, curl, config.smoothing)
   const yCenter = totalHeight * 0.5
   const yFromCenter = rest[1] - yCenter
 
@@ -303,6 +312,66 @@ function overhangTargetPosition(
     yCenter + yFromCenter * config.widthScale,
     activityMask * waveHeight * heightProfile,
   ]
+}
+
+function curlProjectionProfile(value: number, curl: number, smoothing: number): number {
+  const t = clampNumber(value, 0, 1)
+  const broadWave = loopProfile(t, 0.62, 2.25)
+  const returnStart = lerpNumber(0.72, 0.52, curl)
+  const returnEnd = lerpNumber(0.98, 0.84, curl)
+  const riseEnd = lerpNumber(0.52, 0.44, curl)
+  const rise = smootherStep(t / Math.max(riseEnd, 0.000001))
+  const returnUnder = 1 - smootherStep((t - returnStart) / Math.max(returnEnd - returnStart, 0.000001))
+  const curledWave = Math.pow(Math.max(rise * returnUnder, 0), lerpNumber(1.55, 0.82, smoothing))
+  const raw = lerpNumber(broadWave, curledWave, curl)
+
+  return raw / Math.max(sampleCurlProjectionMax(curl, smoothing), 0.000001)
+}
+
+function waveHeightProfile(value: number, curl: number, smoothing: number): number {
+  const t = clampNumber(value, 0, 1)
+  const base = loopProfile(t, 0.54, lerpNumber(2.7, 1.85, smoothing))
+  const plateau = roundedCurlHeightProfile(t, curl, smoothing)
+  const raw = lerpNumber(base, plateau, curl)
+
+  return raw / Math.max(sampleWaveHeightMax(curl, smoothing), 0.000001)
+}
+
+function roundedCurlHeightProfile(t: number, curl: number, smoothing: number): number {
+  const riseEnd = lerpNumber(0.58, 0.46, curl)
+  const fallStart = lerpNumber(0.62, 0.76, curl)
+  const fallEnd = lerpNumber(0.98, 0.92, curl)
+  const rise = smootherStep(t / Math.max(riseEnd, 0.000001))
+  const fall = 1 - smootherStep((t - fallStart) / Math.max(fallEnd - fallStart, 0.000001))
+
+  return Math.pow(Math.max(rise * fall, 0), lerpNumber(1.15, 0.82, smoothing))
+}
+
+function sampleWaveHeightMax(curl: number, smoothing: number): number {
+  let max = 0
+  for (let index = 0; index <= 80; index += 1) {
+    const t = index / 80
+    const base = loopProfile(t, 0.54, lerpNumber(2.7, 1.85, smoothing))
+    const plateau = roundedCurlHeightProfile(t, curl, smoothing)
+    max = Math.max(max, lerpNumber(base, plateau, curl))
+  }
+  return max
+}
+
+function sampleCurlProjectionMax(curl: number, smoothing: number): number {
+  let max = 0
+  for (let index = 0; index <= 80; index += 1) {
+    const t = index / 80
+    const broadWave = loopProfile(t, 0.62, 2.25)
+    const returnStart = lerpNumber(0.72, 0.52, curl)
+    const returnEnd = lerpNumber(0.98, 0.84, curl)
+    const riseEnd = lerpNumber(0.52, 0.44, curl)
+    const rise = smootherStep(t / Math.max(riseEnd, 0.000001))
+    const returnUnder = 1 - smootherStep((t - returnStart) / Math.max(returnEnd - returnStart, 0.000001))
+    const curledWave = Math.pow(Math.max(rise * returnUnder, 0), lerpNumber(1.55, 0.82, smoothing))
+    max = Math.max(max, lerpNumber(broadWave, curledWave, curl))
+  }
+  return max
 }
 
 function loopProfile(value: number, peak: number, power: number): number {
