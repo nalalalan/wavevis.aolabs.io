@@ -12,7 +12,7 @@ type TargetShapeControlsProps = {
   onImportConfigText: (text: string) => void
 }
 
-type NumberKey = 'rows' | 'columns' | 'morph' | 'horizontalOffset'
+type NumberKey = 'rows' | 'columns' | 'morph' | 'horizontalOffset' | 'height'
 type BooleanKey = 'showSurface' | 'showRestGhost' | 'showNodes' | 'showEdges'
 
 export default function TargetShapeControls({
@@ -58,6 +58,14 @@ export default function TargetShapeControls({
             max={24}
             step={0.25}
             onChange={(value) => setNumber('horizontalOffset', value)}
+          />
+          <NumberInput
+            label="height"
+            value={config.height}
+            min={0}
+            max={24}
+            step={0.25}
+            onChange={(value) => setNumber('height', value)}
           />
           <button type="button" className="primary compact-primary" onClick={onRun}>
             Run / Update

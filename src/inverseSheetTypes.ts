@@ -29,6 +29,7 @@ export type TargetParams = {
   radiusMode: RadiusMode
   bendRadius: number
   horizontalOffset: number
+  height: number
   smoothing: number
   widthScale: number
   strainWeight: number
@@ -144,6 +145,7 @@ export type MetricsSummary = {
   meanNormalRotationDeg: number
   maxPlanarityError: number
   overhangAmount: number
+  maxHeight: number
   maxDihedralDeg: number
   meanDihedralDeg: number
   maxDisplacement: number
