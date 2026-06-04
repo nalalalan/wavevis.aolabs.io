@@ -15,7 +15,12 @@ const RED = '#d95757'
 export function legendForMode(model: LatticeModel): LegendInfo {
   switch (model.config.colorMode) {
     case 'edgeStrain':
-      return { label: 'edge strain', min: -0.25, max: 0.25, gradient: `linear-gradient(90deg, ${BLUE}, ${NEUTRAL}, ${RED})` }
+      return {
+        label: 'edge strain',
+        min: -strainColorClamp(model),
+        max: strainColorClamp(model),
+        gradient: `linear-gradient(90deg, ${BLUE}, ${NEUTRAL}, ${RED})`,
+      }
     case 'edgeRotation':
       return { label: 'edge rotation deg', min: 0, max: Math.max(model.summary.maxEdgeRotationDeg, 1), gradient: heatGradient() }
     case 'nodeBend':
@@ -36,7 +41,7 @@ export function legendForMode(model: LatticeModel): LegendInfo {
 export function colorForEdge(metric: EdgeMetric, model: LatticeModel): string {
   if (!model.config.showHeatmap) return '#7d766d'
 
-  if (model.config.colorMode === 'edgeStrain') return signedColor(metric.strain, 0.25)
+  if (model.config.colorMode === 'edgeStrain') return signedColor(metric.strain, strainColorClamp(model))
   if (model.config.colorMode === 'edgeRotation') return heatColor(metric.edgeRotationDeg, Math.max(model.summary.maxEdgeRotationDeg, 1))
   if (model.config.colorMode === 'combinedCost') return heatColor(metric.localCombinedCost, maxLocalCost(model))
   return '#7d766d'
@@ -80,6 +85,14 @@ function heatColor(value: number, max: number): string {
 
 function heatGradient(): string {
   return `linear-gradient(90deg, ${NEUTRAL}, ${ORANGE}, ${RED})`
+}
+
+function strainColorClamp(model: LatticeModel): number {
+  return Math.max(
+    Math.abs(model.summary.maxTensileStrain),
+    Math.abs(model.summary.maxCompressiveStrain),
+    0.25,
+  )
 }
 
 function maxLocalCost(model: LatticeModel): number {

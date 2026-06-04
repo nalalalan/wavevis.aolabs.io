@@ -30,18 +30,18 @@ export const COLOR_MODES: Array<{ value: ColorMode; label: string }> = [
 ]
 
 export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
-  rows: 12,
-  columns: 12,
-  spacing: 1,
+  rows: 32,
+  columns: 32,
+  spacing: 0.5,
   targetPreset: 'overhang',
   morph: 1,
-  verticalDirection: 'down',
-  bendAngleDeg: 130,
-  supportFraction: 0.25,
+  verticalDirection: 'up',
+  bendAngleDeg: 155,
+  supportFraction: 0.18,
   radiusMode: 'autoPreserveLength',
   bendRadius: 4,
-  horizontalOffset: 1.5,
-  smoothing: 0.65,
+  horizontalOffset: 0.9,
+  smoothing: 0.76,
   widthScale: 1,
   strainWeight: 1,
   bendWeight: 0.02,
@@ -141,7 +141,8 @@ export function runInverseSheetSanityChecks(): string[] {
   const flat = buildInverseSheetModel({ morph: 0 })
   const zeroed = buildInverseSheetModel({ bendAngleDeg: 0, horizontalOffset: 0 })
   const twoByTwo = buildInverseSheetModel({ rows: 2, columns: 2 })
-  const twelveByTwelve = buildInverseSheetModel(DEFAULT_INVERSE_SHEET_CONFIG)
+  const defaultOverhang = buildInverseSheetModel(DEFAULT_INVERSE_SHEET_CONFIG)
+  const twelveByTwelve = buildInverseSheetModel({ rows: 12, columns: 12 })
   const fortyByForty = buildInverseSheetModel({ rows: 40, columns: 40 })
 
   if (!isSummaryNearZero(flat.summary)) failures.push('morph = 0 should produce near-zero metrics')
@@ -150,8 +151,28 @@ export function runInverseSheetSanityChecks(): string[] {
   if (twelveByTwelve.quads.length !== 11 * 11) failures.push('12x12 quad count mismatch')
   if (twoByTwo.nodes.length !== 4 || twoByTwo.quads.length !== 1) failures.push('2x2 grid did not build')
   if (fortyByForty.nodes.some((node) => !isFiniteVec(node.currentPosition))) failures.push('40x40 produced invalid node positions')
+  if (!boundaryNodesStayFlat(defaultOverhang)) failures.push('default overhang boundary should stay fixed and flat')
 
   return failures
+}
+
+function boundaryNodesStayFlat(model: LatticeModel): boolean {
+  const tolerance = 0.000001
+  return model.nodes.every((node) => {
+    const onBoundary =
+      node.row === 0 ||
+      node.col === 0 ||
+      node.row === model.config.rows - 1 ||
+      node.col === model.config.columns - 1
+
+    if (!onBoundary) return true
+
+    return (
+      Math.abs(node.currentPosition[0] - node.restPosition[0]) <= tolerance &&
+      Math.abs(node.currentPosition[1] - node.restPosition[1]) <= tolerance &&
+      Math.abs(node.currentPosition[2]) <= tolerance
+    )
+  })
 }
 
 function buildNodes(config: InverseSheetConfig): LatticeNode[] {
@@ -164,7 +185,7 @@ function buildNodes(config: InverseSheetConfig): LatticeNode[] {
     for (let col = 0; col < config.columns; col += 1) {
       const uncenteredRest: Vec3 = [col * config.spacing, row * config.spacing, 0]
       const restPosition: Vec3 = [uncenteredRest[0] - totalWidth / 2, uncenteredRest[1] - totalHeight / 2, 0]
-      const targetUncentered = overhangTargetPosition(uncenteredRest, col, config, totalWidth)
+      const targetUncentered = overhangTargetPosition(uncenteredRest, row, col, config, totalWidth, totalHeight)
       const targetPosition: Vec3 = [
         targetUncentered[0] - totalWidth / 2,
         targetUncentered[1] - targetHeight / 2,
@@ -188,21 +209,30 @@ function buildNodes(config: InverseSheetConfig): LatticeNode[] {
 
 function overhangTargetPosition(
   rest: Vec3,
+  row: number,
   col: number,
   config: InverseSheetConfig,
   totalWidth: number,
+  totalHeight: number,
 ): Vec3 {
   const columnsDenominator = Math.max(config.columns - 1, 1)
+  const rowsDenominator = Math.max(config.rows - 1, 1)
   const u = col / columnsDenominator
+  const t = row / rowsDenominator
   const rootX = config.supportFraction * totalWidth
   const verticalSign = config.verticalDirection === 'up' ? 1 : -1
   const bendAngleRad = (config.bendAngleDeg * Math.PI) / 180
+  const flatRim = Math.min(0.07, Math.max(0.8 / Math.max(config.rows - 1, config.columns - 1), 0.03))
+  const blendRim = Math.min(0.56, flatRim + 0.51)
+  const rimY = edgeRamp(t, flatRim, blendRim) * edgeRamp(1 - t, flatRim, blendRim)
+  const rimX = edgeRamp(u, flatRim, blendRim) * edgeRamp(1 - u, flatRim, blendRim)
+  const rimMask = rimX * rimY
 
   if (Math.abs(bendAngleRad) <= 0.000001 && Math.abs(config.horizontalOffset) <= 0.000001) {
     return [rest[0], rest[1] * config.widthScale, 0]
   }
 
-  if (u <= config.supportFraction) {
+  if (rimMask <= 0.000001 || u <= config.supportFraction) {
     return [rest[0], rest[1] * config.widthScale, 0]
   }
 
@@ -210,17 +240,33 @@ function overhangTargetPosition(
   const sLinear = v
   const sSmooth = v * v * (3 - 2 * v)
   const s = lerpNumber(sLinear, sSmooth, config.smoothing)
-  const theta = s * bendAngleRad
   const remainingLength = Math.max(totalWidth - rootX, config.spacing)
   const effectiveRadius =
     config.radiusMode === 'autoPreserveLength'
       ? Math.max(0.1, remainingLength / Math.max(Math.abs(bendAngleRad), 0.001))
       : Math.max(config.bendRadius, 0.1)
+  const bendMagnitude = clampNumber(Math.abs(config.bendAngleDeg) / 180, 0, 1.35)
+  const waveProgress = smootherStep(s)
+  const waveEnvelope = Math.sin(Math.PI * waveProgress)
+  const flatTangentEnvelope = Math.max(waveEnvelope, 0) ** 0.82
+  const curlWindow =
+    smootherStep(clampNumber((waveProgress - 0.38) / 0.36, 0, 1)) *
+    (1 - smootherStep(clampNumber((waveProgress - 0.98) / 0.25, 0, 1)))
+  const heightRatio = 0.22 + 0.06 * bendMagnitude
+  const waveHeight = Math.min(
+    remainingLength * 0.34,
+    Math.max(config.spacing, Math.min(remainingLength * heightRatio, effectiveRadius * 0.74)),
+  )
+  const forwardReach = config.horizontalOffset + remainingLength * 0.04 * bendMagnitude
+  const curlBack = remainingLength * 0.32 * bendMagnitude
+  const yCenter = totalHeight * 0.5
+  const yFromCenter = rest[1] - yCenter
+  const widthPinch = 1 - rimMask * 0.012 * flatTangentEnvelope
 
   return [
-    rootX + effectiveRadius * Math.sin(theta) + config.horizontalOffset * s,
-    rest[1] * config.widthScale,
-    verticalSign * effectiveRadius * (1 - Math.cos(theta)),
+    rest[0] + rimMask * (forwardReach * waveEnvelope - curlBack * curlWindow),
+    yCenter + yFromCenter * config.widthScale * widthPinch,
+    verticalSign * rimMask * waveHeight * flatTangentEnvelope,
   ]
 }
 
@@ -572,6 +618,15 @@ function lerpVec(a: Vec3, b: Vec3, amount: number): Vec3 {
 
 function lerpNumber(a: number, b: number, amount: number): number {
   return a + (b - a) * amount
+}
+
+function smootherStep(value: number): number {
+  const t = clampNumber(value, 0, 1)
+  return t * t * t * (t * (t * 6 - 15) + 10)
+}
+
+function edgeRamp(distanceFromEdge: number, flatRim: number, blendRim: number): number {
+  return smootherStep((distanceFromEdge - flatRim) / Math.max(blendRim - flatRim, 0.000001))
 }
 
 function subtractVec(a: Vec3, b: Vec3): Vec3 {
