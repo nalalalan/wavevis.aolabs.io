@@ -23,14 +23,16 @@
 \definecolor{SoftGreen}{HTML}{3F7D5A}
 
 \hypersetup{
-  pdftitle={Kinematic incompatibility of exact connector contact with an equal-length clean cross cell in the current Wavevis overhang},
+  pdftitle={Why exact connector contact cannot use a clean equal-arm cross in the current Wavevis overhang},
   pdfauthor={Wavevis inverse-sheet constraint note},
   pdfsubject={Algebraic proof of contacted connector constraints for Wavevis cells}
 }
 
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0.52em}
+\setlength{\fboxsep}{0.66em}
 \renewcommand{\arraystretch}{1.12}
+\newcolumntype{Y}[1]{>{\raggedright\arraybackslash}p{#1}}
 \setlist[itemize]{leftmargin=1.35em,itemsep=0.15em,topsep=0.2em}
 \setlist[enumerate]{leftmargin=1.45em,itemsep=0.15em,topsep=0.2em}
 \color{Ink}
@@ -50,7 +52,7 @@
   smallnote/.style={align=center,font=\footnotesize}
 }
 
-\title{\vspace{-1.5em}Kinematic incompatibility of exact connector contact with an equal-length clean cross cell in the current Wavevis overhang}
+\title{\vspace{-1.5em}Why exact connector contact cannot use a clean equal-arm cross in the current Wavevis overhang}
 \author{Wavevis inverse-sheet constraint note}
 \date{June 4, 2026}
 
@@ -58,23 +60,39 @@
 \maketitle
 \vspace{-1.2em}
 
+\begin{center}
+\fcolorbox{SoftRed}{SoftRed!7}{%
+\begin{minipage}{0.93\linewidth}
+\textbf{Main result.} For a four-arm cell with a fixed center \(C\) and four fixed contacted connector points, a clean cross with exact contact and one common half-arm length \(L\) exists only in a special symmetric geometry. The current Wavevis overhang is not that geometry: one witness cell requires arm lengths \(0.327\), \(0.411\), \(1.243\), and \(1.576\) at the same time. A second witness fails the through-center midpoint test by about \(0.249\).
+
+\textbf{Therefore:} with exact connector contact and no zig-zag legs as hard constraints, the common all-four arm length must be relaxed. If perpendicularity is also hard, that must be relaxed too.
+\end{minipage}}
+\end{center}
+
 \textbf{Claim.} For a four-arm inverse-sheet cell with a fixed center, four prescribed contacted connector points can be reached by a clean equal-length cross only if those four points satisfy exact midpoint, equal-radius, and, when requested, perpendicularity conditions. The current Wavevis overhang connector geometry violates those necessary conditions. Therefore no solver can satisfy exact connector contact, non-zig-zag arms, all-four equal arm length, and perpendicular crossed pairs at the same time for the current overhang.
 
-\textbf{Short result.}
-\begin{itemize}
-  \item If the connector points must contact exactly, then a clean cross with opposite arms collinear, the two arm-pairs perpendicular, and all four half-arms the same length is possible only in a special symmetric case. The current wave connector geometry is not that case.
-  \item Dropping perpendicularity is not enough. A clean cross with opposite arms collinear and all four half-arms the same length still requires all four contacted connector points to be the same distance from the cell center and paired symmetrically through the center. The current geometry violates this.
-  \item The feasible clean-contact model is weaker: each opposite pair may be collinear and equal within the pair, but the two pair lengths must be allowed to differ, and the two pairs must be allowed to meet at a non-right angle.
-\end{itemize}
+\textbf{Why this is a kinematic proof, not a solver preference.} Exact contact fixes the endpoint positions. A clean non-zig-zag cross fixes the endpoint symmetries around the cell center. Equal arm length fixes all four endpoint distances to one value \(L\). These are coordinate-invariant facts; rotating the local axes, changing the numerical optimizer, or smoothing the drawing cannot make unequal distances equal.
 
-\textbf{Scope.} This is not a claim that a flat square grid can never satisfy these constraints. A perfectly symmetric flat cell can. The result here is stronger and more useful for the overhang: once the contacted connector points are prescribed by the current curved Wavevis overhang, the requested clean equal-length cross is algebraically over-constrained. This is a kinematic incompatibility, not a rendering bug and not an optimization failure.
+\textbf{Scope.} This is not a claim that a flat square grid can never satisfy these constraints. A perfectly symmetric flat cell can. The result here is specific to the prescribed connector positions in the current curved Wavevis overhang. Once those contacted connector points are fixed, the requested clean equal-length cross is algebraically over-constrained.
+
+\begin{center}
+\begin{tabular}{Y{0.23\linewidth}Y{0.31\linewidth}Y{0.34\linewidth}}
+\toprule
+Question & Short answer & Reason \\
+\midrule
+Can a different solver fix it? & No, not without changing a constraint. & The contradiction is \(L\) needing to equal four different measured distances for one cell. \\
+Can dropping perpendicularity fix it? & No. & Equal arm length alone still requires all four contacted points to be the same distance from \(C\). \\
+What relaxation keeps the mechanism clean? & Pairwise equal bars. & East-west may use length \(L_x\); north-south may use length \(L_y\); the angle between the bars is free. \\
+\bottomrule
+\end{tabular}
+\end{center}
 
 \section*{0. Visual map of the proof}
 
 The whole question reduces to whether the four contacted connector points assigned to one cell have the special symmetry that an equal-length through-cross demands. The diagrams below show the tests before the algebra.
 
 \begin{center}
-\begin{tabular}{p{0.3\linewidth}p{0.32\linewidth}p{0.3\linewidth}}
+\begin{tabular}{Y{0.3\linewidth}Y{0.32\linewidth}Y{0.3\linewidth}}
 \toprule
 Requested clean cell & Algebraic consequence & What the current overhang does \\
 \midrule
