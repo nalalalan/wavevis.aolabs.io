@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber'
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
+import { cellBodyColor, connectorColor, linkageColor } from './renderStyle'
 import type {
   CameraFocusRequest,
   CameraViewRequest,
@@ -90,8 +91,9 @@ function LatticeModelGroup({
   const surfaceGeometry = useMemo(() => buildSurfaceGeometry(model, nodeById, quadMetricById, dihedralByQuad), [model, nodeById, quadMetricById, dihedralByQuad])
   const labelsVisible = model.config.showLabels && model.config.rows <= 15 && model.config.columns <= 15
   const largeGrid = model.config.rows > 30 || model.config.columns > 30
-  const nodeSize = Math.max(model.config.spacing * (largeGrid ? 0.085 : 0.075), 0.026)
+  const nodeSize = Math.max(model.config.spacing * (largeGrid ? 0.052 : 0.062), 0.02)
   const edgeRadius = Math.max(model.config.spacing * (largeGrid ? 0.032 : 0.026), 0.014)
+  const connectorSize = Math.max(model.config.spacing * (largeGrid ? 0.09 : 0.12), 0.035)
   const surfaceOpacity = largeGrid ? 0.3 : 0.42
 
   return (
@@ -106,15 +108,19 @@ function LatticeModelGroup({
           <meshStandardMaterial vertexColors side={THREE.DoubleSide} transparent opacity={surfaceOpacity} roughness={0.78} metalness={0.02} />
         </mesh>
       )}
+      {model.config.showNodes && <RigidCellGlyphs model={model} nodeById={nodeById} />}
       {model.config.showEdges && (
-        <EdgeInstances
-          model={model}
-          nodes={nodeById}
-          metrics={edgeMetricById}
-          radius={edgeRadius}
-          pickedEdges={pickedEdges}
-          onEdgePick={onEdgePick}
-        />
+        <>
+          <EdgeInstances
+            model={model}
+            nodes={nodeById}
+            metrics={edgeMetricById}
+            radius={edgeRadius}
+            pickedEdges={pickedEdges}
+            onEdgePick={onEdgePick}
+          />
+          <ConnectorInstances model={model} nodes={nodeById} radius={connectorSize} />
+        </>
       )}
       {model.config.showNodes && <NodeInstances model={model} nodeMetrics={nodeMetricById} nodeSize={nodeSize} />}
       {labelsVisible && <NodeLabels nodes={model.nodes} />}
@@ -232,6 +238,56 @@ function SelectionCallout({
   )
 }
 
+function RigidCellGlyphs({
+  model,
+  nodeById,
+}: {
+  model: LatticeModel
+  nodeById: Map<string, LatticeNode>
+}) {
+  const xRodRef = useRef<THREE.InstancedMesh>(null)
+  const yRodRef = useRef<THREE.InstancedMesh>(null)
+  const bodyRef = useRef<THREE.InstancedMesh>(null)
+  const geometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
+  const rodMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: linkageColor, roughness: 0.62, metalness: 0.04 }), [])
+  const bodyMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: cellBodyColor, roughness: 0.7, metalness: 0.04 }), [])
+
+  useLayoutEffect(() => {
+    const xRodMesh = xRodRef.current
+    const yRodMesh = yRodRef.current
+    const bodyMesh = bodyRef.current
+    if (!xRodMesh || !yRodMesh || !bodyMesh) return
+
+    const largeGrid = model.config.rows > 30 || model.config.columns > 30
+    const rodLength = model.config.spacing
+    const rodWidth = Math.max(model.config.spacing * (largeGrid ? 0.04 : 0.052), 0.014)
+    const bodySize = model.config.spacing * (largeGrid ? 0.28 : 0.34)
+    const bodyThickness = Math.max(model.config.spacing * 0.07, 0.022)
+    const matrix = new THREE.Matrix4()
+
+    model.nodes.forEach((node, index) => {
+      const frame = buildNodeFrame(node, nodeById)
+      const center = new THREE.Vector3(...node.currentPosition).addScaledVector(frame.zAxis, bodyThickness * 0.72)
+
+      setBoxInstance(matrix, xRodMesh, index, center, frame.xAxis, frame.yAxis, frame.zAxis, rodLength, rodWidth, rodWidth)
+      setBoxInstance(matrix, yRodMesh, index, center, frame.xAxis, frame.yAxis, frame.zAxis, rodWidth, rodLength, rodWidth)
+      setBoxInstance(matrix, bodyMesh, index, center, frame.xAxis, frame.yAxis, frame.zAxis, bodySize, bodySize, bodyThickness)
+    })
+
+    xRodMesh.instanceMatrix.needsUpdate = true
+    yRodMesh.instanceMatrix.needsUpdate = true
+    bodyMesh.instanceMatrix.needsUpdate = true
+  }, [model, nodeById])
+
+  return (
+    <>
+      <instancedMesh ref={xRodRef} args={[geometry, rodMaterial, model.nodes.length]} />
+      <instancedMesh ref={yRodRef} args={[geometry, rodMaterial, model.nodes.length]} />
+      <instancedMesh ref={bodyRef} args={[geometry, bodyMaterial, model.nodes.length]} />
+    </>
+  )
+}
+
 function NodeInstances({
   model,
   nodeMetrics,
@@ -265,6 +321,40 @@ function NodeInstances({
   return (
     <instancedMesh ref={ref} args={[geometry, material, model.nodes.length]} />
   )
+}
+
+function ConnectorInstances({
+  model,
+  nodes,
+  radius,
+}: {
+  model: LatticeModel
+  nodes: Map<string, LatticeNode>
+  radius: number
+}) {
+  const ref = useRef<THREE.InstancedMesh>(null)
+  const geometry = useMemo(() => new THREE.SphereGeometry(1, model.config.rows > 30 || model.config.columns > 30 ? 8 : 14, 8), [model.config.columns, model.config.rows])
+  const material = useMemo(() => new THREE.MeshStandardMaterial({ color: connectorColor, emissive: connectorColor, emissiveIntensity: 0.14, roughness: 0.45, metalness: 0.03 }), [])
+
+  useLayoutEffect(() => {
+    if (!ref.current) return
+
+    const dummy = new THREE.Object3D()
+    model.edges.forEach((edge, index) => {
+      const nodeA = nodes.get(edge.nodeA)
+      const nodeB = nodes.get(edge.nodeB)
+      const start = new THREE.Vector3(...(nodeA?.currentPosition ?? ([0, 0, 0] as Vec3)))
+      const end = new THREE.Vector3(...(nodeB?.currentPosition ?? ([0, 0, 0] as Vec3)))
+
+      dummy.position.addVectors(start, end).multiplyScalar(0.5)
+      dummy.scale.setScalar(radius)
+      dummy.updateMatrix()
+      ref.current?.setMatrixAt(index, dummy.matrix)
+    })
+    ref.current.instanceMatrix.needsUpdate = true
+  }, [model, nodes, radius])
+
+  return <instancedMesh ref={ref} args={[geometry, material, model.edges.length]} />
 }
 
 function EdgeInstances({
@@ -735,6 +825,70 @@ function formatAngle(value: number): string {
 function formatLength(value: number): string {
   if (!Number.isFinite(value)) return '0'
   return value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')
+}
+
+function setBoxInstance(
+  matrix: THREE.Matrix4,
+  mesh: THREE.InstancedMesh,
+  index: number,
+  center: THREE.Vector3,
+  xAxis: THREE.Vector3,
+  yAxis: THREE.Vector3,
+  zAxis: THREE.Vector3,
+  width: number,
+  height: number,
+  depth: number,
+): void {
+  matrix.makeBasis(
+    xAxis.clone().multiplyScalar(width),
+    yAxis.clone().multiplyScalar(height),
+    zAxis.clone().multiplyScalar(depth),
+  )
+  matrix.setPosition(center)
+  mesh.setMatrixAt(index, matrix)
+}
+
+function buildNodeFrame(node: LatticeNode, nodeById: Map<string, LatticeNode>): {
+  xAxis: THREE.Vector3
+  yAxis: THREE.Vector3
+  zAxis: THREE.Vector3
+} {
+  const center = new THREE.Vector3(...node.currentPosition)
+  const left = nodeById.get(latticeNodeId(node.row, node.col - 1))
+  const right = nodeById.get(latticeNodeId(node.row, node.col + 1))
+  const down = nodeById.get(latticeNodeId(node.row - 1, node.col))
+  const up = nodeById.get(latticeNodeId(node.row + 1, node.col))
+  const xSeed = axisSeed(center, left?.currentPosition, right?.currentPosition, new THREE.Vector3(1, 0, 0))
+  const ySeed = axisSeed(center, down?.currentPosition, up?.currentPosition, new THREE.Vector3(0, 1, 0))
+  const xAxis = normalizeThreeVector(xSeed, new THREE.Vector3(1, 0, 0))
+  const yProjected = ySeed.clone().addScaledVector(xAxis, -ySeed.dot(xAxis))
+  let yAxis = normalizeThreeVector(yProjected, fallbackPerpendicular(xAxis))
+  let zAxis = normalizeThreeVector(new THREE.Vector3().crossVectors(xAxis, yAxis), new THREE.Vector3(0, 0, 1))
+
+  yAxis = normalizeThreeVector(new THREE.Vector3().crossVectors(zAxis, xAxis), yAxis)
+  zAxis = normalizeThreeVector(new THREE.Vector3().crossVectors(xAxis, yAxis), zAxis)
+
+  return { xAxis, yAxis, zAxis }
+}
+
+function axisSeed(center: THREE.Vector3, negative?: Vec3, positive?: Vec3, fallback = new THREE.Vector3(1, 0, 0)): THREE.Vector3 {
+  if (negative && positive) return new THREE.Vector3(...positive).sub(new THREE.Vector3(...negative))
+  if (positive) return new THREE.Vector3(...positive).sub(center)
+  if (negative) return center.clone().sub(new THREE.Vector3(...negative))
+  return fallback.clone()
+}
+
+function fallbackPerpendicular(axis: THREE.Vector3): THREE.Vector3 {
+  const seed = Math.abs(axis.z) < 0.82 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0)
+  return new THREE.Vector3().crossVectors(seed, axis).normalize()
+}
+
+function normalizeThreeVector(vector: THREE.Vector3, fallback: THREE.Vector3): THREE.Vector3 {
+  return vector.lengthSq() > 0.000001 ? vector.clone().normalize() : fallback.clone().normalize()
+}
+
+function latticeNodeId(row: number, col: number): string {
+  return `n-${row}-${col}`
 }
 
 function buildRestGhostGeometry(model: LatticeModel, nodes: Map<string, LatticeNode>): THREE.BufferGeometry {

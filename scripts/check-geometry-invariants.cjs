@@ -290,6 +290,8 @@ function checkCase(testCase) {
   let maxRenderedConnectorGap = 0
   let maxAdjacentAngle = 0
   let maxCellAxisTilt = 0
+  let maxCellCrossDot = 0
+  let maxCellCrossLengthError = 0
   let minAdjacentCenterDistance = Infinity
   let minVerticalStack = Infinity
   let minRenderedZ = Infinity
@@ -301,6 +303,10 @@ function checkCase(testCase) {
     row.forEach((cell) => {
       minVerticalStack = Math.min(minVerticalStack, cell.middle[2] - cell.bottom[2], cell.top[2] - cell.middle[2])
       maxCellAxisTilt = Math.max(maxCellAxisTilt, angleBetween(cellAxis(cell), [0, 0, 1]))
+      const crossX = geometry.sideVectorFromLayout(cell, 'px')
+      const crossY = geometry.sideVectorFromLayout(cell, 'py')
+      maxCellCrossDot = Math.max(maxCellCrossDot, Math.abs(crossX[0] * crossY[0] + crossX[1] * crossY[1] + crossX[2] * crossY[2]))
+      maxCellCrossLengthError = Math.max(maxCellCrossLengthError, Math.abs(length(crossX) - length(crossY)), Math.abs(length(crossX) - 1), Math.abs(length(crossY) - 1))
       ;[cell.bottom, cell.middle, cell.top].forEach((point) => {
         minRenderedZ = Math.min(minRenderedZ, point[2])
       })
@@ -403,6 +409,8 @@ function checkCase(testCase) {
     maxRenderedConnectorGap,
     maxAdjacentAngle,
     maxCellAxisTilt,
+    maxCellCrossDot,
+    maxCellCrossLengthError,
     minAdjacentCenterDistance,
     maxPassiveLayerHeightError,
     maxLayerSeparationError,
@@ -513,6 +521,8 @@ const failed = results.filter(
     result.maxConnectorGap > 1e-7 ||
     result.maxAllConnectorGap > (cases.find((testCase) => testCase.name === result.name)?.maxAllConnectorGap ?? Infinity) ||
     result.maxRenderedConnectorGap > 1e-7 ||
+    result.maxCellCrossDot > 1e-8 ||
+    result.maxCellCrossLengthError > 1e-8 ||
     result.minAdjacentCenterDistance < (cases.find((testCase) => testCase.name === result.name)?.minAdjacentCenterDistance ?? 0) ||
     result.maxAdjacentAngle > (cases.find((testCase) => testCase.name === result.name)?.maxAdjacentAngle ?? 0.64) ||
     result.maxCellAxisTilt > (cases.find((testCase) => testCase.name === result.name)?.maxCellAxisTilt ?? Infinity) ||
