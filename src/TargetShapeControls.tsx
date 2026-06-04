@@ -1,4 +1,4 @@
-import { COLOR_MODES } from './latticeGeometry'
+import { useState } from 'react'
 import type { CameraView, InverseSheetConfig } from './inverseSheetTypes'
 
 type TargetShapeControlsProps = {
@@ -12,23 +12,8 @@ type TargetShapeControlsProps = {
   onImportConfigText: (text: string) => void
 }
 
-type NumberKey =
-  | 'rows'
-  | 'columns'
-  | 'spacing'
-  | 'morph'
-  | 'bendAngleDeg'
-  | 'supportFraction'
-  | 'bendRadius'
-  | 'horizontalOffset'
-  | 'smoothing'
-  | 'widthScale'
-  | 'strainWeight'
-  | 'bendWeight'
-  | 'shearWeight'
-  | 'dihedralWeight'
-
-type BooleanKey = 'showSurface' | 'showRestGhost' | 'showNodes' | 'showEdges' | 'showLabels' | 'showHeatmap'
+type NumberKey = 'rows' | 'columns' | 'morph' | 'horizontalOffset'
+type BooleanKey = 'showSurface' | 'showRestGhost' | 'showNodes' | 'showEdges'
 
 export default function TargetShapeControls({
   config,
@@ -40,14 +25,12 @@ export default function TargetShapeControls({
   onExportJson,
   onImportConfigText,
 }: TargetShapeControlsProps) {
-  const labelsAutoHidden = config.showLabels && (config.rows > 15 || config.columns > 15)
-
   const update = (patch: Partial<InverseSheetConfig>) => {
     onConfigChange({ ...config, ...patch })
   }
 
   const setNumber = (key: NumberKey, value: number) => {
-    update({ [key]: value })
+    update({ [key]: value } as Partial<InverseSheetConfig>)
   }
 
   const setBoolean = (key: BooleanKey, value: boolean) => {
@@ -68,33 +51,51 @@ export default function TargetShapeControls({
         <div className="two-col">
           <NumberInput label="rows" value={config.rows} min={2} max={72} step={1} onChange={(value) => setNumber('rows', value)} />
           <NumberInput label="columns" value={config.columns} min={2} max={72} step={1} onChange={(value) => setNumber('columns', value)} />
-          <NumberInput label="spacing" value={config.spacing} min={0.05} max={20} step={0.05} onChange={(value) => setNumber('spacing', value)} />
-          <label>
-            target preset
-            <select value={config.targetPreset} onChange={() => update({ targetPreset: 'overhang' })}>
-              <option value="overhang">Overhang</option>
-            </select>
-          </label>
+          <NumberInput
+            label="overhang amount"
+            value={config.horizontalOffset}
+            min={0}
+            max={24}
+            step={0.25}
+            onChange={(value) => setNumber('horizontalOffset', value)}
+          />
+          <button type="button" className="primary compact-primary" onClick={onRun}>
+            Run / Update
+          </button>
         </div>
 
         <RangeInput label="morph" value={config.morph} min={0} max={1} step={0.01} onChange={(value) => setNumber('morph', value)} />
 
-        <div className="two-col">
-          <label>
-            vertical direction
-            <select
-              value={config.verticalDirection}
-              onChange={(event) => update({ verticalDirection: event.target.value === 'up' ? 'up' : 'down' })}
+        <div className="display-mode-group" aria-label="result display">
+          <span>results display</span>
+          <div className="segmented-buttons">
+            <button type="button" className={!config.showHeatmap ? 'active' : ''} onClick={() => update({ showHeatmap: false })}>
+              off
+            </button>
+            <button
+              type="button"
+              className={config.showHeatmap && config.colorMode === 'edgeStrain' ? 'active' : ''}
+              onClick={() => update({ showHeatmap: true, colorMode: 'edgeStrain' })}
             >
-              <option value="down">down</option>
-              <option value="up">up</option>
-            </select>
-          </label>
-          <NumberInput label="bend angle deg" value={config.bendAngleDeg} min={-180} max={180} step={1} onChange={(value) => setNumber('bendAngleDeg', value)} />
-          <NumberInput label="left flat water" value={config.supportFraction} min={0.06} max={0.5} step={0.01} onChange={(value) => setNumber('supportFraction', value)} />
-          <button type="button" className="primary compact-primary" onClick={onRun}>
-            Run / Update
-          </button>
+              local strain
+            </button>
+            <button
+              type="button"
+              className={config.showHeatmap && config.colorMode === 'displacement' ? 'active' : ''}
+              onClick={() => update({ showHeatmap: true, colorMode: 'displacement' })}
+            >
+              URES
+            </button>
+          </div>
+        </div>
+
+        <div className="toggle-grid quiet-toggle-grid">
+          {(['showSurface', 'showRestGhost', 'showNodes', 'showEdges'] as BooleanKey[]).map((key) => (
+            <label key={key}>
+              <input type="checkbox" checked={config[key]} onChange={(event) => setBoolean(key, event.target.checked)} />
+              {displayToggleLabel(key)}
+            </label>
+          ))}
         </div>
 
         <div className="view-buttons">
@@ -107,53 +108,6 @@ export default function TargetShapeControls({
           <button type="button" className="secondary" onClick={() => onView('side')}>
             Side View
           </button>
-        </div>
-      </section>
-
-      <section className="panel-section">
-        <div className="section-heading">
-          <h2>advanced</h2>
-          {labelsAutoHidden && <span>labels hidden above 15x15</span>}
-        </div>
-
-        <div className="two-col">
-          <label>
-            radius mode
-            <select
-              value={config.radiusMode}
-              onChange={(event) => update({ radiusMode: event.target.value === 'manual' ? 'manual' : 'autoPreserveLength' })}
-            >
-              <option value="autoPreserveLength">autoPreserveLength</option>
-              <option value="manual">manual</option>
-            </select>
-          </label>
-          <NumberInput label="bend radius" value={config.bendRadius} min={0.1} max={100} step={0.1} onChange={(value) => setNumber('bendRadius', value)} />
-          <NumberInput label="horizontal offset" value={config.horizontalOffset} min={-100} max={100} step={0.1} onChange={(value) => setNumber('horizontalOffset', value)} />
-          <NumberInput label="smoothing" value={config.smoothing} min={0} max={1} step={0.01} onChange={(value) => setNumber('smoothing', value)} />
-          <NumberInput label="width scale" value={config.widthScale} min={0.2} max={3} step={0.05} onChange={(value) => setNumber('widthScale', value)} />
-          <label>
-            color mode
-            <select value={config.colorMode} onChange={(event) => update({ colorMode: event.target.value as InverseSheetConfig['colorMode'] })}>
-              {COLOR_MODES.map((mode) => (
-                <option key={mode.value} value={mode.value}>
-                  {mode.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <NumberInput label="strain weight" value={config.strainWeight} min={0} max={100} step={0.01} onChange={(value) => setNumber('strainWeight', value)} />
-          <NumberInput label="bend weight" value={config.bendWeight} min={0} max={100} step={0.01} onChange={(value) => setNumber('bendWeight', value)} />
-          <NumberInput label="shear weight" value={config.shearWeight} min={0} max={100} step={0.01} onChange={(value) => setNumber('shearWeight', value)} />
-          <NumberInput label="dihedral weight" value={config.dihedralWeight} min={0} max={100} step={0.01} onChange={(value) => setNumber('dihedralWeight', value)} />
-        </div>
-
-        <div className="toggle-grid">
-          {(['showSurface', 'showRestGhost', 'showNodes', 'showEdges', 'showLabels', 'showHeatmap'] as BooleanKey[]).map((key) => (
-            <label key={key}>
-              <input type="checkbox" checked={config[key]} onChange={(event) => setBoolean(key, event.target.checked)} />
-              {key}
-            </label>
-          ))}
         </div>
       </section>
 
@@ -183,6 +137,13 @@ export default function TargetShapeControls({
   )
 }
 
+function displayToggleLabel(key: BooleanKey): string {
+  if (key === 'showSurface') return 'surface'
+  if (key === 'showRestGhost') return 'flat grid'
+  if (key === 'showNodes') return 'nodes'
+  return 'edges'
+}
+
 function NumberInput({
   label,
   value,
@@ -198,12 +159,53 @@ function NumberInput({
   step: number
   onChange: (value: number) => void
 }) {
+  const [draft, setDraft] = useState(formatInputValue(value))
+  const [editing, setEditing] = useState(false)
+  const displayValue = editing ? draft : formatInputValue(value)
+
+  const commitDraft = (nextDraft: string, forceClamp = false) => {
+    const numeric = Number(nextDraft)
+    if (!Number.isFinite(numeric)) {
+      if (forceClamp) setDraft(formatInputValue(value))
+      return
+    }
+
+    if (!forceClamp && (numeric < min || numeric > max)) return
+    const nextValue = forceClamp ? Math.min(max, Math.max(min, numeric)) : numeric
+    onChange(nextValue)
+    setDraft(formatInputValue(nextValue))
+  }
+
   return (
     <label>
       {label}
-      <input type="number" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+      <input
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        value={displayValue}
+        onFocus={() => {
+          setDraft(formatInputValue(value))
+          setEditing(true)
+        }}
+        onBlur={() => {
+          setEditing(false)
+          commitDraft(draft, true)
+        }}
+        onChange={(event) => {
+          const nextDraft = event.target.value
+          setDraft(nextDraft)
+          commitDraft(nextDraft)
+        }}
+      />
     </label>
   )
+}
+
+function formatInputValue(value: number): string {
+  if (!Number.isFinite(value)) return ''
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(4)))
 }
 
 function RangeInput({

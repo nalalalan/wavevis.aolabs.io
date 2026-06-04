@@ -185,3 +185,8 @@ export type CameraViewRequest = {
   view: CameraView
   version: number
 }
+
+export type CameraFocusRequest = {
+  selected: SelectedElement
+  version: number
+}

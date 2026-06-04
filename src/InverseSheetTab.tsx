@@ -1,12 +1,11 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import ColorLegend from './ColorLegend'
 import DeformationMetricsPanel from './DeformationMetricsPanel'
 import { buildConfigJson, buildMetricsCsv, downloadTextFile, parseConfigJson } from './exportMetrics'
 import LatticeViewer3D from './LatticeViewer3D'
 import { buildInverseSheetModel, DEFAULT_INVERSE_SHEET_CONFIG, sanitizeInverseSheetConfig } from './latticeGeometry'
 import SimulatorTabs, { type SimulatorTab } from './SimulatorTabs'
 import TargetShapeControls from './TargetShapeControls'
-import type { CameraView, CameraViewRequest, InverseSheetConfig, SelectedElement } from './inverseSheetTypes'
+import type { CameraFocusRequest, CameraView, CameraViewRequest, InverseSheetConfig, LatticeModel, SelectedElement, Vec3 } from './inverseSheetTypes'
 import WorstElementsPanel from './WorstElementsPanel'
 
 type InverseSheetTabProps = {
@@ -18,8 +17,10 @@ type InverseSheetTabProps = {
 export default function InverseSheetTab({ activeTab, onTabChange, resizeHandle }: InverseSheetTabProps) {
   const [config, setConfig] = useState<InverseSheetConfig>(() => DEFAULT_INVERSE_SHEET_CONFIG)
   const [selected, setSelected] = useState<SelectedElement>(null)
+  const [pickedEdges, setPickedEdges] = useState<string[]>([])
   const [status, setStatus] = useState<string | null>(null)
   const [viewRequest, setViewRequest] = useState<CameraViewRequest>({ view: 'isometric', version: 0 })
+  const [focusRequest, setFocusRequest] = useState<CameraFocusRequest>({ selected: null, version: 0 })
   const model = useMemo(() => buildInverseSheetModel(config), [config])
 
   const updateConfig = (next: InverseSheetConfig) => {
@@ -30,6 +31,7 @@ export default function InverseSheetTab({ activeTab, onTabChange, resizeHandle }
   const resetDefaults = () => {
     setConfig(DEFAULT_INVERSE_SHEET_CONFIG)
     setSelected(null)
+    setPickedEdges([])
     setStatus('Defaults restored.')
   }
 
@@ -51,10 +53,23 @@ export default function InverseSheetTab({ activeTab, onTabChange, resizeHandle }
     try {
       setConfig(parseConfigJson(text))
       setSelected(null)
+      setPickedEdges([])
       setStatus('Config JSON imported and clamped.')
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Config import failed.')
     }
+  }
+
+  const pickEdge = (edgeId: string) => {
+    setSelected({ kind: 'edge', id: edgeId })
+    setPickedEdges((current) => [...current.filter((id) => id !== edgeId), edgeId].slice(-2))
+    setStatus(null)
+  }
+
+  const focusElement = (next: SelectedElement) => {
+    setSelected(next)
+    setPickedEdges(next?.kind === 'edge' ? [next.id] : [])
+    setFocusRequest((current) => ({ selected: next, version: current.version + 1 }))
   }
 
   return (
@@ -87,12 +102,108 @@ export default function InverseSheetTab({ activeTab, onTabChange, resizeHandle }
           onImportConfigText={importConfig}
         />
         {status && <p className="control-status">{status}</p>}
-        <ColorLegend model={model} />
+        <EdgePickPanel model={model} pickedEdges={pickedEdges} />
         <DeformationMetricsPanel summary={model.summary} />
-        <WorstElementsPanel model={model} selected={selected} onSelect={setSelected} />
+        <WorstElementsPanel model={model} selected={selected} onSelect={focusElement} />
       </aside>
       {resizeHandle}
-      <LatticeViewer3D model={model} selected={selected} viewRequest={viewRequest} />
+      <LatticeViewer3D
+        model={model}
+        selected={selected}
+        pickedEdges={pickedEdges}
+        viewRequest={viewRequest}
+        focusRequest={focusRequest}
+        onEdgePick={pickEdge}
+      />
     </>
   )
+}
+
+function EdgePickPanel({ model, pickedEdges }: { model: LatticeModel; pickedEdges: string[] }) {
+  const details = pickedEdges
+    .map((edgeId) => {
+      const edge = model.edges.find((candidate) => candidate.id === edgeId)
+      const metric = model.edgeMetrics.find((candidate) => candidate.edgeId === edgeId)
+      if (!edge || !metric) return null
+
+      const nodeA = model.nodes.find((node) => node.id === edge.nodeA)
+      const nodeB = model.nodes.find((node) => node.id === edge.nodeB)
+      const label = nodeA && nodeB ? `(${nodeA.row},${nodeA.col}) to (${nodeB.row},${nodeB.col})` : `${edge.nodeA} to ${edge.nodeB}`
+
+      return { edge, metric, label }
+    })
+    .filter(Boolean) as Array<{
+    edge: LatticeModel['edges'][number]
+    metric: LatticeModel['edgeMetrics'][number]
+    label: string
+  }>
+
+  if (!details.length) return null
+
+  const angle =
+    details.length === 2
+      ? edgeAngle(model, details[0].edge.id, details[1].edge.id)
+      : null
+
+  return (
+    <section className="panel-section edge-pick-panel">
+      <div className="section-heading">
+        <h2>picked edges</h2>
+        {angle !== null && <span>angle {formatAngle(angle)}</span>}
+      </div>
+      <div className="edge-pick-list">
+        {details.map((detail, index) => (
+          <div key={detail.edge.id} className={index === 0 ? 'edge-pick-row first' : 'edge-pick-row second'}>
+            <span>{detail.label}</span>
+            <strong>{formatPercent(detail.metric.strain)}</strong>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function edgeAngle(model: LatticeModel, edgeAId: string, edgeBId: string): number | null {
+  const edgeA = model.edges.find((edge) => edge.id === edgeAId)
+  const edgeB = model.edges.find((edge) => edge.id === edgeBId)
+  if (!edgeA || !edgeB) return null
+
+  const vectorA = edgeVector(model, edgeA.nodeA, edgeA.nodeB)
+  const vectorB = edgeVector(model, edgeB.nodeA, edgeB.nodeB)
+  const lengthProduct = lengthVec(vectorA) * lengthVec(vectorB)
+  if (lengthProduct <= 0.000001) return null
+
+  const cosine = Math.min(1, Math.max(-1, dotVec(vectorA, vectorB) / lengthProduct))
+  return (Math.acos(cosine) * 180) / Math.PI
+}
+
+function edgeVector(model: LatticeModel, nodeAId: string, nodeBId: string): Vec3 {
+  const nodeA = model.nodes.find((node) => node.id === nodeAId)
+  const nodeB = model.nodes.find((node) => node.id === nodeBId)
+  if (!nodeA || !nodeB) return [0, 0, 0]
+  return [
+    nodeB.currentPosition[0] - nodeA.currentPosition[0],
+    nodeB.currentPosition[1] - nodeA.currentPosition[1],
+    nodeB.currentPosition[2] - nodeA.currentPosition[2],
+  ]
+}
+
+function lengthVec(vector: Vec3): number {
+  return Math.hypot(vector[0], vector[1], vector[2])
+}
+
+function dotVec(a: Vec3, b: Vec3): number {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+function formatPercent(value: number): string {
+  if (!Number.isFinite(value)) return '0%'
+  const percent = value * 100
+  const sign = percent > 0 ? '+' : ''
+  return `${sign}${percent.toFixed(1).replace(/\.0$/, '')}% strain`
+}
+
+function formatAngle(value: number): string {
+  if (!Number.isFinite(value)) return '0 deg'
+  return `${value.toFixed(1).replace(/\.0$/, '')} deg`
 }

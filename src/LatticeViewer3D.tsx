@@ -4,6 +4,7 @@ import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import type {
+  CameraFocusRequest,
   CameraViewRequest,
   DihedralMetric,
   EdgeMetric,
@@ -16,15 +17,18 @@ import type {
   SelectedElement,
   Vec3,
 } from './inverseSheetTypes'
-import { colorForEdge, colorForNode, colorForQuad } from './metricVisuals'
+import { colorForEdge, colorForNode, colorForQuad, legendForMode } from './metricVisuals'
 
 type LatticeViewer3DProps = {
   model: LatticeModel
   selected: SelectedElement
+  pickedEdges: string[]
   viewRequest: CameraViewRequest
+  focusRequest: CameraFocusRequest
+  onEdgePick: (edgeId: string) => void
 }
 
-export default function LatticeViewer3D({ model, selected, viewRequest }: LatticeViewer3DProps) {
+export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequest, focusRequest, onEdgePick }: LatticeViewer3DProps) {
   return (
     <section className="scene-shell inverse-scene" aria-label="Inverse Sheet 3D lattice view">
       <Canvas dpr={[1, 1.8]} gl={{ antialias: true, preserveDrawingBuffer: true }}>
@@ -33,17 +37,28 @@ export default function LatticeViewer3D({ model, selected, viewRequest }: Lattic
         <directionalLight position={[8, -8, 10]} intensity={1.1} />
         <directionalLight position={[-5, 7, 5]} intensity={0.42} />
         <Suspense fallback={null}>
-          <LatticeModelGroup model={model} selected={selected} />
+          <LatticeModelGroup model={model} selected={selected} pickedEdges={pickedEdges} onEdgePick={onEdgePick} />
         </Suspense>
         <SceneGrid bounds={model.bounds} />
         <AxisLabels bounds={model.bounds} />
-        <CameraRig model={model} selected={selected} viewRequest={viewRequest} />
+        <CameraRig model={model} viewRequest={viewRequest} focusRequest={focusRequest} />
       </Canvas>
+      {model.config.showHeatmap && <SceneColorBar model={model} />}
     </section>
   )
 }
 
-function LatticeModelGroup({ model, selected }: { model: LatticeModel; selected: SelectedElement }) {
+function LatticeModelGroup({
+  model,
+  selected,
+  pickedEdges,
+  onEdgePick,
+}: {
+  model: LatticeModel
+  selected: SelectedElement
+  pickedEdges: string[]
+  onEdgePick: (edgeId: string) => void
+}) {
   const nodeById = useMemo(() => new Map(model.nodes.map((node) => [node.id, node])), [model.nodes])
   const edgeMetricById = useMemo(() => new Map(model.edgeMetrics.map((metric) => [metric.edgeId, metric])), [model.edgeMetrics])
   const nodeMetricById = useMemo(() => new Map(model.nodeMetrics.map((metric) => [metric.nodeId, metric])), [model.nodeMetrics])
@@ -69,7 +84,16 @@ function LatticeModelGroup({ model, selected }: { model: LatticeModel; selected:
           <meshStandardMaterial vertexColors side={THREE.DoubleSide} transparent opacity={surfaceOpacity} roughness={0.78} metalness={0.02} />
         </mesh>
       )}
-      {model.config.showEdges && <EdgeInstances model={model} nodes={nodeById} metrics={edgeMetricById} radius={edgeRadius} />}
+      {model.config.showEdges && (
+        <EdgeInstances
+          model={model}
+          nodes={nodeById}
+          metrics={edgeMetricById}
+          radius={edgeRadius}
+          pickedEdges={pickedEdges}
+          onEdgePick={onEdgePick}
+        />
+      )}
       {model.config.showNodes && <NodeInstances model={model} nodeMetrics={nodeMetricById} nodeSize={nodeSize} />}
       {labelsVisible && <NodeLabels nodes={model.nodes} />}
       <SelectedHighlight selected={selected} model={model} nodeById={nodeById} />
@@ -117,18 +141,20 @@ function EdgeInstances({
   nodes,
   metrics,
   radius,
+  pickedEdges,
+  onEdgePick,
 }: {
   model: LatticeModel
   nodes: Map<string, LatticeNode>
   metrics: Map<string, EdgeMetric>
   radius: number
+  pickedEdges: string[]
+  onEdgePick: (edgeId: string) => void
 }) {
   const ref = useRef<THREE.InstancedMesh>(null)
+  const pickedEdgeSet = useMemo(() => new Set(pickedEdges), [pickedEdges])
   const geometry = useMemo(() => new THREE.CylinderGeometry(1, 1, 1, model.config.rows > 30 || model.config.columns > 30 ? 7 : 10), [model.config.columns, model.config.rows])
-  const material = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.54, metalness: 0.03 }),
-    [],
-  )
+  const material = useMemo(() => new THREE.MeshBasicMaterial({ color: '#ffffff', vertexColors: true }), [])
 
   useLayoutEffect(() => {
     if (!ref.current) return
@@ -143,7 +169,9 @@ function EdgeInstances({
       const direction = new THREE.Vector3().subVectors(end, start)
       const length = Math.max(direction.length(), 0.000001)
       const metric = metrics.get(edge.id)
-      const color = new THREE.Color(metric ? colorForEdge(metric, model) : '#5d554f')
+      const color = pickedEdgeSet.has(edge.id)
+        ? new THREE.Color(pickedEdges[0] === edge.id ? '#f5d84b' : '#ff66b3')
+        : new THREE.Color(metric ? colorForEdge(metric, model) : '#5d554f')
 
       dummy.position.addVectors(start, end).multiplyScalar(0.5)
       dummy.quaternion.setFromUnitVectors(yAxis, direction.normalize())
@@ -154,9 +182,21 @@ function EdgeInstances({
     })
     ref.current.instanceMatrix.needsUpdate = true
     if (ref.current.instanceColor) ref.current.instanceColor.needsUpdate = true
-  }, [metrics, model, nodes, radius])
+  }, [metrics, model, nodes, pickedEdgeSet, pickedEdges, radius])
 
-  return <instancedMesh ref={ref} args={[geometry, material, model.edges.length]} />
+  return (
+    <instancedMesh
+      ref={ref}
+      args={[geometry, material, model.edges.length]}
+      onPointerDown={(event) => {
+        if (typeof event.instanceId !== 'number') return
+        const edge = model.edges[event.instanceId]
+        if (!edge) return
+        event.stopPropagation()
+        onEdgePick(edge.id)
+      }}
+    />
+  )
 }
 
 function NodeLabels({ nodes }: { nodes: LatticeNode[] }) {
@@ -307,51 +347,35 @@ function AxisLabels({ bounds }: { bounds: LatticeBounds }) {
 
 function CameraRig({
   model,
-  selected,
   viewRequest,
+  focusRequest,
 }: {
   model: LatticeModel
-  selected: SelectedElement
   viewRequest: CameraViewRequest
+  focusRequest: CameraFocusRequest
 }) {
   const cameraRef = useRef<THREE.PerspectiveCamera>(null)
   const controlsRef = useRef<OrbitControlsImpl | null>(null)
-  const selectedKey = selected ? `${selected.kind}:${selected.id}` : 'none'
+  const modelRef = useRef(model)
+
+  useEffect(() => {
+    modelRef.current = model
+  }, [model])
 
   useEffect(() => {
     const camera = cameraRef.current
     if (!camera) return
 
-    const { bounds } = model
-    const maxSpan = Math.max(bounds.span[0], bounds.span[1], bounds.span[2], 2)
-    const focus = focusForSelected(model, selected)
-    const distance = focus
-      ? Math.max(focus.radius * 7.5, model.config.spacing * 12, maxSpan * 0.22)
-      : maxSpan * 1.75
-    const target = focus ? focus.center : new THREE.Vector3(...bounds.center)
-    const position =
-      viewRequest.view === 'top'
-        ? new THREE.Vector3(target.x, target.y, target.z + distance)
-        : viewRequest.view === 'side'
-          ? new THREE.Vector3(target.x, target.y - distance, target.z)
-          : new THREE.Vector3(target.x + distance * 0.95, target.y - distance * 0.9, target.z + distance * 0.55)
+    positionCamera(camera, controlsRef.current, modelRef.current, viewRequest.view)
+  }, [viewRequest.version, viewRequest.view])
 
-    camera.position.copy(position)
-    if (viewRequest.view === 'top') {
-      camera.up.set(0, 1, 0)
-    } else {
-      camera.up.set(0, 0, 1)
-    }
-    camera.lookAt(target)
+  useEffect(() => {
+    const camera = cameraRef.current
+    const selected = focusRequest.selected
+    if (!camera || !selected) return
 
-    camera.fov = focus ? 32 : viewRequest.view === 'side' ? 34 : 42
-    camera.near = 0.01
-    camera.far = Math.max(distance * 8, 100)
-    camera.updateProjectionMatrix()
-
-    controlsRef.current?.target.copy(target)
-    controlsRef.current?.update()
-  }, [model, selected, selectedKey, viewRequest.version, viewRequest.view])
+    positionCamera(camera, controlsRef.current, modelRef.current, viewRequest.view, selected)
+  }, [focusRequest.selected, focusRequest.version, viewRequest.view])
 
   return (
     <>
@@ -359,6 +383,69 @@ function CameraRig({
       <OrbitControls ref={controlsRef} makeDefault enablePan enableZoom enableRotate />
     </>
   )
+}
+
+function positionCamera(
+  camera: THREE.PerspectiveCamera,
+  controls: OrbitControlsImpl | null,
+  model: LatticeModel,
+  view: CameraViewRequest['view'],
+  selected?: SelectedElement,
+): void {
+  const { bounds } = model
+  const maxSpan = Math.max(bounds.span[0], bounds.span[1], bounds.span[2], 2)
+  const focus = focusForSelected(model, selected ?? null)
+  const distance = focus
+    ? Math.max(focus.radius * 7.5, model.config.spacing * 12, maxSpan * 0.22)
+    : maxSpan * 1.75
+  const target = focus ? focus.center : new THREE.Vector3(...bounds.center)
+  const position =
+    view === 'top'
+      ? new THREE.Vector3(target.x, target.y, target.z + distance)
+      : view === 'side'
+        ? new THREE.Vector3(target.x, target.y - distance, target.z)
+        : new THREE.Vector3(target.x + distance * 0.95, target.y - distance * 0.9, target.z + distance * 0.55)
+
+  camera.position.copy(position)
+  if (view === 'top') {
+    camera.up.set(0, 1, 0)
+  } else {
+    camera.up.set(0, 0, 1)
+  }
+  camera.lookAt(target)
+
+  camera.fov = focus ? 32 : view === 'side' ? 34 : 42
+  camera.near = 0.01
+  camera.far = Math.max(distance * 8, 100)
+  camera.updateProjectionMatrix()
+
+  controls?.target.copy(target)
+  controls?.update()
+}
+
+function SceneColorBar({ model }: { model: LatticeModel }) {
+  const legend = legendForMode(model)
+  const mid = legend.min + (legend.max - legend.min) * 0.5
+
+  return (
+    <div className="scene-colorbar" aria-label={`${legend.label} colorbar`}>
+      <div className="scene-colorbar-label">{legend.label}</div>
+      <div className="scene-colorbar-body">
+        <div className="scene-colorbar-ramp" style={{ background: legend.gradient }} />
+        <div className="scene-colorbar-ticks">
+          <span>{formatLegendValue(legend.max)}</span>
+          <span>{formatLegendValue(mid)}</span>
+          <span>{formatLegendValue(legend.min)}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function formatLegendValue(value: number): string {
+  if (!Number.isFinite(value)) return '0'
+  if (Math.abs(value) < 1) return value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')
+  return value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')
 }
 
 function focusForSelected(
