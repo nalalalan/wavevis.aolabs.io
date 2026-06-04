@@ -1,0 +1,220 @@
+\pdfminorversion=7
+\documentclass[11pt,letterpaper]{article}
+
+\usepackage[margin=0.82in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{newtxtext,newtxmath}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{Ink}{HTML}{23201D}
+\definecolor{SoftRed}{HTML}{B23B31}
+\definecolor{SoftBlue}{HTML}{2F5F9F}
+\definecolor{SoftGray}{HTML}{6D6862}
+
+\hypersetup{
+  pdftitle={Kinematic incompatibility of exact connector contact with an equal-length clean cross cell in the current Wavevis overhang},
+  pdfauthor={Wavevis inverse-sheet constraint note},
+  pdfsubject={Algebraic proof of contacted connector constraints for Wavevis cells}
+}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.52em}
+\setlist[itemize]{leftmargin=1.35em,itemsep=0.15em,topsep=0.2em}
+\setlist[enumerate]{leftmargin=1.45em,itemsep=0.15em,topsep=0.2em}
+\color{Ink}
+
+\title{\vspace{-1.5em}Kinematic incompatibility of exact connector contact with an equal-length clean cross cell in the current Wavevis overhang}
+\author{Wavevis inverse-sheet constraint note}
+\date{June 4, 2026}
+
+\begin{document}
+\maketitle
+\vspace{-1.2em}
+
+\textbf{Claim.} For a four-arm inverse-sheet cell with a fixed center, four prescribed contacted connector points can be reached by a clean equal-length cross only if those four points satisfy exact midpoint, equal-radius, and, when requested, perpendicularity conditions. The current Wavevis overhang connector geometry violates those necessary conditions. Therefore no solver can satisfy exact connector contact, non-zig-zag arms, all-four equal arm length, and perpendicular crossed pairs at the same time for the current overhang.
+
+\textbf{Short result.}
+\begin{itemize}
+  \item If the connector points must contact exactly, then a clean cross with opposite arms collinear, the two arm-pairs perpendicular, and all four half-arms the same length is possible only in a special symmetric case. The current wave connector geometry is not that case.
+  \item Dropping perpendicularity is not enough. A clean cross with opposite arms collinear and all four half-arms the same length still requires all four contacted connector points to be the same distance from the cell center and paired symmetrically through the center. The current geometry violates this.
+  \item The feasible clean-contact model is weaker: each opposite pair may be collinear and equal within the pair, but the two pair lengths must be allowed to differ, and the two pairs must be allowed to meet at a non-right angle.
+\end{itemize}
+
+\textbf{Scope.} This is not a claim that a flat square grid can never satisfy these constraints. A perfectly symmetric flat cell can. The result here is stronger and more useful for the overhang: once the contacted connector points are prescribed by the current curved Wavevis overhang, the requested clean equal-length cross is algebraically over-constrained. This is a kinematic incompatibility, not a rendering bug and not an optimization failure.
+
+\section*{1. Definitions}
+
+Consider one cell with center point \(C \in \mathbb{R}^3\). Let the four contacted connector points assigned to that cell be
+\[
+P_E,\quad P_W,\quad P_N,\quad P_S.
+\]
+``Contact'' means the visible arm endpoint equals the prescribed connector point. Therefore the four arm vectors are
+\[
+e=P_E-C,\quad w=P_W-C,\quad n=P_N-C,\quad s=P_S-C.
+\]
+
+The phrase ``avoid weird zig-zag legs'' is treated as a hard visual/kinematic constraint:
+\[
+\text{opposite arms must be straight through the cell center.}
+\]
+That means the east and west arms lie on one line through \(C\), and the north and south arms lie on another line through \(C\).
+
+\section*{2. Hard equal-length cross with perpendicular pairs}
+
+This is the strongest requested model. It requires unit directions \(u\) and \(v\), one common half-arm length \(L>0\), and perpendicular arm-pairs:
+\[
+P_E=C+Lu,\quad P_W=C-Lu,\quad P_N=C+Lv,\quad P_S=C-Lv,\quad u\cdot v=0.
+\]
+
+\textbf{Necessary conditions.} If these equations hold, then:
+\[
+\frac{P_E+P_W}{2}=C,\qquad \frac{P_N+P_S}{2}=C
+\tag{1}
+\]
+\[
+\|P_E-C\|=\|P_W-C\|=\|P_N-C\|=\|P_S-C\|=L
+\tag{2}
+\]
+\[
+(P_E-C)\cdot(P_N-C)=0.
+\tag{3}
+\]
+
+\textbf{Why.} Equation (1) follows because \(C+Lu\) and \(C-Lu\) average to \(C\), and similarly for \(v\). Equation (2) follows because every vector is either \(Lu\), \(-Lu\), \(Lv\), or \(-Lv\), all with norm \(L\). Equation (3) is perpendicularity.
+
+\textbf{Sufficient conditions.} Conversely, if (1), (2), and (3) hold, then define
+\[
+u=\frac{P_E-C}{L},\qquad v=\frac{P_N-C}{L}.
+\]
+The conditions reconstruct the exact perpendicular equal-length cross. So (1)--(3) are not just nice-to-have checks; they are the exact algebraic test.
+
+\textbf{Conclusion.} If any one of (1), (2), or (3) fails for the contacted connector points of a cell, then exact contact and this clean equal-length perpendicular cross are kinematically impossible for that cell. No rotation of the cross, choice of local axes, or numerical solve can remove that contradiction while the connector points and cell center remain fixed.
+
+\section*{3. Equal-length cross without requiring perpendicular pairs}
+
+Now remove the perpendicular condition. This is weaker:
+\[
+P_E=C+Lu,\quad P_W=C-Lu,\quad P_N=C+Lv,\quad P_S=C-Lv
+\]
+where \(u\) and \(v\) do not have to be perpendicular.
+
+The exact necessary and sufficient conditions become only:
+\[
+\frac{P_E+P_W}{2}=C,\qquad \frac{P_N+P_S}{2}=C
+\tag{4}
+\]
+\[
+\|P_E-C\|=\|P_W-C\|=\|P_N-C\|=\|P_S-C\|=L.
+\tag{5}
+\]
+
+Perpendicularity is gone, but the common radius \(L\) remains. Therefore all four contacted connector points must still lie on one sphere centered at \(C\), and opposite pairs must still be symmetric through \(C\).
+
+\textbf{Conclusion.} Dropping the right angle does not solve the main problem. If the four contacted connector distances from \(C\) are unequal, then no equal-length through-cross can contact them, even if the two arm-pairs are allowed to meet at any angle. The all-four equal-length condition alone forces all four contacted points onto one sphere centered at \(C\).
+
+\section*{4. Numerical witness from the current Wavevis overhang}
+
+For the current Wavevis inverse-sheet overhang, the contacted connector geometry was evaluated from the local model on June 4, 2026. One cell gives the following distances from its center to its four contacted connector points:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Cell & Connector edge & Distance from cell center \\
+\midrule
+\(n\)-10-26 & \(e\)-h-10-25 & 0.411 \\
+\(n\)-10-26 & \(e\)-h-10-26 & 0.327 \\
+\(n\)-10-26 & \(e\)-v-9-26  & 1.576 \\
+\(n\)-10-26 & \(e\)-v-10-26 & 1.243 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The spread between the shortest and longest required contacted arm lengths is
+\[
+1.576-0.327=1.249.
+\]
+
+If all four arms had one common length \(L\), then the same cell would require
+\[
+L=0.411,\quad L=0.327,\quad L=1.576,\quad L=1.243
+\]
+simultaneously. That is a contradiction. Therefore, for this cell, exact connector contact and equal length of all four arms cannot both be true.
+
+This contradiction already proves both impossibility statements:
+\begin{itemize}
+  \item The perpendicular equal-length cross is impossible, because it requires equal distances.
+  \item The non-perpendicular equal-length cross is also impossible, because it still requires equal distances.
+\end{itemize}
+
+A second independent check shows the through-center symmetry condition is also violated in the current contacted layout. For cell \(n\)-8-21, the midpoint disagreement between the opposite-pair connector midpoints and the cell center is approximately
+\[
+0.249.
+\]
+For any exact through-line pair, that value must be exactly zero:
+\[
+\frac{P_E+P_W}{2}=C,\qquad \frac{P_N+P_S}{2}=C.
+\]
+So the current connector layout also fails the required midpoint condition for a clean through-cell model.
+
+\section*{5. What relaxed model is actually feasible}
+
+A clean contacted cell can exist if the two opposite arm-pairs are treated as two separate bars:
+\[
+P_E=C+L_xu,\quad P_W=C-L_xu
+\]
+\[
+P_N=C+L_yv,\quad P_S=C-L_yv
+\]
+where:
+\[
+L_x \neq L_y \quad \text{is allowed}
+\]
+and
+\[
+u\cdot v \neq 0 \quad \text{is allowed.}
+\]
+
+This model still preserves the important clean visual constraint:
+\begin{itemize}
+  \item east and west are collinear and equal to each other;
+  \item north and south are collinear and equal to each other;
+  \item the cell looks like two straight bars crossing at the body, not like four random zig-zag spokes.
+\end{itemize}
+
+The exact algebraic test for this relaxed model is:
+\[
+\frac{P_E+P_W}{2}=C,\qquad \|P_E-C\|=\|P_W-C\|=L_x
+\tag{6}
+\]
+\[
+\frac{P_N+P_S}{2}=C,\qquad \|P_N-C\|=\|P_S-C\|=L_y.
+\tag{7}
+\]
+
+No condition requires \(L_x=L_y\), and no condition requires \(u\cdot v=0\).
+
+\textbf{Interpretation.} This is the first clean-contact model with enough freedom to follow a curved overhang without forcing visible zig-zag arms. It preserves pairwise straightness, but gives up the single common length and the fixed right angle. In practice, exact contact must be solved with this pairwise model: the east-west contact pair and the north-south contact pair each need their own length, and the included angle between the pairs must be free.
+
+If the pairwise midpoint equations in (6) and (7) are also impossible for a chosen fixed center, then the remaining choices are mechanical, not cosmetic: move the center, move the contacted connector assignment, allow a contact residual/gap, or allow a zig-zag/non-collinear leg. A smooth renderer cannot make an incompatible set of endpoint constraints true.
+
+\section*{6. Engineering conclusion}
+
+For the current Wavevis overhang, exact connector contact and a clean visible mechanism can be made compatible only by relaxing the constraints in the correct order:
+
+\begin{enumerate}
+  \item Keep exact connector contact if contact is physically required.
+  \item Keep opposite-pair collinearity if avoiding zig-zag legs is visually and mechanically required.
+  \item Allow the east-west pair length \(L_x\) to differ from the north-south pair length \(L_y\).
+  \item Allow the two pair directions to meet at a non-right angle.
+\end{enumerate}
+
+\textbf{Constraint that must be removed:} one common half-arm length for all four arms. If perpendicularity is also kept hard, it must be removed as well. Otherwise the contacted connector points must satisfy special equal-radius, symmetric, perpendicular conditions that the current wave geometry does not satisfy.
+
+\textbf{Therefore:} with exact contact and no zig-zag legs as hard constraints, the feasible mechanism is a two-bar crossed cell with pairwise equal opposite legs, separate pair lengths, and a free included angle.
+
+\end{document}
