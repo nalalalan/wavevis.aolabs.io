@@ -12,7 +12,18 @@ type TargetShapeControlsProps = {
   onImportConfigText: (text: string) => void
 }
 
-type NumberKey = 'rows' | 'columns' | 'morph' | 'horizontalOffset' | 'height' | 'overhangWidth' | 'curl' | 'smoothing'
+type NumberKey =
+  | 'rows'
+  | 'columns'
+  | 'morph'
+  | 'horizontalOffset'
+  | 'height'
+  | 'overhangWidth'
+  | 'curl'
+  | 'smoothing'
+  | 'lipSharpness'
+  | 'wallSmoothness'
+  | 'flatContribution'
 type BooleanKey = 'showSurface' | 'showRestGhost' | 'showNodes' | 'showEdges'
 
 export default function TargetShapeControls({
@@ -60,6 +71,9 @@ export default function TargetShapeControls({
           <RangeInput label="height" value={config.height} min={0} max={24} step={0.25} onChange={(value) => setNumber('height', value)} />
           <RangeInput label="overhang" value={config.horizontalOffset} min={0} max={32} step={0.25} onChange={(value) => setNumber('horizontalOffset', value)} />
           <RangeInput label="ground transition" value={config.smoothing} min={0} max={1} step={0.01} onChange={(value) => setNumber('smoothing', value)} />
+          <RangeInput label="lip sharpness" value={config.lipSharpness} min={0} max={1} step={0.01} onChange={(value) => setNumber('lipSharpness', value)} />
+          <RangeInput label="wall smoothness" value={config.wallSmoothness} min={0} max={1} step={0.01} onChange={(value) => setNumber('wallSmoothness', value)} />
+          <RangeInput label="flat contribution" value={config.flatContribution} min={0} max={1} step={0.01} onChange={(value) => setNumber('flatContribution', value)} />
         </div>
 
         <button type="button" className="primary compact-primary" onClick={onRun}>

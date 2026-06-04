@@ -240,45 +240,55 @@ function RigidCellGlyphs({
   model: LatticeModel
   nodeById: Map<string, LatticeNode>
 }) {
-  const xRodRef = useRef<THREE.InstancedMesh>(null)
-  const yRodRef = useRef<THREE.InstancedMesh>(null)
+  const armRef = useRef<THREE.InstancedMesh>(null)
   const bodyRef = useRef<THREE.InstancedMesh>(null)
-  const geometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
+  const bodyGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
+  const armGeometry = useMemo(() => new THREE.CylinderGeometry(1, 1, 1, model.config.rows > 30 || model.config.columns > 30 ? 7 : 10), [model.config.columns, model.config.rows])
   const rodMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: inverseLinkageColor, roughness: 0.62, metalness: 0.04 }), [])
   const bodyMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: inverseCellBodyColor, roughness: 0.7, metalness: 0.04 }), [])
 
   useLayoutEffect(() => {
-    const xRodMesh = xRodRef.current
-    const yRodMesh = yRodRef.current
+    const armMesh = armRef.current
     const bodyMesh = bodyRef.current
-    if (!xRodMesh || !yRodMesh || !bodyMesh) return
+    if (!armMesh || !bodyMesh) return
 
     const largeGrid = model.config.rows > 30 || model.config.columns > 30
-    const rodWidth = Math.max(model.config.spacing * (largeGrid ? 0.04 : 0.052), 0.014)
+    const rodWidth = Math.max(model.config.spacing * (largeGrid ? 0.035 : 0.048), 0.014)
     const bodySize = model.config.spacing * (largeGrid ? 0.28 : 0.34)
-    const bodyThickness = Math.max(model.config.spacing * 0.07, 0.022)
+    const bodyThickness = cellBodyThickness(model.config.spacing)
     const matrix = new THREE.Matrix4()
+    const dummy = new THREE.Object3D()
+    let armIndex = 0
 
     model.nodes.forEach((node, index) => {
       const frame = buildNodeFrame(node, nodeById)
-      const center = new THREE.Vector3(...node.currentPosition).addScaledVector(frame.zAxis, bodyThickness * 0.72)
-      const rodLength = estimateCellCrossLength(node, nodeById, model.config.spacing)
+      const center = displayCellCenter(node, frame, model.config.spacing)
 
-      setBoxInstance(matrix, xRodMesh, index, center, frame.xAxis, frame.yAxis, frame.zAxis, rodLength, rodWidth, rodWidth)
-      setBoxInstance(matrix, yRodMesh, index, center, frame.xAxis, frame.yAxis, frame.zAxis, rodWidth, rodLength, rodWidth)
       setBoxInstance(matrix, bodyMesh, index, center, frame.xAxis, frame.yAxis, frame.zAxis, bodySize, bodySize, bodyThickness)
     })
 
-    xRodMesh.instanceMatrix.needsUpdate = true
-    yRodMesh.instanceMatrix.needsUpdate = true
+    model.edges.forEach((edge) => {
+      const nodeA = nodeById.get(edge.nodeA)
+      const nodeB = nodeById.get(edge.nodeB)
+      if (!nodeA || !nodeB) return
+      const connector = connectorPositionForEdge(edge, nodeById, model.config.spacing)
+      const startA = displayCellCenter(nodeA, buildNodeFrame(nodeA, nodeById), model.config.spacing)
+      const startB = displayCellCenter(nodeB, buildNodeFrame(nodeB, nodeById), model.config.spacing)
+
+      setCylinderInstance(dummy, armMesh, armIndex, startA, connector, rodWidth)
+      armIndex += 1
+      setCylinderInstance(dummy, armMesh, armIndex, startB, connector, rodWidth)
+      armIndex += 1
+    })
+
+    armMesh.instanceMatrix.needsUpdate = true
     bodyMesh.instanceMatrix.needsUpdate = true
   }, [model, nodeById])
 
   return (
     <>
-      <instancedMesh ref={xRodRef} args={[geometry, rodMaterial, model.nodes.length]} />
-      <instancedMesh ref={yRodRef} args={[geometry, rodMaterial, model.nodes.length]} />
-      <instancedMesh ref={bodyRef} args={[geometry, bodyMaterial, model.nodes.length]} />
+      <instancedMesh ref={armRef} args={[armGeometry, rodMaterial, model.edges.length * 2]} />
+      <instancedMesh ref={bodyRef} args={[bodyGeometry, bodyMaterial, model.nodes.length]} />
     </>
   )
 }
@@ -396,10 +406,14 @@ function SelectedHighlight({
     if (!edge || !nodeA || !nodeB) return null
     const connectorVector = connectorPositionForEdge(edge, nodeById, model.config.spacing)
     const connector: Vec3 = [connectorVector.x, connectorVector.y, connectorVector.z]
+    const centerA = displayCellCenter(nodeA, buildNodeFrame(nodeA, nodeById), model.config.spacing)
+    const centerB = displayCellCenter(nodeB, buildNodeFrame(nodeB, nodeById), model.config.spacing)
+    const startA: Vec3 = [centerA.x, centerA.y, centerA.z]
+    const startB: Vec3 = [centerB.x, centerB.y, centerB.z]
     return (
       <>
-        <TubeSegment start={nodeA.currentPosition} end={connector} radius={0.04} color="#f5d84b" />
-        <TubeSegment start={nodeB.currentPosition} end={connector} radius={0.04} color="#f5d84b" />
+        <TubeSegment start={startA} end={connector} radius={0.04} color="#f5d84b" />
+        <TubeSegment start={startB} end={connector} radius={0.04} color="#f5d84b" />
       </>
     )
   }
@@ -799,6 +813,38 @@ function setBoxInstance(
   mesh.setMatrixAt(index, matrix)
 }
 
+function setCylinderInstance(
+  dummy: THREE.Object3D,
+  mesh: THREE.InstancedMesh,
+  index: number,
+  start: THREE.Vector3,
+  end: THREE.Vector3,
+  radius: number,
+): void {
+  const direction = new THREE.Vector3().subVectors(end, start)
+  const length = direction.length()
+
+  if (length <= 0.0001) {
+    dummy.position.copy(start)
+    dummy.scale.setScalar(0.000001)
+  } else {
+    dummy.position.addVectors(start, end).multiplyScalar(0.5)
+    dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize())
+    dummy.scale.set(radius, length, radius)
+  }
+
+  dummy.updateMatrix()
+  mesh.setMatrixAt(index, dummy.matrix)
+}
+
+function cellBodyThickness(spacing: number): number {
+  return Math.max(spacing * 0.07, 0.022)
+}
+
+function displayCellCenter(node: LatticeNode, frame: ReturnType<typeof buildNodeFrame>, spacing: number): THREE.Vector3 {
+  return new THREE.Vector3(...node.currentPosition).addScaledVector(frame.zAxis, cellBodyThickness(spacing) * 0.72)
+}
+
 function buildNodeFrame(node: LatticeNode, nodeById: Map<string, LatticeNode>): {
   xAxis: THREE.Vector3
   yAxis: THREE.Vector3
@@ -849,10 +895,10 @@ function connectorPositionForEdge(edge: LatticeModel['edges'][number], nodeById:
   const nodeB = nodeById.get(edge.nodeB)
   if (!nodeA || !nodeB) return new THREE.Vector3(0, 0, 0)
 
-  const centerA = new THREE.Vector3(...nodeA.currentPosition)
-  const centerB = new THREE.Vector3(...nodeB.currentPosition)
   const frameA = buildNodeFrame(nodeA, nodeById)
   const frameB = buildNodeFrame(nodeB, nodeById)
+  const centerA = displayCellCenter(nodeA, frameA, fallback)
+  const centerB = displayCellCenter(nodeB, frameB, fallback)
   const halfA = estimateCellCrossLength(nodeA, nodeById, fallback) * 0.5
   const halfB = estimateCellCrossLength(nodeB, nodeById, fallback) * 0.5
   const axisA = edge.orientation === 'horizontal' ? frameA.xAxis : frameA.yAxis

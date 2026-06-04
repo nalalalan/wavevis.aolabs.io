@@ -33,6 +33,9 @@ export type TargetParams = {
   overhangWidth: number
   curl: number
   smoothing: number
+  lipSharpness: number
+  wallSmoothness: number
+  flatContribution: number
   widthScale: number
   strainWeight: number
   bendWeight: number

@@ -44,6 +44,9 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   overhangWidth: 32,
   curl: 0.72,
   smoothing: 0.86,
+  lipSharpness: 0.28,
+  wallSmoothness: 0.66,
+  flatContribution: 0.35,
   widthScale: 1,
   strainWeight: 1,
   bendWeight: 0.02,
@@ -83,6 +86,9 @@ export function sanitizeInverseSheetConfig(input: LooseConfig = {}): InverseShee
     overhangWidth: readNumber(raw.overhangWidth, DEFAULT_INVERSE_SHEET_CONFIG.overhangWidth, 0, 72),
     curl: readNumber(raw.curl, DEFAULT_INVERSE_SHEET_CONFIG.curl, 0, 1),
     smoothing: readNumber(raw.smoothing, DEFAULT_INVERSE_SHEET_CONFIG.smoothing, 0, 1),
+    lipSharpness: readNumber(raw.lipSharpness, DEFAULT_INVERSE_SHEET_CONFIG.lipSharpness, 0, 1),
+    wallSmoothness: readNumber(raw.wallSmoothness, DEFAULT_INVERSE_SHEET_CONFIG.wallSmoothness, 0, 1),
+    flatContribution: readNumber(raw.flatContribution, DEFAULT_INVERSE_SHEET_CONFIG.flatContribution, 0, 1),
     widthScale: 1,
     strainWeight: readNumber(raw.strainWeight, DEFAULT_INVERSE_SHEET_CONFIG.strainWeight, 0, 100),
     bendWeight: readNumber(raw.bendWeight, DEFAULT_INVERSE_SHEET_CONFIG.bendWeight, 0, 100),
@@ -148,6 +154,7 @@ export function runInverseSheetSanityChecks(): string[] {
   const twoByTwo = buildInverseSheetModel({ rows: 2, columns: 2 })
   const defaultOverhang = buildInverseSheetModel(DEFAULT_INVERSE_SHEET_CONFIG)
   const highOverhang = buildInverseSheetModel({ horizontalOffset: 32 })
+  const highCurlHighOverhang = buildInverseSheetModel({ horizontalOffset: 32, curl: 1, smoothing: 1, lipSharpness: 0.2 })
   const lowWave = buildInverseSheetModel({ horizontalOffset: 9, height: 4 })
   const tallWave = buildInverseSheetModel({ horizontalOffset: 9, height: 10 })
   const narrowWave = buildInverseSheetModel({ overhangWidth: 12 })
@@ -167,6 +174,7 @@ export function runInverseSheetSanityChecks(): string[] {
   if (!boundaryNodesStayFlat(defaultOverhang)) failures.push('default overhang boundary should stay fixed and flat')
   if (!boundaryNodesStayFlat(highOverhang)) failures.push('high-overhang boundary should stay fixed and flat')
   if (!centerlineBackfoldIsBounded(highOverhang)) failures.push('high-overhang curl should stay bounded')
+  if (!centerlineBackfoldIsBounded(highCurlHighOverhang)) failures.push('high-curl high-overhang shape should not self-overlap')
   if (defaultOverhang.summary.overhangAmount <= 0) failures.push('default overhang should report a positive horizontal projection')
   if (Math.abs(lowWave.summary.overhangAmount - tallWave.summary.overhangAmount) > 0.000001) {
     failures.push('changing height should not change measured horizontal overhang amount')
@@ -210,7 +218,7 @@ function centerlineBackfoldIsBounded(model: LatticeModel): boolean {
   const centerline = model.nodes
     .filter((node) => node.row === row)
     .sort((a, b) => a.col - b.col)
-  const tolerance = -Math.max(model.config.spacing * 1.1, model.summary.overhangAmount * 0.2)
+  const tolerance = -Math.max(model.config.spacing * 1.1, model.summary.overhangAmount * 0.08)
 
   for (let index = 0; index < centerline.length - 1; index += 1) {
     const deltaX = centerline[index + 1].currentPosition[0] - centerline[index].currentPosition[0]
@@ -274,101 +282,113 @@ function overhangTargetPosition(
   const rowsDenominator = Math.max(config.rows - 1, 1)
   const u = col / columnsDenominator
   const gridDenominator = Math.max(rowsDenominator, columnsDenominator)
+  const groundTransition = clampNumber(config.smoothing, 0, 1)
+  const wallSmoothness = clampNumber(config.wallSmoothness, 0, 1)
   const flatRim = Math.min(0.12, Math.max(3.4 / gridDenominator, 0.055))
-  const blendRim = Math.min(0.42, flatRim + lerpNumber(0.24, 0.34, config.smoothing))
-  const longitudinalBlendRim = Math.min(0.48, flatRim + lerpNumber(0.22, 0.38, config.smoothing))
-  const rimY = transverseWaveMask(rest[1], totalHeight, config, flatRim, blendRim)
+  const blendRim = Math.min(0.46, flatRim + lerpNumber(0.1, 0.36, groundTransition))
+  const longitudinalBlendRim = Math.min(0.5, flatRim + lerpNumber(0.1, 0.42, groundTransition))
+  const rimY = transverseWaveMask(rest[1], totalHeight, config, flatRim, blendRim, wallSmoothness)
   const rimX = edgeRamp(u, flatRim, longitudinalBlendRim) * edgeRamp(1 - u, flatRim, longitudinalBlendRim)
-  const activityMask = rimX * rimY
+  const maskExponent = lerpNumber(1.7, 0.68, groundTransition)
+  const activityMask = Math.pow(rimX * rimY, maskExponent)
+  const flatMask = flatContributionMask(rest[1], totalHeight, flatRim, blendRim, rimX, activityMask, config.flatContribution)
 
   if (Math.abs(config.height) <= 0.000001) {
     return [rest[0], rest[1] * config.widthScale, 0]
   }
 
-  if (activityMask <= 0.000001) {
+  if (activityMask <= 0.000001 && flatMask <= 0.000001) {
     return [rest[0], rest[1] * config.widthScale, 0]
   }
 
-  const profileStart = Math.max(flatRim, 0.1)
-  const profileEnd = Math.min(1 - flatRim, 0.9)
+  const profileStart = Math.max(flatRim, lerpNumber(0.16, 0.08, groundTransition))
+  const profileEnd = Math.min(1 - flatRim, lerpNumber(0.84, 0.94, groundTransition))
   if (u <= profileStart || u >= profileEnd) {
     return [rest[0], rest[1] * config.widthScale, 0]
   }
 
   const remainingU = Math.max(profileEnd - profileStart, 0.000001)
   const profileU = clampNumber((u - profileStart) / remainingU, 0, 1)
-  const eased = lerpNumber(profileU, smootherStep(profileU), 0.18 + config.smoothing * 0.28)
+  const eased = lerpNumber(profileU, smootherStep(profileU), 0.08 + groundTransition * 0.46)
   const remainingLength = Math.max(totalWidth * remainingU, config.spacing)
   const curl = clampNumber(config.curl, 0, 1)
   const overhangAmount = Math.min(config.horizontalOffset, remainingLength * 0.78)
-  const heightProfile = waveHeightProfile(eased, curl, config.smoothing)
+  const heightProfile = waveHeightProfile(eased, curl, groundTransition, config.lipSharpness)
   const waveHeight = Math.min(config.height, remainingLength * 0.42)
-  const horizontalProjection = overhangAmount * curlProjectionProfile(eased, curl, config.smoothing)
+  const horizontalProjection = overhangAmount * curlProjectionProfile(eased, curl, groundTransition, config.lipSharpness)
+  const flatProjection = horizontalProjection * flatMask
   const yCenter = totalHeight * 0.5
   const yFromCenter = rest[1] - yCenter
 
   return [
-    rest[0] + activityMask * horizontalProjection,
+    rest[0] + activityMask * horizontalProjection + flatProjection,
     yCenter + yFromCenter * config.widthScale,
     activityMask * waveHeight * heightProfile,
   ]
 }
 
-function curlProjectionProfile(value: number, curl: number, smoothing: number): number {
+function curlProjectionProfile(value: number, curl: number, smoothing: number, lipSharpness: number): number {
   const t = clampNumber(value, 0, 1)
   const broadWave = loopProfile(t, 0.62, 2.25)
-  const returnStart = lerpNumber(0.72, 0.52, curl)
-  const returnEnd = lerpNumber(0.98, 0.84, curl)
-  const riseEnd = lerpNumber(0.52, 0.44, curl)
+  const sharpness = clampNumber(lipSharpness, 0, 1)
+  const returnStart = lerpNumber(0.78, 0.61, curl) + lerpNumber(-0.045, 0.035, sharpness)
+  const returnEnd = lerpNumber(1.08, 0.98, curl) + lerpNumber(0.06, -0.035, sharpness)
+  const riseEnd = lerpNumber(0.58, 0.48, curl) + lerpNumber(0.035, -0.025, sharpness)
+  const tailFloor = lerpNumber(0.98, 0.9, curl) + lerpNumber(0.025, -0.06, sharpness)
   const rise = smootherStep(t / Math.max(riseEnd, 0.000001))
-  const returnUnder = 1 - smootherStep((t - returnStart) / Math.max(returnEnd - returnStart, 0.000001))
-  const curledWave = Math.pow(Math.max(rise * returnUnder, 0), lerpNumber(1.55, 0.82, smoothing))
+  const returnAmount = 1 - clampNumber(tailFloor, 0.82, 0.98)
+  const returnUnder = 1 - returnAmount * smootherStep((t - returnStart) / Math.max(returnEnd - returnStart, 0.000001))
+  const curledWave = Math.pow(Math.max(rise * returnUnder, 0), lerpNumber(1.55, 0.92, smoothing))
   const raw = lerpNumber(broadWave, curledWave, curl)
 
-  return raw / Math.max(sampleCurlProjectionMax(curl, smoothing), 0.000001)
+  return raw / Math.max(sampleCurlProjectionMax(curl, smoothing, lipSharpness), 0.000001)
 }
 
-function waveHeightProfile(value: number, curl: number, smoothing: number): number {
+function waveHeightProfile(value: number, curl: number, smoothing: number, lipSharpness: number): number {
   const t = clampNumber(value, 0, 1)
   const base = loopProfile(t, 0.54, lerpNumber(2.7, 1.85, smoothing))
-  const plateau = roundedCurlHeightProfile(t, curl, smoothing)
+  const plateau = roundedCurlHeightProfile(t, curl, smoothing, lipSharpness)
   const raw = lerpNumber(base, plateau, curl)
 
-  return raw / Math.max(sampleWaveHeightMax(curl, smoothing), 0.000001)
+  return raw / Math.max(sampleWaveHeightMax(curl, smoothing, lipSharpness), 0.000001)
 }
 
-function roundedCurlHeightProfile(t: number, curl: number, smoothing: number): number {
-  const riseEnd = lerpNumber(0.58, 0.46, curl)
-  const fallStart = lerpNumber(0.62, 0.76, curl)
-  const fallEnd = lerpNumber(0.98, 0.92, curl)
+function roundedCurlHeightProfile(t: number, curl: number, smoothing: number, lipSharpness: number): number {
+  const sharpness = clampNumber(lipSharpness, 0, 1)
+  const riseEnd = lerpNumber(0.6, 0.49, curl) + lerpNumber(0.035, -0.025, sharpness)
+  const fallStart = lerpNumber(0.62, 0.76, curl) + lerpNumber(-0.035, 0.045, sharpness)
+  const fallEnd = lerpNumber(1.05, 0.98, curl) + lerpNumber(0.08, -0.045, sharpness)
   const rise = smootherStep(t / Math.max(riseEnd, 0.000001))
   const fall = 1 - smootherStep((t - fallStart) / Math.max(fallEnd - fallStart, 0.000001))
 
-  return Math.pow(Math.max(rise * fall, 0), lerpNumber(1.15, 0.82, smoothing))
+  return Math.pow(Math.max(rise * fall, 0), lerpNumber(1.05, 0.74, smoothing) + sharpness * 0.45)
 }
 
-function sampleWaveHeightMax(curl: number, smoothing: number): number {
+function sampleWaveHeightMax(curl: number, smoothing: number, lipSharpness: number): number {
   let max = 0
   for (let index = 0; index <= 80; index += 1) {
     const t = index / 80
     const base = loopProfile(t, 0.54, lerpNumber(2.7, 1.85, smoothing))
-    const plateau = roundedCurlHeightProfile(t, curl, smoothing)
+    const plateau = roundedCurlHeightProfile(t, curl, smoothing, lipSharpness)
     max = Math.max(max, lerpNumber(base, plateau, curl))
   }
   return max
 }
 
-function sampleCurlProjectionMax(curl: number, smoothing: number): number {
+function sampleCurlProjectionMax(curl: number, smoothing: number, lipSharpness: number): number {
   let max = 0
   for (let index = 0; index <= 80; index += 1) {
     const t = index / 80
     const broadWave = loopProfile(t, 0.62, 2.25)
-    const returnStart = lerpNumber(0.72, 0.52, curl)
-    const returnEnd = lerpNumber(0.98, 0.84, curl)
-    const riseEnd = lerpNumber(0.52, 0.44, curl)
+    const sharpness = clampNumber(lipSharpness, 0, 1)
+    const returnStart = lerpNumber(0.78, 0.61, curl) + lerpNumber(-0.045, 0.035, sharpness)
+    const returnEnd = lerpNumber(1.08, 0.98, curl) + lerpNumber(0.06, -0.035, sharpness)
+    const riseEnd = lerpNumber(0.58, 0.48, curl) + lerpNumber(0.035, -0.025, sharpness)
+    const tailFloor = lerpNumber(0.98, 0.9, curl) + lerpNumber(0.025, -0.06, sharpness)
     const rise = smootherStep(t / Math.max(riseEnd, 0.000001))
-    const returnUnder = 1 - smootherStep((t - returnStart) / Math.max(returnEnd - returnStart, 0.000001))
-    const curledWave = Math.pow(Math.max(rise * returnUnder, 0), lerpNumber(1.55, 0.82, smoothing))
+    const returnAmount = 1 - clampNumber(tailFloor, 0.82, 0.98)
+    const returnUnder = 1 - returnAmount * smootherStep((t - returnStart) / Math.max(returnEnd - returnStart, 0.000001))
+    const curledWave = Math.pow(Math.max(rise * returnUnder, 0), lerpNumber(1.55, 0.92, smoothing))
     max = Math.max(max, lerpNumber(broadWave, curledWave, curl))
   }
   return max
@@ -391,6 +411,7 @@ function transverseWaveMask(
   config: InverseSheetConfig,
   flatRim: number,
   blendRim: number,
+  wallSmoothness: number,
 ): number {
   const yCenter = totalHeight * 0.5
   const edgeMask = edgeRamp(y / Math.max(totalHeight, 0.000001), flatRim, blendRim) *
@@ -401,7 +422,7 @@ function transverseWaveMask(
   if (requestedHalfWidth <= 0.000001) return 0
 
   const fadeWidth = Math.min(
-    Math.max(config.spacing * 2.5, totalHeight * lerpNumber(0.06, 0.12, config.smoothing)),
+    Math.max(config.spacing * 2.5, totalHeight * lerpNumber(0.035, 0.18, wallSmoothness)),
     requestedHalfWidth,
   )
   const coreHalfWidth = Math.max(requestedHalfWidth - fadeWidth, 0)
@@ -409,6 +430,26 @@ function transverseWaveMask(
   const widthMask = 1 - smootherStep((distanceFromCenter - coreHalfWidth) / Math.max(fadeWidth, 0.000001))
 
   return edgeMask * widthMask
+}
+
+function flatContributionMask(
+  y: number,
+  totalHeight: number,
+  flatRim: number,
+  blendRim: number,
+  rimX: number,
+  activityMask: number,
+  flatContribution: number,
+): number {
+  const contribution = clampNumber(flatContribution, 0, 1)
+  if (contribution <= 0.000001) return 0
+
+  const yRatio = y / Math.max(totalHeight, 0.000001)
+  const edgeMask = edgeRamp(yRatio, flatRim, blendRim) * edgeRamp(1 - yRatio, flatRim, blendRim)
+  const broadInterior = Math.pow(Math.max(rimX * edgeMask, 0), lerpNumber(1.45, 0.55, contribution))
+  const outsideActive = Math.max(broadInterior - activityMask, 0)
+
+  return contribution * outsideActive * 0.72
 }
 
 function buildEdges(rows: number, columns: number): LatticeEdge[] {
