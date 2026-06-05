@@ -9,6 +9,7 @@
 \usepackage{array}
 \usepackage{booktabs}
 \usepackage{float}
+\usepackage{graphicx}
 \usepackage{xcolor}
 \usepackage{tikz}
 \usepackage{enumitem}
@@ -21,6 +22,10 @@
 \definecolor{SoftGray}{HTML}{6D6862}
 \definecolor{SoftGold}{HTML}{B9842C}
 \definecolor{SoftGreen}{HTML}{3F7D5A}
+\definecolor{PanelFill}{HTML}{FAF7F1}
+\definecolor{SoftBlueFill}{HTML}{EDF3FB}
+\definecolor{SoftRedFill}{HTML}{FCF0EE}
+\definecolor{SoftGreenFill}{HTML}{EEF7F2}
 
 \hypersetup{
   pdftitle={Why exact connector contact cannot use a clean equal-arm cross in the current Wavevis overhang},
@@ -38,6 +43,14 @@
 \color{Ink}
 
 \tikzset{
+  proofpanel/.style={draw=SoftGray!35,fill=PanelFill,line width=0.55pt,rounded corners=4pt},
+  paneltitle/.style={anchor=west,font=\bfseries\small,text=Ink},
+  panelsubtitle/.style={anchor=west,font=\scriptsize,text=SoftGray},
+  figurecallout/.style={draw=SoftGray!45,fill=white,line width=0.45pt,rounded corners=2pt,align=left,font=\scriptsize,inner sep=4pt},
+  redcallout/.style={draw=SoftRed!70,fill=SoftRedFill,line width=0.55pt,rounded corners=2pt,align=left,font=\scriptsize,inner sep=4pt,text=Ink},
+  greencallout/.style={draw=SoftGreen!70,fill=SoftGreenFill,line width=0.55pt,rounded corners=2pt,align=left,font=\scriptsize,inner sep=4pt,text=Ink},
+  equationbadge/.style={draw=SoftRed!80,fill=SoftRedFill,line width=0.55pt,rounded corners=2pt,align=center,font=\scriptsize,inner sep=4pt,text=SoftRed},
+  connectorlabel/.style={font=\scriptsize,inner sep=1.5pt,fill=white,rounded corners=1pt},
   cellbody/.style={draw=Ink,fill=Ink!92,line width=0.8pt,rounded corners=0.6pt},
   centerpt/.style={circle,fill=Ink,inner sep=1.8pt},
   connector/.style={circle,draw=SoftBlue,fill=white,line width=0.85pt,inner sep=2.2pt},
@@ -82,7 +95,7 @@ Question & Short answer & Reason \\
 \midrule
 Can a different solver fix it? & No, not without changing a constraint. & The contradiction is \(L\) needing to equal four different measured distances for one cell. \\
 Can dropping perpendicularity fix it? & No. & Equal arm length alone still requires all four contacted points to be the same distance from \(C\). \\
-What relaxation keeps the mechanism clean? & Pairwise equal bars. & East-west may use length \(L_x\); north-south may use length \(L_y\); the angle between the bars is free. \\
+What relaxation keeps the mechanism clean? & Pairwise equal bars. & Opposite arms stay equal and collinear within a pair. East-west may use length \(L_x\); north-south may use length \(L_y\); the angle between the bars is free. \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -103,120 +116,148 @@ Two pairs stay perpendicular. & The two through-cell directions must have dot pr
 \end{tabular}
 \end{center}
 
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[scale=0.92]
-  \coordinate (C) at (0,0);
-  \coordinate (E) at (2.35,0);
-  \coordinate (W) at (-2.35,0);
-  \coordinate (N) at (0,2.35);
-  \coordinate (S) at (0,-2.35);
-
-  \draw[guide] (C) circle (2.35);
-  \draw[arm] (W) -- (E);
-  \draw[arm] (S) -- (N);
-  \draw[cellbody] (-0.25,-0.25) rectangle (0.25,0.25);
-  \node[centerpt,label=below right:{\small \(C\)}] at (C) {};
-  \node[connector,label=right:{\small \(P_E=C+Lu\)}] at (E) {};
-  \node[connector,label=left:{\small \(P_W=C-Lu\)}] at (W) {};
-  \node[connector,label=above:{\small \(P_N=C+Lv\)}] at (N) {};
-  \node[connector,label=below:{\small \(P_S=C-Lv\)}] at (S) {};
-
-  \draw[dim] (0.14,0.14) -- node[above right=-1pt] {\small \(L\)} ($(N)+(0.14,0)$);
-  \draw[dim] (0,-0.18) -- node[below] {\small \(L\)} ($(E)+(0,-0.18)$);
-  \draw[softline] (0.38,0) -- (0.38,0.38) -- (0,0.38);
-  \node[smallnote,SoftGray] at (0,-3.1) {Equal-length perpendicular cross: all four connectors lie on one circle/sphere centered at \(C\), and opposite pairs average to \(C\).};
-\end{tikzpicture}
-\caption{The special geometry that would make all requested hard constraints true. It is possible only when the contacted connector points already have this symmetry.}
-\end{figure}
+\begin{center}
+\fcolorbox{SoftGray!45}{PanelFill}{%
+\begin{minipage}{0.93\linewidth}
+\textbf{What the two simulator outcomes mean.}
+\begin{itemize}
+  \item \textbf{All constraints at once:} exact connector contact, no zig-zag legs, one common length for all four arms, and perpendicular pairs. This demands a special symmetric connector layout. The current overhang does not have it, so the rendered result can only trade one failure for another: strain, gaps, spikes, or broken-looking local geometry.
+  \item \textbf{New relaxed constraint:} keep the clean through-cell idea only pairwise. East and west are equal and collinear; north and south are equal and collinear; the two pair lengths and the included angle are allowed to differ. This removes the specific contradiction while preserving the visual idea of a clean crossed cell.
+\end{itemize}
+\end{minipage}}
+\end{center}
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[scale=0.95]
-  \coordinate (C) at (0,0);
-  \coordinate (A) at (1.05,0.18);
-  \coordinate (B) at (-0.85,-0.18);
-  \coordinate (D) at (0.55,3.0);
-  \coordinate (F) at (-0.25,-2.35);
+\begin{minipage}{0.48\linewidth}
+\centering
+{\setlength{\fboxsep}{0pt}\fcolorbox{SoftGray!45}{white}{\includegraphics[width=\linewidth]{proofs/figures/sim-overhang-side-overview.png}}}
+\vspace{0.35em}
 
-  \draw[cellbody] (-0.25,-0.25) rectangle (0.25,0.25);
-  \node[centerpt,label=right:{\small \(C\)}] at (C) {};
+\small\textbf{Actual overhang state.} The current simulator produces the wave-like overhang and the surrounding flat water region, with local strain shown on the rendered surface.
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\linewidth}
+\centering
+{\setlength{\fboxsep}{0pt}\fcolorbox{SoftGray!45}{white}{\includegraphics[width=\linewidth]{proofs/figures/sim-strict-all-constraints-side.png}}}
+\vspace{0.35em}
 
-  \draw[badarm] (C) -- (A);
-  \draw[badarm] (C) -- (B);
-  \draw[badarm] (C) -- (D);
-  \draw[badarm] (C) -- (F);
-  \node[badconnector,label=right:{\small 0.411}] at (A) {};
-  \node[badconnector,label=left:{\small 0.327}] at (B) {};
-  \node[badconnector,label=above:{\small 1.576}] at (D) {};
-  \node[badconnector,label=below:{\small 1.243}] at (F) {};
-
-  \draw[guide] (C) circle (1.05);
-  \draw[guide] (C) circle (3.0);
-  \node[smallnote,SoftGray] at (4.1,2.08) {One common \(L\) would have to equal\\four different values at once.};
-  \node[note,SoftRed] at (4.2,0.92) {\(L=0.327=0.411=1.243=1.576\)\\is impossible.};
-  \node[smallnote,SoftGray] at (0,-3.25) {Current overhang witness cell \(n\)-10-26: exact contact forces unequal center-to-connector distances.};
-\end{tikzpicture}
-\caption{The equal-radius test fails in the current Wavevis overhang. This alone rules out both the perpendicular equal-length cross and the non-perpendicular equal-length cross.}
+\small\textbf{Actual hotspot.} Forcing the cell mechanism toward the strict equal-arm cross leaves the high-strain/contact hotspot visible instead of making the four connector constraints disappear.
+\end{minipage}
+\caption{Screenshots from the Wavevis inverse-sheet simulator. The proof below explains why this is not only a rendering issue: if the contacted connector points are fixed, the strict clean cell would have to pass the equal-radius and midpoint tests that the current overhang violates.}
 \end{figure}
 
 \clearpage
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[scale=1.2]
-  \coordinate (C) at (0,0);
-  \coordinate (E) at (2.15,0.58);
-  \coordinate (W) at (-0.65,-0.22);
-  \coordinate (N) at (0.22,2.2);
-  \coordinate (S) at (-0.42,-0.48);
-  \coordinate (Mh) at ($(E)!0.5!(W)$);
-  \coordinate (Mv) at ($(N)!0.5!(S)$);
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \draw[proofpanel] (0,0) rectangle (7.85,6.35);
+  \node[paneltitle] at (0.35,5.95) {A. Special symmetric case};
+  \node[panelsubtitle] at (0.35,5.6) {All four contacted points sit on one radius \(L\) from \(C\).};
 
-  \draw[guide] (E) -- (W);
-  \draw[guide] (N) -- (S);
-  \draw[cellbody] (-0.25,-0.25) rectangle (0.25,0.25);
-  \node[centerpt,label=below left:{\small \(C\)}] at (C) {};
-  \node[badconnector,label=right:{\small \(P_E\)}] at (E) {};
-  \node[badconnector,label=left:{\small \(P_W\)}] at (W) {};
-  \node[badconnector,label=above:{\small \(P_N\)}] at (N) {};
-  \node[badconnector,label=below:{\small \(P_S\)}] at (S) {};
-  \node[connector,label=above:{\small \(M_h\)}] at (Mh) {};
-  \node[connector,label=right:{\small \(M_v\)}] at (Mv) {};
-  \draw[badarm] (C) -- (Mh);
-  \draw[badarm] (C) -- (Mv);
-  \node[note,SoftRed] at (3.7,1.2) {For a non-zig-zag through-cell pair,\\each midpoint must be exactly \(C\).};
-  \node[smallnote,SoftGray] at (3.7,0.03) {Witness midpoint miss: about 0.249.};
-  \node[smallnote,SoftGray] at (0,-2.45) {If \(M_h\neq C\) or \(M_v\neq C\), then the contacted endpoints cannot be opposite straight arms through the cell center.};
-\end{tikzpicture}
-\caption{The midpoint test is independent of the length test. It checks whether opposite contacted connectors can form a straight bar through the cell center.}
+  \coordinate (CA) at (3.92,3.08);
+  \coordinate (AE) at (5.65,3.08);
+  \coordinate (AW) at (2.19,3.08);
+  \coordinate (AN) at (3.92,4.81);
+  \coordinate (AS) at (3.92,1.35);
+  \draw[draw=SoftBlue!55,fill=SoftBlueFill,line width=0.55pt] (CA) circle (1.73);
+  \draw[arm,line width=1.7pt] (AW) -- (AE);
+  \draw[arm,line width=1.7pt] (AS) -- (AN);
+  \draw[cellbody] ($(CA)+(-0.22,-0.22)$) rectangle ($(CA)+(0.22,0.22)$);
+  \node[connector,label={[connectorlabel,anchor=west]right:\(P_E\)}] at (AE) {};
+  \node[connector,label={[connectorlabel,anchor=east]left:\(P_W\)}] at (AW) {};
+  \node[connector,label={[connectorlabel,anchor=south]above:\(P_N\)}] at (AN) {};
+  \node[connector,label={[connectorlabel,anchor=north]below:\(P_S\)}] at (AS) {};
+  \node[centerpt,label={[connectorlabel,anchor=west]right:\(C\)}] at (CA) {};
+  \draw[dim,draw=SoftBlue] ($(CA)+(0,-0.28)$) -- node[fill=SoftBlueFill,inner sep=1.5pt] {\(L\)} ($(AE)+(0,-0.28)$);
+  \draw[dim,draw=SoftBlue] ($(CA)+(0.28,0)$) -- node[fill=SoftBlueFill,inner sep=1.5pt] {\(L\)} ($(AN)+(0.28,0)$);
+  \draw[softline] ($(CA)+(0.36,0)$) -- ($(CA)+(0.36,0.36)$) -- ($(CA)+(0,0.36)$);
+  \node[figurecallout,text width=6.75cm] at (3.92,0.55) {Required symmetry: both opposite-pair midpoints equal \(C\), all four distances equal \(L\), and the two directions are perpendicular if the right angle is kept.};
+
+  \draw[proofpanel] (8.45,0) rectangle (16.3,6.35);
+  \node[paneltitle] at (8.8,5.95) {B. Current overhang witness};
+  \node[panelsubtitle] at (8.8,5.6) {Exact contact asks one cell to use four different radii.};
+
+  \coordinate (CB) at (11.78,3.0);
+  \coordinate (BE) at (13.05,3.18);
+  \coordinate (BW) at (10.77,2.82);
+  \coordinate (BN) at (12.33,5.12);
+  \coordinate (BS) at (11.48,0.95);
+  \draw[guide] (CB) circle (1.1);
+  \draw[guide] (CB) circle (2.2);
+  \draw[badarm,line width=1.55pt] (CB) -- (BE);
+  \draw[badarm,line width=1.55pt] (CB) -- (BW);
+  \draw[badarm,line width=1.55pt] (CB) -- (BN);
+  \draw[badarm,line width=1.55pt] (CB) -- (BS);
+  \draw[cellbody] ($(CB)+(-0.22,-0.22)$) rectangle ($(CB)+(0.22,0.22)$);
+  \node[badconnector,label={[connectorlabel,anchor=west]right:0.411}] at (BE) {};
+  \node[badconnector,label={[connectorlabel,anchor=east]left:0.327}] at (BW) {};
+  \node[badconnector,label={[connectorlabel,anchor=west]right:1.576}] at (BN) {};
+  \node[badconnector,label={[connectorlabel,anchor=north]below:1.243}] at (BS) {};
+  \node[centerpt,label={[connectorlabel,anchor=west]right:\(C\)}] at (CB) {};
+  \node[equationbadge,text width=4.75cm] at (13.72,1.45) {\(L=0.327=0.411=1.243=1.576\)\\cannot be true};
+  \node[redcallout,text width=5.0cm] at (13.7,4.0) {Equal arm length would force every red point onto one circle centered at \(C\). The measured connector positions do not lie on one circle.};
+\end{tikzpicture}}
+\caption{Equal-radius obstruction. Panel A shows the special symmetric geometry required by one common arm length. Panel B shows a current Wavevis witness cell: exact connector contact gives four different center-to-connector distances, so no single \(L\) can satisfy all four arms.}
 \end{figure}
+
+\clearpage
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[scale=1.12]
-  \coordinate (C) at (0,0);
-  \coordinate (E) at (2.65,0);
-  \coordinate (W) at (-2.65,0);
-  \coordinate (N) at (0.95,1.8);
-  \coordinate (S) at (-0.95,-1.8);
-  \draw[pairarm] (W) -- (E);
-  \draw[arm] (S) -- (N);
-  \draw[cellbody] (-0.27,-0.27) rectangle (0.27,0.27);
-  \node[centerpt,label=below right:{\small \(C\)}] at (C) {};
-  \node[connector,label=right:{\small \(P_E\)}] at (E) {};
-  \node[connector,label=left:{\small \(P_W\)}] at (W) {};
-  \node[connector,label=above:{\small \(P_N\)}] at (N) {};
-  \node[connector,label=below:{\small \(P_S\)}] at (S) {};
-  \draw[dim] (0,-0.38) -- node[below] {\small \(L_x\)} (2.65,-0.38);
-  \draw[dim] (0.24,0.16) -- node[right] {\small \(L_y\)} (1.19,1.96);
-  \draw[softline] (0.75,0) arc[start angle=0,end angle=62,radius=0.75];
-  \node[smallnote] at (1.05,0.38) {\(\theta\)};
-  \node[note,SoftGreen] at (4.25,1.45) {Feasible clean-contact model:\\opposite legs match each other,\\not all four at once.};
-  \node[smallnote,SoftGray] at (4.25,0.35) {\(L_x\) may differ from \(L_y\), and \(\theta\) is free.};
-  \node[smallnote,SoftGray] at (0,-2.75) {This removes the incompatible all-four common-length and right-angle demands while preserving clean pairwise bars.};
-\end{tikzpicture}
-\caption{The relaxed model that can remain visually clean: each opposite pair is collinear and equal within the pair, but the two pair lengths and included angle are free.}
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \draw[proofpanel] (0,0) rectangle (7.85,6.35);
+  \node[paneltitle] at (0.35,5.95) {C. Midpoint test};
+  \node[panelsubtitle] at (0.35,5.6) {A straight opposite pair must pass through the cell center.};
+
+  \coordinate (CC) at (3.15,2.85);
+  \coordinate (CE) at (5.6,3.28);
+  \coordinate (CW) at (1.95,2.45);
+  \coordinate (CN) at (3.64,5.05);
+  \coordinate (CS) at (2.66,1.87);
+  \coordinate (CMh) at ($(CE)!0.5!(CW)$);
+  \coordinate (CMv) at ($(CN)!0.5!(CS)$);
+  \draw[guide] (CW) -- (CE);
+  \draw[guide] (CS) -- (CN);
+  \draw[cellbody] ($(CC)+(-0.22,-0.22)$) rectangle ($(CC)+(0.22,0.22)$);
+  \node[centerpt,label={[connectorlabel,anchor=south east]below left:\(C\)}] at (CC) {};
+  \node[badconnector,label={[connectorlabel,anchor=west]right:\(P_E\)}] at (CE) {};
+  \node[badconnector,label={[connectorlabel,anchor=east]left:\(P_W\)}] at (CW) {};
+  \node[badconnector,label={[connectorlabel,anchor=south]above:\(P_N\)}] at (CN) {};
+  \node[badconnector,label={[connectorlabel,anchor=east]left:\(P_S\)}] at (CS) {};
+  \node[connector,label={[connectorlabel,anchor=south]above:\(M_h\)}] at (CMh) {};
+  \node[connector,label={[connectorlabel,anchor=west]right:\(M_v\)}] at (CMv) {};
+  \draw[badarm,line width=1.25pt,-{Latex[length=2.4mm]}] (CC) -- (CMh);
+  \draw[badarm,line width=1.25pt,-{Latex[length=2.4mm]}] (CC) -- (CMv);
+  \node[redcallout,text width=4.95cm] at (4.75,1.0) {For a non-zig-zag through-cell arm pair, \(M_h=C\) and \(M_v=C\). Current witness miss: about \(0.249\).};
+
+  \draw[proofpanel] (8.45,0) rectangle (16.3,6.35);
+  \node[paneltitle] at (8.8,5.95) {D. Clean model that remains feasible};
+  \node[panelsubtitle] at (8.8,5.6) {Pairwise equal bars, separate pair lengths, free included angle.};
+
+  \coordinate (CD) at (12.1,3.05);
+  \coordinate (DE) at (14.3,3.05);
+  \coordinate (DW) at (9.9,3.05);
+  \coordinate (DN) at (12.92,4.72);
+  \coordinate (DS) at (11.28,1.38);
+  \draw[pairarm,line width=1.8pt] (DW) -- (DE);
+  \draw[arm,line width=1.8pt] (DS) -- (DN);
+  \draw[cellbody] ($(CD)+(-0.24,-0.24)$) rectangle ($(CD)+(0.24,0.24)$);
+  \node[connector,label={[connectorlabel,anchor=west]right:\(P_E\)}] at (DE) {};
+  \node[connector,label={[connectorlabel,anchor=east]left:\(P_W\)}] at (DW) {};
+  \node[connector,label={[connectorlabel,anchor=south]above:\(P_N\)}] at (DN) {};
+  \node[connector,label={[connectorlabel,anchor=north]below:\(P_S\)}] at (DS) {};
+  \node[centerpt,label={[connectorlabel,anchor=west]right:\(C\)}] at (CD) {};
+  \draw[dim,draw=SoftGreen] ($(CD)+(0,-0.38)$) -- node[fill=SoftGreenFill,inner sep=1.5pt] {\(L_x\)} ($(DE)+(0,-0.38)$);
+  \draw[dim,draw=SoftGray] ($(CD)+(0.28,0.1)$) -- node[fill=white,inner sep=1.5pt] {\(L_y\)} ($(DN)+(0.28,0.1)$);
+  \draw[softline] ($(CD)+(0.72,0)$) arc[start angle=0,end angle=64,radius=0.72];
+  \node[connectorlabel] at ($(CD)+(0.93,0.36)$) {\(\theta\)};
+  \node[greencallout,text width=5.1cm] at (13.5,1.0) {This keeps each opposite pair clean and equal. It drops the all-four constraints \(L_x=L_y\) and \(\theta=90^\circ\).};
+\end{tikzpicture}}
+\caption{Midpoint obstruction and viable relaxation. Panel C shows the separate through-center condition needed to avoid zig-zag legs. Panel D shows the first clean model with enough freedom for exact contact on the curved overhang: opposite legs stay collinear and equal within each pair, but the two pair lengths and included angle are independent.}
 \end{figure}
 
 \clearpage
