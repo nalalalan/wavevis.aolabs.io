@@ -42,8 +42,10 @@ const flat0 = summarizeFlatContribution(buildInverseSheetModel({ flatContributio
 const flat1 = summarizeFlatContribution(buildInverseSheetModel({ flatContribution: 1 }))
 const transition0 = buildInverseSheetModel({ smoothing: 0 })
 const transition1 = buildInverseSheetModel({ smoothing: 1 })
-const bluntLip = summarizeLipSharpness(buildInverseSheetModel({ smoothing: 1, wallSmoothness: 1, flatContribution: 1, overhangAngleDeg: 90, lipSharpness: 0 }))
-const sharpLip = summarizeLipSharpness(buildInverseSheetModel({ smoothing: 1, wallSmoothness: 1, flatContribution: 1, overhangAngleDeg: 90, lipSharpness: 1 }))
+const bluntLip = summarizeLipSharpness(buildInverseSheetModel({ smoothing: 1, flatContribution: 1, overhangAngleDeg: 90, lipSharpness: 0 }))
+const sharpLip = summarizeLipSharpness(buildInverseSheetModel({ smoothing: 1, flatContribution: 1, overhangAngleDeg: 90, lipSharpness: 1 }))
+const sharpWalls = summarizeWallSmoothness(buildInverseSheetModel({ smoothing: 1, wallSmoothness: 0, flatContribution: 1 }))
+const roundWalls = summarizeWallSmoothness(buildInverseSheetModel({ smoothing: 1, wallSmoothness: 1, flatContribution: 1 }))
 const mechanism = rigidCellMechanismStats(buildInverseSheetModel())
 
 if (!(flat1.flatMeanAbs > flat0.flatMeanAbs * 1.8)) {
@@ -76,6 +78,10 @@ if (!(sharpLip.postTipDrop > bluntLip.postTipDrop * 2)) {
 
 if (Math.abs(bluntLip.frontX - sharpLip.frontX) > 0.5) {
   failures.push('lip sharpness should control tip shape without materially changing overhang reach')
+}
+
+if (!(roundWalls.endToCenterWidthRatio < sharpWalls.endToCenterWidthRatio * 0.82)) {
+  failures.push('wall smoothness 1 should round the plan-view overhang footprint more than wall smoothness 0')
 }
 
 if (mechanism.maxConnectorEndpointGap > 0.0001) {
@@ -113,6 +119,10 @@ const report = {
     blunt: bluntLip,
     pointed: sharpLip,
   },
+  wallSmoothness: {
+    sharp: sharpWalls,
+    round: roundWalls,
+  },
   mechanism: {
     maxLegLengthSpread: round(mechanism.maxLegLengthSpread),
     maxPairLengthSpread: round(mechanism.maxPairLengthSpread),
@@ -131,6 +141,31 @@ console.log(JSON.stringify(report, null, 2))
 if (failures.length) {
   console.error(JSON.stringify({ failures }, null, 2))
   process.exit(1)
+}
+
+function summarizeWallSmoothness(model) {
+  const maxLift = Math.max(...model.nodes.map((node) => node.currentPosition[2]))
+  const threshold = Math.max(maxLift * 0.08, 0.0001)
+  const countsByColumn = new Map()
+
+  for (const node of model.nodes) {
+    if (node.currentPosition[2] <= threshold) continue
+    countsByColumn.set(node.col, (countsByColumn.get(node.col) ?? 0) + 1)
+  }
+
+  const activeColumns = [...countsByColumn.keys()].sort((a, b) => a - b)
+  const edgeSpan = Math.max(2, Math.floor(activeColumns.length * 0.16))
+  const edgeColumns = [...activeColumns.slice(0, edgeSpan), ...activeColumns.slice(-edgeSpan)]
+  const centerIndex = Math.floor(activeColumns.length * 0.5)
+  const centerColumns = activeColumns.slice(Math.max(0, centerIndex - edgeSpan), Math.min(activeColumns.length, centerIndex + edgeSpan))
+  const edgeWidth = mean(edgeColumns.map((col) => countsByColumn.get(col) ?? 0))
+  const centerWidth = mean(centerColumns.map((col) => countsByColumn.get(col) ?? 0))
+
+  return {
+    edgeWidth: round(edgeWidth),
+    centerWidth: round(centerWidth),
+    endToCenterWidthRatio: round(edgeWidth / Math.max(centerWidth, 0.0001)),
+  }
 }
 
 function summarizeFlatContribution(model) {

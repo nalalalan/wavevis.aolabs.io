@@ -21,8 +21,6 @@ type NumberKey =
   | 'height'
   | 'overhangWidth'
   | 'overhangAngleDeg'
-  | 'conicRho'
-  | 'curlRadius'
   | 'smoothing'
   | 'lipSharpness'
   | 'wallSmoothness'
@@ -86,8 +84,6 @@ export default function TargetShapeControls({
           <RangeInput label="lip sharpness" value={config.lipSharpness} min={0} max={1} step={0.01} onChange={(value) => setNumber('lipSharpness', value)} />
           <RangeInput label="ground transition" value={config.smoothing} min={0} max={1} step={0.01} onChange={(value) => setNumber('smoothing', value)} />
           <RangeInput label="wall smoothness" value={config.wallSmoothness} min={0} max={1} step={0.01} onChange={(value) => setNumber('wallSmoothness', value)} />
-          <RangeInput label="conic rho" value={config.conicRho} min={0.05} max={0.95} step={0.01} onChange={(value) => setNumber('conicRho', value)} />
-          <RangeInput label="curl radius" value={config.curlRadius} min={0.25} max={1.25} step={0.01} onChange={(value) => setNumber('curlRadius', value)} />
           <RangeInput label="flat contribution" value={config.flatContribution} min={0} max={1} step={0.01} onChange={(value) => setNumber('flatContribution', value)} />
         </div>
 

@@ -47,7 +47,7 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   curlRadius: 0.65,
   smoothing: 0,
   lipSharpness: 0.28,
-  wallSmoothness: 0.66,
+  wallSmoothness: 0.18,
   flatContribution: 0.35,
   widthScale: 1,
   strainWeight: 1,
@@ -516,28 +516,31 @@ function overhangTargetPosition(
   const flatRim = Math.min(0.12, Math.max(3.4 / gridDenominator, 0.055))
   const blendRim = Math.min(0.46, flatRim + lerpNumber(0.1, 0.36, stableGroundTransition))
   const longitudinalBlendRim = Math.min(0.5, flatRim + lerpNumber(0.1, 0.42, stableGroundTransition))
-  const rimY = transverseWaveMask(rest[1], totalHeight, config, flatRim, blendRim, wallSmoothness)
-  const rimX = edgeRamp(u, flatRim, longitudinalBlendRim) * edgeRamp(1 - u, flatRim, longitudinalBlendRim)
-  const maskExponent = lerpNumber(1.7, 0.68, stableGroundTransition)
-  const activityMask = Math.pow(rimX * rimY, maskExponent)
-  const flatMask = flatContributionMask(rest[1], totalHeight, flatRim, blendRim, rimX, activityMask, config.flatContribution)
+  const profileStart = Math.max(flatRim, lerpNumber(0.16, 0.08, stableGroundTransition))
+  const profileEnd = Math.min(1 - flatRim, lerpNumber(0.84, 0.94, stableGroundTransition))
 
   if (Math.abs(config.height) <= 0.000001) {
     return [rest[0], rest[1] * config.widthScale, 0]
   }
 
-  if (activityMask <= 0.000001 && flatMask <= 0.000001) {
-    return [rest[0], rest[1] * config.widthScale, 0]
-  }
-
-  const profileStart = Math.max(flatRim, lerpNumber(0.16, 0.08, stableGroundTransition))
-  const profileEnd = Math.min(1 - flatRim, lerpNumber(0.84, 0.94, stableGroundTransition))
   if (u <= profileStart || u >= profileEnd) {
     return [rest[0], rest[1] * config.widthScale, 0]
   }
 
   const remainingU = Math.max(profileEnd - profileStart, 0.000001)
   const profileU = clampNumber((u - profileStart) / remainingU, 0, 1)
+  const rimY = transverseWaveMask(rest[1], totalHeight, config, flatRim, blendRim, wallSmoothness)
+  const rimX = edgeRamp(u, flatRim, longitudinalBlendRim) * edgeRamp(1 - u, flatRim, longitudinalBlendRim)
+  const maskExponent = lerpNumber(1.7, 0.68, stableGroundTransition)
+  const squareFootprintMask = Math.pow(rimX * rimY, maskExponent)
+  const circularFootprintMask = roundedFootprintMask(profileU, rest[1], totalHeight, config, flatRim)
+  const activityMask = lerpNumber(squareFootprintMask, circularFootprintMask, smootherStep(wallSmoothness))
+  const flatMask = flatContributionMask(rest[1], totalHeight, flatRim, blendRim, rimX, activityMask, config.flatContribution)
+
+  if (activityMask <= 0.000001 && flatMask <= 0.000001) {
+    return [rest[0], rest[1] * config.widthScale, 0]
+  }
+
   const eased = lerpNumber(profileU, smootherStep(profileU), 0.08 + stableGroundTransition * 0.46)
   const remainingLength = Math.max(totalWidth * remainingU, config.spacing)
   const curl = overhangAngleDegToCurl(config.overhangAngleDeg)
@@ -760,6 +763,28 @@ function transverseWaveMask(
   const widthMask = 1 - smootherStep((distanceFromCenter - coreHalfWidth) / Math.max(fadeWidth, 0.000001))
 
   return edgeMask * widthMask
+}
+
+function roundedFootprintMask(
+  profileU: number,
+  y: number,
+  totalHeight: number,
+  config: InverseSheetConfig,
+  flatRim: number,
+): number {
+  const yCenter = totalHeight * 0.5
+  const maxHalfWidth = Math.max(totalHeight * (0.5 - flatRim), config.spacing)
+  const requestedHalfWidth = Math.min(config.overhangWidth * 0.5, maxHalfWidth)
+
+  if (requestedHalfWidth <= 0.000001) return 0
+
+  const x = Math.abs(profileU - 0.5) / 0.5
+  const yNormalized = Math.abs(y - yCenter) / requestedHalfWidth
+  const exponent = 2
+  const distance = Math.pow(Math.pow(x, exponent) + Math.pow(yNormalized, exponent), 1 / exponent)
+  const feather = clampNumber(0.05 + config.spacing / requestedHalfWidth, 0.055, 0.2)
+
+  return 1 - smootherStep((distance - (1 - feather)) / feather)
 }
 
 function flatContributionMask(
