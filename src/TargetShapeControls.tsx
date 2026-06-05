@@ -71,8 +71,10 @@ export default function TargetShapeControls({
 
         <div className="slider-stack">
           <RangeInput label="morph" value={config.morph} min={0} max={1} step={0.01} onChange={(value) => setNumber('morph', value)} />
+          <RangeInput label="height" value={config.height} min={0} max={ranges.heightMax} step={0.25} onChange={(value) => setNumber('height', value)} />
+          <RangeInput label="overhang" value={config.horizontalOffset} min={0} max={ranges.horizontalOffsetMax} step={0.25} onChange={(value) => setNumber('horizontalOffset', value)} />
           <RangeInput
-            label="overhang angle"
+            label="lip dip"
             value={config.overhangAngleDeg}
             min={40}
             max={120}
@@ -80,14 +82,12 @@ export default function TargetShapeControls({
             formatValue={(value) => `${Math.round(value)} deg`}
             onChange={(value) => setNumber('overhangAngleDeg', value)}
           />
+          <RangeInput label="width" value={config.overhangWidth} min={0} max={ranges.overhangWidthMax} step={0.5} onChange={(value) => setNumber('overhangWidth', value)} />
+          <RangeInput label="lip sharpness" value={config.lipSharpness} min={0} max={1} step={0.01} onChange={(value) => setNumber('lipSharpness', value)} />
+          <RangeInput label="ground transition" value={config.smoothing} min={0} max={1} step={0.01} onChange={(value) => setNumber('smoothing', value)} />
+          <RangeInput label="wall smoothness" value={config.wallSmoothness} min={0} max={1} step={0.01} onChange={(value) => setNumber('wallSmoothness', value)} />
           <RangeInput label="conic rho" value={config.conicRho} min={0.05} max={0.95} step={0.01} onChange={(value) => setNumber('conicRho', value)} />
           <RangeInput label="curl radius" value={config.curlRadius} min={0.25} max={1.25} step={0.01} onChange={(value) => setNumber('curlRadius', value)} />
-          <RangeInput label="width" value={config.overhangWidth} min={0} max={ranges.overhangWidthMax} step={0.5} onChange={(value) => setNumber('overhangWidth', value)} />
-          <RangeInput label="height" value={config.height} min={0} max={ranges.heightMax} step={0.25} onChange={(value) => setNumber('height', value)} />
-          <RangeInput label="overhang" value={config.horizontalOffset} min={0} max={ranges.horizontalOffsetMax} step={0.25} onChange={(value) => setNumber('horizontalOffset', value)} />
-          <RangeInput label="ground transition" value={config.smoothing} min={0} max={1} step={0.01} onChange={(value) => setNumber('smoothing', value)} />
-          <RangeInput label="lip sharpness" value={config.lipSharpness} min={0} max={1} step={0.01} onChange={(value) => setNumber('lipSharpness', value)} />
-          <RangeInput label="wall smoothness" value={config.wallSmoothness} min={0} max={1} step={0.01} onChange={(value) => setNumber('wallSmoothness', value)} />
           <RangeInput label="flat contribution" value={config.flatContribution} min={0} max={1} step={0.01} onChange={(value) => setNumber('flatContribution', value)} />
         </div>
 
