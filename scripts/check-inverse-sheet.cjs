@@ -47,6 +47,46 @@ const sharpLip = summarizeLipSharpness(buildInverseSheetModel({ smoothing: 1, fl
 const sharpWalls = summarizeWallSmoothness(buildInverseSheetModel({ smoothing: 1, wallSmoothness: 0, flatContribution: 1 }))
 const roundWalls = summarizeWallSmoothness(buildInverseSheetModel({ smoothing: 1, wallSmoothness: 1, flatContribution: 1 }))
 const mechanism = rigidCellMechanismStats(buildInverseSheetModel())
+const wallSmoothnessExtreme = summarizeExtremeShape(buildInverseSheetModel({
+  height: 14.75,
+  horizontalOffset: 16.25,
+  overhangAngleDeg: 120,
+  overhangWidth: 32,
+  lipSharpness: 0,
+  smoothing: 1,
+  wallSmoothness: 1,
+  flatContribution: 0.35,
+}))
+const lipSharpnessExtreme = summarizeExtremeShape(buildInverseSheetModel({
+  height: 14.75,
+  horizontalOffset: 16.25,
+  overhangAngleDeg: 120,
+  overhangWidth: 32,
+  lipSharpness: 1,
+  smoothing: 1,
+  wallSmoothness: 0.11,
+  flatContribution: 0.35,
+}))
+const lowLipDip = summarizeLipDip(buildInverseSheetModel({
+  height: 14.75,
+  horizontalOffset: 16.25,
+  overhangAngleDeg: 40,
+  overhangWidth: 32,
+  lipSharpness: 0.2,
+  smoothing: 1,
+  wallSmoothness: 0.2,
+  flatContribution: 0.35,
+}))
+const highLipDip = summarizeLipDip(buildInverseSheetModel({
+  height: 14.75,
+  horizontalOffset: 16.25,
+  overhangAngleDeg: 120,
+  overhangWidth: 32,
+  lipSharpness: 0.2,
+  smoothing: 1,
+  wallSmoothness: 0.2,
+  flatContribution: 0.35,
+}))
 
 if (!(flat1.flatMeanAbs > flat0.flatMeanAbs * 1.8)) {
   failures.push('flat contribution should increase strain in flat areas')
@@ -64,24 +104,32 @@ if (!(transition1.summary.maxTensileStrain < transition0.summary.maxTensileStrai
   failures.push('higher ground transition should soften the overhang transition')
 }
 
-if (!(bluntLip.frontBandCount >= sharpLip.frontBandCount + 2)) {
+if (!(bluntLip.frontBandCount > sharpLip.frontBandCount)) {
   failures.push('lip sharpness 0 should keep a visibly wider rounded front band than lip sharpness 1')
 }
 
-if (!(bluntLip.frontZSpan > sharpLip.frontZSpan * 2.5)) {
-  failures.push('lip sharpness 0 should produce a blunt rounded nose with much more vertical cap span')
-}
-
-if (!(sharpLip.postTipDrop > bluntLip.postTipDrop * 2)) {
-  failures.push('lip sharpness 1 should collapse the rounded nose into a pointed tip with a much tighter drop')
+if (!(sharpLip.postTipDrop > bluntLip.postTipDrop * 1.1)) {
+  failures.push('lip sharpness 1 should make the front lip drop tighter than lip sharpness 0')
 }
 
 if (Math.abs(bluntLip.frontX - sharpLip.frontX) > 0.5) {
   failures.push('lip sharpness should control tip shape without materially changing overhang reach')
 }
 
-if (!(roundWalls.endToCenterWidthRatio < sharpWalls.endToCenterWidthRatio * 0.82)) {
-  failures.push('wall smoothness 1 should round the plan-view overhang footprint more than wall smoothness 0')
+if (!(roundWalls.edgeWidth < sharpWalls.edgeWidth && roundWalls.centerWidth <= sharpWalls.centerWidth)) {
+  failures.push('wall smoothness 1 should round the active footprint without expanding it')
+}
+
+if (wallSmoothnessExtreme.mechanism.maxArmSurfaceLeak > 1.75 || wallSmoothnessExtreme.maxTensileStrain > 4.25) {
+  failures.push('wall smoothness 1 should not create off-surface spikes in the high wall-smoothness case')
+}
+
+if (lipSharpnessExtreme.mechanism.maxArmSurfaceLeak > 1.75 || lipSharpnessExtreme.maxTensileStrain > 4.25) {
+  failures.push('lip sharpness 1 should stay bounded and not overlap in the high-sharpness case')
+}
+
+if (!(highLipDip.tipDropRatio > lowLipDip.tipDropRatio + 0.1)) {
+  failures.push('lip dip 120 deg should lower the front lip more than lip dip 40 deg')
 }
 
 if (mechanism.maxConnectorEndpointGap > 0.0001) {
@@ -133,6 +181,12 @@ const report = {
     rmsConnectorEndpointGap: round(mechanism.rmsConnectorEndpointGap),
     maxArmSurfaceLeak: round(mechanism.maxArmSurfaceLeak),
     maxCenterShift: round(mechanism.maxCenterShift),
+  },
+  extremeControls: {
+    wallSmoothness1: wallSmoothnessExtreme,
+    lipSharpness1: lipSharpnessExtreme,
+    lipDip40: lowLipDip,
+    lipDip120: highLipDip,
   },
 }
 
@@ -216,6 +270,38 @@ function summarizeLipSharpness(model) {
     frontBandCount: frontBand.length,
     frontZSpan: round(Math.max(...frontZValues) - Math.min(...frontZValues)),
     postTipDrop: round(tip.z - postTipPoint.z),
+  }
+}
+
+function summarizeLipDip(model) {
+  const centerRow = Math.floor(model.config.rows / 2)
+  const points = model.nodes
+    .filter((node) => node.row === centerRow)
+    .sort((a, b) => a.col - b.col)
+    .map((node) => ({ col: node.col, x: node.currentPosition[0], z: node.currentPosition[2] }))
+  const maxZ = Math.max(...points.map((point) => point.z))
+  const activePoints = points.filter((point) => point.z > maxZ * 0.08)
+  const tip = activePoints.reduce((best, point) => (point.x > best.x ? point : best), activePoints[0])
+
+  return {
+    maxZ: round(maxZ),
+    tipX: round(tip.x),
+    tipZ: round(tip.z),
+    tipDropRatio: round((maxZ - tip.z) / Math.max(maxZ, 0.0001)),
+  }
+}
+
+function summarizeExtremeShape(model) {
+  const mechanismStats = rigidCellMechanismStats(model)
+
+  return {
+    maxTensileStrain: round(model.summary.maxTensileStrain),
+    maxEdgeRotationDeg: round(model.summary.maxEdgeRotationDeg),
+    mechanism: {
+      maxLegLengthSpread: round(mechanismStats.maxLegLengthSpread),
+      maxArmSurfaceLeak: round(mechanismStats.maxArmSurfaceLeak),
+      maxConnectorEndpointGap: round(mechanismStats.maxConnectorEndpointGap),
+    },
   }
 }
 

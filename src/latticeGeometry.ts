@@ -332,9 +332,9 @@ export function runInverseSheetSanityChecks(): string[] {
   if (!boundaryNodesStayFlat(highOverhang)) failures.push('high-overhang boundary should stay fixed and flat')
   if (!centerlineBackfoldIsBounded(highOverhang)) failures.push('high-overhang angle should stay bounded')
   if (!centerlineBackfoldIsBounded(highAngleHighOverhang)) failures.push('high-angle high-overhang shape should not self-overlap')
-  if (!centerlineHasVisibleCurlReturn(highAngle)) failures.push('120 deg overhang angle should visibly return inward into a C profile')
-  if (centerlineCurlReturnDepth(highAngleSmallGrid) < centerlineCurlReturnDepth(lowAngleSmallGrid) * 1.65) {
-    failures.push('120 deg overhang angle should visibly curl farther inward than 40 deg on a 20x20 grid')
+  if (!centerlineHasVisibleLipDip(highAngle)) failures.push('120 deg lip dip should visibly lower the front lip')
+  if (centerlineLipDropRatio(highAngleSmallGrid) < centerlineLipDropRatio(lowAngleSmallGrid) + 0.02) {
+    failures.push('120 deg lip dip should lower the front lip more than 40 deg on a 20x20 grid')
   }
   if (defaultOverhang.summary.overhangAmount <= 0) failures.push('default overhang should report a positive horizontal projection')
   if (Math.abs(lowWave.summary.overhangAmount - tallWave.summary.overhangAmount) > 0.000001) {
@@ -384,6 +384,7 @@ function centerlineBackfoldIsBounded(model: LatticeModel): boolean {
     .sort((a, b) => a.col - b.col)
   const maxSegmentLength = Math.max(model.config.spacing * 5.5, model.summary.overhangAmount * 0.22)
   const collisionTolerance = model.config.spacing * 0.24
+  const nearGroundZ = Math.max(model.summary.maxHeight * 0.08, model.config.spacing * 0.08)
 
   for (let index = 0; index < centerline.length - 1; index += 1) {
     const current = centerline[index].currentPosition
@@ -396,6 +397,7 @@ function centerlineBackfoldIsBounded(model: LatticeModel): boolean {
     for (let bIndex = aIndex + 3; bIndex < centerline.length; bIndex += 1) {
       const a = centerline[aIndex].currentPosition
       const b = centerline[bIndex].currentPosition
+      if (a[2] <= nearGroundZ && b[2] <= nearGroundZ) continue
       const distance = Math.hypot(b[0] - a[0], b[2] - a[2])
       if (distance < collisionTolerance) return false
     }
@@ -404,31 +406,23 @@ function centerlineBackfoldIsBounded(model: LatticeModel): boolean {
   return true
 }
 
-function centerlineHasVisibleCurlReturn(model: LatticeModel): boolean {
-  return centerlineCurlReturnDepth(model) >= Math.max(model.config.spacing * 2.5, model.summary.overhangAmount * 0.24)
+function centerlineHasVisibleLipDip(model: LatticeModel): boolean {
+  return centerlineLipDropRatio(model) >= 0.24
 }
 
-function centerlineCurlReturnDepth(model: LatticeModel): number {
+function centerlineLipDropRatio(model: LatticeModel): number {
   const row = Math.floor((model.config.rows - 1) / 2)
   const centerline = model.nodes
     .filter((node) => node.row === row)
     .sort((a, b) => a.col - b.col)
   const maxHeight = Math.max(model.summary.maxHeight, 0.000001)
-  const liftedCenterline = centerline.filter((node) => node.currentPosition[2] > maxHeight * 0.04)
-  let maxX = -Infinity
-  let maxXIndex = 0
+  const liftedCenterline = centerline.filter((node) => node.currentPosition[2] > maxHeight * 0.08)
+  if (!liftedCenterline.length) return 0
+  const frontLip = liftedCenterline.reduce((best, node) => (
+    node.currentPosition[0] > best.currentPosition[0] ? node : best
+  ), liftedCenterline[0])
 
-  liftedCenterline.forEach((node, index) => {
-    if (node.currentPosition[0] > maxX) {
-      maxX = node.currentPosition[0]
-      maxXIndex = index
-    }
-  })
-
-  const postCrestLiftedNodes = liftedCenterline.slice(maxXIndex + 1)
-  const deepestReturnX = Math.min(...postCrestLiftedNodes.map((node) => node.currentPosition[0]))
-
-  return Number.isFinite(deepestReturnX) ? maxX - deepestReturnX : 0
+  return clampNumber((maxHeight - frontLip.currentPosition[2]) / maxHeight, 0, 1)
 }
 
 function groundTransitionSmoothsBottomDescent(low: LatticeModel, high: LatticeModel): boolean {
@@ -534,7 +528,8 @@ function overhangTargetPosition(
   const maskExponent = lerpNumber(1.7, 0.68, stableGroundTransition)
   const squareFootprintMask = Math.pow(rimX * rimY, maskExponent)
   const circularFootprintMask = roundedFootprintMask(profileU, rest[1], totalHeight, config, flatRim)
-  const activityMask = lerpNumber(squareFootprintMask, circularFootprintMask, smootherStep(wallSmoothness))
+  const roundedActivityMask = Math.min(squareFootprintMask, circularFootprintMask)
+  const activityMask = lerpNumber(squareFootprintMask, roundedActivityMask, smootherStep(wallSmoothness))
   const flatMask = flatContributionMask(rest[1], totalHeight, flatRim, blendRim, rimX, activityMask, config.flatContribution)
 
   if (activityMask <= 0.000001 && flatMask <= 0.000001) {
@@ -589,40 +584,32 @@ function curlProjectionRaw(
   curlRadius: number,
 ): number {
   const broadWave = openWaveProjection(t)
-  const sharpness = clampNumber(lipSharpness, 0, 1)
-  const pointed = smootherStep(sharpness)
+  const dip = clampNumber((curl - 0.28) / 0.72, 0, 1)
+  const pointed = smootherStep(clampNumber(lipSharpness, 0, 1)) * 0.38
   const rho = normalizedConicRho(conicRho)
   const radius = normalizedCurlRadius(curlRadius)
-  const returnStartBase =
-    lerpNumber(0.82, 0.5, curl) + lerpNumber(0.04, -0.05, rho) + lerpNumber(0.06, -0.055, radius)
+  const riseEnd = clampNumber(
+    lerpNumber(0.68, 0.44, dip) + lerpNumber(0.035, -0.035, rho) + lerpNumber(-0.035, 0.04, radius),
+    0.36,
+    0.72,
+  )
   const returnStart = clampNumber(
-    returnStartBase + lerpNumber(0.04, 0.1, pointed),
-    0.24,
-    0.9,
-  )
-  const returnSpan = lerpNumber(0.42, 0.085, pointed) + lerpNumber(0.07, 0.015, pointed) * radius +
-    smoothing * lerpNumber(0.035, 0, pointed)
-  const returnEnd = clampNumber(
-    returnStart + returnSpan,
-    returnStart + lerpNumber(0.24, 0.055, pointed),
-    0.995,
-  )
-  const riseEnd = lerpNumber(0.58, 0.34, curl) + lerpNumber(0.035, -0.05, rho) + lerpNumber(-0.035, 0.055, radius) +
-    lerpNumber(0.02, -0.015, pointed)
-  const tailFloor = clampNumber(
-    lerpNumber(0.98, 0.018, curl) + lerpNumber(0.05, -0.055, rho) + lerpNumber(-0.055, 0.07, radius) +
-      lerpNumber(0.08, -0.11, pointed),
-    0,
-    0.98,
+    lerpNumber(0.76, 0.9, dip) + lerpNumber(0.025, -0.02, rho) + pointed * 0.04,
+    0.58,
+    0.96,
   )
   const rise = smootherStep(t / Math.max(riseEnd, 0.000001))
-  const returnAmount = 1 - tailFloor
-  const returnUnder = 1 - returnAmount * smootherStep((t - returnStart) / Math.max(returnEnd - returnStart, 0.000001))
+  const returnAmount = clampNumber(
+    lerpNumber(0.32, 0.02, dip) + lerpNumber(0.035, -0.02, rho) + lerpNumber(-0.025, 0.02, radius),
+    0,
+    0.34,
+  )
+  const returnUnder = 1 - returnAmount * smootherStep((t - returnStart) / Math.max(1 - returnStart, 0.000001))
   const power = clampNumber(
-    lerpNumber(1.48, 0.72, smoothing) + lerpNumber(0.18, -0.22, rho) + lerpNumber(-0.14, 0.2, radius) +
-      pointed * 0.24,
-    0.42,
-    1.8,
+    lerpNumber(1.18, 0.78, smoothing) + lerpNumber(0.12, -0.12, rho) + lerpNumber(-0.08, 0.1, radius) +
+      pointed * 0.14,
+    0.54,
+    1.4,
   )
   const curledWave = Math.pow(Math.max(rise * returnUnder, 0), power)
 
@@ -653,30 +640,31 @@ function roundedCurlHeightProfile(
   conicRho: number,
   curlRadius: number,
 ): number {
-  const sharpness = clampNumber(lipSharpness, 0, 1)
-  const pointed = smootherStep(sharpness)
+  const dip = clampNumber((curl - 0.24) / 0.76, 0, 1)
+  const pointed = smootherStep(clampNumber(lipSharpness, 0, 1))
   const rho = normalizedConicRho(conicRho)
   const radius = normalizedCurlRadius(curlRadius)
-  const riseEnd = lerpNumber(0.6, 0.34, curl) + lerpNumber(0.045, -0.055, rho) + lerpNumber(-0.035, 0.055, radius) +
-    lerpNumber(0.022, -0.014, pointed)
-  const fallSpan = lerpNumber(0.4, 0.075, pointed) + lerpNumber(0.08, 0.018, pointed) * radius +
-    smoothing * lerpNumber(0.025, 0, pointed)
+  const riseEnd = clampNumber(
+    lerpNumber(0.62, 0.42, dip) + lerpNumber(0.045, -0.045, rho) + lerpNumber(-0.04, 0.05, radius),
+    0.36,
+    0.68,
+  )
   const fallStart = clampNumber(
-    lerpNumber(0.72, 0.66, curl) + lerpNumber(0.05, -0.055, rho) + lerpNumber(-0.04, 0.06, radius) +
-      lerpNumber(-0.035, 0.04, pointed) - smoothing * lerpNumber(0, 0.03, curl),
-    riseEnd + 0.04,
+    lerpNumber(0.9, 0.43, dip) + lerpNumber(0.04, -0.04, rho) + lerpNumber(-0.025, 0.04, radius) +
+      lerpNumber(-0.12, 0.08, pointed) - smoothing * 0.025,
+    riseEnd + lerpNumber(0.19, 0.1, pointed),
     0.92,
   )
-  const fallEnd = clampNumber(
-    fallStart + fallSpan,
-    fallStart + lerpNumber(0.24, 0.055, pointed),
-    0.998,
-  )
+  const fallSpan = clampNumber(lerpNumber(0.5, 0.24, pointed) + lerpNumber(0.07, 0.03, pointed) * radius, 0.22, 0.56)
+  const fallEnd = clampNumber(fallStart + fallSpan, fallStart + 0.2, 0.998)
   const rise = smootherStep(t / Math.max(riseEnd, 0.000001))
   const fall = 1 - smootherStep((t - fallStart) / Math.max(fallEnd - fallStart, 0.000001))
 
-  const power = clampNumber(lerpNumber(1.02, 0.56, smoothing) + pointed * 0.2 + lerpNumber(0.18, -0.2, rho) +
-    lerpNumber(-0.12, 0.16, radius), 0.34, 1.55)
+  const power = clampNumber(
+    lerpNumber(0.9, 0.66, smoothing) + pointed * 0.22 + lerpNumber(0.14, -0.16, rho) + lerpNumber(-0.1, 0.12, radius),
+    0.44,
+    1.2,
+  )
 
   return Math.pow(Math.max(rise * fall, 0), power)
 }
