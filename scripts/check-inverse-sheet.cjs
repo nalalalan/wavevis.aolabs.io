@@ -87,6 +87,10 @@ const highLipDip = summarizeLipDip(buildInverseSheetModel({
   wallSmoothness: 0.2,
   flatContribution: 0.35,
 }))
+const positionBack = summarizeOverhangPosition(buildInverseSheetModel({ overhangPosition: -1 }))
+const positionNeutral = summarizeOverhangPosition(buildInverseSheetModel({ overhangPosition: 0 }))
+const positionDefault = summarizeOverhangPosition(buildInverseSheetModel())
+const positionFront = summarizeOverhangPosition(buildInverseSheetModel({ overhangPosition: 1 }))
 
 if (!(flat1.flatMeanAbs > flat0.flatMeanAbs * 1.8)) {
   failures.push('flat contribution should increase strain in flat areas')
@@ -130,6 +134,18 @@ if (lipSharpnessExtreme.mechanism.maxArmSurfaceLeak > 1.75 || lipSharpnessExtrem
 
 if (!(highLipDip.tipDropRatio > lowLipDip.tipDropRatio + 0.1)) {
   failures.push('lip dip 120 deg should lower the front lip more than lip dip 40 deg')
+}
+
+if (!(positionFront.activeCenterCol > positionBack.activeCenterCol + 1)) {
+  failures.push('overhang position should move the active wave footprint forward and backward on the grid')
+}
+
+if (!(positionDefault.activeCenterCol < positionNeutral.activeCenterCol)) {
+  failures.push('default overhang position should be slightly backward of center')
+}
+
+if (!(positionBack.boundaryFlat && positionFront.boundaryFlat)) {
+  failures.push('overhang position should not release the constrained flat boundary')
 }
 
 if (mechanism.maxConnectorEndpointGap > 0.0001) {
@@ -187,6 +203,12 @@ const report = {
     lipSharpness1: lipSharpnessExtreme,
     lipDip40: lowLipDip,
     lipDip120: highLipDip,
+  },
+  overhangPosition: {
+    back: positionBack,
+    default: positionDefault,
+    neutral: positionNeutral,
+    front: positionFront,
   },
 }
 
@@ -289,6 +311,36 @@ function summarizeLipDip(model) {
     tipZ: round(tip.z),
     tipDropRatio: round((maxZ - tip.z) / Math.max(maxZ, 0.0001)),
   }
+}
+
+function summarizeOverhangPosition(model) {
+  const maxLift = Math.max(...model.nodes.map((node) => node.currentPosition[2]))
+  const activeNodes = model.nodes.filter((node) => node.currentPosition[2] > maxLift * 0.08)
+  const columns = activeNodes.map((node) => node.col)
+
+  return {
+    activeStartCol: round(Math.min(...columns)),
+    activeEndCol: round(Math.max(...columns)),
+    activeCenterCol: round(mean(columns)),
+    boundaryFlat: boundaryNodesStayFlat(model),
+  }
+}
+
+function boundaryNodesStayFlat(model) {
+  const tolerance = 0.000001
+  return model.nodes.every((node) => {
+    const onBoundary =
+      node.row === 0 ||
+      node.col === 0 ||
+      node.row === model.config.rows - 1 ||
+      node.col === model.config.columns - 1
+
+    return !onBoundary || (
+      Math.abs(node.currentPosition[0] - node.restPosition[0]) <= tolerance &&
+      Math.abs(node.currentPosition[1] - node.restPosition[1]) <= tolerance &&
+      Math.abs(node.currentPosition[2]) <= tolerance
+    )
+  })
 }
 
 function summarizeExtremeShape(model) {

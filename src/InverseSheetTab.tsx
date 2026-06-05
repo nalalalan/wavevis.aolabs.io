@@ -15,11 +15,11 @@ type InverseSheetTabProps = {
 }
 
 export default function InverseSheetTab({ activeTab, onTabChange, resizeHandle }: InverseSheetTabProps) {
-  const [config, setConfig] = useState<InverseSheetConfig>(() => DEFAULT_INVERSE_SHEET_CONFIG)
+  const [config, setConfig] = useState<InverseSheetConfig>(() => readInitialInverseSheetConfig())
   const [selected, setSelected] = useState<SelectedElement>(null)
   const [pickedEdges, setPickedEdges] = useState<string[]>([])
   const [status, setStatus] = useState<string | null>(null)
-  const [viewRequest, setViewRequest] = useState<CameraViewRequest>({ view: 'isometric', version: 0 })
+  const [viewRequest, setViewRequest] = useState<CameraViewRequest>(() => ({ view: readInitialInverseSheetView(), version: 0 }))
   const [focusRequest, setFocusRequest] = useState<CameraFocusRequest>({ selected: null, version: 0 })
   const model = useMemo(() => buildInverseSheetModel(config), [config])
 
@@ -123,6 +123,67 @@ export default function InverseSheetTab({ activeTab, onTabChange, resizeHandle }
       />
     </>
   )
+}
+
+function readInitialInverseSheetConfig(): InverseSheetConfig {
+  if (typeof window === 'undefined') return DEFAULT_INVERSE_SHEET_CONFIG
+
+  const search = new URLSearchParams(window.location.search)
+  const config: Partial<InverseSheetConfig> = {}
+  readIntegerConfigParam(search, config, 'rows', 'rows', 2, 72)
+  readIntegerConfigParam(search, config, 'cols', 'columns', 2, 72)
+  readIntegerConfigParam(search, config, 'columns', 'columns', 2, 72)
+  readNumberConfigParam(search, config, 'morph', 'morph')
+  readNumberConfigParam(search, config, 'height', 'height')
+  readNumberConfigParam(search, config, 'overhang', 'horizontalOffset')
+  readNumberConfigParam(search, config, 'horizontalOffset', 'horizontalOffset')
+  readNumberConfigParam(search, config, 'position', 'overhangPosition')
+  readNumberConfigParam(search, config, 'overhangPosition', 'overhangPosition')
+  readNumberConfigParam(search, config, 'lipDip', 'overhangAngleDeg')
+  readNumberConfigParam(search, config, 'overhangAngleDeg', 'overhangAngleDeg')
+  readNumberConfigParam(search, config, 'width', 'overhangWidth')
+  readNumberConfigParam(search, config, 'overhangWidth', 'overhangWidth')
+  readNumberConfigParam(search, config, 'lipSharpness', 'lipSharpness')
+  readNumberConfigParam(search, config, 'groundTransition', 'smoothing')
+  readNumberConfigParam(search, config, 'smoothing', 'smoothing')
+  readNumberConfigParam(search, config, 'wallSmoothness', 'wallSmoothness')
+  readNumberConfigParam(search, config, 'flatContribution', 'flatContribution')
+
+  return sanitizeInverseSheetConfig(config)
+}
+
+function readInitialInverseSheetView(): CameraView {
+  if (typeof window === 'undefined') return 'isometric'
+  const view = new URLSearchParams(window.location.search).get('view')
+  return view === 'side' || view === 'top' || view === 'isometric' ? view : 'isometric'
+}
+
+function readNumberConfigParam<Key extends keyof InverseSheetConfig>(
+  search: URLSearchParams,
+  config: Partial<InverseSheetConfig>,
+  param: string,
+  key: Key,
+): void {
+  if (!search.has(param)) return
+  const value = Number(search.get(param))
+  if (Number.isFinite(value)) {
+    config[key] = value as InverseSheetConfig[Key]
+  }
+}
+
+function readIntegerConfigParam<Key extends keyof InverseSheetConfig>(
+  search: URLSearchParams,
+  config: Partial<InverseSheetConfig>,
+  param: string,
+  key: Key,
+  min: number,
+  max: number,
+): void {
+  if (!search.has(param)) return
+  const value = Number(search.get(param))
+  if (Number.isFinite(value)) {
+    config[key] = Math.min(max, Math.max(min, Math.round(value))) as InverseSheetConfig[Key]
+  }
 }
 
 function EdgePickPanel({ model, pickedEdges }: { model: LatticeModel; pickedEdges: string[] }) {

@@ -29,6 +29,7 @@ export type TargetParams = {
   radiusMode: RadiusMode
   bendRadius: number
   horizontalOffset: number
+  overhangPosition: number
   height: number
   overhangWidth: number
   overhangAngleDeg: number

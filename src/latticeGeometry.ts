@@ -40,6 +40,7 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   radiusMode: 'autoPreserveLength',
   bendRadius: 4,
   horizontalOffset: 14,
+  overhangPosition: -0.15,
   height: 7,
   overhangWidth: 32,
   overhangAngleDeg: 90,
@@ -89,7 +90,8 @@ export function sanitizeInverseSheetConfig(input: LooseConfig = {}): InverseShee
   const columns = readInteger(raw.columns, DEFAULT_INVERSE_SHEET_CONFIG.columns, 2, 72)
   const spacing = 1
   const smoothing = readNumber(raw.smoothing, DEFAULT_INVERSE_SHEET_CONFIG.smoothing, 0, 1)
-  const ranges = calculateInverseSheetUsableRanges(rows, columns, spacing, smoothing)
+  const overhangPosition = readNumber(raw.overhangPosition, DEFAULT_INVERSE_SHEET_CONFIG.overhangPosition, -1, 1)
+  const ranges = calculateInverseSheetUsableRanges(rows, columns, spacing, smoothing, overhangPosition)
   const overhangAngleDeg = readOverhangAngleDeg(input)
 
   return {
@@ -104,6 +106,7 @@ export function sanitizeInverseSheetConfig(input: LooseConfig = {}): InverseShee
     radiusMode: readOneOf(raw.radiusMode, RADIUS_MODES, DEFAULT_INVERSE_SHEET_CONFIG.radiusMode),
     bendRadius: readNumber(raw.bendRadius, DEFAULT_INVERSE_SHEET_CONFIG.bendRadius, 0.1, 100),
     horizontalOffset: readNumber(raw.horizontalOffset, DEFAULT_INVERSE_SHEET_CONFIG.horizontalOffset, 0, ranges.horizontalOffsetMax),
+    overhangPosition,
     height: readNumber(raw.height, DEFAULT_INVERSE_SHEET_CONFIG.height, 0, ranges.heightMax),
     overhangWidth: readNumber(raw.overhangWidth, DEFAULT_INVERSE_SHEET_CONFIG.overhangWidth, 0, ranges.overhangWidthMax),
     overhangAngleDeg,
@@ -134,14 +137,21 @@ export function getInverseSheetUsableRanges(input: LooseConfig = {}): InverseShe
   const columns = readInteger(raw.columns, DEFAULT_INVERSE_SHEET_CONFIG.columns, 2, 72)
   const spacing = 1
   const smoothing = readNumber(raw.smoothing, DEFAULT_INVERSE_SHEET_CONFIG.smoothing, 0, 1)
+  const overhangPosition = readNumber(raw.overhangPosition, DEFAULT_INVERSE_SHEET_CONFIG.overhangPosition, -1, 1)
 
-  return calculateInverseSheetUsableRanges(rows, columns, spacing, smoothing)
+  return calculateInverseSheetUsableRanges(rows, columns, spacing, smoothing, overhangPosition)
 }
 
-function calculateInverseSheetUsableRanges(rows: number, columns: number, spacing: number, smoothing: number): InverseSheetUsableRanges {
+function calculateInverseSheetUsableRanges(
+  rows: number,
+  columns: number,
+  spacing: number,
+  smoothing: number,
+  overhangPosition = 0,
+): InverseSheetUsableRanges {
   const totalWidth = Math.max((columns - 1) * spacing, spacing)
   const totalHeight = Math.max((rows - 1) * spacing, spacing)
-  const profile = overhangProfileLimits(rows, columns, spacing, smoothing)
+  const profile = overhangProfileLimits(rows, columns, spacing, smoothing, overhangPosition)
   const remainingLength = Math.max(totalWidth * profile.remainingU, spacing)
   const maxHalfWidth = Math.max(totalHeight * (0.5 - profile.flatRim), spacing)
 
@@ -152,14 +162,18 @@ function calculateInverseSheetUsableRanges(rows: number, columns: number, spacin
   }
 }
 
-function overhangProfileLimits(rows: number, columns: number, spacing: number, smoothing: number) {
+function overhangProfileLimits(rows: number, columns: number, spacing: number, smoothing: number, overhangPosition = 0) {
   const rowsDenominator = Math.max(rows - 1, 1)
   const columnsDenominator = Math.max(columns - 1, 1)
   const gridDenominator = Math.max(rowsDenominator, columnsDenominator)
   const stableGroundTransition = stableGroundTransitionValue(smoothing)
   const flatRim = Math.min(0.12, Math.max(3.4 / gridDenominator, 0.055))
-  const profileStart = Math.max(flatRim, lerpNumber(0.16, 0.08, stableGroundTransition))
-  const profileEnd = Math.min(1 - flatRim, lerpNumber(0.84, 0.94, stableGroundTransition))
+  const baseStart = Math.max(flatRim, lerpNumber(0.2, 0.06, stableGroundTransition))
+  const baseEnd = Math.min(1 - flatRim, lerpNumber(0.78, 0.965, stableGroundTransition))
+  const requestedShift = clampNumber(overhangPosition, -1, 1)
+  const shift = requestedShift * lerpNumber(0.12, 0.08, stableGroundTransition)
+  const profileStart = clampNumber(baseStart + shift, flatRim, 1 - flatRim)
+  const profileEnd = clampNumber(baseEnd + shift, profileStart + spacing / Math.max(columnsDenominator * spacing, spacing), 1 - flatRim)
 
   return {
     flatRim,
@@ -170,7 +184,7 @@ function overhangProfileLimits(rows: number, columns: number, spacing: number, s
 }
 
 function stableGroundTransitionValue(value: number): number {
-  return lerpNumber(0.86, 1, clampNumber(value, 0, 1))
+  return lerpNumber(0.72, 1, clampNumber(value, 0, 1))
 }
 
 function readOverhangAngleDeg(input: LooseConfig): number {
@@ -501,17 +515,16 @@ function overhangTargetPosition(
   totalHeight: number,
 ): Vec3 {
   const columnsDenominator = Math.max(config.columns - 1, 1)
-  const rowsDenominator = Math.max(config.rows - 1, 1)
   const u = col / columnsDenominator
-  const gridDenominator = Math.max(rowsDenominator, columnsDenominator)
   const groundTransition = clampNumber(config.smoothing, 0, 1)
   const stableGroundTransition = stableGroundTransitionValue(groundTransition)
   const wallSmoothness = clampNumber(config.wallSmoothness, 0, 1)
-  const flatRim = Math.min(0.12, Math.max(3.4 / gridDenominator, 0.055))
+  const profileLimits = overhangProfileLimits(config.rows, config.columns, config.spacing, groundTransition, config.overhangPosition)
+  const flatRim = profileLimits.flatRim
   const blendRim = Math.min(0.46, flatRim + lerpNumber(0.1, 0.36, stableGroundTransition))
   const longitudinalBlendRim = Math.min(0.5, flatRim + lerpNumber(0.1, 0.42, stableGroundTransition))
-  const profileStart = Math.max(flatRim, lerpNumber(0.16, 0.08, stableGroundTransition))
-  const profileEnd = Math.min(1 - flatRim, lerpNumber(0.84, 0.94, stableGroundTransition))
+  const profileStart = profileLimits.profileStart
+  const profileEnd = profileLimits.profileEnd
 
   if (Math.abs(config.height) <= 0.000001) {
     return [rest[0], rest[1] * config.widthScale, 0]
@@ -584,36 +597,38 @@ function curlProjectionRaw(
   curlRadius: number,
 ): number {
   const broadWave = openWaveProjection(t)
-  const dip = clampNumber((curl - 0.28) / 0.72, 0, 1)
-  const pointed = smootherStep(clampNumber(lipSharpness, 0, 1)) * 0.38
+  const parallel = curlParallelAmount(curl)
+  const downDip = curlDownDipAmount(curl)
+  const pointed = smootherStep(clampNumber(lipSharpness, 0, 1))
   const rho = normalizedConicRho(conicRho)
   const radius = normalizedCurlRadius(curlRadius)
   const riseEnd = clampNumber(
-    lerpNumber(0.68, 0.44, dip) + lerpNumber(0.035, -0.035, rho) + lerpNumber(-0.035, 0.04, radius),
-    0.36,
-    0.72,
+    lerpNumber(0.76, 0.72, downDip) + lerpNumber(0.035, -0.03, rho) + lerpNumber(-0.035, 0.04, radius),
+    0.62,
+    0.8,
   )
   const returnStart = clampNumber(
-    lerpNumber(0.76, 0.9, dip) + lerpNumber(0.025, -0.02, rho) + pointed * 0.04,
-    0.58,
+    lerpNumber(0.94, 0.76, downDip) + lerpNumber(0.025, -0.02, rho) + lerpNumber(-0.035, 0.02, pointed),
+    riseEnd + 0.04,
     0.96,
   )
   const rise = smootherStep(t / Math.max(riseEnd, 0.000001))
   const returnAmount = clampNumber(
-    lerpNumber(0.32, 0.02, dip) + lerpNumber(0.035, -0.02, rho) + lerpNumber(-0.025, 0.02, radius),
+    downDip * (lerpNumber(0.58, 0.24, pointed) + lerpNumber(0.03, -0.03, rho) + lerpNumber(-0.04, 0.025, radius)) +
+      (1 - downDip) * (1 - pointed) * 0.14,
     0,
-    0.34,
+    0.66,
   )
   const returnUnder = 1 - returnAmount * smootherStep((t - returnStart) / Math.max(1 - returnStart, 0.000001))
   const power = clampNumber(
-    lerpNumber(1.18, 0.78, smoothing) + lerpNumber(0.12, -0.12, rho) + lerpNumber(-0.08, 0.1, radius) +
-      pointed * 0.14,
+    lerpNumber(1.12, 0.72, smoothing) + lerpNumber(0.12, -0.12, rho) + lerpNumber(-0.08, 0.1, radius) +
+      pointed * 0.12,
     0.54,
     1.4,
   )
   const curledWave = Math.pow(Math.max(rise * returnUnder, 0), power)
 
-  return lerpNumber(broadWave, curledWave, curl)
+  return lerpNumber(broadWave, curledWave, parallel)
 }
 
 function waveHeightProfile(
@@ -640,25 +655,31 @@ function roundedCurlHeightProfile(
   conicRho: number,
   curlRadius: number,
 ): number {
-  const dip = clampNumber((curl - 0.24) / 0.76, 0, 1)
+  const downDip = curlDownDipAmount(curl)
   const pointed = smootherStep(clampNumber(lipSharpness, 0, 1))
   const rho = normalizedConicRho(conicRho)
   const radius = normalizedCurlRadius(curlRadius)
   const riseEnd = clampNumber(
-    lerpNumber(0.62, 0.42, dip) + lerpNumber(0.045, -0.045, rho) + lerpNumber(-0.04, 0.05, radius),
-    0.36,
-    0.68,
+    lerpNumber(0.64, 0.48, downDip) + lerpNumber(0.045, -0.04, rho) + lerpNumber(-0.04, 0.05, radius),
+    0.4,
+    0.7,
   )
   const fallStart = clampNumber(
-    lerpNumber(0.9, 0.43, dip) + lerpNumber(0.04, -0.04, rho) + lerpNumber(-0.025, 0.04, radius) +
-      lerpNumber(-0.12, 0.08, pointed) - smoothing * 0.025,
-    riseEnd + lerpNumber(0.19, 0.1, pointed),
-    0.92,
+    lerpNumber(0.86, 0.72, pointed) + lerpNumber(0, -0.16, downDip) +
+      lerpNumber(0.035, -0.035, rho) + lerpNumber(-0.035, 0.035, radius) - smoothing * 0.025,
+    riseEnd + 0.055,
+    0.94,
   )
-  const fallSpan = clampNumber(lerpNumber(0.5, 0.24, pointed) + lerpNumber(0.07, 0.03, pointed) * radius, 0.22, 0.56)
-  const fallEnd = clampNumber(fallStart + fallSpan, fallStart + 0.2, 0.998)
+  const fallSpan = clampNumber(
+    lerpNumber(0.66, 0.2, pointed) * lerpNumber(1, 0.62, downDip) + lerpNumber(0.08, 0.01, pointed) * radius,
+    0.18,
+    0.72,
+  )
+  const fallEnd = clampNumber(fallStart + fallSpan, fallStart + 0.14, 0.998)
   const rise = smootherStep(t / Math.max(riseEnd, 0.000001))
-  const fall = 1 - smootherStep((t - fallStart) / Math.max(fallEnd - fallStart, 0.000001))
+  const earlyDipDepth = downDip * lerpNumber(0.92, 0.45, pointed)
+  const earlyDipFall = 1 - earlyDipDepth * smootherStep((t - (fallStart - fallSpan * 0.16)) / Math.max(fallSpan * 0.58, 0.000001))
+  const capFall = 1 - smootherStep((t - fallStart) / Math.max(fallEnd - fallStart, 0.000001))
 
   const power = clampNumber(
     lerpNumber(0.9, 0.66, smoothing) + pointed * 0.22 + lerpNumber(0.14, -0.16, rho) + lerpNumber(-0.1, 0.12, radius),
@@ -666,7 +687,15 @@ function roundedCurlHeightProfile(
     1.2,
   )
 
-  return Math.pow(Math.max(rise * fall, 0), power)
+  return Math.pow(Math.max(rise * earlyDipFall * capFall, 0), power)
+}
+
+function curlParallelAmount(curl: number): number {
+  return clampNumber(curl / PARALLEL_ANGLE_CURL, 0, 1)
+}
+
+function curlDownDipAmount(curl: number): number {
+  return clampNumber((curl - PARALLEL_ANGLE_CURL) / (1 - PARALLEL_ANGLE_CURL), 0, 1)
 }
 
 function openWaveProjection(t: number): number {

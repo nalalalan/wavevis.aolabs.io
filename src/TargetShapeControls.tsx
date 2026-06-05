@@ -18,6 +18,7 @@ type NumberKey =
   | 'columns'
   | 'morph'
   | 'horizontalOffset'
+  | 'overhangPosition'
   | 'height'
   | 'overhangWidth'
   | 'overhangAngleDeg'
@@ -71,6 +72,7 @@ export default function TargetShapeControls({
           <RangeInput label="morph" value={config.morph} min={0} max={1} step={0.01} onChange={(value) => setNumber('morph', value)} />
           <RangeInput label="height" value={config.height} min={0} max={ranges.heightMax} step={0.25} onChange={(value) => setNumber('height', value)} />
           <RangeInput label="overhang" value={config.horizontalOffset} min={0} max={ranges.horizontalOffsetMax} step={0.25} onChange={(value) => setNumber('horizontalOffset', value)} />
+          <RangeInput label="position" value={config.overhangPosition} min={-1} max={1} step={0.01} onChange={(value) => setNumber('overhangPosition', value)} />
           <RangeInput
             label="lip dip"
             value={config.overhangAngleDeg}
@@ -169,6 +171,7 @@ function clampToUsableRanges(config: InverseSheetConfig): InverseSheetConfig {
     ...config,
     height: clampNumber(config.height, 0, ranges.heightMax),
     horizontalOffset: clampNumber(config.horizontalOffset, 0, ranges.horizontalOffsetMax),
+    overhangPosition: clampNumber(config.overhangPosition, -1, 1),
     overhangWidth: clampNumber(config.overhangWidth, 0, ranges.overhangWidthMax),
   }
 }
