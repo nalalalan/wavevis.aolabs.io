@@ -42,6 +42,8 @@ const flat0 = summarizeFlatContribution(buildInverseSheetModel({ flatContributio
 const flat1 = summarizeFlatContribution(buildInverseSheetModel({ flatContribution: 1 }))
 const transition0 = buildInverseSheetModel({ smoothing: 0 })
 const transition1 = buildInverseSheetModel({ smoothing: 1 })
+const bluntLip = summarizeLipSharpness(buildInverseSheetModel({ smoothing: 1, wallSmoothness: 1, flatContribution: 1, overhangAngleDeg: 90, lipSharpness: 0 }))
+const sharpLip = summarizeLipSharpness(buildInverseSheetModel({ smoothing: 1, wallSmoothness: 1, flatContribution: 1, overhangAngleDeg: 90, lipSharpness: 1 }))
 const mechanism = rigidCellMechanismStats(buildInverseSheetModel())
 
 if (!(flat1.flatMeanAbs > flat0.flatMeanAbs * 1.8)) {
@@ -58,6 +60,22 @@ if (Math.abs(flat1.overhang - flat0.overhang) > 0.15 || Math.abs(flat1.height - 
 
 if (!(transition1.summary.maxTensileStrain < transition0.summary.maxTensileStrain)) {
   failures.push('higher ground transition should soften the overhang transition')
+}
+
+if (!(bluntLip.frontBandCount >= sharpLip.frontBandCount + 2)) {
+  failures.push('lip sharpness 0 should keep a visibly wider rounded front band than lip sharpness 1')
+}
+
+if (!(bluntLip.frontZSpan > sharpLip.frontZSpan * 2.5)) {
+  failures.push('lip sharpness 0 should produce a blunt rounded nose with much more vertical cap span')
+}
+
+if (!(sharpLip.postTipDrop > bluntLip.postTipDrop * 2)) {
+  failures.push('lip sharpness 1 should collapse the rounded nose into a pointed tip with a much tighter drop')
+}
+
+if (Math.abs(bluntLip.frontX - sharpLip.frontX) > 0.5) {
+  failures.push('lip sharpness should control tip shape without materially changing overhang reach')
 }
 
 if (mechanism.maxConnectorEndpointGap > 0.0001) {
@@ -90,6 +108,10 @@ const report = {
   transition1: {
     maxTensileStrain: round(transition1.summary.maxTensileStrain),
     maxEdgeRotationDeg: round(transition1.summary.maxEdgeRotationDeg),
+  },
+  lipSharpness: {
+    blunt: bluntLip,
+    pointed: sharpLip,
   },
   mechanism: {
     maxLegLengthSpread: round(mechanism.maxLegLengthSpread),
@@ -135,6 +157,30 @@ function summarizeFlatContribution(model) {
     activeMaxAbs: round(Math.max(...activeEdges.map((edge) => Math.abs(edge.strain)))),
     overhang: round(model.summary.overhangAmount),
     height: round(model.summary.maxHeight),
+  }
+}
+
+function summarizeLipSharpness(model) {
+  const centerRow = Math.floor(model.config.rows / 2)
+  const points = model.nodes
+    .filter((node) => node.row === centerRow)
+    .sort((a, b) => a.col - b.col)
+    .map((node) => ({ col: node.col, x: node.currentPosition[0], z: node.currentPosition[2] }))
+  const maxZ = Math.max(...points.map((point) => point.z))
+  const activePoints = points.filter((point) => point.z > maxZ * 0.08)
+  const tip = activePoints.reduce((best, point) => (point.x > best.x ? point : best), activePoints[0])
+  const frontBand = activePoints.filter(
+    (point) => point.x >= tip.x - model.config.spacing * 0.75 && point.z > maxZ * 0.18,
+  )
+  const frontZValues = frontBand.map((point) => point.z)
+  const tipIndex = points.findIndex((point) => point.col === tip.col)
+  const postTipPoint = points[Math.min(points.length - 1, tipIndex + 2)]
+
+  return {
+    frontX: round(tip.x),
+    frontBandCount: frontBand.length,
+    frontZSpan: round(Math.max(...frontZValues) - Math.min(...frontZValues)),
+    postTipDrop: round(tip.z - postTipPoint.z),
   }
 }
 

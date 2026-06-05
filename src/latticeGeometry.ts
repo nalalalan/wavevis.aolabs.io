@@ -587,32 +587,40 @@ function curlProjectionRaw(
 ): number {
   const broadWave = openWaveProjection(t)
   const sharpness = clampNumber(lipSharpness, 0, 1)
+  const pointed = smootherStep(sharpness)
   const rho = normalizedConicRho(conicRho)
   const radius = normalizedCurlRadius(curlRadius)
+  const returnStartBase =
+    lerpNumber(0.82, 0.5, curl) + lerpNumber(0.04, -0.05, rho) + lerpNumber(0.06, -0.055, radius)
   const returnStart = clampNumber(
-    lerpNumber(0.82, 0.5, curl) + lerpNumber(0.04, -0.05, rho) + lerpNumber(0.06, -0.055, radius) +
-      lerpNumber(-0.018, 0.014, sharpness),
+    returnStartBase + lerpNumber(0.04, 0.1, pointed),
     0.24,
-    0.88,
+    0.9,
   )
+  const returnSpan = lerpNumber(0.42, 0.085, pointed) + lerpNumber(0.07, 0.015, pointed) * radius +
+    smoothing * lerpNumber(0.035, 0, pointed)
   const returnEnd = clampNumber(
-    lerpNumber(1, 0.94, curl) + smoothing * lerpNumber(0, 0.035, curl) + lerpNumber(-0.025, 0.07, radius) +
-      lerpNumber(0.012, -0.012, sharpness),
-    returnStart + lerpNumber(0.14, 0.4, curl) + radius * 0.06,
+    returnStart + returnSpan,
+    returnStart + lerpNumber(0.24, 0.055, pointed),
     0.995,
   )
   const riseEnd = lerpNumber(0.58, 0.34, curl) + lerpNumber(0.035, -0.05, rho) + lerpNumber(-0.035, 0.055, radius) +
-    lerpNumber(0.018, -0.012, sharpness)
+    lerpNumber(0.02, -0.015, pointed)
   const tailFloor = clampNumber(
     lerpNumber(0.98, 0.018, curl) + lerpNumber(0.05, -0.055, rho) + lerpNumber(-0.055, 0.07, radius) +
-      lerpNumber(0.018, -0.018, sharpness),
+      lerpNumber(0.08, -0.11, pointed),
     0,
     0.98,
   )
   const rise = smootherStep(t / Math.max(riseEnd, 0.000001))
   const returnAmount = 1 - tailFloor
   const returnUnder = 1 - returnAmount * smootherStep((t - returnStart) / Math.max(returnEnd - returnStart, 0.000001))
-  const power = clampNumber(lerpNumber(1.48, 0.72, smoothing) + lerpNumber(0.18, -0.22, rho) + lerpNumber(-0.14, 0.2, radius), 0.42, 1.8)
+  const power = clampNumber(
+    lerpNumber(1.48, 0.72, smoothing) + lerpNumber(0.18, -0.22, rho) + lerpNumber(-0.14, 0.2, radius) +
+      pointed * 0.24,
+    0.42,
+    1.8,
+  )
   const curledWave = Math.pow(Math.max(rise * returnUnder, 0), power)
 
   return lerpNumber(broadWave, curledWave, curl)
@@ -643,27 +651,28 @@ function roundedCurlHeightProfile(
   curlRadius: number,
 ): number {
   const sharpness = clampNumber(lipSharpness, 0, 1)
+  const pointed = smootherStep(sharpness)
   const rho = normalizedConicRho(conicRho)
   const radius = normalizedCurlRadius(curlRadius)
   const riseEnd = lerpNumber(0.6, 0.34, curl) + lerpNumber(0.045, -0.055, rho) + lerpNumber(-0.035, 0.055, radius) +
-    lerpNumber(0.02, -0.012, sharpness)
-  const fallEnd = clampNumber(
-    lerpNumber(0.98, 0.99, curl) + smoothing * lerpNumber(0, 0.01, curl) + lerpNumber(-0.025, 0.055, radius) +
-      lerpNumber(0.012, -0.012, sharpness),
-    0.88,
-    0.998,
-  )
-  const minimumFallSpan = lerpNumber(0.12, 0.26, radius)
+    lerpNumber(0.022, -0.014, pointed)
+  const fallSpan = lerpNumber(0.4, 0.075, pointed) + lerpNumber(0.08, 0.018, pointed) * radius +
+    smoothing * lerpNumber(0.025, 0, pointed)
   const fallStart = clampNumber(
     lerpNumber(0.72, 0.66, curl) + lerpNumber(0.05, -0.055, rho) + lerpNumber(-0.04, 0.06, radius) +
-      lerpNumber(-0.018, 0.018, sharpness) - smoothing * lerpNumber(0, 0.03, curl),
+      lerpNumber(-0.035, 0.04, pointed) - smoothing * lerpNumber(0, 0.03, curl),
     riseEnd + 0.04,
-    fallEnd - minimumFallSpan,
+    0.92,
+  )
+  const fallEnd = clampNumber(
+    fallStart + fallSpan,
+    fallStart + lerpNumber(0.24, 0.055, pointed),
+    0.998,
   )
   const rise = smootherStep(t / Math.max(riseEnd, 0.000001))
   const fall = 1 - smootherStep((t - fallStart) / Math.max(fallEnd - fallStart, 0.000001))
 
-  const power = clampNumber(lerpNumber(1.02, 0.56, smoothing) + sharpness * 0.24 + lerpNumber(0.18, -0.2, rho) +
+  const power = clampNumber(lerpNumber(1.02, 0.56, smoothing) + pointed * 0.2 + lerpNumber(0.18, -0.2, rho) +
     lerpNumber(-0.12, 0.16, radius), 0.34, 1.55)
 
   return Math.pow(Math.max(rise * fall, 0), power)
