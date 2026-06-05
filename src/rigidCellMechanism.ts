@@ -14,9 +14,14 @@ export type RigidCellFrame = {
 
 export type RigidCellMechanismStats = {
   maxLegLengthSpread: number
+  maxPairLengthSpread: number
+  maxOppositeColinearErrorDeg: number
   maxOrthogonalityErrorDeg: number
   maxConnectorEndpointGap: number
+  meanConnectorEndpointGap: number
+  rmsConnectorEndpointGap: number
   maxArmSurfaceLeak: number
+  maxCenterShift: number
 }
 
 export type RigidCellMechanism = {
@@ -106,25 +111,77 @@ export function rigidEdgeEndpoints(
 
 export function rigidCellMechanismStats(model: LatticeModel): RigidCellMechanismStats {
   const mechanism = buildRigidCellMechanism(model)
+  const nodeById = new Map(model.nodes.map((node) => [node.id, node]))
   let maxLegLengthSpread = 0
+  let maxPairLengthSpread = 0
+  let maxOppositeColinearErrorDeg = 0
   let maxOrthogonalityErrorDeg = 0
   let maxConnectorEndpointGap = 0
+  let connectorEndpointGapSum = 0
+  let connectorEndpointGapSquaredSum = 0
+  let connectorEndpointGapCount = 0
   let maxArmSurfaceLeak = 0
+  let maxCenterShift = 0
 
   mechanism.frames.forEach((frame) => {
-    const endpoints = [
-      armEndpointForDirection(frame, 'east'),
-      armEndpointForDirection(frame, 'west'),
-      armEndpointForDirection(frame, 'north'),
-      armEndpointForDirection(frame, 'south'),
-    ]
-    const lengths = endpoints.map((endpoint) => distanceVec(frame.center, endpoint))
-    maxLegLengthSpread = Math.max(maxLegLengthSpread, Math.max(...lengths) - Math.min(...lengths))
-    maxOrthogonalityErrorDeg = Math.max(maxOrthogonalityErrorDeg, Math.abs(90 - angleDeg(frame.xAxis, frame.yAxis)))
+    const eastEndpoint = frame.armEndpoints.east
+    const westEndpoint = frame.armEndpoints.west
+    const northEndpoint = frame.armEndpoints.north
+    const southEndpoint = frame.armEndpoints.south
+
+    const pairedLengths: number[] = []
+
+    if (eastEndpoint && westEndpoint) {
+      const eastVector = subtractVec(eastEndpoint, frame.center)
+      const westVector = subtractVec(westEndpoint, frame.center)
+      const eastLength = lengthVec(eastVector)
+      const westLength = lengthVec(westVector)
+
+      pairedLengths.push(eastLength, westLength)
+      maxPairLengthSpread = Math.max(maxPairLengthSpread, Math.abs(eastLength - westLength))
+      maxOppositeColinearErrorDeg = Math.max(
+        maxOppositeColinearErrorDeg,
+        angleDeg(eastVector, scaleVec(westVector, -1)),
+      )
+    }
+
+    if (northEndpoint && southEndpoint) {
+      const northVector = subtractVec(northEndpoint, frame.center)
+      const southVector = subtractVec(southEndpoint, frame.center)
+      const northLength = lengthVec(northVector)
+      const southLength = lengthVec(southVector)
+
+      pairedLengths.push(northLength, southLength)
+      maxPairLengthSpread = Math.max(maxPairLengthSpread, Math.abs(northLength - southLength))
+      maxOppositeColinearErrorDeg = Math.max(
+        maxOppositeColinearErrorDeg,
+        angleDeg(northVector, scaleVec(southVector, -1)),
+      )
+    }
+
+    if (pairedLengths.length >= 2) {
+      maxLegLengthSpread = Math.max(maxLegLengthSpread, Math.max(...pairedLengths) - Math.min(...pairedLengths))
+    }
+
+    if (eastEndpoint && westEndpoint && northEndpoint && southEndpoint) {
+      const visualXAxis = subtractVec(eastEndpoint, westEndpoint)
+      const visualYAxis = subtractVec(northEndpoint, southEndpoint)
+      maxOrthogonalityErrorDeg = Math.max(maxOrthogonalityErrorDeg, Math.abs(90 - angleDeg(visualXAxis, visualYAxis)))
+    }
+
+    const sourceNode = nodeById.get(frame.nodeId)
+    if (sourceNode) {
+      const baseFrame = buildRigidCellFrame(sourceNode, nodeById, model.config.spacing)
+      maxCenterShift = Math.max(maxCenterShift, distanceVec(frame.center, baseFrame.center))
+    }
   })
 
   mechanism.endpointsByEdgeId.forEach((endpoints) => {
-    maxConnectorEndpointGap = Math.max(maxConnectorEndpointGap, distanceVec(endpoints.endpointA, endpoints.endpointB))
+    const endpointGap = distanceVec(endpoints.endpointA, endpoints.endpointB)
+    maxConnectorEndpointGap = Math.max(maxConnectorEndpointGap, endpointGap)
+    connectorEndpointGapSum += endpointGap
+    connectorEndpointGapSquaredSum += endpointGap ** 2
+    connectorEndpointGapCount += 1
   })
 
   model.edges.forEach((edge) => {
@@ -133,14 +190,23 @@ export function rigidCellMechanismStats(model: LatticeModel): RigidCellMechanism
     const connector = mechanism.connectorByEdgeId.get(edge.id)
     if (!frameA || !frameB || !connector) return
 
-    maxArmSurfaceLeak = Math.max(maxArmSurfaceLeak, pointSegmentDistance(connector, frameA.center, frameB.center))
+    const midpoint = scaleVec(addVec(frameA.center, frameB.center), 0.5)
+    const localNormal = normalizeVec(addVec(frameA.zAxis, frameB.zAxis), frameA.zAxis)
+    maxArmSurfaceLeak = Math.max(maxArmSurfaceLeak, Math.abs(dotVec(subtractVec(connector, midpoint), localNormal)))
   })
 
   return {
     maxLegLengthSpread,
+    maxPairLengthSpread,
+    maxOppositeColinearErrorDeg,
     maxOrthogonalityErrorDeg,
     maxConnectorEndpointGap,
+    meanConnectorEndpointGap: connectorEndpointGapCount ? connectorEndpointGapSum / connectorEndpointGapCount : 0,
+    rmsConnectorEndpointGap: connectorEndpointGapCount
+      ? Math.sqrt(connectorEndpointGapSquaredSum / connectorEndpointGapCount)
+      : 0,
     maxArmSurfaceLeak,
+    maxCenterShift,
   }
 }
 
@@ -151,13 +217,14 @@ export function buildRigidCellMechanism(model: LatticeModel): RigidCellMechanism
   model.nodes.forEach((node) => {
     frameByNodeId.set(node.id, buildRigidCellFrame(node, nodeById, model.config.spacing))
   })
+  smoothFrameAxes(model, frameByNodeId)
 
   const connectorByEdgeId = solveSurfaceAnchoredConnectors(model, frameByNodeId, nodeById)
   const endpointsByEdgeId = new Map<string, { endpointA: Vec3; endpointB: Vec3 }>()
   model.edges.forEach((edge) => {
-    const connector = connectorByEdgeId.get(edge.id)
-    if (!connector) return
-    endpointsByEdgeId.set(edge.id, { endpointA: connector, endpointB: connector })
+    const endpoints = rigidEdgeEndpointsFromFrames(edge, frameByNodeId, nodeById)
+    if (!endpoints) return
+    endpointsByEdgeId.set(edge.id, endpoints)
   })
 
   return {
@@ -173,88 +240,70 @@ function solveSurfaceAnchoredConnectors(
   frameByNodeId: Map<string, RigidCellFrame>,
   nodeById: Map<string, LatticeNode>,
 ): Map<string, Vec3> {
-  const radiusByNodeId = solveCellLegRadii(model, frameByNodeId)
-  const connectorByEdgeId = buildSurfaceSharedConnectors(model, frameByNodeId, radiusByNodeId)
-  applySurfaceArmEndpoints(model, frameByNodeId, nodeById, connectorByEdgeId)
+  const connectorByEdgeId = buildPairwiseOppositeConnectorMap(model, frameByNodeId)
+  applyConnectedArmEndpoints(model, frameByNodeId, nodeById, connectorByEdgeId)
+  alignFrameAxesToPairwiseArms(frameByNodeId)
+
   return connectorByEdgeId
 }
 
-function solveCellLegRadii(
+function buildPairwiseOppositeConnectorMap(
   model: LatticeModel,
   frameByNodeId: Map<string, RigidCellFrame>,
-): Map<string, number> {
-  const edgeLengths = model.edges.map((edge) => {
-    const frameA = frameByNodeId.get(edge.nodeA)
-    const frameB = frameByNodeId.get(edge.nodeB)
-    return {
-      edge,
-      length: frameA && frameB ? distanceVec(frameA.center, frameB.center) : model.config.spacing,
-    }
-  })
-  const radiusByNodeId = new Map<string, number>()
-
-  frameByNodeId.forEach((frame, nodeIdValue) => {
-    const incident = edgeLengths
-      .filter(({ edge }) => edge.nodeA === nodeIdValue || edge.nodeB === nodeIdValue)
-      .map(({ length }) => length)
-    const meanLength = incident.length ? incident.reduce((sum, length) => sum + length, 0) / incident.length : model.config.spacing
-    radiusByNodeId.set(nodeIdValue, Math.max(meanLength * 0.5, model.config.spacing * 0.12, frame.legLength * 0.4))
-  })
-
-  for (let iteration = 0; iteration < 36; iteration += 1) {
-    const next = new Map(radiusByNodeId)
-
-    frameByNodeId.forEach((_frame, nodeIdValue) => {
-      const incidentTargets = edgeLengths
-        .filter(({ edge }) => edge.nodeA === nodeIdValue || edge.nodeB === nodeIdValue)
-        .map(({ edge, length }) => length - (radiusByNodeId.get(edge.nodeA === nodeIdValue ? edge.nodeB : edge.nodeA) ?? length * 0.5))
-        .filter((target) => Number.isFinite(target))
-
-      if (!incidentTargets.length) return
-      const target = incidentTargets.reduce((sum, value) => sum + value, 0) / incidentTargets.length
-      const localLengths = edgeLengths
-        .filter(({ edge }) => edge.nodeA === nodeIdValue || edge.nodeB === nodeIdValue)
-        .map(({ length }) => length)
-      const shortest = Math.min(...localLengths)
-      const longest = Math.max(...localLengths)
-      const lower = Math.max(shortest * 0.18, model.config.spacing * 0.08)
-      const upper = Math.max(longest * 0.82, lower + model.config.spacing * 0.05)
-      const current = radiusByNodeId.get(nodeIdValue) ?? target
-
-      next.set(nodeIdValue, lerpNumber(current, clampNumber(target, lower, upper), 0.34))
-    })
-
-    radiusByNodeId.clear()
-    next.forEach((value, key) => radiusByNodeId.set(key, value))
-  }
-
-  return radiusByNodeId
-}
-
-function buildSurfaceSharedConnectors(
-  model: LatticeModel,
-  frameByNodeId: Map<string, RigidCellFrame>,
-  radiusByNodeId: Map<string, number>,
 ): Map<string, Vec3> {
   const connectorByEdgeId = new Map<string, Vec3>()
 
-  model.edges.forEach((edge) => {
-    const frameA = frameByNodeId.get(edge.nodeA)
-    const frameB = frameByNodeId.get(edge.nodeB)
-    if (!frameA || !frameB) return
+  for (let row = 0; row < model.config.rows; row += 1) {
+    const centers = Array.from({ length: model.config.columns }, (_value, col) => frameByNodeId.get(nodeId(row, col))?.center)
+    solveOppositePairConnectorChain(centers).forEach((connector, col) => {
+      connectorByEdgeId.set(`e-h-${row}-${col}`, connector)
+    })
+  }
 
-    const length = distanceVec(frameA.center, frameB.center)
-    const radiusA = radiusByNodeId.get(edge.nodeA) ?? length * 0.5
-    const radiusB = radiusByNodeId.get(edge.nodeB) ?? length * 0.5
-    const ratio = clampNumber(radiusA / Math.max(radiusA + radiusB, 0.000001), 0.16, 0.84)
-
-    connectorByEdgeId.set(edge.id, lerpVec(frameA.center, frameB.center, ratio))
-  })
+  for (let col = 0; col < model.config.columns; col += 1) {
+    const centers = Array.from({ length: model.config.rows }, (_value, row) => frameByNodeId.get(nodeId(row, col))?.center)
+    solveOppositePairConnectorChain(centers).forEach((connector, row) => {
+      connectorByEdgeId.set(`e-v-${row}-${col}`, connector)
+    })
+  }
 
   return connectorByEdgeId
 }
 
-function applySurfaceArmEndpoints(
+function solveOppositePairConnectorChain(centers: Array<Vec3 | undefined>): Vec3[] {
+  if (centers.length < 2) return []
+
+  const edgeCount = centers.length - 1
+  const signs: number[] = [1]
+  const offsets: Vec3[] = [[0, 0, 0]]
+
+  for (let edgeIndex = 1; edgeIndex < edgeCount; edgeIndex += 1) {
+    const center = centers[edgeIndex]
+    const previousOffset = offsets[edgeIndex - 1]
+    signs[edgeIndex] = -signs[edgeIndex - 1]
+    offsets[edgeIndex] = center ? subtractVec(scaleVec(center, 2), previousOffset) : previousOffset
+  }
+
+  let seedSum: Vec3 = [0, 0, 0]
+  let seedCount = 0
+
+  for (let edgeIndex = 0; edgeIndex < edgeCount; edgeIndex += 1) {
+    const left = centers[edgeIndex]
+    const right = centers[edgeIndex + 1]
+    if (!left || !right) continue
+
+    const target = scaleVec(addVec(left, right), 0.5)
+    seedSum = addVec(seedSum, scaleVec(subtractVec(target, offsets[edgeIndex]), signs[edgeIndex]))
+    seedCount += 1
+  }
+
+  const seed = seedCount ? scaleVec(seedSum, 1 / seedCount) : centers[0] ?? [0, 0, 0]
+  return Array.from({ length: edgeCount }, (_value, edgeIndex) =>
+    addVec(scaleVec(seed, signs[edgeIndex]), offsets[edgeIndex]),
+  )
+}
+
+function applyConnectedArmEndpoints(
   model: LatticeModel,
   frameByNodeId: Map<string, RigidCellFrame>,
   nodeById: Map<string, LatticeNode>,
@@ -275,23 +324,83 @@ function applySurfaceArmEndpoints(
     frameA.armEndpoints[armDirectionForEdge(edge, nodeA, nodeB)] = connector
     frameB.armEndpoints[armDirectionForEdge(edge, nodeB, nodeA)] = connector
   })
+}
 
+function smoothFrameAxes(model: LatticeModel, frameByNodeId: Map<string, RigidCellFrame>): void {
+  for (let pass = 0; pass < 10; pass += 1) {
+    const nextAxes = new Map<string, Pick<RigidCellFrame, 'xAxis' | 'yAxis' | 'zAxis'>>()
+
+    model.nodes.forEach((node) => {
+      const frame = frameByNodeId.get(node.id)
+      if (!frame) return
+
+      let xSum = scaleVec(frame.xAxis, 2.2)
+      let ySum = scaleVec(frame.yAxis, 2.2)
+
+      neighboringNodeIds(node).forEach((neighborId) => {
+        const neighbor = frameByNodeId.get(neighborId)
+        if (!neighbor) return
+
+        xSum = addVec(xSum, scaleVec(alignAxis(neighbor.xAxis, frame.xAxis), 0.72))
+        ySum = addVec(ySum, scaleVec(alignAxis(neighbor.yAxis, frame.yAxis), 0.72))
+      })
+
+      const zAxis = frame.zAxis
+      const xAxis = normalizeVec(projectToPlane(xSum, zAxis), frame.xAxis)
+      const yCandidate = normalizeVec(projectToPlane(ySum, zAxis), frame.yAxis)
+      let yAxis = normalizeVec(crossVec(zAxis, xAxis), fallbackPerpendicular(xAxis))
+      if (dotVec(yAxis, yCandidate) < 0) yAxis = scaleVec(yAxis, -1)
+
+      nextAxes.set(node.id, { xAxis, yAxis, zAxis })
+    })
+
+    nextAxes.forEach((axes, nodeIdValue) => {
+      const frame = frameByNodeId.get(nodeIdValue)
+      if (!frame) return
+      frame.xAxis = axes.xAxis
+      frame.yAxis = axes.yAxis
+      frame.zAxis = axes.zAxis
+    })
+  }
+}
+
+function neighboringNodeIds(node: LatticeNode): string[] {
+  return [
+    nodeId(node.row, node.col - 1),
+    nodeId(node.row, node.col + 1),
+    nodeId(node.row - 1, node.col),
+    nodeId(node.row + 1, node.col),
+  ]
+}
+
+function alignAxis(axis: Vec3, reference: Vec3): Vec3 {
+  return dotVec(axis, reference) < 0 ? scaleVec(axis, -1) : axis
+}
+
+function projectToPlane(vector: Vec3, normal: Vec3): Vec3 {
+  return subtractVec(vector, scaleVec(normal, dotVec(vector, normal)))
+}
+
+function alignFrameAxesToPairwiseArms(frameByNodeId: Map<string, RigidCellFrame>): void {
   frameByNodeId.forEach((frame) => {
-    const endpoints = Object.values(frame.armEndpoints).filter(Boolean) as Vec3[]
-    if (!endpoints.length) return
+    const xSeed = frame.armEndpoints.east && frame.armEndpoints.west
+      ? subtractVec(frame.armEndpoints.east, frame.armEndpoints.west)
+      : frame.xAxis
+    const ySeed = frame.armEndpoints.north && frame.armEndpoints.south
+      ? subtractVec(frame.armEndpoints.north, frame.armEndpoints.south)
+      : frame.yAxis
+    const xAxis = normalizeVec(projectToPlane(xSeed, frame.zAxis), frame.xAxis)
+    const yProjected = subtractVec(ySeed, scaleVec(xAxis, dotVec(ySeed, xAxis)))
+    const yAxis = normalizeVec(projectToPlane(yProjected, frame.zAxis), fallbackPerpendicular(xAxis))
+    const zAxis = normalizeVec(crossVec(xAxis, yAxis), frame.zAxis)
+    const connectedLengths = Object.values(frame.armEndpoints).map((endpoint) => distanceVec(frame.center, endpoint))
 
-    frame.legLength = endpoints.reduce((sum, endpoint) => sum + distanceVec(frame.center, endpoint), 0) / endpoints.length
-
-    const east = frame.armEndpoints.east
-    const west = frame.armEndpoints.west
-    const north = frame.armEndpoints.north
-    const south = frame.armEndpoints.south
-    const xSeed = east && west ? subtractVec(east, west) : east ? subtractVec(east, frame.center) : west ? subtractVec(frame.center, west) : frame.xAxis
-    const ySeed = north && south ? subtractVec(north, south) : north ? subtractVec(north, frame.center) : south ? subtractVec(frame.center, south) : frame.yAxis
-
-    frame.xAxis = normalizeVec(xSeed, frame.xAxis)
-    frame.yAxis = normalizeVec(ySeed, frame.yAxis)
-    frame.zAxis = normalizeVec(crossVec(frame.xAxis, frame.yAxis), frame.zAxis)
+    frame.xAxis = xAxis
+    frame.yAxis = normalizeVec(crossVec(zAxis, xAxis), yAxis)
+    frame.zAxis = zAxis
+    if (connectedLengths.length) {
+      frame.legLength = connectedLengths.reduce((sum, value) => sum + value, 0) / connectedLengths.length
+    }
   })
 }
 
@@ -384,35 +493,11 @@ function distanceVec(a: Vec3, b: Vec3): number {
   return lengthVec(subtractVec(a, b))
 }
 
-function pointSegmentDistance(point: Vec3, start: Vec3, end: Vec3): number {
-  const segment = subtractVec(end, start)
-  const denominator = dotVec(segment, segment)
-  if (denominator <= 0.000001) return distanceVec(point, start)
-  const amount = clampNumber(dotVec(subtractVec(point, start), segment) / denominator, 0, 1)
-  return distanceVec(point, lerpVec(start, end, amount))
-}
-
 function angleDeg(a: Vec3, b: Vec3): number {
   const denominator = lengthVec(a) * lengthVec(b)
   if (denominator <= 0.000001) return 0
   const cosine = Math.min(1, Math.max(-1, dotVec(a, b) / denominator))
   return (Math.acos(cosine) * 180) / Math.PI
-}
-
-function lerpVec(a: Vec3, b: Vec3, amount: number): Vec3 {
-  return [
-    a[0] + (b[0] - a[0]) * amount,
-    a[1] + (b[1] - a[1]) * amount,
-    a[2] + (b[2] - a[2]) * amount,
-  ]
-}
-
-function lerpNumber(a: number, b: number, amount: number): number {
-  return a + (b - a) * amount
-}
-
-function clampNumber(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value))
 }
 
 function nodeId(row: number, col: number): string {

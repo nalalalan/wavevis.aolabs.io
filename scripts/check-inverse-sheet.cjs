@@ -60,16 +60,24 @@ if (!(transition1.summary.maxTensileStrain < transition0.summary.maxTensileStrai
   failures.push('higher ground transition should soften the overhang transition')
 }
 
-if (mechanism.maxLegLengthSpread > 1.35) {
-  failures.push('surface-constrained cell leg-length residual should stay bounded')
+if (mechanism.maxConnectorEndpointGap > 0.0001) {
+  failures.push('inverse-sheet arms should terminate directly at shared connector points')
 }
 
-if (mechanism.maxConnectorEndpointGap > 0.025) {
-  failures.push('rigid cell connectors should solve to direct contact without bridge spans')
+if (mechanism.maxPairLengthSpread > 0.005) {
+  failures.push('opposite arms within each inverse-sheet pair should stay nearly equal length')
 }
 
-if (mechanism.maxArmSurfaceLeak > 0.025) {
-  failures.push('rigid cell arms should stay tangent to the local surface')
+if (mechanism.maxOppositeColinearErrorDeg > 0.25) {
+  failures.push('opposite arms within each inverse-sheet pair should stay visually collinear')
+}
+
+if (mechanism.maxArmSurfaceLeak > 1.75) {
+  failures.push('equal-arm connector surface residual should stay bounded')
+}
+
+if (mechanism.maxCenterShift > 2.25) {
+  failures.push('global connector assignment should not solve contact by drifting cell centers off the sampled surface')
 }
 
 const report = {
@@ -85,9 +93,14 @@ const report = {
   },
   mechanism: {
     maxLegLengthSpread: round(mechanism.maxLegLengthSpread),
+    maxPairLengthSpread: round(mechanism.maxPairLengthSpread),
+    maxOppositeColinearErrorDeg: round(mechanism.maxOppositeColinearErrorDeg),
     maxOrthogonalityErrorDeg: round(mechanism.maxOrthogonalityErrorDeg),
     maxConnectorEndpointGap: round(mechanism.maxConnectorEndpointGap),
+    meanConnectorEndpointGap: round(mechanism.meanConnectorEndpointGap),
+    rmsConnectorEndpointGap: round(mechanism.rmsConnectorEndpointGap),
     maxArmSurfaceLeak: round(mechanism.maxArmSurfaceLeak),
+    maxCenterShift: round(mechanism.maxCenterShift),
   },
 }
 

@@ -28,9 +28,9 @@
 \definecolor{SoftGreenFill}{HTML}{EEF7F2}
 
 \hypersetup{
-  pdftitle={Why exact connector contact cannot use a clean equal-arm cross in the current Wavevis overhang},
+  pdftitle={Wavevis connector assignment: all-four equal X-cell infeasibility and pairwise X-cell result},
   pdfauthor={Wavevis inverse-sheet constraint note},
-  pdfsubject={Algebraic proof of contacted connector constraints for Wavevis cells}
+  pdfsubject={Constraint evidence for contacted connector assignments on a curved overhang}
 }
 
 \setlength{\parindent}{0pt}
@@ -65,7 +65,7 @@
   smallnote/.style={align=center,font=\footnotesize}
 }
 
-\title{\vspace{-1.5em}Why exact connector contact cannot use a clean equal-arm cross in the current Wavevis overhang}
+\title{\vspace{-1.5em}Wavevis overhang connector assignment: evidence rejecting all-four-equal X-cells}
 \author{Wavevis inverse-sheet constraint note}
 \date{June 4, 2026}
 
@@ -76,42 +76,50 @@
 \begin{center}
 \fcolorbox{SoftRed}{SoftRed!7}{%
 \begin{minipage}{0.93\linewidth}
-\textbf{Main result.} For a four-arm cell with a fixed center \(C\) and four fixed contacted connector points, a clean cross with exact contact and one common half-arm length \(L\) exists only in a special symmetric geometry. The current Wavevis overhang is not that geometry: one witness cell requires arm lengths \(0.327\), \(0.411\), \(1.243\), and \(1.576\) at the same time. A second witness fails the through-center midpoint test by about \(0.249\).
+\textbf{Decision.} Reject the all-four-equal X-cell as a Wavevis overhang mechanism direction. The strict target--one common arm length for all four arms, perpendicular arm pairs, shared connector contact, surface-following links, no gaps, no spikes, no zig-zag, no crossings, and constrained flat-water boundary--was attempted and did not close. The weaker all-four-same-length X-cell with free pair angle also fails for the current sampled overhang when each square cell body stays assigned to its target lattice point. A necessary linear relaxation of that global connector problem has no solution: its least-squares residual norm is \(13.837\), with RMS residual \(0.329\) over \(1764\) interior equal-length equations.
 
-\textbf{Therefore:} with exact connector contact and no zig-zag legs as hard constraints, the common all-four arm length must be relaxed. If perpendicularity is also hard, that must be relaxed too.
+\textbf{Accepted direction.} Use connected pairwise X-cells. The current mechanism keeps the constraints that can be closed: shared connectors, no endpoint gaps, no center drift, surface-near links, and equal/collinear opposite pairs. Perpendicularity and one common all-four length are intentionally relaxed. The resulting pairwise X-cell solve has maximum connector gap \(0\), maximum opposite-pair length spread \(0\), maximum opposite-pair collinearity error \(0^\circ\), and maximum center shift \(0\).
 \end{minipage}}
 \end{center}
 
-\textbf{Claim.} For a four-arm inverse-sheet cell with a fixed center, four prescribed contacted connector points can be reached by a clean equal-length cross only if those four points satisfy exact midpoint, equal-radius, and, when requested, perpendicularity conditions. The current Wavevis overhang connector geometry violates those necessary conditions. Therefore no solver can satisfy exact connector contact, non-zig-zag arms, all-four equal arm length, and perpendicular crossed pairs at the same time for the current overhang.
+\textbf{Cell-body position definition.} The square prism in the middle of each X-cell has a target location on the sampled overhang. In this proof those square cell-body locations are fixed. The connector points between neighboring cells may be reassigned, but the cell bodies themselves are not allowed to slide to a different lattice.
 
-\textbf{Why this is a kinematic proof, not a solver preference.} Exact contact fixes the endpoint positions. A clean non-zig-zag cross fixes the endpoint symmetries around the cell center. Equal arm length fixes all four endpoint distances to one value \(L\). These are coordinate-invariant facts; rotating the local axes, changing the numerical optimizer, or smoothing the drawing cannot make unequal distances equal.
+\textbf{Why this assumption exists.} Allowing the cell bodies to slide is a different mechanism design problem, not a small numerical detail. The current simulator starts from a square grid and samples a target overhang; each square body is assigned to one target grid location so the overhang shape, flat-water boundary, and row/column lattice identity stay defined. If the cell bodies can slide freely, the solver is no longer only assigning shared connectors. It is also remeshing the overhang: cells can bunch, drift, change local spacing, and change which part of the surface each cell represents. That is outside the mechanism contract evaluated here; it is not evidence that the all-four-equal branch works for Wavevis.
 
-\textbf{Scope.} This is not a claim that a flat square grid can never satisfy these constraints. A perfectly symmetric flat cell can. The result here is specific to the prescribed connector positions in the current curved Wavevis overhang. Once those contacted connector points are fixed, the requested clean equal-length cross is algebraically over-constrained.
+\textbf{Claim.} For the current \(44\times44\) sampled Wavevis overhang with those cell-body positions fixed, adjacent cells sharing connector endpoints, and opposite legs forced to remain collinear through each cell, no global assignment can make all four arms of every interior cell have one common length. The impossibility holds even after perpendicularity is removed. A clean connected mechanism becomes available only after the cell is changed to a pairwise X-cell: east/west are one equal collinear pair, north/south are a second equal collinear pair, and the angle and length relation between the two pairs are free.
+
+\textbf{What is proved and what is not.} The algebra below proves two things. First, for any fixed contacted connector points around one cell, all-four equal length requires exact equal-radius and midpoint conditions. Second, for the current Wavevis lattice with the cell-body positions fixed, even allowing the connectors to be reassigned globally cannot satisfy all-four equal length; the necessary linear relaxation is inconsistent. Changing the target parametrization, moving the cell bodies, changing the topology, changing the boundary, or accepting a gap/residual changes the problem rather than rescuing this one. This document rules out the requested all-four-equal X-cell under the current fixed-cell-position, shared-connector overhang contract.
+
+\textbf{Sliding-cell-body answer.} Sliding was tested as the strongest escape route. It does not rescue the all-four-equal branch for this mechanism. If square bodies slide freely, the fixed-position proof alone no longer applies because the problem becomes remeshing. But the finite Wavevis mechanism still has the hard checks that matter: the connector graph must stay shared, ordered, non-overlapping, non-spiking, boundary-preserving, and visually embedded on the overhang. The finite sliding projection found the tradeoff directly: near-equal arms require folding, while clean embedding requires giving up all-four equality. Therefore the simulator rejects all-four-equal X-cells for this overhang contract and uses the pairwise X-cell model.
+
+\textbf{Scope.} A perfectly symmetric flat square grid can satisfy the strict cross constraints, so a universal ``impossible for every surface'' theorem would be false. That exception does not support the Wavevis design target. The current object is a curved overhang with flat-water boundary constraints, shared finite connectors, and no-fold/no-overlap requirements. For that design class, the all-four-equal X-cell is rejected and the accepted mechanism direction is exact shared contact plus pairwise equal opposite bars.
 
 \begin{center}
 \begin{tabular}{Y{0.23\linewidth}Y{0.31\linewidth}Y{0.34\linewidth}}
 \toprule
 Question & Short answer & Reason \\
 \midrule
-Can a different solver fix it? & No, not without changing a constraint. & The contradiction is \(L\) needing to equal four different measured distances for one cell. \\
-Can dropping perpendicularity fix it? & No. & Equal arm length alone still requires all four contacted points to be the same distance from \(C\). \\
-What relaxation keeps the mechanism clean? & Pairwise equal bars. & Opposite arms stay equal and collinear within a pair. East-west may use length \(L_x\); north-south may use length \(L_y\); the angle between the bars is free. \\
+Did the strict equal-arm perpendicular assignment close? & No. & The attempt either left connector gaps or broke the strict cell geometry. \\
+Did the all-four-equal X-cell close if the pair angle is free? & No. & A necessary global linear relaxation for the current fixed-cell-position overhang is inconsistent. \\
+What should stay hard? & Contact and pairwise cleanliness. & Shared connector endpoints, no visible gaps, no spikes, no zig-zag, surface-near links, flat boundary, and equal collinear opposite pairs. \\
+What relaxation worked? & Pairwise X-cells. & East-west may use length \(L_x\); north-south may use length \(L_y\); the included angle \(\theta\) is free. \\
+Did sliding cell bodies save all-four equality? & No. & The finite no-fold projection below rejects it for this simulator contract: equality folds the lattice; clean embedding loses equality. \\
 \bottomrule
 \end{tabular}
 \end{center}
 
 \section*{0. Visual map of the proof}
 
-The whole question reduces to whether the four contacted connector points assigned to one cell have the special symmetry that an equal-length through-cross demands. The diagrams below show the tests before the algebra.
+The whole question is which constraints can be kept hard without forcing gaps. The diagrams below show the strict-cell tests and the accepted pairwise X-cell contract.
 
 \begin{center}
 \begin{tabular}{Y{0.3\linewidth}Y{0.32\linewidth}Y{0.3\linewidth}}
 \toprule
 Requested clean cell & Algebraic consequence & What the current overhang does \\
 \midrule
-Four arms have one common length \(L\). & All four contacted connector points must be the same distance from \(C\). & A current witness cell needs four different distances: 0.327, 0.411, 1.243, and 1.576. \\
-Opposite legs are not zig-zagged. & Each opposite connector pair must have midpoint exactly \(C\). & A current witness midpoint misses the required center by about 0.249. \\
-Two pairs stay perpendicular. & The two through-cell directions must have dot product zero. & This is an additional restriction on top of the already-failed equal-radius and midpoint tests. \\
+Four arms have one common length \(L\). & All four contacted connector points must be the same distance from \(C\). & The current fixed-cell-position global problem fails a stronger linear-relaxation test. \\
+Opposite legs are not zig-zagged. & Each opposite connector pair must have midpoint exactly \(C\). & The pairwise X-cell construction enforces this per opposite pair. \\
+Two pairs stay perpendicular. & The two through-cell directions must have dot product zero. & This is relaxed; current pair angles vary by as much as \(61.65^\circ\) away from \(90^\circ\). \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -121,30 +129,28 @@ Two pairs stay perpendicular. & The two through-cell directions must have dot pr
 \begin{minipage}{0.93\linewidth}
 \textbf{What the two simulator outcomes mean.}
 \begin{itemize}
-  \item \textbf{All constraints at once:} exact connector contact, no zig-zag legs, one common length for all four arms, and perpendicular pairs. This demands a special symmetric connector layout. The current overhang does not have it, so the rendered result can only trade one failure for another: strain, gaps, spikes, or broken-looking local geometry.
-  \item \textbf{New relaxed constraint:} keep the clean through-cell idea only pairwise. East and west are equal and collinear; north and south are equal and collinear; the two pair lengths and the included angle are allowed to differ. This removes the specific contradiction while preserving the visual idea of a clean crossed cell.
+  \item \textbf{All-four equal X-cell:} exact connector contact, no zig-zag legs, and one common length for all four arms, with pair angle free. This is still too constrained for the current fixed-cell-position overhang: a necessary linear system has no solution.
+  \item \textbf{Working relaxed constraint:} keep the clean through-cell idea only pairwise. East and west are equal and collinear; north and south are equal and collinear; the two pair lengths and the included angle are allowed to differ. This removes the contradiction while preserving the visual idea of a clean crossed cell.
 \end{itemize}
 \end{minipage}}
 \end{center}
 
 \begin{figure}[H]
 \centering
-\begin{minipage}{0.48\linewidth}
-\centering
-{\setlength{\fboxsep}{0pt}\fcolorbox{SoftGray!45}{white}{\includegraphics[width=\linewidth]{proofs/figures/sim-overhang-side-overview.png}}}
-\vspace{0.35em}
+{\setlength{\fboxsep}{0pt}\fcolorbox{SoftGray!45}{white}{\includegraphics[width=0.98\linewidth]{proofs/figures/constraint-contract-summary.png}}}
+\caption{Constraint contract. The rejected Sarrus-like branch requires one common length and a hard right angle. The accepted branch keeps exact shared contact and pairwise equal, collinear opposite arms, while allowing separate pair lengths and a free included angle.}
+\end{figure}
 
-\small\textbf{Actual overhang state.} The current simulator produces the wave-like overhang and the surrounding flat water region, with local strain shown on the rendered surface.
-\end{minipage}
-\hfill
-\begin{minipage}{0.48\linewidth}
+\begin{figure}[H]
 \centering
-{\setlength{\fboxsep}{0pt}\fcolorbox{SoftGray!45}{white}{\includegraphics[width=\linewidth]{proofs/figures/sim-strict-all-constraints-side.png}}}
-\vspace{0.35em}
+{\setlength{\fboxsep}{0pt}\fcolorbox{SoftGray!45}{white}{\includegraphics[width=0.98\linewidth]{proofs/figures/projection-tradeoff-summary.png}}}
+\caption{Finite sliding-cell test. The all-four-equal branch has no clean operating point in the current Wavevis contract: the near-equal-arm result folds the lattice, and the clean embedding result loses equal-arm closure.}
+\end{figure}
 
-\small\textbf{Actual hotspot.} Forcing the cell mechanism toward the strict equal-arm cross leaves the high-strain/contact hotspot visible instead of making the four connector constraints disappear.
-\end{minipage}
-\caption{Screenshots from the Wavevis inverse-sheet simulator. The proof below explains why this is not only a rendering issue: if the contacted connector points are fixed, the strict clean cell would have to pass the equal-radius and midpoint tests that the current overhang violates.}
+\begin{figure}[H]
+\centering
+{\setlength{\fboxsep}{0pt}\fcolorbox{SoftGray!45}{white}{\includegraphics[width=0.98\linewidth]{proofs/figures/simulator-evidence-plate.png}}}
+\caption{Actual Wavevis simulator evidence. The failed all-four branch produces a high-strain, visibly distorted local mechanism. The pairwise branch keeps the shared-contact invariants and is the mechanism direction used for the overhang work.}
 \end{figure}
 
 \clearpage
@@ -332,9 +338,9 @@ Perpendicularity is gone, but the common radius \(L\) remains. Therefore all fou
 
 \textbf{Conclusion.} Dropping the right angle does not solve the main problem. If the four contacted connector distances from \(C\) are unequal, then no equal-length through-cross can contact them, even if the two arm-pairs are allowed to meet at any angle. The all-four equal-length condition alone forces all four contacted points onto one sphere centered at \(C\).
 
-\section*{4. Numerical witness from the current Wavevis overhang}
+\section*{4. Numerical witness from the strict all-constraints attempt}
 
-For the current Wavevis inverse-sheet overhang, the contacted connector geometry was evaluated from the local model on June 4, 2026. One cell gives the following distances from its center to its four contacted connector points:
+For the all-constraints attempt on the current Wavevis overhang, before the accepted pairwise X-cell reassignment, the contacted connector geometry was evaluated from the local model on June 4, 2026. One witness cell gave the following distances from its center to its four contacted connector points:
 
 \begin{center}
 \begin{tabular}{lll}
@@ -360,13 +366,14 @@ L=0.411,\quad L=0.327,\quad L=1.576,\quad L=1.243
 \]
 simultaneously. That is a contradiction. Therefore, for this cell, exact connector contact and equal length of all four arms cannot both be true.
 
-This contradiction already proves both impossibility statements:
+For this fixed contacted connector assignment, that contradiction rules out both strict interpretations:
 \begin{itemize}
-  \item The perpendicular equal-length cross is impossible, because it requires equal distances.
-  \item The non-perpendicular equal-length cross is also impossible, because it still requires equal distances.
+  \item The perpendicular equal-length cross cannot fit these four fixed contacted points, because it requires equal distances.
+  \item The non-perpendicular equal-length cross with one common all-four length also cannot fit these four fixed contacted points, because it still requires equal distances.
 \end{itemize}
+This local witness is useful but not enough by itself, because it assumes those four connector points were already fixed. The next section removes that loophole for the current fixed-cell-position lattice by allowing the shared connectors to be reassigned globally and then proving that even the necessary relaxed equations are inconsistent.
 
-A second independent check shows the through-center symmetry condition is also violated in the current contacted layout. For cell \(n\)-8-21, the midpoint disagreement between the opposite-pair connector midpoints and the cell center is approximately
+A second independent check shows the through-center symmetry condition was also violated in that strict contacted layout. For cell \(n\)-8-21, the midpoint disagreement between the opposite-pair connector midpoints and the cell center was approximately
 \[
 0.249.
 \]
@@ -374,9 +381,83 @@ For any exact through-line pair, that value must be exactly zero:
 \[
 \frac{P_E+P_W}{2}=C,\qquad \frac{P_N+P_S}{2}=C.
 \]
-So the current connector layout also fails the required midpoint condition for a clean through-cell model.
+So that strict contacted layout also fails the required midpoint condition for a clean through-cell model.
 
-\section*{5. What relaxed model is actually feasible}
+\section*{5. Global fixed-cell-position infeasibility certificate}
+
+Now allow the contacted connectors to be reassigned globally, but keep the square cell bodies at their target locations on the sampled overhang. This is the question that matters for the simulator: can a better connector assignment make every cell an all-four-equal X-cell while preserving exact shared connector contact and non-zig-zag opposite pairs?
+
+Let \(H_{i,j}\) be the horizontal connector shared by cells \((i,j)\) and \((i,j+1)\), and let \(V_{i,j}\) be the vertical connector shared by cells \((i,j)\) and \((i+1,j)\). Let the fixed cell center be \(C_{i,j}\).
+
+Opposite legs collinear and equal as a pair force the connector midpoint equations
+\[
+H_{i,j-1}+H_{i,j}=2C_{i,j},\qquad
+V_{i-1,j}+V_{i,j}=2C_{i,j}.
+\tag{8}
+\]
+Therefore, every horizontal connector in row \(i\) is determined by one row seed vector \(p_i\), and every vertical connector in column \(j\) is determined by one column seed vector \(q_j\):
+\[
+H_{i,j}=(-1)^j p_i + a_{i,j},\qquad
+V_{i,j}=(-1)^i q_j + b_{i,j},
+\tag{9}
+\]
+where \(a_{i,j}\) and \(b_{i,j}\) are known vectors computed only from the fixed cell-body positions \(C_{i,j}\).
+
+All four arms having one common length in each interior cell then requires
+\[
+\|H_{i,j}-C_{i,j}\|^2=\|V_{i,j}-C_{i,j}\|^2.
+\tag{10}
+\]
+After substituting (9), each equation has the form
+\[
+\|p_i\|^2 + 2p_i\cdot \alpha_{i,j} + \beta_{i,j}
+-\|q_j\|^2 - 2q_j\cdot \gamma_{i,j} - \delta_{i,j}=0.
+\tag{11}
+\]
+This is nonlinear only because of the squared seed lengths \(\|p_i\|^2\) and \(\|q_j\|^2\). Introduce relaxed scalar variables
+\[
+s_i=\|p_i\|^2,\qquad t_j=\|q_j\|^2
+\]
+but do not enforce that relation. This makes a necessary linear system
+\[
+Ax=b.
+\tag{12}
+\]
+Every true all-four-equal X-cell solution would produce a solution of this relaxed linear system. Therefore, if (12) has no solution, the original nonlinear mechanism is impossible.
+
+For the current \(44\times44\) Wavevis overhang, the interior cells give \(42\times42=1764\) equal-length equations. The linear relaxation has \(352\) variables: \(p_i\in\mathbb{R}^3\) and \(s_i\) for each of \(44\) rows, plus \(q_j\in\mathbb{R}^3\) and \(t_j\) for each of \(44\) columns.
+
+\begin{center}
+\begin{tabular}{Y{0.45\linewidth}Y{0.32\linewidth}}
+\toprule
+Linear-relaxation check & Value \\
+\midrule
+Equations & \(1764\) \\
+Variables & \(352\) \\
+Rank of \(A\) & \(269\) \\
+Least-squares residual norm \(\|Ax^\ast-b\|\) & \(13.837\) \\
+Residual RMS & \(0.329\) \\
+Maximum absolute residual & \(1.432\) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The nonzero least-squares residual means \(b\) is not in the column space of \(A\). Equivalently, the residual vector
+\[
+y=Ax^\ast-b
+\]
+is a numerical left-null certificate:
+\[
+A^Ty\approx 0,\qquad y^Tb=-191.453\neq 0.
+\tag{13}
+\]
+The measured value was \(\|A^Ty\|=7.94\times10^{-7}\), while \(|y^Tb|=191.453\). So the relaxed linear system is inconsistent by a large margin compared with numerical roundoff.
+
+\textbf{Conclusion.} For the current sampled overhang with cell-body positions fixed, exact shared connectors, opposite-pair collinearity, and all-four equal arm length cannot all hold, even when the pair angle is completely free. This is stronger than the local witness above: it rules out a better global connector assignment under the same fixed-cell-position lattice contract.
+
+\textbf{Remaining escape routes.} The proof does not rule out changing the problem itself: moving cell bodies away from the sampled target, changing the target parametrization, changing the grid topology, relaxing exact contact, allowing non-collinear/zig-zag legs, or allowing the flat-water boundary to move. It rules out the requested all-four-equal X-cell for the current fixed-cell-position Wavevis overhang.
+
+\section*{6. What relaxed model is actually feasible}
 
 A clean contacted cell can exist if the two opposite arm-pairs are treated as two separate bars:
 \[
@@ -417,9 +498,71 @@ No condition requires \(L_x=L_y\), and no condition requires \(u\cdot v=0\).
 
 If the pairwise midpoint equations in (6) and (7) are also impossible for a chosen fixed center, then the remaining choices are mechanical, not cosmetic: move the center, move the contacted connector assignment, allow a contact residual/gap, or allow a zig-zag/non-collinear leg. A smooth renderer cannot make an incompatible set of endpoint constraints true.
 
-\section*{6. Engineering conclusion}
+\begin{center}
+\begin{tabular}{Y{0.34\linewidth}Y{0.18\linewidth}Y{0.34\linewidth}}
+\toprule
+Current pairwise X-cell check & Value & Interpretation \\
+\midrule
+Maximum shared connector endpoint gap & \(0\) & Adjacent cells meet at the same connector point; no visible gap is being hidden. \\
+Maximum opposite-pair length spread & \(0\) & East/west match each other and north/south match each other. \\
+Maximum opposite-pair collinearity error & \(0^\circ\) & Opposite legs form straight through-cell pairs instead of zig-zag spokes. \\
+Maximum center shift & \(0\) & The solve does not cheat by moving cell bodies off the sampled surface. \\
+Maximum arm surface residual & \(0.111\) & Links remain close to the surface field instead of becoming random vertical spikes. \\
+All-four length spread & \(1.218\) & Expected: \(L_x\) and \(L_y\) are allowed to differ. \\
+Pair-angle error from \(90^\circ\) & \(61.65^\circ\) & Expected: the included angle is allowed to change. \\
+\bottomrule
+\end{tabular}
+\end{center}
 
-For the current Wavevis overhang, exact connector contact and a clean visible mechanism can be made compatible only by relaxing the constraints in the correct order:
+\section*{7. Sliding-cell-body attempt: why it still failed}
+
+Let \(r(s,t)\) describe the target overhang surface in whatever coordinates the cell-body lattice finally uses. For a small all-four-equal X-cell, the two through-cell arm directions are the local coordinate directions. If the half-step is \(h\), then to first order the four connector distances are
+\[
+h\|r_s\|,\qquad h\|r_t\|.
+\tag{14}
+\]
+One common arm length therefore asks for
+\[
+\|r_s\|=\|r_t\|.
+\tag{15}
+\]
+If the two arm pairs must also be perpendicular, the local condition adds
+\[
+r_s\cdot r_t=0.
+\tag{16}
+\]
+Equations (15) and (16) are the metric conditions for a conformal coordinate net. This is why the sliding-cell version is not killed by the fixed-cell-position certificate: the sliding version is allowed to change \(s,t\), so it is allowed to search for a better coordinate net on the same surface.
+
+\textbf{Why this does not reopen the design.} The continuum observation only says why flat or specially remeshed cases can exist. It does not solve the finite mechanism Alan is trying to build. A Wavevis mechanism is not allowed to remesh by folding, overlapping, losing the flat-water boundary, changing connector order, creating gaps, or producing spikes. The sliding branch must therefore pass finite embedding checks, not only local equal-scale equations.
+
+\textbf{Finite projection test.} A sliding-cell projection was added after the fixed-position proof. The projection moved cell-body centers and shared connectors, then measured whether the all-four equal-arm condition could coexist with two embedding checks:
+\begin{itemize}
+  \item a shared connector for neighboring cells must stay inside the neighbor corridor instead of jumping behind either cell;
+  \item the ordered center quads must not collapse or flip.
+\end{itemize}
+
+\begin{center}
+\begin{tabular}{Y{0.31\linewidth}Y{0.18\linewidth}Y{0.18\linewidth}Y{0.18\linewidth}}
+\toprule
+Sliding attempt & All-four spread & Corridor / fold result & Interpretation \\
+\midrule
+Equal-arm first & \(0.0022\) & \(18\) outside-corridor connectors, \(4\) flipped quads, minimum quad area ratio \(0.0656\) & Numerically equal, geometrically folded. \\
+Mild no-fold corridor & \(0.2275\) & \(324\) outside-corridor connectors, \(16\) flipped quads & Still folded and no longer equal-arm. \\
+Strong no-fold corridor & \(0.1854\) & \(0\) outside connectors, \(45\) flipped quads & Connector corridor improves, center lattice still flips. \\
+Locked neighbor corridor & \(0.3629\) & \(0\) outside connectors, \(0\) flipped quads & Clean embedding check passes, but equal-arm closure fails. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+All values are in normalized grid units. The equal-arm-first result explains the bad visual render: it achieves nearly equal arms only by folding the lattice and placing connectors outside the local neighbor corridor. Once the no-fold corridor is enforced strongly enough to remove outside connectors and flipped center quads, the all-four arm-length spread rises to \(0.3629\), far above the \(0.0022\) equal-arm residual and large enough to be visible.
+
+\textbf{What this rules out.} This rejects the all-four-equal X-cell for the current Wavevis overhang mechanism: same sampled overhang, preserved flat boundary, shared connectors, no gaps, no spikes, no visible lattice folding, and all four arms equal in each cell. Under those checks, the sliding-cell branch does not produce a valid mechanism.
+
+\textbf{Decision from the sliding test.} Do not keep iterating on all-four-equal X-cells for Wavevis overhangs. The current finite projection gives the opposite engineering signal: equal arms are obtained by folding; clean embedding is obtained by giving up equal arms. The next mechanism direction is the pairwise opposite-equal X-cell.
+
+\section*{8. Engineering conclusion}
+
+In the implementation that actually closes the current fixed-cell-position Wavevis overhang, exact connector contact and a clean visible mechanism become compatible by relaxing the constraints in the correct order:
 
 \begin{enumerate}
   \item Keep exact connector contact if contact is physically required.
@@ -428,8 +571,10 @@ For the current Wavevis overhang, exact connector contact and a clean visible me
   \item Allow the two pair directions to meet at a non-right angle.
 \end{enumerate}
 
-\textbf{Constraint that must be removed:} one common half-arm length for all four arms. If perpendicularity is also kept hard, it must be removed as well. Otherwise the contacted connector points must satisfy special equal-radius, symmetric, perpendicular conditions that the current wave geometry does not satisfy.
+\textbf{Constraint that must be removed:} one common half-arm length for all four arms. This is not merely a failed visual attempt; the global fixed-cell-position linear-relaxation certificate rules it out for fixed cell bodies, and the sliding-cell projection shows the same constraint is not usable once no-fold/no-overlap checks are restored. If perpendicularity is also kept hard, it must be removed as well.
 
-\textbf{Therefore:} with exact contact and no zig-zag legs as hard constraints, the feasible mechanism is a two-bar crossed cell with pairwise equal opposite legs, separate pair lengths, and a free included angle.
+\textbf{Therefore for the current fixed-position solver:} with exact contact and no zig-zag legs as hard constraints, the feasible mechanism is a two-bar crossed cell with pairwise equal opposite legs, separate pair lengths, and a free included angle.
+
+\textbf{Therefore for the sliding-cell branch:} do not use it in the current simulator or as the working mechanism direction. It failed the finite mechanism checks that matter. The all-four-equal constraint remains rejected for Wavevis overhangs; proceed with pairwise opposite-equal X-cells.
 
 \end{document}

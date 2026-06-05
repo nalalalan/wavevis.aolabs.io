@@ -17,7 +17,6 @@ import type {
 } from './inverseSheetTypes'
 import { colorForQuad, legendForMode } from './metricVisuals'
 import {
-  armEndpointForDirection,
   buildRigidCellMechanism,
   rigidCellBodyThickness,
   type CellArmDirection,
@@ -119,6 +118,7 @@ function LatticeModelGroup({
         <>
           <EdgeHitTargets
             model={model}
+            mechanism={mechanism}
             nodes={nodeById}
             radius={edgePickRadius}
             onEdgePick={onEdgePick}
@@ -274,7 +274,8 @@ function RigidCellGlyphs({
 
       setBoxInstance(matrix, bodyMesh, index, center, toThree(frame.xAxis), toThree(frame.yAxis), toThree(frame.zAxis), bodySize, bodySize, bodyThickness)
       directions.forEach((direction) => {
-        setCylinderInstance(dummy, armMesh, armIndex, center, toThree(armEndpointForDirection(frame, direction)), rodWidth)
+        const connectedEndpoint = frame.armEndpoints[direction]
+        setCylinderInstance(dummy, armMesh, armIndex, center, connectedEndpoint ? toThree(connectedEndpoint) : center, rodWidth)
         armIndex += 1
       })
     })
@@ -322,11 +323,13 @@ function ConnectorInstances({
 
 function EdgeHitTargets({
   model,
+  mechanism,
   nodes,
   radius,
   onEdgePick,
 }: {
   model: LatticeModel
+  mechanism: RigidCellMechanism
   nodes: Map<string, LatticeNode>
   radius: number
   onEdgePick: (edgeId: string) => void
@@ -343,8 +346,10 @@ function EdgeHitTargets({
     model.edges.forEach((edge, index) => {
       const nodeA = nodes.get(edge.nodeA)
       const nodeB = nodes.get(edge.nodeB)
-      const start = new THREE.Vector3(...(nodeA?.currentPosition ?? ([0, 0, 0] as Vec3)))
-      const end = new THREE.Vector3(...(nodeB?.currentPosition ?? ([0, 0, 0] as Vec3)))
+      const frameA = mechanism.frameByNodeId.get(edge.nodeA)
+      const frameB = mechanism.frameByNodeId.get(edge.nodeB)
+      const start = new THREE.Vector3(...(frameA?.center ?? nodeA?.currentPosition ?? ([0, 0, 0] as Vec3)))
+      const end = new THREE.Vector3(...(frameB?.center ?? nodeB?.currentPosition ?? ([0, 0, 0] as Vec3)))
       const direction = new THREE.Vector3().subVectors(end, start)
       const length = Math.max(direction.length(), 0.000001)
 
@@ -355,7 +360,7 @@ function EdgeHitTargets({
       ref.current?.setMatrixAt(index, dummy.matrix)
     })
     ref.current.instanceMatrix.needsUpdate = true
-  }, [model, nodes, radius])
+  }, [mechanism, model, nodes, radius])
 
   return (
     <instancedMesh
@@ -580,9 +585,10 @@ function positionCamera(
   const { bounds } = model
   const maxSpan = Math.max(bounds.span[0], bounds.span[1], bounds.span[2], 2)
   const focus = focusForSelected(model, selected ?? null)
+  const fov = focus ? 32 : view === 'side' ? 34 : 42
   const distance = focus
     ? Math.max(focus.radius * 7.5, model.config.spacing * 12, maxSpan * 0.22)
-    : maxSpan * 1.75
+    : cameraDistanceForView(bounds, view, fov, camera.aspect)
   const target = focus ? focus.center : new THREE.Vector3(...bounds.center)
   const position =
     view === 'top'
@@ -599,13 +605,47 @@ function positionCamera(
   }
   camera.lookAt(target)
 
-  camera.fov = focus ? 32 : view === 'side' ? 34 : 42
+  camera.fov = fov
   camera.near = 0.01
   camera.far = Math.max(distance * 8, 100)
   camera.updateProjectionMatrix()
 
   controls?.target.copy(target)
   controls?.update()
+}
+
+function cameraDistanceForView(
+  bounds: LatticeBounds,
+  view: CameraViewRequest['view'],
+  fovDeg: number,
+  aspect: number,
+): number {
+  const safeAspect = Math.max(aspect || 1, 0.2)
+  const fov = THREE.MathUtils.degToRad(fovDeg)
+  const tanHalfFov = Math.tan(fov / 2)
+
+  if (view === 'side') {
+    return fitPerspectiveDistance(bounds.span[0], bounds.span[2], tanHalfFov, safeAspect, 1.34)
+  }
+
+  if (view === 'top') {
+    return fitPerspectiveDistance(bounds.span[0], bounds.span[1], tanHalfFov, safeAspect, 1.18)
+  }
+
+  return Math.max(bounds.span[0], bounds.span[1], bounds.span[2], 2) * 1.75
+}
+
+function fitPerspectiveDistance(
+  horizontalSpan: number,
+  verticalSpan: number,
+  tanHalfFov: number,
+  aspect: number,
+  padding: number,
+): number {
+  const horizontalDistance = horizontalSpan / Math.max(2 * tanHalfFov * aspect, 0.000001)
+  const verticalDistance = verticalSpan / Math.max(2 * tanHalfFov, 0.000001)
+
+  return Math.max(horizontalDistance, verticalDistance, 2) * padding
 }
 
 function SceneColorBar({ model }: { model: LatticeModel }) {

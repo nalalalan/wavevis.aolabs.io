@@ -31,7 +31,9 @@ export type TargetParams = {
   horizontalOffset: number
   height: number
   overhangWidth: number
-  curl: number
+  overhangAngleDeg: number
+  conicRho: number
+  curlRadius: number
   smoothing: number
   lipSharpness: number
   wallSmoothness: number

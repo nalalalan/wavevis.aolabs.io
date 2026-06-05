@@ -42,8 +42,10 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   horizontalOffset: 14,
   height: 7,
   overhangWidth: 32,
-  curl: 0.72,
-  smoothing: 0.86,
+  overhangAngleDeg: 90,
+  conicRho: 0.5,
+  curlRadius: 0.65,
+  smoothing: 0,
   lipSharpness: 0.28,
   wallSmoothness: 0.66,
   flatContribution: 0.35,
@@ -64,16 +66,36 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
 const TARGET_PRESETS: TargetPreset[] = ['overhang']
 const RADIUS_MODES: RadiusMode[] = ['autoPreserveLength', 'manual']
 const COLOR_MODE_VALUES = COLOR_MODES.map((mode) => mode.value)
+const OVERHANG_ANGLE_MIN_DEG = 40
+const OVERHANG_ANGLE_PARALLEL_DEG = 90
+const OVERHANG_ANGLE_MAX_DEG = 120
+const PARALLEL_ANGLE_CURL = 0.68
+const CONIC_RHO_MIN = 0.05
+const CONIC_RHO_MAX = 0.95
+const CURL_RADIUS_MIN = 0.25
+const CURL_RADIUS_MAX = 1.25
 
-type LooseConfig = Partial<Record<keyof InverseSheetConfig, unknown>>
+type LegacyConfigKey = keyof InverseSheetConfig | 'curl'
+type LooseConfig = Partial<Record<LegacyConfigKey, unknown>>
+export type InverseSheetUsableRanges = {
+  heightMax: number
+  horizontalOffsetMax: number
+  overhangWidthMax: number
+}
 
 export function sanitizeInverseSheetConfig(input: LooseConfig = {}): InverseSheetConfig {
   const raw: LooseConfig = { ...DEFAULT_INVERSE_SHEET_CONFIG, ...input }
+  const rows = readInteger(raw.rows, DEFAULT_INVERSE_SHEET_CONFIG.rows, 2, 72)
+  const columns = readInteger(raw.columns, DEFAULT_INVERSE_SHEET_CONFIG.columns, 2, 72)
+  const spacing = 1
+  const smoothing = readNumber(raw.smoothing, DEFAULT_INVERSE_SHEET_CONFIG.smoothing, 0, 1)
+  const ranges = calculateInverseSheetUsableRanges(rows, columns, spacing, smoothing)
+  const overhangAngleDeg = readOverhangAngleDeg(input)
 
   return {
-    rows: readInteger(raw.rows, DEFAULT_INVERSE_SHEET_CONFIG.rows, 2, 72),
-    columns: readInteger(raw.columns, DEFAULT_INVERSE_SHEET_CONFIG.columns, 2, 72),
-    spacing: 1,
+    rows,
+    columns,
+    spacing,
     targetPreset: readOneOf(raw.targetPreset, TARGET_PRESETS, DEFAULT_INVERSE_SHEET_CONFIG.targetPreset),
     morph: readNumber(raw.morph, DEFAULT_INVERSE_SHEET_CONFIG.morph, 0, 1),
     verticalDirection: 'up',
@@ -81,11 +103,13 @@ export function sanitizeInverseSheetConfig(input: LooseConfig = {}): InverseShee
     supportFraction: DEFAULT_INVERSE_SHEET_CONFIG.supportFraction,
     radiusMode: readOneOf(raw.radiusMode, RADIUS_MODES, DEFAULT_INVERSE_SHEET_CONFIG.radiusMode),
     bendRadius: readNumber(raw.bendRadius, DEFAULT_INVERSE_SHEET_CONFIG.bendRadius, 0.1, 100),
-    horizontalOffset: readNumber(raw.horizontalOffset, DEFAULT_INVERSE_SHEET_CONFIG.horizontalOffset, 0, 32),
-    height: readNumber(raw.height, DEFAULT_INVERSE_SHEET_CONFIG.height, 0, 24),
-    overhangWidth: readNumber(raw.overhangWidth, DEFAULT_INVERSE_SHEET_CONFIG.overhangWidth, 0, 72),
-    curl: readNumber(raw.curl, DEFAULT_INVERSE_SHEET_CONFIG.curl, 0, 1),
-    smoothing: readNumber(raw.smoothing, DEFAULT_INVERSE_SHEET_CONFIG.smoothing, 0, 1),
+    horizontalOffset: readNumber(raw.horizontalOffset, DEFAULT_INVERSE_SHEET_CONFIG.horizontalOffset, 0, ranges.horizontalOffsetMax),
+    height: readNumber(raw.height, DEFAULT_INVERSE_SHEET_CONFIG.height, 0, ranges.heightMax),
+    overhangWidth: readNumber(raw.overhangWidth, DEFAULT_INVERSE_SHEET_CONFIG.overhangWidth, 0, ranges.overhangWidthMax),
+    overhangAngleDeg,
+    conicRho: readNumber(raw.conicRho, DEFAULT_INVERSE_SHEET_CONFIG.conicRho, CONIC_RHO_MIN, CONIC_RHO_MAX),
+    curlRadius: readNumber(raw.curlRadius, DEFAULT_INVERSE_SHEET_CONFIG.curlRadius, CURL_RADIUS_MIN, CURL_RADIUS_MAX),
+    smoothing,
     lipSharpness: readNumber(raw.lipSharpness, DEFAULT_INVERSE_SHEET_CONFIG.lipSharpness, 0, 1),
     wallSmoothness: readNumber(raw.wallSmoothness, DEFAULT_INVERSE_SHEET_CONFIG.wallSmoothness, 0, 1),
     flatContribution: readNumber(raw.flatContribution, DEFAULT_INVERSE_SHEET_CONFIG.flatContribution, 0, 1),
@@ -102,6 +126,98 @@ export function sanitizeInverseSheetConfig(input: LooseConfig = {}): InverseShee
     showHeatmap: readBoolean(raw.showHeatmap, DEFAULT_INVERSE_SHEET_CONFIG.showHeatmap),
     colorMode: readOneOf(raw.colorMode, COLOR_MODE_VALUES, DEFAULT_INVERSE_SHEET_CONFIG.colorMode),
   }
+}
+
+export function getInverseSheetUsableRanges(input: LooseConfig = {}): InverseSheetUsableRanges {
+  const raw: LooseConfig = { ...DEFAULT_INVERSE_SHEET_CONFIG, ...input }
+  const rows = readInteger(raw.rows, DEFAULT_INVERSE_SHEET_CONFIG.rows, 2, 72)
+  const columns = readInteger(raw.columns, DEFAULT_INVERSE_SHEET_CONFIG.columns, 2, 72)
+  const spacing = 1
+  const smoothing = readNumber(raw.smoothing, DEFAULT_INVERSE_SHEET_CONFIG.smoothing, 0, 1)
+
+  return calculateInverseSheetUsableRanges(rows, columns, spacing, smoothing)
+}
+
+function calculateInverseSheetUsableRanges(rows: number, columns: number, spacing: number, smoothing: number): InverseSheetUsableRanges {
+  const totalWidth = Math.max((columns - 1) * spacing, spacing)
+  const totalHeight = Math.max((rows - 1) * spacing, spacing)
+  const profile = overhangProfileLimits(rows, columns, spacing, smoothing)
+  const remainingLength = Math.max(totalWidth * profile.remainingU, spacing)
+  const maxHalfWidth = Math.max(totalHeight * (0.5 - profile.flatRim), spacing)
+
+  return {
+    heightMax: roundControlMax(Math.min(24, remainingLength * 0.42), 0.25),
+    horizontalOffsetMax: roundControlMax(Math.min(32, remainingLength * 0.78), 0.25),
+    overhangWidthMax: roundControlMax(Math.min(72, maxHalfWidth * 2), 0.5),
+  }
+}
+
+function overhangProfileLimits(rows: number, columns: number, spacing: number, smoothing: number) {
+  const rowsDenominator = Math.max(rows - 1, 1)
+  const columnsDenominator = Math.max(columns - 1, 1)
+  const gridDenominator = Math.max(rowsDenominator, columnsDenominator)
+  const stableGroundTransition = stableGroundTransitionValue(smoothing)
+  const flatRim = Math.min(0.12, Math.max(3.4 / gridDenominator, 0.055))
+  const profileStart = Math.max(flatRim, lerpNumber(0.16, 0.08, stableGroundTransition))
+  const profileEnd = Math.min(1 - flatRim, lerpNumber(0.84, 0.94, stableGroundTransition))
+
+  return {
+    flatRim,
+    profileStart,
+    profileEnd,
+    remainingU: Math.max(profileEnd - profileStart, spacing / Math.max(columnsDenominator * spacing, spacing)),
+  }
+}
+
+function stableGroundTransitionValue(value: number): number {
+  return lerpNumber(0.86, 1, clampNumber(value, 0, 1))
+}
+
+function readOverhangAngleDeg(input: LooseConfig): number {
+  if (Object.prototype.hasOwnProperty.call(input, 'overhangAngleDeg')) {
+    return readNumber(
+      input.overhangAngleDeg,
+      DEFAULT_INVERSE_SHEET_CONFIG.overhangAngleDeg,
+      OVERHANG_ANGLE_MIN_DEG,
+      OVERHANG_ANGLE_MAX_DEG,
+    )
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'curl')) {
+    return curlToOverhangAngleDeg(readNumber(input.curl, PARALLEL_ANGLE_CURL, 0, 1))
+  }
+
+  return DEFAULT_INVERSE_SHEET_CONFIG.overhangAngleDeg
+}
+
+function overhangAngleDegToCurl(angleDeg: number): number {
+  const angle = clampNumber(angleDeg, OVERHANG_ANGLE_MIN_DEG, OVERHANG_ANGLE_MAX_DEG)
+  if (angle <= OVERHANG_ANGLE_PARALLEL_DEG) {
+    return (
+      ((angle - OVERHANG_ANGLE_MIN_DEG) / (OVERHANG_ANGLE_PARALLEL_DEG - OVERHANG_ANGLE_MIN_DEG)) *
+      PARALLEL_ANGLE_CURL
+    )
+  }
+
+  return PARALLEL_ANGLE_CURL +
+    ((angle - OVERHANG_ANGLE_PARALLEL_DEG) / (OVERHANG_ANGLE_MAX_DEG - OVERHANG_ANGLE_PARALLEL_DEG)) *
+      (1 - PARALLEL_ANGLE_CURL)
+}
+
+function curlToOverhangAngleDeg(curlValue: number): number {
+  const curl = clampNumber(curlValue, 0, 1)
+  if (curl <= PARALLEL_ANGLE_CURL) {
+    return OVERHANG_ANGLE_MIN_DEG +
+      (curl / PARALLEL_ANGLE_CURL) * (OVERHANG_ANGLE_PARALLEL_DEG - OVERHANG_ANGLE_MIN_DEG)
+  }
+
+  return OVERHANG_ANGLE_PARALLEL_DEG +
+    ((curl - PARALLEL_ANGLE_CURL) / (1 - PARALLEL_ANGLE_CURL)) *
+      (OVERHANG_ANGLE_MAX_DEG - OVERHANG_ANGLE_PARALLEL_DEG)
+}
+
+function roundControlMax(value: number, step: number): number {
+  return Math.max(step, Math.floor(value / step) * step)
 }
 
 export function buildInverseSheetModel(input: LooseConfig = {}): LatticeModel {
@@ -154,15 +270,56 @@ export function runInverseSheetSanityChecks(): string[] {
   const twoByTwo = buildInverseSheetModel({ rows: 2, columns: 2 })
   const defaultOverhang = buildInverseSheetModel(DEFAULT_INVERSE_SHEET_CONFIG)
   const highOverhang = buildInverseSheetModel({ horizontalOffset: 32 })
-  const highCurlHighOverhang = buildInverseSheetModel({ horizontalOffset: 32, curl: 1, smoothing: 1, lipSharpness: 0.2 })
+  const highAngleHighOverhang = buildInverseSheetModel({
+    horizontalOffset: 32,
+    overhangAngleDeg: 120,
+    smoothing: 1,
+    lipSharpness: 0.2,
+  })
   const lowWave = buildInverseSheetModel({ horizontalOffset: 9, height: 4 })
   const tallWave = buildInverseSheetModel({ horizontalOffset: 9, height: 10 })
   const narrowWave = buildInverseSheetModel({ overhangWidth: 12 })
   const wideWave = buildInverseSheetModel({ overhangWidth: 36 })
-  const lowCurl = buildInverseSheetModel({ curl: 0 })
-  const highCurl = buildInverseSheetModel({ curl: 1 })
+  const lowAngle = buildInverseSheetModel({ overhangAngleDeg: 40 })
+  const highAngle = buildInverseSheetModel({ overhangAngleDeg: 120 })
+  const lowAngleSmallGrid = buildInverseSheetModel({
+    rows: 20,
+    columns: 20,
+    height: 99,
+    horizontalOffset: 99,
+    overhangWidth: 99,
+    smoothing: 0,
+    overhangAngleDeg: 40,
+  })
+  const highAngleSmallGrid = buildInverseSheetModel({
+    rows: 20,
+    columns: 20,
+    height: 99,
+    horizontalOffset: 99,
+    overhangWidth: 99,
+    smoothing: 0,
+    overhangAngleDeg: 120,
+  })
   const twelveByTwelve = buildInverseSheetModel({ rows: 12, columns: 12 })
   const fortyByForty = buildInverseSheetModel({ rows: 40, columns: 40 })
+  const lowGroundTransition = buildInverseSheetModel({
+    rows: 20,
+    columns: 20,
+    height: 99,
+    horizontalOffset: 99,
+    overhangWidth: 99,
+    smoothing: 0,
+    overhangAngleDeg: 90,
+  })
+  const highGroundTransition = buildInverseSheetModel({
+    rows: 20,
+    columns: 20,
+    height: 99,
+    horizontalOffset: 99,
+    overhangWidth: 99,
+    smoothing: 1,
+    overhangAngleDeg: 90,
+  })
 
   if (!isSummaryNearZero(flat.summary)) failures.push('morph = 0 should produce near-zero metrics')
   if (zeroed.summary.overhangAmount !== 0) failures.push('zero horizontal offset should report no horizontal overhang')
@@ -173,22 +330,29 @@ export function runInverseSheetSanityChecks(): string[] {
   if (fortyByForty.nodes.some((node) => !isFiniteVec(node.currentPosition))) failures.push('40x40 produced invalid node positions')
   if (!boundaryNodesStayFlat(defaultOverhang)) failures.push('default overhang boundary should stay fixed and flat')
   if (!boundaryNodesStayFlat(highOverhang)) failures.push('high-overhang boundary should stay fixed and flat')
-  if (!centerlineBackfoldIsBounded(highOverhang)) failures.push('high-overhang curl should stay bounded')
-  if (!centerlineBackfoldIsBounded(highCurlHighOverhang)) failures.push('high-curl high-overhang shape should not self-overlap')
+  if (!centerlineBackfoldIsBounded(highOverhang)) failures.push('high-overhang angle should stay bounded')
+  if (!centerlineBackfoldIsBounded(highAngleHighOverhang)) failures.push('high-angle high-overhang shape should not self-overlap')
+  if (!centerlineHasVisibleCurlReturn(highAngle)) failures.push('120 deg overhang angle should visibly return inward into a C profile')
+  if (centerlineCurlReturnDepth(highAngleSmallGrid) < centerlineCurlReturnDepth(lowAngleSmallGrid) * 1.65) {
+    failures.push('120 deg overhang angle should visibly curl farther inward than 40 deg on a 20x20 grid')
+  }
   if (defaultOverhang.summary.overhangAmount <= 0) failures.push('default overhang should report a positive horizontal projection')
   if (Math.abs(lowWave.summary.overhangAmount - tallWave.summary.overhangAmount) > 0.000001) {
     failures.push('changing height should not change measured horizontal overhang amount')
   }
   if (tallWave.summary.maxHeight <= lowWave.summary.maxHeight + 1) failures.push('height control should change vertical wave height')
-  if (Math.abs(lowCurl.summary.overhangAmount - highCurl.summary.overhangAmount) > 0.15) {
-    failures.push('curl should not materially change measured horizontal overhang amount')
+  if (Math.abs(lowAngle.summary.overhangAmount - highAngle.summary.overhangAmount) > 0.25) {
+    failures.push('overhang angle should not materially change measured horizontal overhang amount')
   }
-  if (Math.abs(lowCurl.summary.maxHeight - highCurl.summary.maxHeight) > 0.15) {
-    failures.push('curl should not materially change measured wave height')
+  if (Math.abs(lowAngle.summary.maxHeight - highAngle.summary.maxHeight) > 0.15) {
+    failures.push('overhang angle should not materially change measured wave height')
   }
   if (!boundaryNodesStayFlat(narrowWave)) failures.push('narrow overhang boundary should stay fixed and flat')
   if (measureActiveRowCount(wideWave) <= measureActiveRowCount(narrowWave)) {
     failures.push('overhang width control should change the active wave width')
+  }
+  if (!groundTransitionSmoothsBottomDescent(lowGroundTransition, highGroundTransition)) {
+    failures.push('ground transition should lengthen and soften the lower return into flat water')
   }
 
   return failures
@@ -218,14 +382,78 @@ function centerlineBackfoldIsBounded(model: LatticeModel): boolean {
   const centerline = model.nodes
     .filter((node) => node.row === row)
     .sort((a, b) => a.col - b.col)
-  const tolerance = -Math.max(model.config.spacing * 1.1, model.summary.overhangAmount * 0.08)
+  const maxSegmentLength = Math.max(model.config.spacing * 5.5, model.summary.overhangAmount * 0.22)
+  const collisionTolerance = model.config.spacing * 0.24
 
   for (let index = 0; index < centerline.length - 1; index += 1) {
-    const deltaX = centerline[index + 1].currentPosition[0] - centerline[index].currentPosition[0]
-    if (deltaX < tolerance) return false
+    const current = centerline[index].currentPosition
+    const next = centerline[index + 1].currentPosition
+    const segmentLength = Math.hypot(next[0] - current[0], next[2] - current[2])
+    if (segmentLength > maxSegmentLength) return false
+  }
+
+  for (let aIndex = 0; aIndex < centerline.length; aIndex += 1) {
+    for (let bIndex = aIndex + 3; bIndex < centerline.length; bIndex += 1) {
+      const a = centerline[aIndex].currentPosition
+      const b = centerline[bIndex].currentPosition
+      const distance = Math.hypot(b[0] - a[0], b[2] - a[2])
+      if (distance < collisionTolerance) return false
+    }
   }
 
   return true
+}
+
+function centerlineHasVisibleCurlReturn(model: LatticeModel): boolean {
+  return centerlineCurlReturnDepth(model) >= Math.max(model.config.spacing * 2.5, model.summary.overhangAmount * 0.24)
+}
+
+function centerlineCurlReturnDepth(model: LatticeModel): number {
+  const row = Math.floor((model.config.rows - 1) / 2)
+  const centerline = model.nodes
+    .filter((node) => node.row === row)
+    .sort((a, b) => a.col - b.col)
+  const maxHeight = Math.max(model.summary.maxHeight, 0.000001)
+  const liftedCenterline = centerline.filter((node) => node.currentPosition[2] > maxHeight * 0.04)
+  let maxX = -Infinity
+  let maxXIndex = 0
+
+  liftedCenterline.forEach((node, index) => {
+    if (node.currentPosition[0] > maxX) {
+      maxX = node.currentPosition[0]
+      maxXIndex = index
+    }
+  })
+
+  const postCrestLiftedNodes = liftedCenterline.slice(maxXIndex + 1)
+  const deepestReturnX = Math.min(...postCrestLiftedNodes.map((node) => node.currentPosition[0]))
+
+  return Number.isFinite(deepestReturnX) ? maxX - deepestReturnX : 0
+}
+
+function groundTransitionSmoothsBottomDescent(low: LatticeModel, high: LatticeModel): boolean {
+  const lowStats = centerlineDescentStats(low)
+  const highStats = centerlineDescentStats(high)
+
+  return highStats.activeEndCol > lowStats.activeEndCol && highStats.maxAdjacentDrop < lowStats.maxAdjacentDrop * 0.92
+}
+
+function centerlineDescentStats(model: LatticeModel): { activeEndCol: number; maxAdjacentDrop: number } {
+  const row = Math.floor((model.config.rows - 1) / 2)
+  const centerline = model.nodes
+    .filter((node) => node.row === row)
+    .sort((a, b) => a.col - b.col)
+  const maxHeight = Math.max(model.summary.maxHeight, 0.000001)
+  const active = centerline.filter((node) => node.currentPosition[2] > maxHeight * 0.04)
+  const maxAdjacentDrop = centerline.slice(1).reduce((currentMax, node, index) => {
+    const previous = centerline[index]
+    return Math.max(currentMax, Math.abs(node.currentPosition[2] - previous.currentPosition[2]))
+  }, 0)
+
+  return {
+    activeEndCol: active[active.length - 1]?.col ?? -1,
+    maxAdjacentDrop,
+  }
 }
 
 function measureActiveRowCount(model: LatticeModel): number {
@@ -283,13 +511,14 @@ function overhangTargetPosition(
   const u = col / columnsDenominator
   const gridDenominator = Math.max(rowsDenominator, columnsDenominator)
   const groundTransition = clampNumber(config.smoothing, 0, 1)
+  const stableGroundTransition = stableGroundTransitionValue(groundTransition)
   const wallSmoothness = clampNumber(config.wallSmoothness, 0, 1)
   const flatRim = Math.min(0.12, Math.max(3.4 / gridDenominator, 0.055))
-  const blendRim = Math.min(0.46, flatRim + lerpNumber(0.1, 0.36, groundTransition))
-  const longitudinalBlendRim = Math.min(0.5, flatRim + lerpNumber(0.1, 0.42, groundTransition))
+  const blendRim = Math.min(0.46, flatRim + lerpNumber(0.1, 0.36, stableGroundTransition))
+  const longitudinalBlendRim = Math.min(0.5, flatRim + lerpNumber(0.1, 0.42, stableGroundTransition))
   const rimY = transverseWaveMask(rest[1], totalHeight, config, flatRim, blendRim, wallSmoothness)
   const rimX = edgeRamp(u, flatRim, longitudinalBlendRim) * edgeRamp(1 - u, flatRim, longitudinalBlendRim)
-  const maskExponent = lerpNumber(1.7, 0.68, groundTransition)
+  const maskExponent = lerpNumber(1.7, 0.68, stableGroundTransition)
   const activityMask = Math.pow(rimX * rimY, maskExponent)
   const flatMask = flatContributionMask(rest[1], totalHeight, flatRim, blendRim, rimX, activityMask, config.flatContribution)
 
@@ -301,21 +530,28 @@ function overhangTargetPosition(
     return [rest[0], rest[1] * config.widthScale, 0]
   }
 
-  const profileStart = Math.max(flatRim, lerpNumber(0.16, 0.08, groundTransition))
-  const profileEnd = Math.min(1 - flatRim, lerpNumber(0.84, 0.94, groundTransition))
+  const profileStart = Math.max(flatRim, lerpNumber(0.16, 0.08, stableGroundTransition))
+  const profileEnd = Math.min(1 - flatRim, lerpNumber(0.84, 0.94, stableGroundTransition))
   if (u <= profileStart || u >= profileEnd) {
     return [rest[0], rest[1] * config.widthScale, 0]
   }
 
   const remainingU = Math.max(profileEnd - profileStart, 0.000001)
   const profileU = clampNumber((u - profileStart) / remainingU, 0, 1)
-  const eased = lerpNumber(profileU, smootherStep(profileU), 0.08 + groundTransition * 0.46)
+  const eased = lerpNumber(profileU, smootherStep(profileU), 0.08 + stableGroundTransition * 0.46)
   const remainingLength = Math.max(totalWidth * remainingU, config.spacing)
-  const curl = clampNumber(config.curl, 0, 1)
+  const curl = overhangAngleDegToCurl(config.overhangAngleDeg)
   const overhangAmount = Math.min(config.horizontalOffset, remainingLength * 0.78)
-  const heightProfile = waveHeightProfile(eased, curl, groundTransition, config.lipSharpness)
+  const heightProfile = waveHeightProfile(eased, curl, groundTransition, config.lipSharpness, config.conicRho, config.curlRadius)
   const waveHeight = Math.min(config.height, remainingLength * 0.42)
-  const horizontalProjection = overhangAmount * curlProjectionProfile(eased, curl, groundTransition, config.lipSharpness)
+  const horizontalProjection = overhangAmount * curlProjectionProfile(
+    eased,
+    curl,
+    groundTransition,
+    config.lipSharpness,
+    config.conicRho,
+    config.curlRadius,
+  )
   const flatProjection = horizontalProjection * flatMask
   const yCenter = totalHeight * 0.5
   const yFromCenter = rest[1] - yCenter
@@ -327,82 +563,167 @@ function overhangTargetPosition(
   ]
 }
 
-function curlProjectionProfile(value: number, curl: number, smoothing: number, lipSharpness: number): number {
+function curlProjectionProfile(
+  value: number,
+  curl: number,
+  smoothing: number,
+  lipSharpness: number,
+  conicRho: number,
+  curlRadius: number,
+): number {
   const t = clampNumber(value, 0, 1)
-  const broadWave = loopProfile(t, 0.62, 2.25)
-  const sharpness = clampNumber(lipSharpness, 0, 1)
-  const returnStart = lerpNumber(0.78, 0.61, curl) + lerpNumber(-0.045, 0.035, sharpness)
-  const returnEnd = lerpNumber(1.08, 0.98, curl) + lerpNumber(0.06, -0.035, sharpness)
-  const riseEnd = lerpNumber(0.58, 0.48, curl) + lerpNumber(0.035, -0.025, sharpness)
-  const tailFloor = lerpNumber(0.98, 0.9, curl) + lerpNumber(0.025, -0.06, sharpness)
-  const rise = smootherStep(t / Math.max(riseEnd, 0.000001))
-  const returnAmount = 1 - clampNumber(tailFloor, 0.82, 0.98)
-  const returnUnder = 1 - returnAmount * smootherStep((t - returnStart) / Math.max(returnEnd - returnStart, 0.000001))
-  const curledWave = Math.pow(Math.max(rise * returnUnder, 0), lerpNumber(1.55, 0.92, smoothing))
-  const raw = lerpNumber(broadWave, curledWave, curl)
+  const raw = curlProjectionRaw(t, curl, smoothing, lipSharpness, conicRho, curlRadius)
 
-  return raw / Math.max(sampleCurlProjectionMax(curl, smoothing, lipSharpness), 0.000001)
+  return raw / Math.max(sampleCurlProjectionMax(curl, smoothing, lipSharpness, conicRho, curlRadius), 0.000001)
 }
 
-function waveHeightProfile(value: number, curl: number, smoothing: number, lipSharpness: number): number {
+function curlProjectionRaw(
+  t: number,
+  curl: number,
+  smoothing: number,
+  lipSharpness: number,
+  conicRho: number,
+  curlRadius: number,
+): number {
+  const broadWave = openWaveProjection(t)
+  const sharpness = clampNumber(lipSharpness, 0, 1)
+  const rho = normalizedConicRho(conicRho)
+  const radius = normalizedCurlRadius(curlRadius)
+  const returnStart = clampNumber(
+    lerpNumber(0.82, 0.5, curl) + lerpNumber(0.04, -0.05, rho) + lerpNumber(0.06, -0.055, radius) +
+      lerpNumber(-0.018, 0.014, sharpness),
+    0.24,
+    0.88,
+  )
+  const returnEnd = clampNumber(
+    lerpNumber(1, 0.94, curl) + smoothing * lerpNumber(0, 0.035, curl) + lerpNumber(-0.025, 0.07, radius) +
+      lerpNumber(0.012, -0.012, sharpness),
+    returnStart + lerpNumber(0.14, 0.4, curl) + radius * 0.06,
+    0.995,
+  )
+  const riseEnd = lerpNumber(0.58, 0.34, curl) + lerpNumber(0.035, -0.05, rho) + lerpNumber(-0.035, 0.055, radius) +
+    lerpNumber(0.018, -0.012, sharpness)
+  const tailFloor = clampNumber(
+    lerpNumber(0.98, 0.018, curl) + lerpNumber(0.05, -0.055, rho) + lerpNumber(-0.055, 0.07, radius) +
+      lerpNumber(0.018, -0.018, sharpness),
+    0,
+    0.98,
+  )
+  const rise = smootherStep(t / Math.max(riseEnd, 0.000001))
+  const returnAmount = 1 - tailFloor
+  const returnUnder = 1 - returnAmount * smootherStep((t - returnStart) / Math.max(returnEnd - returnStart, 0.000001))
+  const power = clampNumber(lerpNumber(1.48, 0.72, smoothing) + lerpNumber(0.18, -0.22, rho) + lerpNumber(-0.14, 0.2, radius), 0.42, 1.8)
+  const curledWave = Math.pow(Math.max(rise * returnUnder, 0), power)
+
+  return lerpNumber(broadWave, curledWave, curl)
+}
+
+function waveHeightProfile(
+  value: number,
+  curl: number,
+  smoothing: number,
+  lipSharpness: number,
+  conicRho: number,
+  curlRadius: number,
+): number {
   const t = clampNumber(value, 0, 1)
-  const base = loopProfile(t, 0.54, lerpNumber(2.7, 1.85, smoothing))
-  const plateau = roundedCurlHeightProfile(t, curl, smoothing, lipSharpness)
+  const base = openWaveHeight(t, smoothing, conicRho, curlRadius)
+  const plateau = roundedCurlHeightProfile(t, curl, smoothing, lipSharpness, conicRho, curlRadius)
   const raw = lerpNumber(base, plateau, curl)
 
-  return raw / Math.max(sampleWaveHeightMax(curl, smoothing, lipSharpness), 0.000001)
+  return raw / Math.max(sampleWaveHeightMax(curl, smoothing, lipSharpness, conicRho, curlRadius), 0.000001)
 }
 
-function roundedCurlHeightProfile(t: number, curl: number, smoothing: number, lipSharpness: number): number {
+function roundedCurlHeightProfile(
+  t: number,
+  curl: number,
+  smoothing: number,
+  lipSharpness: number,
+  conicRho: number,
+  curlRadius: number,
+): number {
   const sharpness = clampNumber(lipSharpness, 0, 1)
-  const riseEnd = lerpNumber(0.6, 0.49, curl) + lerpNumber(0.035, -0.025, sharpness)
-  const fallStart = lerpNumber(0.62, 0.76, curl) + lerpNumber(-0.035, 0.045, sharpness)
-  const fallEnd = lerpNumber(1.05, 0.98, curl) + lerpNumber(0.08, -0.045, sharpness)
+  const rho = normalizedConicRho(conicRho)
+  const radius = normalizedCurlRadius(curlRadius)
+  const riseEnd = lerpNumber(0.6, 0.34, curl) + lerpNumber(0.045, -0.055, rho) + lerpNumber(-0.035, 0.055, radius) +
+    lerpNumber(0.02, -0.012, sharpness)
+  const fallEnd = clampNumber(
+    lerpNumber(0.98, 0.99, curl) + smoothing * lerpNumber(0, 0.01, curl) + lerpNumber(-0.025, 0.055, radius) +
+      lerpNumber(0.012, -0.012, sharpness),
+    0.88,
+    0.998,
+  )
+  const minimumFallSpan = lerpNumber(0.12, 0.26, radius)
+  const fallStart = clampNumber(
+    lerpNumber(0.72, 0.66, curl) + lerpNumber(0.05, -0.055, rho) + lerpNumber(-0.04, 0.06, radius) +
+      lerpNumber(-0.018, 0.018, sharpness) - smoothing * lerpNumber(0, 0.03, curl),
+    riseEnd + 0.04,
+    fallEnd - minimumFallSpan,
+  )
   const rise = smootherStep(t / Math.max(riseEnd, 0.000001))
   const fall = 1 - smootherStep((t - fallStart) / Math.max(fallEnd - fallStart, 0.000001))
 
-  return Math.pow(Math.max(rise * fall, 0), lerpNumber(1.05, 0.74, smoothing) + sharpness * 0.45)
+  const power = clampNumber(lerpNumber(1.02, 0.56, smoothing) + sharpness * 0.24 + lerpNumber(0.18, -0.2, rho) +
+    lerpNumber(-0.12, 0.16, radius), 0.34, 1.55)
+
+  return Math.pow(Math.max(rise * fall, 0), power)
 }
 
-function sampleWaveHeightMax(curl: number, smoothing: number, lipSharpness: number): number {
+function openWaveProjection(t: number): number {
+  const rise = smootherStep(t / 0.62)
+  const lateReturn = 1 - smootherStep((t - 0.88) / 0.12)
+
+  return Math.pow(Math.max(rise * lateReturn, 0), 1.12)
+}
+
+function openWaveHeight(t: number, smoothing: number, conicRho: number, curlRadius: number): number {
+  const rho = normalizedConicRho(conicRho)
+  const radius = normalizedCurlRadius(curlRadius)
+  const rise = smootherStep(t / 0.62)
+  const fall = 1 - smootherStep((t - lerpNumber(0.78, 0.88, smoothing) + lerpNumber(-0.035, 0.035, radius)) /
+    lerpNumber(0.16, 0.24, radius))
+
+  return Math.pow(Math.max(rise * fall, 0), clampNumber(lerpNumber(1.22, 0.88, smoothing) + lerpNumber(0.16, -0.16, rho), 0.62, 1.45))
+}
+
+function sampleWaveHeightMax(
+  curl: number,
+  smoothing: number,
+  lipSharpness: number,
+  conicRho: number,
+  curlRadius: number,
+): number {
   let max = 0
   for (let index = 0; index <= 80; index += 1) {
     const t = index / 80
-    const base = loopProfile(t, 0.54, lerpNumber(2.7, 1.85, smoothing))
-    const plateau = roundedCurlHeightProfile(t, curl, smoothing, lipSharpness)
+    const base = openWaveHeight(t, smoothing, conicRho, curlRadius)
+    const plateau = roundedCurlHeightProfile(t, curl, smoothing, lipSharpness, conicRho, curlRadius)
     max = Math.max(max, lerpNumber(base, plateau, curl))
   }
   return max
 }
 
-function sampleCurlProjectionMax(curl: number, smoothing: number, lipSharpness: number): number {
+function sampleCurlProjectionMax(
+  curl: number,
+  smoothing: number,
+  lipSharpness: number,
+  conicRho: number,
+  curlRadius: number,
+): number {
   let max = 0
   for (let index = 0; index <= 80; index += 1) {
     const t = index / 80
-    const broadWave = loopProfile(t, 0.62, 2.25)
-    const sharpness = clampNumber(lipSharpness, 0, 1)
-    const returnStart = lerpNumber(0.78, 0.61, curl) + lerpNumber(-0.045, 0.035, sharpness)
-    const returnEnd = lerpNumber(1.08, 0.98, curl) + lerpNumber(0.06, -0.035, sharpness)
-    const riseEnd = lerpNumber(0.58, 0.48, curl) + lerpNumber(0.035, -0.025, sharpness)
-    const tailFloor = lerpNumber(0.98, 0.9, curl) + lerpNumber(0.025, -0.06, sharpness)
-    const rise = smootherStep(t / Math.max(riseEnd, 0.000001))
-    const returnAmount = 1 - clampNumber(tailFloor, 0.82, 0.98)
-    const returnUnder = 1 - returnAmount * smootherStep((t - returnStart) / Math.max(returnEnd - returnStart, 0.000001))
-    const curledWave = Math.pow(Math.max(rise * returnUnder, 0), lerpNumber(1.55, 0.92, smoothing))
-    max = Math.max(max, lerpNumber(broadWave, curledWave, curl))
+    max = Math.max(max, curlProjectionRaw(t, curl, smoothing, lipSharpness, conicRho, curlRadius))
   }
   return max
 }
 
-function loopProfile(value: number, peak: number, power: number): number {
-  const t = clampNumber(value, 0, 1)
-  const safePeak = clampNumber(peak, 0.1, 0.9)
-  const local =
-    t < safePeak
-      ? 0.5 * (t / safePeak)
-      : 0.5 + 0.5 * ((t - safePeak) / Math.max(1 - safePeak, 0.000001))
+function normalizedConicRho(value: number): number {
+  return (clampNumber(value, CONIC_RHO_MIN, CONIC_RHO_MAX) - CONIC_RHO_MIN) / (CONIC_RHO_MAX - CONIC_RHO_MIN)
+}
 
-  return Math.pow(Math.max(Math.sin(Math.PI * local), 0), power)
+function normalizedCurlRadius(value: number): number {
+  return (clampNumber(value, CURL_RADIUS_MIN, CURL_RADIUS_MAX) - CURL_RADIUS_MIN) / (CURL_RADIUS_MAX - CURL_RADIUS_MIN)
 }
 
 function transverseWaveMask(
@@ -669,7 +990,7 @@ function measureOverhangAmount(nodes: LatticeNode[]): number {
   const maxLift = maxValue(nodes.map((node) => Math.abs(node.currentPosition[2])), (value) => value, 0)
   if (maxLift <= 0.000001) return 0
 
-  const liftedNodes = nodes.filter((node) => Math.abs(node.currentPosition[2]) >= maxLift * 0.24)
+  const liftedNodes = nodes.filter((node) => Math.abs(node.currentPosition[2]) >= maxLift * 0.04)
   const horizontalProjection = liftedNodes.map((node) => Math.abs(node.currentPosition[0] - node.restPosition[0]))
   return maxValue(horizontalProjection, (value) => value, 0)
 }

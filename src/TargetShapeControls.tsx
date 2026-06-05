@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { CameraView, InverseSheetConfig } from './inverseSheetTypes'
+import { getInverseSheetUsableRanges } from './latticeGeometry'
 
 type TargetShapeControlsProps = {
   config: InverseSheetConfig
@@ -19,7 +20,9 @@ type NumberKey =
   | 'horizontalOffset'
   | 'height'
   | 'overhangWidth'
-  | 'curl'
+  | 'overhangAngleDeg'
+  | 'conicRho'
+  | 'curlRadius'
   | 'smoothing'
   | 'lipSharpness'
   | 'wallSmoothness'
@@ -36,8 +39,10 @@ export default function TargetShapeControls({
   onExportJson,
   onImportConfigText,
 }: TargetShapeControlsProps) {
+  const ranges = getInverseSheetUsableRanges(config)
+
   const update = (patch: Partial<InverseSheetConfig>) => {
-    onConfigChange({ ...config, ...patch })
+    onConfigChange(clampToUsableRanges({ ...config, ...patch }))
   }
 
   const setNumber = (key: NumberKey, value: number) => {
@@ -66,10 +71,20 @@ export default function TargetShapeControls({
 
         <div className="slider-stack">
           <RangeInput label="morph" value={config.morph} min={0} max={1} step={0.01} onChange={(value) => setNumber('morph', value)} />
-          <RangeInput label="curl" value={config.curl} min={0} max={1} step={0.01} onChange={(value) => setNumber('curl', value)} />
-          <RangeInput label="width" value={config.overhangWidth} min={0} max={72} step={0.5} onChange={(value) => setNumber('overhangWidth', value)} />
-          <RangeInput label="height" value={config.height} min={0} max={24} step={0.25} onChange={(value) => setNumber('height', value)} />
-          <RangeInput label="overhang" value={config.horizontalOffset} min={0} max={32} step={0.25} onChange={(value) => setNumber('horizontalOffset', value)} />
+          <RangeInput
+            label="overhang angle"
+            value={config.overhangAngleDeg}
+            min={40}
+            max={120}
+            step={1}
+            formatValue={(value) => `${Math.round(value)} deg`}
+            onChange={(value) => setNumber('overhangAngleDeg', value)}
+          />
+          <RangeInput label="conic rho" value={config.conicRho} min={0.05} max={0.95} step={0.01} onChange={(value) => setNumber('conicRho', value)} />
+          <RangeInput label="curl radius" value={config.curlRadius} min={0.25} max={1.25} step={0.01} onChange={(value) => setNumber('curlRadius', value)} />
+          <RangeInput label="width" value={config.overhangWidth} min={0} max={ranges.overhangWidthMax} step={0.5} onChange={(value) => setNumber('overhangWidth', value)} />
+          <RangeInput label="height" value={config.height} min={0} max={ranges.heightMax} step={0.25} onChange={(value) => setNumber('height', value)} />
+          <RangeInput label="overhang" value={config.horizontalOffset} min={0} max={ranges.horizontalOffsetMax} step={0.25} onChange={(value) => setNumber('horizontalOffset', value)} />
           <RangeInput label="ground transition" value={config.smoothing} min={0} max={1} step={0.01} onChange={(value) => setNumber('smoothing', value)} />
           <RangeInput label="lip sharpness" value={config.lipSharpness} min={0} max={1} step={0.01} onChange={(value) => setNumber('lipSharpness', value)} />
           <RangeInput label="wall smoothness" value={config.wallSmoothness} min={0} max={1} step={0.01} onChange={(value) => setNumber('wallSmoothness', value)} />
@@ -151,6 +166,17 @@ export default function TargetShapeControls({
   )
 }
 
+function clampToUsableRanges(config: InverseSheetConfig): InverseSheetConfig {
+  const ranges = getInverseSheetUsableRanges(config)
+
+  return {
+    ...config,
+    height: clampNumber(config.height, 0, ranges.heightMax),
+    horizontalOffset: clampNumber(config.horizontalOffset, 0, ranges.horizontalOffsetMax),
+    overhangWidth: clampNumber(config.overhangWidth, 0, ranges.overhangWidthMax),
+  }
+}
+
 function displayToggleLabel(key: BooleanKey): string {
   if (key === 'showSurface') return 'surface'
   if (key === 'showRestGhost') return 'flat grid'
@@ -222,12 +248,18 @@ function formatInputValue(value: number): string {
   return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(4)))
 }
 
+function clampNumber(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min
+  return Math.min(max, Math.max(min, value))
+}
+
 function RangeInput({
   label,
   value,
   min,
   max,
   step,
+  formatValue,
   onChange,
 }: {
   label: string
@@ -235,14 +267,17 @@ function RangeInput({
   min: number
   max: number
   step: number
+  formatValue?: (value: number) => string
   onChange: (value: number) => void
 }) {
+  const safeValue = clampNumber(value, min, max)
+
   return (
     <label className="range-label">
       <span>
-        {label} <strong>{value.toFixed(2)}</strong>
+        {label} <strong>{formatValue ? formatValue(safeValue) : safeValue.toFixed(2)}</strong>
       </span>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+      <input type="range" min={min} max={max} step={step} value={safeValue} onChange={(event) => onChange(Number(event.target.value))} />
     </label>
   )
 }
