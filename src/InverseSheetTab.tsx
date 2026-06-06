@@ -139,6 +139,8 @@ function readInitialInverseSheetConfig(): InverseSheetConfig {
   readNumberConfigParam(search, config, 'horizontalOffset', 'horizontalOffset')
   readNumberConfigParam(search, config, 'position', 'overhangPosition')
   readNumberConfigParam(search, config, 'overhangPosition', 'overhangPosition')
+  readNumberConfigParam(search, config, 'steer', 'steer')
+  readNumberConfigParam(search, config, 'steerYaw', 'steer')
   readNumberConfigParam(search, config, 'lipDip', 'overhangAngleDeg')
   readNumberConfigParam(search, config, 'overhangAngleDeg', 'overhangAngleDeg')
   readNumberConfigParam(search, config, 'width', 'overhangWidth')

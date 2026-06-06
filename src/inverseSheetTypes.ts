@@ -30,6 +30,7 @@ export type TargetParams = {
   bendRadius: number
   horizontalOffset: number
   overhangPosition: number
+  steer: number
   height: number
   overhangWidth: number
   overhangAngleDeg: number
