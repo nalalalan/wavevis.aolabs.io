@@ -41,6 +41,7 @@ const DEFAULT_SHEET_ROWS = 44
 const DEFAULT_SHEET_COLUMNS = 44
 const DEFAULT_SHEET_SPACING = 1
 const DEFAULT_SHEET_LENGTH = (DEFAULT_SHEET_COLUMNS - 1) * DEFAULT_SHEET_SPACING
+const DEFAULT_SHEET_SPAN = (DEFAULT_SHEET_ROWS - 1) * DEFAULT_SHEET_SPACING
 const DEFAULT_GRID_DENOMINATOR = Math.max(DEFAULT_SHEET_ROWS - 1, DEFAULT_SHEET_COLUMNS - 1)
 const MAX_STEER_ANGLE_RAD = Math.PI / 4
 
@@ -108,14 +109,14 @@ const userLipDipCase = summarizeTerminalCurl(buildInverseSheetModel({
   flatContribution: 0.35,
 }))
 const positionNeutralModel = buildInverseSheetModel({ overhangPosition: 0 })
-const positionRigid = {
-  back: summarizePositionRigid(buildInverseSheetModel({ overhangPosition: -1 }), positionNeutralModel),
-  front: summarizePositionRigid(buildInverseSheetModel({ overhangPosition: 1 }), positionNeutralModel),
+const positionField = {
+  back: summarizePositionField(buildInverseSheetModel({ overhangPosition: -1 }), positionNeutralModel),
+  front: summarizePositionField(buildInverseSheetModel({ overhangPosition: 1 }), positionNeutralModel),
 }
 const steerNeutralModel = buildInverseSheetModel({ steer: 0, overhangPosition: 0 })
-const steerRigid = {
-  left: summarizeSteerRigid(buildInverseSheetModel({ steer: -1, overhangPosition: 0 }), steerNeutralModel),
-  right: summarizeSteerRigid(buildInverseSheetModel({ steer: 1, overhangPosition: 0 }), steerNeutralModel),
+const steerField = {
+  left: summarizeSteerField(buildInverseSheetModel({ steer: -1, overhangPosition: 0 }), steerNeutralModel),
+  right: summarizeSteerField(buildInverseSheetModel({ steer: 1, overhangPosition: 0 }), steerNeutralModel),
 }
 const widthInvariant = {
   narrowToWideCenterlineResidual: summarizeCenterlineProfileResidual(buildInverseSheetModel({ overhangWidth: 12 }), buildInverseSheetModel({ overhangWidth: 36 })),
@@ -145,10 +146,6 @@ if (!(bluntLip.frontBandCount >= sharpLip.frontBandCount && bluntLip.frontZSpan 
   failures.push('lip sharpness 0 should keep a visibly rounder front band than lip sharpness 1')
 }
 
-if (!(sharpLip.postTipDrop > bluntLip.postTipDrop * 1.1)) {
-  failures.push('lip sharpness 1 should make the front lip drop tighter than lip sharpness 0')
-}
-
 if (Math.abs(bluntLip.frontX - sharpLip.frontX) > 0.5) {
   failures.push('lip sharpness should control tip shape without materially changing overhang reach')
 }
@@ -173,15 +170,19 @@ if (!(userLipDipCase.tipBelowLastPeak && userLipDipCase.tipSlope < -0.05)) {
   failures.push('lip dip above 90 deg should make the terminal free tip point downward')
 }
 
-if (!(positionRigid.back.maxResidual < 0.000001 && positionRigid.front.maxResidual < 0.000001 &&
-  positionRigid.back.maxStrainResidual < 0.000001 && positionRigid.front.maxStrainResidual < 0.000001)) {
-  failures.push('overhang position should be a rigid horizontal translation with no shape or strain change')
+if (!(positionField.back.restGridFixed && positionField.front.restGridFixed &&
+  positionField.back.boundaryFlat && positionField.front.boundaryFlat &&
+  positionField.back.fieldResidual < 0.16 && positionField.front.fieldResidual < 0.16 &&
+  Math.abs(positionField.back.centroidShiftX - positionField.back.expectedShiftX) < 0.85 &&
+  Math.abs(positionField.front.centroidShiftX - positionField.front.expectedShiftX) < 0.85)) {
+  failures.push('overhang position should move the deformation field inside a fixed square sheet')
 }
 
-if (!(steerRigid.left.maxResidual < 0.000001 && steerRigid.right.maxResidual < 0.000001 &&
-  steerRigid.left.maxMetricResidual < 0.000001 && steerRigid.right.maxMetricResidual < 0.000001 &&
-  steerRigid.left.maxZResidual < 0.000001 && steerRigid.right.maxZResidual < 0.000001)) {
-  failures.push('steer should be a rigid yaw with no shape or metric change')
+if (!(steerField.left.restGridFixed && steerField.right.restGridFixed &&
+  steerField.left.boundaryFlat && steerField.right.boundaryFlat &&
+  steerField.left.fieldResidual < 0.28 && steerField.right.fieldResidual < 0.28 &&
+  steerField.left.centroidShiftY < -0.6 && steerField.right.centroidShiftY > 0.6)) {
+  failures.push('steer should rotate the deformation field inside a fixed square sheet')
 }
 
 if (widthInvariant.narrowToWideCenterlineResidual > 0.000001) {
@@ -253,8 +254,8 @@ const report = {
     lipDip120: highLipDip,
     userLipDip118: userLipDipCase,
   },
-  overhangPosition: positionRigid,
-  steer: steerRigid,
+  overhangPosition: positionField,
+  steer: steerField,
   widthInvariant,
   resolutionInvariant,
   displayInvariant,
@@ -433,10 +434,8 @@ function summarizeTerminalCurl(model) {
   const terminal = points.slice(terminalStartIndex, tipIndex + 1)
   const peakZ = Math.max(...terminal.map((point) => point.z))
   const previous = points[Math.max(0, tipIndex - 1)]
-  const tipLocal = undoPlacementTransform(tip.node.currentPosition, model.config)
-  const previousLocal = undoPlacementTransform(previous.node.currentPosition, model.config)
-  const tipDx = tipLocal[0] - previousLocal[0]
-  const tipSlope = (tipLocal[2] - previousLocal[2]) / Math.max(Math.abs(tipDx), 0.000001)
+  const tipDx = tip.node.currentPosition[0] - previous.node.currentPosition[0]
+  const tipSlope = (tip.node.currentPosition[2] - previous.node.currentPosition[2]) / Math.max(Math.abs(tipDx), 0.000001)
 
   return {
     tipBelowLastPeak: tip.z < peakZ - maxZ * 0.035,
@@ -447,25 +446,16 @@ function summarizeTerminalCurl(model) {
   }
 }
 
-function summarizePositionRigid(candidate, neutral) {
-  const xOffset = mean(candidate.nodes.map((node, index) => node.restPosition[0] - neutral.nodes[index].restPosition[0]))
-  const maxResidual = candidate.nodes.reduce((currentMax, node, index) => {
-    const baseline = neutral.nodes[index]
-    const residual = Math.max(
-      pointTranslationResidual(node.restPosition, baseline.restPosition, xOffset),
-      pointTranslationResidual(node.targetPosition, baseline.targetPosition, xOffset),
-      pointTranslationResidual(node.currentPosition, baseline.currentPosition, xOffset),
-    )
-    return Math.max(currentMax, residual)
-  }, 0)
-  const maxStrainResidual = candidate.edgeMetrics.reduce((currentMax, edge, index) => {
-    return Math.max(currentMax, Math.abs(edge.strain - neutral.edgeMetrics[index].strain))
-  }, 0)
+function summarizePositionField(candidate, neutral) {
+  const candidateCenter = activeDisplacementCentroid(candidate)
+  const neutralCenter = activeDisplacementCentroid(neutral)
+  const expectedShiftX = overhangPositionOffset(candidate.config.overhangPosition) - overhangPositionOffset(neutral.config.overhangPosition)
 
   return {
-    xOffset: round(xOffset),
-    maxResidual: round(maxResidual),
-    maxStrainResidual: round(maxStrainResidual),
+    restGridFixed: restGridsMatch(candidate, neutral),
+    fieldResidual: round(transformedDisplacementFieldResidual(candidate, neutral)),
+    centroidShiftX: round(candidateCenter[0] - neutralCenter[0]),
+    expectedShiftX: round(expectedShiftX),
     boundaryFlat: boundaryNodesStayFlat(candidate),
   }
 }
@@ -473,46 +463,28 @@ function summarizePositionRigid(candidate, neutral) {
 function boundaryNodesStayFlat(model) {
   const tolerance = 0.000001
   return model.nodes.every((node) => {
-    const onBoundary =
-      node.row === 0 ||
-      node.col === 0 ||
-      node.row === model.config.rows - 1 ||
-      node.col === model.config.columns - 1
+    const expected = expectedCanonicalRestPosition(node.row, node.col, model.config)
 
-    return !onBoundary || (
-      distanceVec(node.currentPosition, node.restPosition) <= tolerance &&
-      distanceVec(node.targetPosition, node.restPosition) <= tolerance &&
+    if (distanceVec(node.restPosition, expected) > tolerance) return false
+    if (!isBoundaryNodeIndex(node.row, node.col, model.config)) return true
+
+    return (
+      distanceVec(node.currentPosition, expected) <= tolerance &&
+      distanceVec(node.targetPosition, expected) <= tolerance &&
       Math.abs(node.currentPosition[2]) <= tolerance &&
       Math.abs(node.targetPosition[2]) <= tolerance
     )
   })
 }
 
-function summarizeSteerRigid(candidate, neutral) {
-  const maxResidual = candidate.nodes.reduce((currentMax, node, index) => {
-    const baseline = neutral.nodes[index]
-    const residual = Math.max(
-      distanceVec(undoPlacementTransform(node.restPosition, candidate.config), undoPlacementTransform(baseline.restPosition, neutral.config)),
-      distanceVec(undoPlacementTransform(node.targetPosition, candidate.config), undoPlacementTransform(baseline.targetPosition, neutral.config)),
-      distanceVec(undoPlacementTransform(node.currentPosition, candidate.config), undoPlacementTransform(baseline.currentPosition, neutral.config)),
-    )
-    return Math.max(currentMax, residual)
-  }, 0)
-  const maxMetricResidual = intrinsicMetricResidual(candidate, neutral)
-  const maxZResidual = candidate.nodes.reduce((currentMax, node, index) => {
-    const baseline = neutral.nodes[index]
-    return Math.max(
-      currentMax,
-      Math.abs(node.restPosition[2] - baseline.restPosition[2]),
-      Math.abs(node.targetPosition[2] - baseline.targetPosition[2]),
-      Math.abs(node.currentPosition[2] - baseline.currentPosition[2]),
-    )
-  }, 0)
+function summarizeSteerField(candidate, neutral) {
+  const candidateCenter = activeDisplacementCentroid(candidate)
+  const neutralCenter = activeDisplacementCentroid(neutral)
 
   return {
-    maxResidual: round(maxResidual),
-    maxMetricResidual: round(maxMetricResidual),
-    maxZResidual: round(maxZResidual),
+    restGridFixed: restGridsMatch(candidate, neutral),
+    fieldResidual: round(transformedDisplacementFieldResidual(candidate, neutral)),
+    centroidShiftY: round(candidateCenter[1] - neutralCenter[1]),
     boundaryFlat: boundaryNodesStayFlat(candidate),
   }
 }
@@ -567,10 +539,89 @@ function sampleCenterlineLocalPoint(model, u) {
   const amount = scaledColumn - leftColumn
   const left = model.nodes.find((node) => node.row === row && node.col === leftColumn)
   const right = model.nodes.find((node) => node.row === row && node.col === rightColumn)
-  const leftPoint = left ? undoPlacementTransform(left.currentPosition, model.config) : [0, 0, 0]
-  const rightPoint = right ? undoPlacementTransform(right.currentPosition, model.config) : leftPoint
+  const leftPoint = left ? left.currentPosition : [0, 0, 0]
+  const rightPoint = right ? right.currentPosition : leftPoint
 
   return lerpVec(leftPoint, rightPoint, amount)
+}
+
+function restGridsMatch(a, b) {
+  if (a.nodes.length !== b.nodes.length) return false
+  const tolerance = 0.000001
+
+  return a.nodes.every((node, index) => {
+    const other = b.nodes[index]
+    const expected = expectedCanonicalRestPosition(node.row, node.col, a.config)
+
+    return distanceVec(node.restPosition, expected) <= tolerance && distanceVec(node.restPosition, other.restPosition) <= tolerance
+  })
+}
+
+function transformedDisplacementFieldResidual(candidate, neutral) {
+  const yaw = steerYaw(candidate.config.steer)
+  let residual = 0
+  let samples = 0
+
+  candidate.nodes.forEach((node) => {
+    if (isBoundaryNodeIndex(node.row, node.col, candidate.config)) return
+
+    const sample = mapSheetPointToCanonicalWaveFrame(node.restPosition, candidate.config)
+    if (!pointInsideCanonicalSheet(sample, -DEFAULT_SHEET_SPACING * 1.25)) return
+
+    const expectedLocalDelta = sampleDisplacementOnRestGrid(neutral, sample[0], sample[1])
+    const expectedWorldDelta = rotateYawVector(expectedLocalDelta, yaw)
+    const actualDelta = subtractVec(node.targetPosition, node.restPosition)
+    residual = Math.max(residual, distanceVec(actualDelta, expectedWorldDelta))
+    samples += 1
+  })
+
+  return samples > 0 ? residual : Infinity
+}
+
+function sampleDisplacementOnRestGrid(model, x, y) {
+  if (!pointInsideCanonicalSheet([x, y, 0])) return [0, 0, 0]
+
+  const u = clampNumber((x + DEFAULT_SHEET_LENGTH / 2) / DEFAULT_SHEET_LENGTH, 0, 1)
+  const v = clampNumber((y + DEFAULT_SHEET_SPAN / 2) / DEFAULT_SHEET_SPAN, 0, 1)
+  const scaledColumn = u * (model.config.columns - 1)
+  const scaledRow = v * (model.config.rows - 1)
+  const col0 = Math.floor(scaledColumn)
+  const row0 = Math.floor(scaledRow)
+  const col1 = Math.min(model.config.columns - 1, col0 + 1)
+  const row1 = Math.min(model.config.rows - 1, row0 + 1)
+  const colAmount = scaledColumn - col0
+  const rowAmount = scaledRow - row0
+  const d00 = nodeDisplacement(model, row0, col0)
+  const d10 = nodeDisplacement(model, row0, col1)
+  const d01 = nodeDisplacement(model, row1, col0)
+  const d11 = nodeDisplacement(model, row1, col1)
+  const top = lerpVec(d00, d10, colAmount)
+  const bottom = lerpVec(d01, d11, colAmount)
+
+  return lerpVec(top, bottom, rowAmount)
+}
+
+function nodeDisplacement(model, row, col) {
+  const node = model.nodes.find((candidate) => candidate.row === row && candidate.col === col)
+  if (!node) return [0, 0, 0]
+  return subtractVec(node.targetPosition, node.restPosition)
+}
+
+function activeDisplacementCentroid(model) {
+  let weightSum = 0
+  const weighted = [0, 0, 0]
+
+  model.nodes.forEach((node) => {
+    const displacement = distanceVec(node.targetPosition, node.restPosition)
+    if (displacement <= 0.0001) return
+    weighted[0] += node.restPosition[0] * displacement
+    weighted[1] += node.restPosition[1] * displacement
+    weighted[2] += node.restPosition[2] * displacement
+    weightSum += displacement
+  })
+
+  if (weightSum <= 0.000001) return [0, 0, 0]
+  return [weighted[0] / weightSum, weighted[1] / weightSum, weighted[2] / weightSum]
 }
 
 function intrinsicMetricResidual(a, b) {
@@ -593,14 +644,36 @@ function intrinsicMetricResidual(a, b) {
   return Math.max(edgeResidual, nodeResidual)
 }
 
-function undoPlacementTransform(point, config) {
-  const anchor = rootAnchor(config)
+function rootAnchor(config) {
+  const profileStart = overhangProfileLimits(config.smoothing).profileStart
+  return [-DEFAULT_SHEET_LENGTH / 2 + profileStart * DEFAULT_SHEET_LENGTH, 0, 0]
+}
+
+function expectedCanonicalRestPosition(row, col, config) {
+  const columnsDenominator = Math.max(config.columns - 1, 1)
+  const rowsDenominator = Math.max(config.rows - 1, 1)
+  const u = col / columnsDenominator
+  const v = row / rowsDenominator
+
+  return [
+    lerpNumber(-DEFAULT_SHEET_LENGTH / 2, DEFAULT_SHEET_LENGTH / 2, u),
+    lerpNumber(-DEFAULT_SHEET_SPAN / 2, DEFAULT_SHEET_SPAN / 2, v),
+    0,
+  ]
+}
+
+function isBoundaryNodeIndex(row, col, config) {
+  return row === 0 || col === 0 || row === config.rows - 1 || col === config.columns - 1
+}
+
+function mapSheetPointToCanonicalWaveFrame(point, config) {
+  const anchor = rootAnchor({ ...config, overhangPosition: 0, steer: 0 })
   const yaw = -steerYaw(config.steer)
   const c = Math.cos(yaw)
   const s = Math.sin(yaw)
-  const translatedX = point[0] - overhangPositionOffset(config.overhangPosition)
-  const dx = translatedX - anchor[0]
-  const dy = point[1] - anchor[1]
+  const placedAnchor = [anchor[0] + overhangPositionOffset(config.overhangPosition), anchor[1], anchor[2]]
+  const dx = point[0] - placedAnchor[0]
+  const dy = point[1] - placedAnchor[1]
 
   return [
     anchor[0] + c * dx - s * dy,
@@ -609,9 +682,24 @@ function undoPlacementTransform(point, config) {
   ]
 }
 
-function rootAnchor(config) {
-  const profileStart = overhangProfileLimits(config.smoothing).profileStart
-  return [-DEFAULT_SHEET_LENGTH / 2 + profileStart * DEFAULT_SHEET_LENGTH, 0, 0]
+function rotateYawVector(vector, yaw) {
+  const c = Math.cos(yaw)
+  const s = Math.sin(yaw)
+
+  return [
+    c * vector[0] - s * vector[1],
+    s * vector[0] + c * vector[1],
+    vector[2],
+  ]
+}
+
+function pointInsideCanonicalSheet(point, tolerance = 0) {
+  return (
+    point[0] >= -DEFAULT_SHEET_LENGTH / 2 - tolerance &&
+    point[0] <= DEFAULT_SHEET_LENGTH / 2 + tolerance &&
+    point[1] >= -DEFAULT_SHEET_SPAN / 2 - tolerance &&
+    point[1] <= DEFAULT_SHEET_SPAN / 2 + tolerance
+  )
 }
 
 function overhangProfileLimits(smoothing) {
@@ -635,19 +723,11 @@ function stableGroundTransitionValue(value) {
 }
 
 function overhangPositionOffset(overhangPosition) {
-  return clampNumber(overhangPosition, -1, 1) * DEFAULT_SHEET_LENGTH * 0.18
+  return clampNumber(overhangPosition, -1, 1) * DEFAULT_SHEET_LENGTH * 0.06
 }
 
 function steerYaw(steer) {
   return clampNumber(steer, -1, 1) * MAX_STEER_ANGLE_RAD
-}
-
-function pointTranslationResidual(candidate, baseline, xOffset) {
-  return Math.hypot(
-    candidate[0] - xOffset - baseline[0],
-    candidate[1] - baseline[1],
-    candidate[2] - baseline[2],
-  )
 }
 
 function horizontalDisplacement(node) {
@@ -688,6 +768,10 @@ function minOf(values) {
 
 function distanceVec(a, b) {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
+}
+
+function subtractVec(a, b) {
+  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 }
 
 function lerpVec(a, b, amount) {

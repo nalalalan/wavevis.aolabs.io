@@ -35,7 +35,8 @@ const DEFAULT_SHEET_LENGTH = (DEFAULT_SHEET_COLUMNS - 1) * DEFAULT_SHEET_SPACING
 const DEFAULT_SHEET_SPAN = (DEFAULT_SHEET_ROWS - 1) * DEFAULT_SHEET_SPACING
 const DEFAULT_GRID_DENOMINATOR = Math.max(DEFAULT_SHEET_ROWS - 1, DEFAULT_SHEET_COLUMNS - 1)
 const MAX_STEER_ANGLE_RAD = Math.PI / 4
-const MAX_TERMINAL_LIP_DIP_RAD = (72 * Math.PI) / 180
+const MAX_TERMINAL_LIP_DIP_RAD = (160 * Math.PI) / 180
+const PROFILE_LIP_SHARPNESS = 0.28
 
 export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   rows: DEFAULT_SHEET_ROWS,
@@ -179,7 +180,7 @@ function overhangProfileLimits(smoothing: number) {
 }
 
 function overhangPositionOffset(overhangPosition: number, totalWidth = DEFAULT_SHEET_LENGTH): number {
-  return clampNumber(overhangPosition, -1, 1) * totalWidth * 0.18
+  return clampNumber(overhangPosition, -1, 1) * totalWidth * 0.06
 }
 
 function steerYaw(steer: number): number {
@@ -191,33 +192,87 @@ function rootAnchor(config: InverseSheetConfig): Vec3 {
   return [-DEFAULT_SHEET_LENGTH / 2 + profileStart * DEFAULT_SHEET_LENGTH, 0, 0]
 }
 
-function applyPlacementTransform(point: Vec3, config: InverseSheetConfig): Vec3 {
-  const anchor = rootAnchor(config)
-  const yaw = steerYaw(config.steer)
-  const c = Math.cos(yaw)
-  const s = Math.sin(yaw)
-  const dx = point[0] - anchor[0]
-  const dy = point[1] - anchor[1]
-  const x = anchor[0] + c * dx - s * dy + overhangPositionOffset(config.overhangPosition)
-  const y = anchor[1] + s * dx + c * dy
-
-  return [x, y, point[2]]
+function canonicalFieldConfig(config: InverseSheetConfig): InverseSheetConfig {
+  return {
+    ...config,
+    overhangPosition: 0,
+    steer: 0,
+  }
 }
 
-function undoPlacementTransform(point: Vec3, config: InverseSheetConfig): Vec3 {
-  const anchor = rootAnchor(config)
-  const yaw = -steerYaw(config.steer)
-  const c = Math.cos(yaw)
-  const s = Math.sin(yaw)
-  const translatedX = point[0] - overhangPositionOffset(config.overhangPosition)
-  const dx = translatedX - anchor[0]
-  const dy = point[1] - anchor[1]
+function expectedCanonicalRestPosition(row: number, col: number, config: InverseSheetConfig): Vec3 {
+  const columnsDenominator = Math.max(config.columns - 1, 1)
+  const rowsDenominator = Math.max(config.rows - 1, 1)
+  const u = col / columnsDenominator
+  const v = row / rowsDenominator
+
+  return [
+    lerpNumber(-DEFAULT_SHEET_LENGTH / 2, DEFAULT_SHEET_LENGTH / 2, u),
+    lerpNumber(-DEFAULT_SHEET_SPAN / 2, DEFAULT_SHEET_SPAN / 2, v),
+    0,
+  ]
+}
+
+function isBoundaryNodeIndex(row: number, col: number, config: InverseSheetConfig): boolean {
+  return row === 0 || col === 0 || row === config.rows - 1 || col === config.columns - 1
+}
+
+function mapSheetPointToCanonicalWaveFrame(point: Vec3, config: InverseSheetConfig): Vec3 {
+  const canonicalConfig = canonicalFieldConfig(config)
+  const anchor = rootAnchor(canonicalConfig)
+  const yaw = steerYaw(config.steer)
+  const c = Math.cos(-yaw)
+  const s = Math.sin(-yaw)
+  const placedAnchor: Vec3 = [
+    anchor[0] + overhangPositionOffset(config.overhangPosition),
+    anchor[1],
+    anchor[2],
+  ]
+  const dx = point[0] - placedAnchor[0]
+  const dy = point[1] - placedAnchor[1]
 
   return [
     anchor[0] + c * dx - s * dy,
     anchor[1] + s * dx + c * dy,
     point[2],
   ]
+}
+
+function rotateYawVector(vector: Vec3, yaw: number): Vec3 {
+  const c = Math.cos(yaw)
+  const s = Math.sin(yaw)
+
+  return [
+    c * vector[0] - s * vector[1],
+    s * vector[0] + c * vector[1],
+    vector[2],
+  ]
+}
+
+function pointInsideCanonicalSheet(point: Vec3, tolerance = 0): boolean {
+  return (
+    point[0] >= -DEFAULT_SHEET_LENGTH / 2 - tolerance &&
+    point[0] <= DEFAULT_SHEET_LENGTH / 2 + tolerance &&
+    point[1] >= -DEFAULT_SHEET_SPAN / 2 - tolerance &&
+    point[1] <= DEFAULT_SHEET_SPAN / 2 + tolerance
+  )
+}
+
+function targetFromDeformationField(restPosition: Vec3, config: InverseSheetConfig): Vec3 {
+  const canonicalSample = mapSheetPointToCanonicalWaveFrame(restPosition, config)
+
+  if (!pointInsideCanonicalSheet(canonicalSample)) {
+    return restPosition
+  }
+
+  const canonicalConfig = canonicalFieldConfig(config)
+  const u = (canonicalSample[0] + DEFAULT_SHEET_LENGTH / 2) / DEFAULT_SHEET_LENGTH
+  const v = (canonicalSample[1] + DEFAULT_SHEET_SPAN / 2) / DEFAULT_SHEET_SPAN
+  const canonicalTarget = canonicalOverhangTargetPosition(u, v, canonicalSample, canonicalConfig)
+  const localDelta = subtractVec(canonicalTarget, canonicalSample)
+  const worldDelta = rotateYawVector(localDelta, steerYaw(config.steer))
+
+  return addVec(restPosition, worldDelta)
 }
 
 function lipDipAmount(angleDeg: number): number {
@@ -430,11 +485,11 @@ export function runInverseSheetSanityChecks(): string[] {
   if (!groundTransitionSmoothsBottomDescent(lowGroundTransition, highGroundTransition)) {
     failures.push('ground transition should lengthen and soften the lower return into flat water')
   }
-  if (!positionIsRigidTranslation(positionBack, positionNeutral) || !positionIsRigidTranslation(positionFront, positionNeutral)) {
-    failures.push('overhang position should be a rigid horizontal translation only')
+  if (!positionMovesFieldInsideFixedSheet(positionBack, positionNeutral) || !positionMovesFieldInsideFixedSheet(positionFront, positionNeutral)) {
+    failures.push('overhang position should move the deformation field inside a fixed square sheet')
   }
-  if (!steerIsRigidYaw(steerLeft, steerNeutral) || !steerIsRigidYaw(steerRight, steerNeutral)) {
-    failures.push('steer should be a rigid horizontal yaw only')
+  if (!steerRotatesFieldInsideFixedSheet(steerLeft, steerNeutral) || !steerRotatesFieldInsideFixedSheet(steerRight, steerNeutral)) {
+    failures.push('steer should rotate the deformation field inside a fixed square sheet')
   }
   if (!geometryAndMetricsMatch(displayOff, displayUres)) {
     failures.push('display mode should only change colors/materials, not geometry or intrinsic metrics')
@@ -449,58 +504,122 @@ export function runInverseSheetSanityChecks(): string[] {
 function boundaryNodesStayFlat(model: LatticeModel): boolean {
   const tolerance = 0.000001
   return model.nodes.every((node) => {
-    const onBoundary =
-      node.row === 0 ||
-      node.col === 0 ||
-      node.row === model.config.rows - 1 ||
-      node.col === model.config.columns - 1
+    const expected = expectedCanonicalRestPosition(node.row, node.col, model.config)
 
-    if (!onBoundary) return true
+    if (distanceVec(node.restPosition, expected) > tolerance) return false
+    if (!isBoundaryNodeIndex(node.row, node.col, model.config)) return true
 
     return (
-      distanceVec(node.currentPosition, node.restPosition) <= tolerance &&
-      distanceVec(node.targetPosition, node.restPosition) <= tolerance &&
+      distanceVec(node.currentPosition, expected) <= tolerance &&
+      distanceVec(node.targetPosition, expected) <= tolerance &&
       Math.abs(node.currentPosition[2]) <= tolerance
     )
   })
 }
 
-function positionIsRigidTranslation(candidate: LatticeModel, neutral: LatticeModel): boolean {
-  if (candidate.nodes.length !== neutral.nodes.length) return false
+function positionMovesFieldInsideFixedSheet(candidate: LatticeModel, neutral: LatticeModel): boolean {
+  if (!restGridsMatch(candidate, neutral)) return false
+  if (!boundaryNodesStayFlat(candidate)) return false
 
-  const xOffsets = candidate.nodes.map((node, index) => node.restPosition[0] - neutral.nodes[index].restPosition[0])
-  const xOffset = mean(xOffsets)
-  const maxResidual = candidate.nodes.reduce((currentMax, node, index) => {
-    const baseline = neutral.nodes[index]
-    const residual = Math.max(
-      pointTranslationResidual(node.restPosition, baseline.restPosition, xOffset),
-      pointTranslationResidual(node.targetPosition, baseline.targetPosition, xOffset),
-      pointTranslationResidual(node.currentPosition, baseline.currentPosition, xOffset),
-    )
-    return Math.max(currentMax, residual)
-  }, 0)
-  const maxStrainResidual = candidate.edgeMetrics.reduce((currentMax, edge, index) => {
-    return Math.max(currentMax, Math.abs(edge.strain - neutral.edgeMetrics[index].strain))
-  }, 0)
+  const residual = transformedDisplacementFieldResidual(candidate, neutral)
+  const candidateCenter = activeDisplacementCentroid(candidate)
+  const neutralCenter = activeDisplacementCentroid(neutral)
+  const expectedOffset = overhangPositionOffset(candidate.config.overhangPosition) - overhangPositionOffset(neutral.config.overhangPosition)
+  const movedAsExpected = Math.abs((candidateCenter[0] - neutralCenter[0]) - expectedOffset) <= DEFAULT_SHEET_SPACING * 0.85
 
-  return maxResidual <= 0.000001 && maxStrainResidual <= 0.000001
+  return residual <= 0.16 && movedAsExpected
 }
 
-function steerIsRigidYaw(candidate: LatticeModel, neutral: LatticeModel): boolean {
-  if (candidate.nodes.length !== neutral.nodes.length) return false
+function steerRotatesFieldInsideFixedSheet(candidate: LatticeModel, neutral: LatticeModel): boolean {
+  if (!restGridsMatch(candidate, neutral)) return false
+  if (!boundaryNodesStayFlat(candidate)) return false
 
-  const maxResidual = candidate.nodes.reduce((currentMax, node, index) => {
-    const baseline = neutral.nodes[index]
-    const residual = Math.max(
-      distanceVec(undoPlacementTransform(node.restPosition, candidate.config), undoPlacementTransform(baseline.restPosition, neutral.config)),
-      distanceVec(undoPlacementTransform(node.targetPosition, candidate.config), undoPlacementTransform(baseline.targetPosition, neutral.config)),
-      distanceVec(undoPlacementTransform(node.currentPosition, candidate.config), undoPlacementTransform(baseline.currentPosition, neutral.config)),
-    )
-    return Math.max(currentMax, residual)
-  }, 0)
-  const maxMetricResidual = intrinsicMetricResidual(candidate, neutral)
+  const residual = transformedDisplacementFieldResidual(candidate, neutral)
+  const candidateCenter = activeDisplacementCentroid(candidate)
+  const neutralCenter = activeDisplacementCentroid(neutral)
+  const expectedDirection = Math.sign(candidate.config.steer)
+  const yShift = candidateCenter[1] - neutralCenter[1]
 
-  return maxResidual <= 0.000001 && maxMetricResidual <= 0.000005
+  return residual <= 0.28 && Math.sign(yShift) === expectedDirection && Math.abs(yShift) >= DEFAULT_SHEET_SPACING * 0.6
+}
+
+function restGridsMatch(a: LatticeModel, b: LatticeModel): boolean {
+  if (a.nodes.length !== b.nodes.length) return false
+  const tolerance = 0.000001
+
+  return a.nodes.every((node, index) => {
+    const other = b.nodes[index]
+    const expected = expectedCanonicalRestPosition(node.row, node.col, a.config)
+
+    return distanceVec(node.restPosition, expected) <= tolerance && distanceVec(node.restPosition, other.restPosition) <= tolerance
+  })
+}
+
+function transformedDisplacementFieldResidual(candidate: LatticeModel, neutral: LatticeModel): number {
+  const yaw = steerYaw(candidate.config.steer)
+  let residual = 0
+  let samples = 0
+
+  candidate.nodes.forEach((node) => {
+    if (isBoundaryNodeIndex(node.row, node.col, candidate.config)) return
+
+    const sample = mapSheetPointToCanonicalWaveFrame(node.restPosition, candidate.config)
+    if (!pointInsideCanonicalSheet(sample, -DEFAULT_SHEET_SPACING * 1.25)) return
+
+    const expectedLocalDelta = sampleDisplacementOnRestGrid(neutral, sample[0], sample[1])
+    const expectedWorldDelta = rotateYawVector(expectedLocalDelta, yaw)
+    const actualDelta = subtractVec(node.targetPosition, node.restPosition)
+    residual = Math.max(residual, distanceVec(actualDelta, expectedWorldDelta))
+    samples += 1
+  })
+
+  return samples > 0 ? residual : Infinity
+}
+
+function sampleDisplacementOnRestGrid(model: LatticeModel, x: number, y: number): Vec3 {
+  if (!pointInsideCanonicalSheet([x, y, 0])) return [0, 0, 0]
+
+  const u = clampNumber((x + DEFAULT_SHEET_LENGTH / 2) / DEFAULT_SHEET_LENGTH, 0, 1)
+  const v = clampNumber((y + DEFAULT_SHEET_SPAN / 2) / DEFAULT_SHEET_SPAN, 0, 1)
+  const scaledColumn = u * (model.config.columns - 1)
+  const scaledRow = v * (model.config.rows - 1)
+  const col0 = Math.floor(scaledColumn)
+  const row0 = Math.floor(scaledRow)
+  const col1 = Math.min(model.config.columns - 1, col0 + 1)
+  const row1 = Math.min(model.config.rows - 1, row0 + 1)
+  const colAmount = scaledColumn - col0
+  const rowAmount = scaledRow - row0
+  const d00 = nodeDisplacement(model, row0, col0)
+  const d10 = nodeDisplacement(model, row0, col1)
+  const d01 = nodeDisplacement(model, row1, col0)
+  const d11 = nodeDisplacement(model, row1, col1)
+  const top = lerpVec(d00, d10, colAmount)
+  const bottom = lerpVec(d01, d11, colAmount)
+
+  return lerpVec(top, bottom, rowAmount)
+}
+
+function nodeDisplacement(model: LatticeModel, row: number, col: number): Vec3 {
+  const node = model.nodes.find((candidate) => candidate.row === row && candidate.col === col)
+  if (!node) return [0, 0, 0]
+  return subtractVec(node.targetPosition, node.restPosition)
+}
+
+function activeDisplacementCentroid(model: LatticeModel): Vec3 {
+  let weightSum = 0
+  const weighted: Vec3 = [0, 0, 0]
+
+  model.nodes.forEach((node) => {
+    const displacement = lengthVec(subtractVec(node.targetPosition, node.restPosition))
+    if (displacement <= 0.0001) return
+    weighted[0] += node.restPosition[0] * displacement
+    weighted[1] += node.restPosition[1] * displacement
+    weighted[2] += node.restPosition[2] * displacement
+    weightSum += displacement
+  })
+
+  if (weightSum <= 0.000001) return [0, 0, 0]
+  return [weighted[0] / weightSum, weighted[1] / weightSum, weighted[2] / weightSum]
 }
 
 function geometryAndMetricsMatch(a: LatticeModel, b: LatticeModel): boolean {
@@ -575,18 +694,10 @@ function sampleCenterlineLocalPoint(model: LatticeModel, u: number): Vec3 {
   const amount = scaledColumn - leftColumn
   const left = model.nodes.find((node) => node.row === row && node.col === leftColumn)
   const right = model.nodes.find((node) => node.row === row && node.col === rightColumn)
-  const leftPoint = left ? undoPlacementTransform(left.currentPosition, model.config) : [0, 0, 0] as Vec3
-  const rightPoint = right ? undoPlacementTransform(right.currentPosition, model.config) : leftPoint
+  const leftPoint = left?.currentPosition ?? [0, 0, 0] as Vec3
+  const rightPoint = right?.currentPosition ?? leftPoint
 
   return lerpVec(leftPoint, rightPoint, amount)
-}
-
-function pointTranslationResidual(candidate: Vec3, baseline: Vec3, xOffset: number): number {
-  return Math.hypot(
-    candidate[0] - xOffset - baseline[0],
-    candidate[1] - baseline[1],
-    candidate[2] - baseline[2],
-  )
 }
 
 function terminalLipCurlIsDownward(model: LatticeModel): boolean {
@@ -624,7 +735,7 @@ function centerlineBackfoldIsBounded(model: LatticeModel): boolean {
 }
 
 function centerlineHasVisibleLipDip(model: LatticeModel): boolean {
-  return centerlineLipDropRatio(model) >= 0.24
+  return terminalLipCurlIsDownward(model) && centerlineLipDropRatio(model) >= 0.08
 }
 
 function centerlineLipDropRatio(model: LatticeModel): number {
@@ -675,8 +786,8 @@ function terminalLipCurlStats(model: LatticeModel): { tipBelowLastPeak: boolean;
   const terminal = centerline.slice(terminalStartIndex, tipCenterlineIndex + 1)
   const peakHeight = maxValue(terminal.map((node) => node.currentPosition[2]), (value) => value, 0)
   const previous = centerline[Math.max(0, tipCenterlineIndex - 1)]
-  const tipPoint = undoPlacementTransform(tip.currentPosition, model.config)
-  const previousPoint = undoPlacementTransform(previous.currentPosition, model.config)
+  const tipPoint = tip.currentPosition
+  const previousPoint = previous.currentPosition
   const tipDx = tipPoint[0] - previousPoint[0]
   const tipSlope = (tipPoint[2] - previousPoint[2]) / Math.max(Math.abs(tipDx), 0.000001)
 
@@ -731,24 +842,15 @@ function horizontalDisplacement(node: LatticeNode): number {
 }
 
 function buildNodes(config: InverseSheetConfig): LatticeNode[] {
-  const columnsDenominator = Math.max(config.columns - 1, 1)
-  const rowsDenominator = Math.max(config.rows - 1, 1)
   const nodes: LatticeNode[] = []
 
   for (let row = 0; row < config.rows; row += 1) {
     for (let col = 0; col < config.columns; col += 1) {
-      const u = col / columnsDenominator
-      const v = row / rowsDenominator
-      const restLocal: Vec3 = [
-        lerpNumber(-DEFAULT_SHEET_LENGTH / 2, DEFAULT_SHEET_LENGTH / 2, u),
-        lerpNumber(-DEFAULT_SHEET_SPAN / 2, DEFAULT_SHEET_SPAN / 2, v),
-        0,
-      ]
-      const targetLocal = overhangTargetPosition(u, v, restLocal, config)
-      const currentLocal = lerpVec(restLocal, targetLocal, config.morph)
-      const restPosition = applyPlacementTransform(restLocal, config)
-      const targetPosition = applyPlacementTransform(targetLocal, config)
-      const currentPosition = applyPlacementTransform(currentLocal, config)
+      const restPosition = expectedCanonicalRestPosition(row, col, config)
+      const targetPosition = isBoundaryNodeIndex(row, col, config)
+        ? restPosition
+        : targetFromDeformationField(restPosition, config)
+      const currentPosition = lerpVec(restPosition, targetPosition, config.morph)
 
       nodes.push({
         id: nodeId(row, col),
@@ -764,16 +866,17 @@ function buildNodes(config: InverseSheetConfig): LatticeNode[] {
   return nodes
 }
 
-function overhangTargetPosition(
+function canonicalOverhangTargetPosition(
   u: number,
   v: number,
   rest: Vec3,
   config: InverseSheetConfig,
 ): Vec3 {
-  const groundTransition = clampNumber(config.smoothing, 0, 1)
-  const stableGroundTransition = stableGroundTransitionValue(groundTransition)
+  const rawGroundTransition = clampNumber(config.smoothing, 0, 1)
+  const groundTransition = stableGroundTransitionValue(rawGroundTransition)
+  const stableGroundTransition = groundTransition
   const wallSmoothness = clampNumber(config.wallSmoothness, 0, 1)
-  const profileLimits = overhangProfileLimits(groundTransition)
+  const profileLimits = overhangProfileLimits(rawGroundTransition)
   const flatRim = profileLimits.flatRim
   const blendRim = Math.min(0.46, flatRim + lerpNumber(0.1, 0.36, stableGroundTransition))
   const longitudinalBlendRim = Math.min(0.5, flatRim + lerpNumber(0.1, 0.42, stableGroundTransition))
@@ -805,13 +908,13 @@ function overhangTargetPosition(
   const curl = PARALLEL_ANGLE_CURL
   const lipDip = lipDipAmount(config.overhangAngleDeg)
   const overhangAmount = Math.min(config.horizontalOffset, remainingLength * 0.78)
-  const heightProfile = waveHeightProfile(eased, curl, groundTransition, config.lipSharpness, config.conicRho, config.curlRadius)
+  const heightProfile = waveHeightProfile(eased, curl, groundTransition, PROFILE_LIP_SHARPNESS, config.conicRho, config.curlRadius)
   const waveHeight = Math.min(config.height, remainingLength * 0.42)
   let horizontalProjection = overhangAmount * curlProjectionProfile(
     eased,
     curl,
     groundTransition,
-    config.lipSharpness,
+    PROFILE_LIP_SHARPNESS,
     config.conicRho,
     config.curlRadius,
   )
@@ -858,7 +961,7 @@ function applyTerminalLipCurl(
   const start = terminalLipCurlStart(smoothing, lipSharpness, conicRho, curlRadius)
   const envelope = Math.pow(
     smootherStep((t - start) / Math.max(1 - start, 0.000001)),
-    0.45,
+    0.4,
   )
 
   if (lipDip <= 0.000001 || envelope <= 0.000001 || overhangAmount <= 0.000001 || waveHeight <= 0.000001) {
@@ -866,8 +969,8 @@ function applyTerminalLipCurl(
   }
 
   const curl = PARALLEL_ANGLE_CURL
-  const hingeX = overhangAmount * curlProjectionProfile(start, curl, smoothing, lipSharpness, conicRho, curlRadius)
-  const hingeZ = waveHeight * waveHeightProfile(start, curl, smoothing, lipSharpness, conicRho, curlRadius)
+  const hingeX = overhangAmount * curlProjectionProfile(start, curl, smoothing, PROFILE_LIP_SHARPNESS, conicRho, curlRadius)
+  const hingeZ = waveHeight * waveHeightProfile(start, curl, smoothing, PROFILE_LIP_SHARPNESS, conicRho, curlRadius)
   const dx = x - hingeX
   const dz = z - hingeZ
   const angleRad = -MAX_TERMINAL_LIP_DIP_RAD * clampNumber(lipDip, 0, 1) * envelope
@@ -1005,10 +1108,10 @@ function terminalLipCurlStart(smoothing: number, lipSharpness: number, conicRho:
   const radius = normalizedCurlRadius(curlRadius)
 
   return clampNumber(
-    0.47 + lerpNumber(-0.045, 0.045, pointed) + lerpNumber(0.02, -0.02, rho) + lerpNumber(-0.015, 0.02, radius) -
-      smoothing * 0.015,
-    0.39,
-    0.62,
+    0.52 + lerpNumber(-0.01, 0.025, pointed) + lerpNumber(0.018, -0.018, rho) + lerpNumber(-0.022, 0.022, radius) -
+      smoothing * 0.012,
+    0.46,
+    0.72,
   )
 }
 
@@ -1093,15 +1196,18 @@ function transverseWaveMask(
 
   if (requestedHalfWidth <= 0.000001) return 0
 
+  const gridSpacingY = DEFAULT_SHEET_SPAN / Math.max(config.rows - 1, 1)
+  const minimumFadeWidth = Math.max(gridSpacingY * 3.5, config.spacing * 1.5)
+  const requestedFadeWidth = requestedHalfWidth * lerpNumber(0.34, 0.78, wallSmoothness)
   const fadeWidth = Math.min(
-    Math.max(config.spacing * 2.5, totalHeight * lerpNumber(0.035, 0.18, wallSmoothness)),
+    Math.max(minimumFadeWidth, requestedFadeWidth),
     requestedHalfWidth,
   )
   const coreHalfWidth = Math.max(requestedHalfWidth - fadeWidth, 0)
   const distanceFromCenter = Math.abs(y - yCenter)
   const widthMask = 1 - smootherStep((distanceFromCenter - coreHalfWidth) / Math.max(fadeWidth, 0.000001))
 
-  return edgeMask * widthMask
+  return clampNumber(edgeMask * widthMask, 0, 1)
 }
 
 function buildEdges(rows: number, columns: number): LatticeEdge[] {
