@@ -164,9 +164,9 @@ function calculateInverseSheetUsableRanges(smoothing: number): InverseSheetUsabl
 
 function overhangProfileLimits(smoothing: number) {
   const stableGroundTransition = stableGroundTransitionValue(smoothing)
-  const flatRim = Math.min(0.12, Math.max(3.4 / DEFAULT_GRID_DENOMINATOR, 0.055))
+  const flatRim = Math.min(0.055, Math.max(1 / DEFAULT_GRID_DENOMINATOR, 0.024))
   const baseStart = Math.max(flatRim, lerpNumber(0.2, 0.06, stableGroundTransition))
-  const baseEnd = Math.min(1 - flatRim, lerpNumber(0.78, 0.965, stableGroundTransition))
+  const baseEnd = Math.min(1 - flatRim, lerpNumber(0.88, 0.998, stableGroundTransition))
   const profileStart = clampNumber(baseStart, flatRim, 1 - flatRim)
   const profileEnd = clampNumber(baseEnd, profileStart + 1 / DEFAULT_GRID_DENOMINATOR, 1 - flatRim)
 
@@ -471,7 +471,7 @@ export function runInverseSheetSanityChecks(): string[] {
   if (highAngle.summary.overhangAmount < neutralAngle.summary.overhangAmount - 0.75) {
     failures.push('lip dip should not collapse measured horizontal overhang amount backward')
   }
-  if (preTerminalCenterlineProfileResidual(neutralAngle, highAngle, 0.65) > 0.000001) {
+  if (preTerminalCenterlineProfileResidual(neutralAngle, highAngle, preTerminalLipCutoff(highAngle)) > 0.000001) {
     failures.push('lip dip should not change the pre-terminal wave body')
   }
   if (!boundaryNodesStayFlat(narrowWave)) failures.push('narrow overhang boundary should stay fixed and flat')
@@ -705,7 +705,10 @@ function sampleCenterlineLocalPoint(model: LatticeModel, u: number): Vec3 {
 
 function terminalLipCurlIsDownward(model: LatticeModel): boolean {
   const stats = terminalLipCurlStats(model)
-  return stats.tipBelowLastPeak && stats.tipForwardOfCrest && stats.tipSlope < -0.05
+  return stats.tipBelowLastPeak &&
+    stats.tipForwardOfCrest &&
+    stats.tipSlope < -0.6 &&
+    stats.finalTangentAngleDeg <= -35
 }
 
 function centerlineBackfoldIsBounded(model: LatticeModel): boolean {
@@ -738,7 +741,8 @@ function centerlineBackfoldIsBounded(model: LatticeModel): boolean {
 }
 
 function centerlineHasVisibleLipDip(model: LatticeModel): boolean {
-  return terminalLipCurlIsDownward(model) && centerlineLipDropRatio(model) >= 0.08
+  const stats = terminalLipCurlStats(model)
+  return terminalLipCurlIsDownward(model) && stats.dropRatio >= 0.35
 }
 
 function centerlineLipDropRatio(model: LatticeModel): number {
@@ -751,6 +755,12 @@ function terminalLipCurlStats(model: LatticeModel): {
   tipDx: number;
   tipForwardOfCrest: boolean;
   dropRatio: number;
+  tipForwardDistance: number;
+  finalTangentAngleDeg: number;
+  crestX: number;
+  crestZ: number;
+  tipX: number;
+  tipZ: number;
 } {
   const row = Math.floor((model.config.rows - 1) / 2)
   const centerline = model.nodes
@@ -764,7 +774,7 @@ function terminalLipCurlStats(model: LatticeModel): {
   ))
 
   if (active.length < 3) {
-    return { tipBelowLastPeak: false, tipSlope: 0, tipDx: 0, tipForwardOfCrest: false, dropRatio: 0 }
+    return emptyTerminalLipCurlStats()
   }
 
   const activeStartCol = active[0].col
@@ -773,7 +783,7 @@ function terminalLipCurlStats(model: LatticeModel): {
   const terminal = active.filter((node) => node.col >= terminalStartCol && node.currentPosition[2] > maxHeight * 0.08)
 
   if (terminal.length < 3) {
-    return { tipBelowLastPeak: false, tipSlope: 0, tipDx: 0, tipForwardOfCrest: false, dropRatio: 0 }
+    return emptyTerminalLipCurlStats()
   }
 
   const crest = terminal.reduce((best, node) => {
@@ -782,32 +792,89 @@ function terminalLipCurlStats(model: LatticeModel): {
     return best
   }, terminal[0])
   const postCrest = terminal.filter((node) => node.col > crest.col)
-  const forwardPostCrest = postCrest.filter((node) => node.currentPosition[0] > crest.currentPosition[0] + model.config.spacing * 0.25)
+  const forwardPostCrest = postCrest.filter((node) => (
+    node.currentPosition[0] > crest.currentPosition[0] + model.config.spacing * 0.25 &&
+    horizontalDisplacement(node) >= maxHorizontalReach * 0.58
+  ))
   const candidates = forwardPostCrest.length ? forwardPostCrest : (postCrest.length ? postCrest : terminal)
   const tip = candidates.reduce((best, node) => {
-    const bestDrop = crest.currentPosition[2] - best.currentPosition[2]
-    const nodeDrop = crest.currentPosition[2] - node.currentPosition[2]
-    if (nodeDrop > bestDrop + 0.000001) return node
-    if (Math.abs(nodeDrop - bestDrop) <= 0.000001 && node.currentPosition[0] > best.currentPosition[0]) return node
+    if (node.currentPosition[2] < best.currentPosition[2] - 0.000001) return node
+    if (Math.abs(node.currentPosition[2] - best.currentPosition[2]) <= 0.000001 && node.currentPosition[0] > best.currentPosition[0]) return node
     return best
   }, candidates[0])
   const tipCenterlineIndex = centerline.findIndex((node) => node.id === tip.id)
   const previous = centerline[Math.max(0, tipCenterlineIndex - 1)]
+  const next = centerline[Math.min(centerline.length - 1, tipCenterlineIndex + 1)]
   const tipPoint = tip.currentPosition
   const previousPoint = previous.currentPosition
-  const tipDx = tipPoint[0] - previousPoint[0]
-  const tipSlope = (tipPoint[2] - previousPoint[2]) / Math.max(Math.abs(tipDx), 0.000001)
+  const nextPoint = next.currentPosition
+  const incomingDx = tipPoint[0] - previousPoint[0]
+  const outgoingDx = nextPoint[0] - tipPoint[0]
+  let tipSlope = Math.min(
+    (tipPoint[2] - previousPoint[2]) / Math.max(Math.abs(incomingDx), 0.000001),
+    (nextPoint[2] - tipPoint[2]) / Math.max(Math.abs(outgoingDx), 0.000001),
+  )
+  let finalTangentAngleDeg = Math.min(
+    Math.atan2(tipPoint[2] - previousPoint[2], Math.abs(incomingDx)) * 180 / Math.PI,
+    Math.atan2(nextPoint[2] - tipPoint[2], Math.abs(outgoingDx)) * 180 / Math.PI,
+  )
+  const curlPath = centerline.slice(
+    Math.max(0, centerline.findIndex((node) => node.id === crest.id)),
+    Math.max(tipCenterlineIndex + 1, centerline.findIndex((node) => node.id === crest.id) + 2),
+  )
+  for (let index = 0; index < curlPath.length - 1; index += 1) {
+    const a = curlPath[index].currentPosition
+    const b = curlPath[index + 1].currentPosition
+    if (b[0] <= crest.currentPosition[0] || horizontalDisplacement(curlPath[index + 1]) < maxHorizontalReach * 0.58) continue
+    const dx = b[0] - a[0]
+    const dz = b[2] - a[2]
+    const slope = dz / Math.max(Math.abs(dx), 0.000001)
+    const angle = Math.atan2(dz, Math.abs(dx)) * 180 / Math.PI
+    tipSlope = Math.min(tipSlope, slope)
+    finalTangentAngleDeg = Math.min(finalTangentAngleDeg, angle)
+  }
   const peakHeight = crest.currentPosition[2]
   const dropRatio = clampNumber((peakHeight - tip.currentPosition[2]) / maxHeight, 0, 1)
-  const tipForwardOfCrest = tip.currentPosition[0] > crest.currentPosition[0] + model.config.spacing * 0.25
+  const tipForwardDistance = tip.currentPosition[0] - crest.currentPosition[0]
+  const tipForwardOfCrest = tipForwardDistance > model.config.spacing * 0.25
 
   return {
     tipBelowLastPeak: dropRatio >= 0.08,
     tipSlope,
-    tipDx,
+    tipDx: incomingDx,
     tipForwardOfCrest,
     dropRatio,
+    tipForwardDistance,
+    finalTangentAngleDeg,
+    crestX: crest.currentPosition[0],
+    crestZ: crest.currentPosition[2],
+    tipX: tip.currentPosition[0],
+    tipZ: tip.currentPosition[2],
   }
+}
+
+function emptyTerminalLipCurlStats() {
+  return {
+    tipBelowLastPeak: false,
+    tipSlope: 0,
+    tipDx: 0,
+    tipForwardOfCrest: false,
+    dropRatio: 0,
+    tipForwardDistance: 0,
+    finalTangentAngleDeg: 0,
+    crestX: 0,
+    crestZ: 0,
+    tipX: 0,
+    tipZ: 0,
+  }
+}
+
+function preTerminalLipCutoff(model: LatticeModel): number {
+  return clampNumber(
+    breakingLipStart(stableGroundTransitionValue(model.config.smoothing), model.config.lipSharpness) - 0.04,
+    0.48,
+    0.68,
+  )
 }
 
 function groundTransitionSmoothsBottomDescent(low: LatticeModel, high: LatticeModel): boolean {
@@ -937,18 +1004,26 @@ function canonicalOverhangTargetPosition(
   const remainingU = Math.max(profileEnd - profileStart, 0.000001)
   const profileU = clampNumber((u - profileStart) / remainingU, 0, 1)
   const lipDip = lipDipAmount(config.overhangAngleDeg)
-  const longitudinalFade = lerpNumber(0.11, 0.24, stableGroundTransition)
-  const frontLongitudinalFade = Math.min(longitudinalFade * lerpNumber(1, 1.46, lipDip), 0.34)
+  const longitudinalFade = lerpNumber(0.12, 0.34, stableGroundTransition)
+  const frontLongitudinalFade = Math.min(longitudinalFade * lerpNumber(1.05, 1.7, lipDip), 0.48)
   const rimY = transverseWaveMask(uncenteredY, DEFAULT_SHEET_SPAN, config, flatRim, blendRim, wallSmoothness)
   const rimX = edgeRamp(profileU, 0, longitudinalFade) * edgeRamp(1 - profileU, 0, frontLongitudinalFade)
   const maskExponent = lerpNumber(1.7, 0.68, stableGroundTransition)
-  const activityMask = Math.pow(rimX, maskExponent) * Math.pow(rimY, lerpNumber(1.05, 0.78, wallSmoothness))
-  const supportBlendRim = Math.min(0.5, blendRim + lerpNumber(0.02, 0.14, stableGroundTransition) + flatContribution * 0.1)
+  const bodyMask = Math.pow(rimX, maskExponent) * Math.pow(rimY, lerpNumber(1.05, 0.78, wallSmoothness))
+  const lipStart = breakingLipStart(stableGroundTransition, config.lipSharpness)
+  const lipPreserveEnvelope = smootherStep((profileU - lipStart) / 0.035)
+  const lipSpanMask = Math.pow(clampNumber(rimY, 0, 1), lerpNumber(0.72, 0.48, wallSmoothness))
+  const lipMask = (lipDip > 0.000001 ? 1 : 0) *
+    lipPreserveEnvelope *
+    edgeRamp(profileU, 0, longitudinalFade) *
+    lipSpanMask
+  const coreMask = clampNumber(Math.max(bodyMask, lipMask), 0, 1)
+  const supportBlendRim = Math.min(0.5, blendRim + lerpNumber(0.1, 0.32, stableGroundTransition) + flatContribution * 0.34)
   const supportLongitudinalFade = Math.min(
-    0.38,
-    longitudinalFade + lerpNumber(0.04, 0.14, stableGroundTransition) + flatContribution * 0.08,
+    0.72,
+    longitudinalFade + lerpNumber(0.12, 0.36, stableGroundTransition) + flatContribution * 0.34,
   )
-  const supportWidth = config.overhangWidth * (1 + rawGroundTransition * 0.32 + flatContribution * 0.9)
+  const supportWidth = config.overhangWidth * (1 + rawGroundTransition * 1.25 + flatContribution * 3.6)
   const supportY = transverseWaveMask(
     uncenteredY,
     DEFAULT_SHEET_SPAN,
@@ -962,20 +1037,12 @@ function canonicalOverhangTargetPosition(
     edgeRamp(profileU, 0, supportLongitudinalFade) * edgeRamp(1 - profileU, 0, supportLongitudinalFade)
   const supportMask = Math.pow(supportX, lerpNumber(1.28, 0.52, stableGroundTransition)) *
     Math.pow(supportY, lerpNumber(0.9, 0.58, wallSmoothness))
-  const apronBand = Math.max(0, supportMask - activityMask * 0.55)
-  const centerlinePreserve = lerpNumber(1, 0.05, Math.pow(clampNumber(rimY, 0, 1), 4))
-  const apronStrength = flatContribution * lerpNumber(0.55, 0.95, flatContribution)
-  const totalMask = clampNumber(activityMask + apronBand * apronStrength * centerlinePreserve, 0, 1)
-  const terminalHorizontalSupport = lipDip * Math.pow(clampNumber(rimY, 0, 1), 0.78) *
-    smootherStep((profileU - 0.68) / 0.16) *
-    (1 - smootherStep((profileU - 0.86) / 0.14))
-  const horizontalMask = clampNumber(
-    Math.max(totalMask, terminalHorizontalSupport * lerpNumber(0.54, 0.76, lipDip)),
-    0,
-    1,
-  )
+  const apronBand = Math.max(0, supportMask - coreMask * 0.38)
+  const centerlinePreserve = lerpNumber(1, 0.015, Math.pow(clampNumber(rimY, 0, 1), 6))
+  const apronStrength = flatContribution * lerpNumber(0.42, 0.74, flatContribution)
+  const shapeMask = clampNumber(coreMask + apronBand * apronStrength * centerlinePreserve, 0, 1)
 
-  if (totalMask <= 0.000001) return rest
+  if (shapeMask <= 0.000001) return rest
 
   const eased = lerpNumber(profileU, smootherStep(profileU), 0.08 + stableGroundTransition * 0.46)
   const remainingLength = Math.max(DEFAULT_SHEET_LENGTH * remainingU, DEFAULT_SHEET_SPACING)
@@ -987,6 +1054,7 @@ function canonicalOverhangTargetPosition(
 
   if (lipDip > 0.000001) {
     const terminalLip = applyBreakingWaveLip(
+      profileU,
       eased,
       overhangAmount,
       waveHeight,
@@ -1001,9 +1069,9 @@ function canonicalOverhangTargetPosition(
   }
 
   const deformed: Vec3 = [
-    rest[0] + horizontalMask * horizontalProjection,
+    rest[0] + shapeMask * horizontalProjection,
     rest[1],
-    totalMask * liftedHeight,
+    shapeMask * liftedHeight,
   ]
 
   return deformed
@@ -1035,6 +1103,7 @@ function baseWaveProfile(
 }
 
 function applyBreakingWaveLip(
+  profileU: number,
   t: number,
   overhangAmount: number,
   waveHeight: number,
@@ -1046,25 +1115,22 @@ function applyBreakingWaveLip(
 ): { x: number; z: number } {
   const dip = clampNumber(lipDip, 0, 1)
   const sharp = smootherStep(clampNumber(lipSharpness, 0, 1))
-  const start = clampNumber(lerpNumber(0.7, 0.8, sharp) - smoothing * 0.012, 0.68, 0.82)
+  const start = breakingLipStart(smoothing, lipSharpness)
+  const tipU = breakingLipTipU(smoothing, lipSharpness)
 
-  if (dip <= 0.000001 || t < start || overhangAmount <= 0.000001 || waveHeight <= 0.000001) {
+  if (dip <= 0.000001 || profileU < start || overhangAmount <= 0.000001 || waveHeight <= 0.000001) {
     return baseWaveProfile(t, overhangAmount, waveHeight, smoothing, conicRho, curlRadius)
   }
 
-  const q = Math.pow(
-    smootherStep((t - start) / Math.max(1 - start, 0.000001)),
-    lerpNumber(0.78, 1.42, sharp),
-  )
-  const crest = baseWaveProfile(start, overhangAmount, waveHeight, smoothing, conicRho, curlRadius)
-  const crestTangent = sampleBaseProfileTangent(start, overhangAmount, waveHeight, smoothing, conicRho, curlRadius)
-  const forwardReach = overhangAmount * lerpNumber(0.055, 0.17, dip)
-  const downwardDrop = waveHeight * lerpNumber(0.08, 0.36, dip)
+  const crestT = profileBaseParameter(start, smoothing)
+  const crest = baseWaveProfile(crestT, overhangAmount, waveHeight, smoothing, conicRho, curlRadius)
+  const forwardReach = overhangAmount * lerpNumber(0.04, 0.13, dip)
+  const downwardDrop = waveHeight * lerpNumber(0.34, 0.82, dip)
   const tip = {
     x: crest.x + forwardReach,
-    z: Math.max(0, crest.z - downwardDrop),
+    z: Math.max(waveHeight * 0.025, crest.z - downwardDrop),
   }
-  const finalAngle = -lerpNumber(16, 72, dip) * (Math.PI / 180)
+  const finalAngle = -lerpNumber(60, 104, dip) * (Math.PI / 180)
   const finalTangent = {
     x: Math.cos(finalAngle),
     z: Math.sin(finalAngle),
@@ -1072,35 +1138,54 @@ function applyBreakingWaveLip(
   const segmentLength = Math.max(Math.hypot(tip.x - crest.x, tip.z - crest.z), 0.000001)
   const p0 = crest
   const p1 = {
-    x: p0.x + crestTangent.x * segmentLength * lerpNumber(0.46, 0.2, sharp),
-    z: p0.z + crestTangent.z * segmentLength * lerpNumber(0.46, 0.2, sharp),
+    x: p0.x + overhangAmount * lerpNumber(0.1, 0.18, dip),
+    z: p0.z + waveHeight * lerpNumber(0.03, 0.08, dip),
   }
   const p3 = tip
+  const terminalHandle = segmentLength * lerpNumber(0.62, 0.025, sharp)
   const p2 = {
-    x: p3.x - finalTangent.x * segmentLength * lerpNumber(0.72, 0.055, sharp),
-    z: p3.z - finalTangent.z * segmentLength * lerpNumber(0.72, 0.055, sharp),
+    x: p3.x - finalTangent.x * terminalHandle,
+    z: p3.z - finalTangent.z * terminalHandle,
   }
 
-  return cubicBezierProfile(p0, p1, p2, p3, q)
+  if (profileU <= tipU) {
+    const lipProgress = smootherStep((profileU - start) / Math.max(tipU - start, 0.000001))
+    const terminalPower = lerpNumber(1.25, 2.8, sharp) * lerpNumber(0.95, 1.2, dip)
+    const q = Math.pow(lipProgress, terminalPower)
+
+    return cubicBezierProfile(p0, p1, p2, p3, q)
+  }
+
+  const rawReturnProgress = clampNumber((profileU - tipU) / Math.max(1 - tipU, 0.000001), 0, 1)
+  const returnProgress = Math.pow(rawReturnProgress, lerpNumber(0.74, 0.54, dip))
+  const returnLength = Math.max(Math.hypot(tip.x, tip.z), segmentLength)
+  const r0 = tip
+  const r1 = {
+    x: r0.x + finalTangent.x * returnLength * lerpNumber(0.1, 0.035, sharp),
+    z: Math.max(0, r0.z + finalTangent.z * returnLength * lerpNumber(0.22, 0.08, sharp)),
+  }
+  const r3 = { x: 0, z: 0 }
+  const r2 = {
+    x: tip.x * lerpNumber(0.22, 0.12, sharp),
+    z: waveHeight * lerpNumber(0.035, 0.012, sharp),
+  }
+
+  return cubicBezierProfile(r0, r1, r2, r3, returnProgress)
 }
 
-function sampleBaseProfileTangent(
-  t: number,
-  overhangAmount: number,
-  waveHeight: number,
-  smoothing: number,
-  conicRho: number,
-  curlRadius: number,
-): { x: number; z: number } {
-  const step = 0.004
-  const before = baseWaveProfile(clampNumber(t - step, 0, 1), overhangAmount, waveHeight, smoothing, conicRho, curlRadius)
-  const after = baseWaveProfile(clampNumber(t + step, 0, 1), overhangAmount, waveHeight, smoothing, conicRho, curlRadius)
-  const dx = after.x - before.x
-  const dz = after.z - before.z
-  const length = Math.hypot(dx, dz)
+function breakingLipStart(smoothing: number, lipSharpness: number): number {
+  const sharp = smootherStep(clampNumber(lipSharpness, 0, 1))
+  return clampNumber(lerpNumber(0.58, 0.65, sharp) - clampNumber(smoothing, 0, 1) * 0.015, 0.56, 0.68)
+}
 
-  if (length <= 0.000001) return { x: 1, z: 0 }
-  return { x: dx / length, z: dz / length }
+function breakingLipTipU(smoothing: number, lipSharpness: number): number {
+  const sharp = smootherStep(clampNumber(lipSharpness, 0, 1))
+  return clampNumber(lerpNumber(0.875, 0.82, sharp) + clampNumber(smoothing, 0, 1) * 0.012, 0.78, 0.91)
+}
+
+function profileBaseParameter(profileU: number, smoothing: number): number {
+  const amount = clampNumber(profileU, 0, 1)
+  return lerpNumber(amount, smootherStep(amount), 0.08 + clampNumber(smoothing, 0, 1) * 0.46)
 }
 
 function cubicBezierProfile(
@@ -1143,34 +1228,22 @@ function curlProjectionRaw(
 ): number {
   const broadWave = openWaveProjection(t)
   const parallel = curlParallelAmount(curl)
-  const downDip = curlDownDipAmount(curl)
   const pointed = smootherStep(clampNumber(lipSharpness, 0, 1))
   const rho = normalizedConicRho(conicRho)
   const radius = normalizedCurlRadius(curlRadius)
   const riseEnd = clampNumber(
-    0.76 + lerpNumber(0.035, -0.03, rho) + lerpNumber(-0.035, 0.04, radius),
-    0.62,
-    0.84,
-  )
-  const returnStart = clampNumber(
-    lerpNumber(0.94, 0.76, downDip) + lerpNumber(0.025, -0.02, rho) + lerpNumber(-0.035, 0.02, pointed),
-    riseEnd + 0.04,
-    0.96,
+    0.86 + lerpNumber(0.04, -0.035, rho) + lerpNumber(-0.025, 0.045, radius) - pointed * 0.025,
+    0.72,
+    0.94,
   )
   const rise = smootherStep(t / Math.max(riseEnd, 0.000001))
-  const baseReturn = Math.max(
-    0,
-    (1 - pointed) * 0.14 + lerpNumber(0.03, -0.03, rho) + lerpNumber(-0.035, 0.02, radius),
-  )
-  const returnAmount = clampNumber(baseReturn * downDip, 0, 0.24)
-  const returnUnder = 1 - returnAmount * smootherStep((t - returnStart) / Math.max(1 - returnStart, 0.000001))
   const power = clampNumber(
-    lerpNumber(1.12, 0.72, smoothing) + lerpNumber(0.12, -0.12, rho) + lerpNumber(-0.08, 0.1, radius) +
+    lerpNumber(1.2, 0.74, smoothing) + lerpNumber(0.12, -0.12, rho) + lerpNumber(-0.08, 0.1, radius) +
       pointed * 0.12,
     0.54,
     1.4,
   )
-  const curledWave = Math.pow(Math.max(rise * returnUnder, 0), power)
+  const curledWave = Math.pow(Math.max(rise, 0), power)
 
   return lerpNumber(broadWave, curledWave, parallel)
 }
@@ -1331,16 +1404,14 @@ function transverseWaveMask(
 
   if (requestedHalfWidth <= 0.000001) return 0
 
-  const gridSpacingY = DEFAULT_SHEET_SPAN / Math.max(config.rows - 1, 1)
-  const minimumFadeWidth = Math.max(gridSpacingY * 5, config.spacing * 1.5)
-  const requestedFadeWidth = requestedHalfWidth * lerpNumber(0.45, 0.85, wallSmoothness)
-  const fadeWidth = Math.min(
-    Math.max(minimumFadeWidth, requestedFadeWidth),
-    requestedHalfWidth,
-  )
-  const coreHalfWidth = Math.max(requestedHalfWidth - fadeWidth, 0)
   const distanceFromCenter = Math.abs(y - yCenter)
-  const widthMask = 1 - smootherStep((distanceFromCenter - coreHalfWidth) / Math.max(fadeWidth, 0.000001))
+  const normalizedDistance = distanceFromCenter / Math.max(requestedHalfWidth, 0.000001)
+  const centerPlateau = 0.18
+  const envelopeDistance = Math.max(0, (normalizedDistance - centerPlateau) / (1 - centerPlateau))
+  const exponent = lerpNumber(2.05, 4.4, clampNumber(wallSmoothness, 0, 1))
+  const softSpan = Math.exp(-Math.pow(envelopeDistance, exponent) * 2.25)
+  const tailFade = 1 - smootherStep((normalizedDistance - 1.18) / 0.64)
+  const widthMask = softSpan * tailFade
 
   return clampNumber(edgeMask * widthMask, 0, 1)
 }
