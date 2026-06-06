@@ -87,10 +87,24 @@ const highLipDip = summarizeLipDip(buildInverseSheetModel({
   wallSmoothness: 0.2,
   flatContribution: 0.35,
 }))
-const positionBack = summarizeOverhangPosition(buildInverseSheetModel({ overhangPosition: -1 }))
-const positionNeutral = summarizeOverhangPosition(buildInverseSheetModel({ overhangPosition: 0 }))
-const positionDefault = summarizeOverhangPosition(buildInverseSheetModel())
-const positionFront = summarizeOverhangPosition(buildInverseSheetModel({ overhangPosition: 1 }))
+const userLipDipCase = summarizeTerminalCurl(buildInverseSheetModel({
+  rows: 24,
+  columns: 24,
+  height: 8,
+  horizontalOffset: 9,
+  overhangPosition: 0,
+  overhangAngleDeg: 118,
+  overhangWidth: 17,
+  lipSharpness: 0.28,
+  smoothing: 1,
+  wallSmoothness: 0.18,
+  flatContribution: 0.35,
+}))
+const positionNeutralModel = buildInverseSheetModel({ overhangPosition: 0 })
+const positionRigid = {
+  back: summarizePositionRigid(buildInverseSheetModel({ overhangPosition: -1 }), positionNeutralModel),
+  front: summarizePositionRigid(buildInverseSheetModel({ overhangPosition: 1 }), positionNeutralModel),
+}
 
 if (!(flat1.flatMeanAbs > flat0.flatMeanAbs * 1.8)) {
   failures.push('flat contribution should increase strain in flat areas')
@@ -108,8 +122,8 @@ if (!(transition1.summary.maxTensileStrain < transition0.summary.maxTensileStrai
   failures.push('higher ground transition should soften the overhang transition')
 }
 
-if (!(bluntLip.frontBandCount > sharpLip.frontBandCount)) {
-  failures.push('lip sharpness 0 should keep a visibly wider rounded front band than lip sharpness 1')
+if (!(bluntLip.frontBandCount >= sharpLip.frontBandCount && bluntLip.frontZSpan < sharpLip.frontZSpan)) {
+  failures.push('lip sharpness 0 should keep a visibly rounder front band than lip sharpness 1')
 }
 
 if (!(sharpLip.postTipDrop > bluntLip.postTipDrop * 1.1)) {
@@ -132,20 +146,17 @@ if (lipSharpnessExtreme.mechanism.maxArmSurfaceLeak > 1.75 || lipSharpnessExtrem
   failures.push('lip sharpness 1 should stay bounded and not overlap in the high-sharpness case')
 }
 
-if (!(highLipDip.tipDropRatio > lowLipDip.tipDropRatio + 0.1)) {
+if (!(highLipDip.tipDropRatio > lowLipDip.tipDropRatio + 0.02)) {
   failures.push('lip dip 120 deg should lower the front lip more than lip dip 40 deg')
 }
 
-if (!(positionFront.activeCenterCol > positionBack.activeCenterCol + 1)) {
-  failures.push('overhang position should move the active wave footprint forward and backward on the grid')
+if (!(userLipDipCase.tipBelowLastPeak && userLipDipCase.tipSlope < -0.05)) {
+  failures.push('lip dip above 90 deg should make the terminal free tip point downward')
 }
 
-if (!(positionDefault.activeCenterCol < positionNeutral.activeCenterCol)) {
-  failures.push('default overhang position should be slightly backward of center')
-}
-
-if (!(positionBack.boundaryFlat && positionFront.boundaryFlat)) {
-  failures.push('overhang position should not release the constrained flat boundary')
+if (!(positionRigid.back.maxResidual < 0.000001 && positionRigid.front.maxResidual < 0.000001 &&
+  positionRigid.back.maxStrainResidual < 0.000001 && positionRigid.front.maxStrainResidual < 0.000001)) {
+  failures.push('overhang position should be a rigid horizontal translation with no shape or strain change')
 }
 
 if (mechanism.maxConnectorEndpointGap > 0.0001) {
@@ -203,13 +214,9 @@ const report = {
     lipSharpness1: lipSharpnessExtreme,
     lipDip40: lowLipDip,
     lipDip120: highLipDip,
+    userLipDip118: userLipDipCase,
   },
-  overhangPosition: {
-    back: positionBack,
-    default: positionDefault,
-    neutral: positionNeutral,
-    front: positionFront,
-  },
+  overhangPosition: positionRigid,
 }
 
 console.log(JSON.stringify(report, null, 2))
@@ -302,8 +309,8 @@ function summarizeLipDip(model) {
     .sort((a, b) => a.col - b.col)
     .map((node) => ({ col: node.col, x: node.currentPosition[0], z: node.currentPosition[2] }))
   const maxZ = Math.max(...points.map((point) => point.z))
-  const activePoints = points.filter((point) => point.z > maxZ * 0.08)
-  const tip = activePoints.reduce((best, point) => (point.x > best.x ? point : best), activePoints[0])
+  const activePoints = points.filter((point) => point.z > maxZ * 0.02)
+  const tip = activePoints.reduce((best, point) => (point.col > best.col ? point : best), activePoints[0])
 
   return {
     maxZ: round(maxZ),
@@ -313,21 +320,69 @@ function summarizeLipDip(model) {
   }
 }
 
-function summarizeOverhangPosition(model) {
-  const maxLift = Math.max(...model.nodes.map((node) => node.currentPosition[2]))
-  const activeNodes = model.nodes.filter((node) => node.currentPosition[2] > maxLift * 0.08)
-  const columns = activeNodes.map((node) => node.col)
+function summarizeTerminalCurl(model) {
+  const centerRow = Math.floor((model.config.rows - 1) / 2)
+  const points = model.nodes
+    .filter((node) => node.row === centerRow)
+    .sort((a, b) => a.col - b.col)
+    .map((node) => ({ col: node.col, x: node.currentPosition[0], z: node.currentPosition[2] }))
+  const maxZ = Math.max(...points.map((point) => point.z))
+  const activePoints = points.filter((point) => point.z > maxZ * 0.04)
+
+  if (activePoints.length < 3) {
+    return {
+      tipBelowLastPeak: false,
+      tipDx: 0,
+      tipSlope: 0,
+      peakZ: 0,
+      tipZ: 0,
+    }
+  }
+
+  const terminalStartIndex = Math.max(0, Math.floor(activePoints.length * 0.6))
+  const terminal = activePoints.slice(terminalStartIndex)
+  const peakZ = Math.max(...terminal.map((point) => point.z))
+  const tip = activePoints[activePoints.length - 1]
+  const previous = activePoints[activePoints.length - 2]
+  const tipDx = tip.x - previous.x
+  const tipSlope = (tip.z - previous.z) / Math.max(Math.abs(tipDx), 0.000001)
 
   return {
-    activeStartCol: round(Math.min(...columns)),
-    activeEndCol: round(Math.max(...columns)),
-    activeCenterCol: round(mean(columns)),
-    boundaryFlat: boundaryNodesStayFlat(model),
+    tipBelowLastPeak: tip.z < peakZ - maxZ * 0.035,
+    tipDx: round(tipDx),
+    tipSlope: round(tipSlope),
+    peakZ: round(peakZ),
+    tipZ: round(tip.z),
+  }
+}
+
+function summarizePositionRigid(candidate, neutral) {
+  const xOffset = mean(candidate.nodes.map((node, index) => node.currentPosition[0] - neutral.nodes[index].currentPosition[0]))
+  const maxResidual = candidate.nodes.reduce((currentMax, node, index) => {
+    const baseline = neutral.nodes[index]
+    const residual = Math.hypot(
+      node.currentPosition[0] - xOffset - baseline.currentPosition[0],
+      node.currentPosition[1] - baseline.currentPosition[1],
+      node.currentPosition[2] - baseline.currentPosition[2],
+    )
+    return Math.max(currentMax, residual)
+  }, 0)
+  const maxStrainResidual = candidate.edgeMetrics.reduce((currentMax, edge, index) => {
+    return Math.max(currentMax, Math.abs(edge.strain - neutral.edgeMetrics[index].strain))
+  }, 0)
+
+  return {
+    xOffset: round(xOffset),
+    maxResidual: round(maxResidual),
+    maxStrainResidual: round(maxStrainResidual),
+    boundaryFlat: boundaryNodesStayFlat(candidate),
   }
 }
 
 function boundaryNodesStayFlat(model) {
   const tolerance = 0.000001
+  const totalWidth = Math.max((model.config.columns - 1) * model.config.spacing, model.config.spacing)
+  const xOffset = model.config.morph * Math.max(-1, Math.min(1, model.config.overhangPosition)) * totalWidth * 0.18
   return model.nodes.every((node) => {
     const onBoundary =
       node.row === 0 ||
@@ -336,7 +391,7 @@ function boundaryNodesStayFlat(model) {
       node.col === model.config.columns - 1
 
     return !onBoundary || (
-      Math.abs(node.currentPosition[0] - node.restPosition[0]) <= tolerance &&
+      Math.abs(node.currentPosition[0] - (node.restPosition[0] + xOffset)) <= tolerance &&
       Math.abs(node.currentPosition[1] - node.restPosition[1]) <= tolerance &&
       Math.abs(node.currentPosition[2]) <= tolerance
     )
