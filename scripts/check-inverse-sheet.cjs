@@ -38,9 +38,9 @@ const { buildInverseSheetModel, getInverseSheetUsableRanges, runInverseSheetSani
 const { rigidCellMechanismStats } = require(path.join(outDir, 'rigidCellMechanism.js'))
 
 const DEFAULT_SHEET_ROWS = 44
-const DEFAULT_SHEET_COLUMNS = 44
+const DEFAULT_SHEET_COLUMNS = 64
 const DEFAULT_SHEET_SPACING = 1
-const DEFAULT_WAVE_FIELD_LENGTH = (DEFAULT_SHEET_COLUMNS - 1) * DEFAULT_SHEET_SPACING
+const DEFAULT_WAVE_FIELD_LENGTH = 43 * DEFAULT_SHEET_SPACING
 const DEFAULT_WAVE_FIELD_SPAN = (DEFAULT_SHEET_ROWS - 1) * DEFAULT_SHEET_SPACING
 const DEFAULT_SHEET_LENGTH = 80
 const DEFAULT_SHEET_SPAN = 80
