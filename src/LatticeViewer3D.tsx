@@ -678,8 +678,8 @@ function activeSideProfileBounds(model: LatticeModel): LatticeBounds {
   const maxX = Math.max(...activeNodes.map((node) => node.currentPosition[0]))
   const minZ = Math.min(...activeNodes.map((node) => node.currentPosition[2]), 0)
   const maxZ = Math.max(...activeNodes.map((node) => node.currentPosition[2]))
-  const padX = Math.max(model.config.spacing * 3.4, (maxX - minX) * 0.18)
-  const padZ = Math.max(model.config.spacing * 1.4, (maxZ - minZ) * 0.34)
+  const padX = Math.max(model.config.spacing * 2, (maxX - minX) * 0.1)
+  const padZ = Math.max(model.config.spacing * 0.9, (maxZ - minZ) * 0.2)
   const min: Vec3 = [minX - padX, model.bounds.min[1], Math.min(0, minZ - padZ * 0.34)]
   const max: Vec3 = [maxX + padX, model.bounds.max[1], maxZ + padZ]
   const center: Vec3 = [
@@ -707,7 +707,7 @@ function cameraDistanceForView(
   const tanHalfFov = Math.tan(fov / 2)
 
   if (view === 'side') {
-    return fitPerspectiveDistance(bounds.span[0], bounds.span[2], tanHalfFov, safeAspect, 1.34)
+    return fitPerspectiveDistance(bounds.span[0], bounds.span[2], tanHalfFov, safeAspect, 1.06)
   }
 
   if (view === 'top') {

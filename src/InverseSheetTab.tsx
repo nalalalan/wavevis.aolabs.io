@@ -131,8 +131,8 @@ function readInitialInverseSheetConfig(): InverseSheetConfig {
   const search = new URLSearchParams(window.location.search)
   const config: Partial<InverseSheetConfig> = {}
   readIntegerConfigParam(search, config, 'rows', 'rows', 2, 72)
-  readIntegerConfigParam(search, config, 'cols', 'columns', 2, 72)
-  readIntegerConfigParam(search, config, 'columns', 'columns', 2, 72)
+  readIntegerConfigParam(search, config, 'cols', 'columns', 2, 120)
+  readIntegerConfigParam(search, config, 'columns', 'columns', 2, 120)
   readNumberConfigParam(search, config, 'morph', 'morph')
   readNumberConfigParam(search, config, 'height', 'height')
   readNumberConfigParam(search, config, 'overhang', 'horizontalOffset')

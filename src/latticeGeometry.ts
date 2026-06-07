@@ -59,7 +59,7 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   horizontalOffset: 16.25,
   overhangPosition: -0.15,
   steer: 0,
-  height: 10,
+  height: 14.75,
   overhangWidth: 32,
   overhangAngleDeg: 120,
   conicRho: 0.5,
@@ -1447,7 +1447,7 @@ function applyBreakingWaveLip(
   }
   const lipNose = {
     x: shoulder.x + profileScale * lerpNumber(0.22, 0.52, dip),
-    z: waveHeight * lerpNumber(0.3, 0.36, dip),
+    z: waveHeight * lerpNumber(0.28, 0.3, dip),
   }
   const underPocket = {
     x: crest.x + profileScale * lerpNumber(-0.12, -0.02, dip),
