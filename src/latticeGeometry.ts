@@ -85,7 +85,7 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
 const TARGET_PRESETS: TargetPreset[] = ['overhang']
 const RADIUS_MODES: RadiusMode[] = ['autoPreserveLength', 'manual']
 const COLOR_MODE_VALUES = COLOR_MODES.map((mode) => mode.value)
-const OVERHANG_ANGLE_MIN_DEG = 40
+const OVERHANG_ANGLE_MIN_DEG = 90
 const OVERHANG_ANGLE_PARALLEL_DEG = 90
 const OVERHANG_ANGLE_MAX_DEG = 120
 const PARALLEL_ANGLE_CURL = 0.68
@@ -787,8 +787,7 @@ function terminalLipCurlIsDownward(model: LatticeModel): boolean {
     stats.hookTuckedUnderShoulder &&
     stats.returnToFlat &&
     stats.smoothTerminalReturn &&
-    stats.tipSlope < -0.6 &&
-    stats.finalTangentAngleDeg <= -35
+    stats.tipSlope < -0.6
 }
 
 function centerlineBackfoldIsBounded(model: LatticeModel): boolean {
@@ -869,25 +868,16 @@ function terminalLipCurlStats(model: LatticeModel): {
     return emptyTerminalLipCurlStats()
   }
 
-  const activeStartCol = active[0].col
-  const activeEndCol = active[active.length - 1].col
-  const terminalStartCol = activeStartCol + (activeEndCol - activeStartCol) * 0.38
-  const terminal = active.filter((node) => node.col >= terminalStartCol)
-
-  if (terminal.length < 3) {
-    return emptyTerminalLipCurlStats()
-  }
-
-  const crest = terminal.reduce((best, node) => {
+  const crest = active.reduce((best, node) => {
     if (node.currentPosition[2] > best.currentPosition[2] + 0.000001) return node
     if (Math.abs(node.currentPosition[2] - best.currentPosition[2]) <= 0.000001 && node.col < best.col) return node
     return best
-  }, terminal[0])
-  const postCrest = terminal.filter((node) => node.col > crest.col)
+  }, active[0])
+  const postCrest = active.filter((node) => node.col > crest.col)
   if (!postCrest.length) return emptyTerminalLipCurlStats()
 
   const shoulderCandidates = postCrest.filter((node) => (
-    node.currentPosition[2] >= crest.currentPosition[2] * 0.55
+    node.currentPosition[2] >= maxHeight * 0.38
   ))
   const shoulderPool = shoulderCandidates.length ? shoulderCandidates : postCrest
   const shoulder = shoulderPool.reduce((best, node) => {
@@ -897,11 +887,11 @@ function terminalLipCurlStats(model: LatticeModel): {
     if (Math.abs(reach - bestReach) <= 0.000001 && node.col < best.col) return node
     return best
   }, shoulderPool[0])
-  const postShoulder = terminal.filter((node) => node.col > shoulder.col)
+  const postShoulder = active.filter((node) => node.col > shoulder.col)
   if (!postShoulder.length) return emptyTerminalLipCurlStats()
 
   const hookCandidates = postShoulder.filter((node) => (
-    node.currentPosition[2] > maxHeight * 0.16 &&
+    node.currentPosition[2] > maxHeight * 0.08 &&
     node.currentPosition[2] <= shoulder.currentPosition[2] - maxHeight * 0.08
   ))
   const tuckedHookCandidates = hookCandidates.filter((node) => (
@@ -909,8 +899,8 @@ function terminalLipCurlStats(model: LatticeModel): {
   ))
   const hookPool = tuckedHookCandidates.length ? tuckedHookCandidates : (hookCandidates.length ? hookCandidates : postShoulder)
   const tip = hookPool.reduce((best, node) => {
-    if (node.currentPosition[2] < best.currentPosition[2] - 0.000001) return node
-    if (Math.abs(node.currentPosition[2] - best.currentPosition[2]) <= 0.000001 && node.currentPosition[0] < best.currentPosition[0]) return node
+    if (node.currentPosition[0] < best.currentPosition[0] - 0.000001) return node
+    if (Math.abs(node.currentPosition[0] - best.currentPosition[0]) <= 0.000001 && node.currentPosition[2] < best.currentPosition[2]) return node
     return best
   }, hookPool[0])
   const postTip = centerline.filter((node) => (
@@ -1250,7 +1240,7 @@ function coreWaveMask(profileU: number, uncenteredY: number, config: InverseShee
   const bodyMask = Math.pow(bodyX, 1.18) * Math.pow(rimY, lerpNumber(1.08, 0.78, wallSmoothness))
   const lipStart = breakingLipStart(config.lipSharpness)
   const lipPreserveEnvelope = smootherStep((profileU - lipStart) / 0.035)
-  const lipSpanMask = Math.pow(clampNumber(rimY, 0, 1), lerpNumber(0.72, 0.48, wallSmoothness))
+  const lipSpanMask = Math.pow(clampNumber(rimY, 0, 1), lerpNumber(0.62, 0.44, Math.max(wallSmoothness, lipDip)))
   const lipMask = (lipDip > 0.000001 ? 1 : 0) *
     lipPreserveEnvelope *
     edgeRamp(profileU, 0, coreLongitudinalFade) *
@@ -1290,7 +1280,7 @@ function canonicalOverhangTargetPosition(
   const bodyMask = Math.pow(bodyX, 1.18) * Math.pow(rimY, lerpNumber(1.08, 0.78, wallSmoothness))
   const lipStart = breakingLipStart(config.lipSharpness)
   const lipPreserveEnvelope = smootherStep((profileU - lipStart) / 0.035)
-  const lipSpanMask = Math.pow(clampNumber(rimY, 0, 1), lerpNumber(0.72, 0.48, wallSmoothness))
+  const lipSpanMask = Math.pow(clampNumber(rimY, 0, 1), lerpNumber(0.62, 0.44, Math.max(wallSmoothness, lipDip)))
   const lipMask = (lipDip > 0.000001 ? 1 : 0) *
     lipPreserveEnvelope *
     edgeRamp(profileU, 0, coreLongitudinalFade) *
@@ -1391,7 +1381,8 @@ function applyBreakingWaveLip(
   const sharp = smootherStep(clampNumber(lipSharpness, 0, 1))
   const crestU = breakingLipStart(lipSharpness)
   const shoulderU = breakingLipShoulderU()
-  const hookU = breakingLipHookU()
+  const noseU = breakingLipHookU()
+  const underU = breakingLipUnderU()
   const returnU = breakingLipReturnU()
   const restXAt = (amount: number) => profileRestLength * amount
   const toDisplacement = (amount: number, current: { x: number; z: number }) => ({
@@ -1409,13 +1400,25 @@ function applyBreakingWaveLip(
     x: restXAt(crestU) + crest.x,
     z: crest.z,
   }
+  const profileScale = Math.max(overhangAmount, waveHeight * 1.2, DEFAULT_SHEET_SPACING)
   const shoulder = {
-    x: crestCurrent.x + overhangAmount * lerpNumber(0.78, 1.28, dip),
-    z: Math.max(waveHeight * 0.16, crest.z - waveHeight * lerpNumber(0.06, 0.28, dip)),
+    x: crestCurrent.x + profileScale * lerpNumber(0.36, 1.12, dip),
+    z: Math.max(waveHeight * 0.22, crest.z - waveHeight * lerpNumber(0.04, 0.25, dip)),
   }
-  const hookTip = {
-    x: shoulder.x - overhangAmount * lerpNumber(0.30, 0.62, dip),
-    z: Math.max(waveHeight * lerpNumber(0.11, 0.055, dip), crest.z - waveHeight * lerpNumber(0.42, 0.74, dip)),
+  const lipNose = {
+    x: shoulder.x - profileScale * lerpNumber(0.025, 0.1, dip),
+    z: Math.max(waveHeight * lerpNumber(0.36, 0.24, dip), crest.z - waveHeight * lerpNumber(0.22, 0.48, dip)),
+  }
+  const underPocket = {
+    x: shoulder.x - profileScale * lerpNumber(0.28, 0.54, dip),
+    z: Math.max(waveHeight * lerpNumber(0.11, 0.04, dip), crest.z - waveHeight * lerpNumber(0.48, 0.86, dip)),
+  }
+  const floorReturn = {
+    x: Math.max(
+      underPocket.x + profileScale * lerpNumber(0.46, 0.64, dip),
+      shoulder.x + profileScale * lerpNumber(0.05, 0.14, dip),
+    ),
+    z: 0,
   }
 
   if (profileU <= shoulderU) {
@@ -1423,47 +1426,63 @@ function applyBreakingWaveLip(
     const p0 = crestCurrent
     const p3 = shoulder
     const p1 = {
-      x: crestCurrent.x + overhangAmount * lerpNumber(0.42, 0.64, dip),
-      z: crest.z + waveHeight * lerpNumber(0.045, 0.085, dip),
+      x: crestCurrent.x + profileScale * lerpNumber(0.22, 0.42, dip),
+      z: crest.z + waveHeight * lerpNumber(0.035, 0.085, dip),
     }
     const p2 = {
-      x: shoulder.x - overhangAmount * lerpNumber(0.10, 0.04, sharp),
-      z: shoulder.z + waveHeight * lerpNumber(0.025, 0.006, sharp),
+      x: shoulder.x - profileScale * lerpNumber(0.2, 0.08, sharp),
+      z: shoulder.z + waveHeight * lerpNumber(0.22, 0.08, sharp),
     }
 
     return toDisplacement(profileU, cubicBezierProfile(p0, p1, p2, p3, amount))
   }
 
-  if (profileU <= hookU) {
+  if (profileU <= noseU) {
     const amount = Math.pow(
-      smootherStep((profileU - shoulderU) / Math.max(hookU - shoulderU, 0.000001)),
-      lerpNumber(1.15, 0.72, sharp),
+      smootherStep((profileU - shoulderU) / Math.max(noseU - shoulderU, 0.000001)),
+      lerpNumber(1.08, 0.74, sharp),
     )
     const p0 = shoulder
-    const p3 = hookTip
+    const p3 = lipNose
     const p1 = {
-      x: shoulder.x + overhangAmount * lerpNumber(0.08, 0.22, dip),
-      z: shoulder.z - waveHeight * lerpNumber(0.01, 0.035, sharp),
+      x: shoulder.x + profileScale * lerpNumber(0.1, 0.22, dip),
+      z: shoulder.z - waveHeight * lerpNumber(0.005, 0.035, sharp),
     }
     const p2 = {
-      x: hookTip.x + overhangAmount * lerpNumber(0.38, 0.12, sharp),
-      z: hookTip.z + waveHeight * lerpNumber(0.58, 0.14, sharp),
+      x: lipNose.x + profileScale * lerpNumber(0.34, 0.18, sharp),
+      z: lipNose.z + waveHeight * lerpNumber(0.34, 0.18, sharp),
+    }
+
+    return toDisplacement(profileU, cubicBezierProfile(p0, p1, p2, p3, amount))
+  }
+
+  if (profileU <= underU) {
+    const amount = smootherStep((profileU - noseU) / Math.max(underU - noseU, 0.000001))
+    const p0 = lipNose
+    const p3 = underPocket
+    const p1 = {
+      x: lipNose.x + profileScale * lerpNumber(0.03, 0.08, dip),
+      z: Math.max(0, lipNose.z - waveHeight * lerpNumber(0.1, 0.2, dip)),
+    }
+    const p2 = {
+      x: underPocket.x + profileScale * lerpNumber(0.14, 0.24, sharp),
+      z: underPocket.z + waveHeight * lerpNumber(0.22, 0.12, sharp),
     }
 
     return toDisplacement(profileU, cubicBezierProfile(p0, p1, p2, p3, amount))
   }
 
   if (profileU <= returnU) {
-    const amount = smootherStep((profileU - hookU) / Math.max(returnU - hookU, 0.000001))
-    const p0 = hookTip
-    const p3 = { x: restXAt(returnU), z: 0 }
+    const amount = smootherStep((profileU - underU) / Math.max(returnU - underU, 0.000001))
+    const p0 = underPocket
+    const p3 = floorReturn
     const p1 = {
-      x: hookTip.x - overhangAmount * lerpNumber(0.05, 0.16, dip),
-      z: Math.max(0, hookTip.z - waveHeight * lerpNumber(0.08, 0.18, dip)),
+      x: underPocket.x - profileScale * lerpNumber(0.03, 0.1, dip),
+      z: Math.max(0, underPocket.z - waveHeight * lerpNumber(0.015, 0.045, dip)),
     }
     const p2 = {
-      x: p3.x - profileRestLength * lerpNumber(0.16, 0.26, dip),
-      z: waveHeight * lerpNumber(0.045, 0.012, dip),
+      x: p3.x - profileScale * lerpNumber(0.3, 0.5, dip),
+      z: waveHeight * lerpNumber(0.04, 0.012, dip),
     }
 
     return toDisplacement(profileU, cubicBezierProfile(p0, p1, p2, p3, amount))
@@ -1473,19 +1492,23 @@ function applyBreakingWaveLip(
 }
 
 function breakingLipStart(_lipSharpness: number): number {
-  return 0.48
+  return 0.46
 }
 
 function breakingLipShoulderU(): number {
-  return 0.72
+  return 0.68
 }
 
 function breakingLipHookU(): number {
-  return 0.94
+  return 0.86
+}
+
+function breakingLipUnderU(): number {
+  return 1.04
 }
 
 function breakingLipReturnU(): number {
-  return 1.36
+  return 1.34
 }
 
 function profileBaseParameter(profileU: number): number {

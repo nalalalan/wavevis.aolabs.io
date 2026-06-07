@@ -101,10 +101,10 @@ const lipSharpnessExtreme = summarizeExtremeShape(buildInverseSheetModel({
   wallSmoothness: 0.11,
   flatContribution: 0.35,
 }))
-const lowLipDip = summarizeBreakingLip(buildInverseSheetModel({
+const neutralLipDip = summarizeBreakingLip(buildInverseSheetModel({
   height: 14.75,
   horizontalOffset: 16.25,
-  overhangAngleDeg: 40,
+  overhangAngleDeg: 90,
   overhangWidth: 32,
   lipSharpness: 0.2,
   smoothing: 1,
@@ -320,7 +320,7 @@ const report = {
   extremeControls: {
     wallSmoothness1: wallSmoothnessExtreme,
     lipSharpness1: lipSharpnessExtreme,
-    lipDip40: lowLipDip,
+    lipDip90: neutralLipDip,
     lipDip120: highLipDip,
     userLipDip118: userLipDipCase,
   },
@@ -356,35 +356,26 @@ function summarizeBreakingLip(model) {
     return emptyBreakingLipSummary()
   }
 
-  const activeStartCol = activePoints[0].col
-  const activeEndCol = activePoints[activePoints.length - 1].col
-  const terminalStartCol = activeStartCol + (activeEndCol - activeStartCol) * 0.38
-  const terminal = activePoints.filter((point) => point.col >= terminalStartCol)
-
-  if (terminal.length < 3) {
-    return emptyBreakingLipSummary()
-  }
-
-  const crest = terminal.reduce((best, point) => {
+  const crest = activePoints.reduce((best, point) => {
     if (point.z > best.z + 0.000001) return point
     if (Math.abs(point.z - best.z) <= 0.000001 && point.col < best.col) return point
     return best
-  }, terminal[0])
-  const postCrest = terminal.filter((point) => point.col > crest.col)
+  }, activePoints[0])
+  const postCrest = activePoints.filter((point) => point.col > crest.col)
   if (!postCrest.length) return emptyBreakingLipSummary()
 
-  const shoulderCandidates = postCrest.filter((point) => point.z >= crest.z * 0.55)
+  const shoulderCandidates = postCrest.filter((point) => point.z >= maxZ * 0.38)
   const shoulderPool = shoulderCandidates.length ? shoulderCandidates : postCrest
   const shoulder = shoulderPool.reduce((best, point) => {
     if (point.x > best.x + 0.000001) return point
     if (Math.abs(point.x - best.x) <= 0.000001 && point.col < best.col) return point
     return best
   }, shoulderPool[0])
-  const postShoulder = terminal.filter((point) => point.col > shoulder.col)
+  const postShoulder = activePoints.filter((point) => point.col > shoulder.col)
   if (!postShoulder.length) return emptyBreakingLipSummary()
 
   const hookCandidates = postShoulder.filter((point) => (
-    point.z > maxZ * 0.16 &&
+    point.z > maxZ * 0.08 &&
     point.z <= shoulder.z - maxZ * 0.08
   ))
   const tuckedHookCandidates = hookCandidates.filter((point) => (
@@ -392,8 +383,8 @@ function summarizeBreakingLip(model) {
   ))
   const hookPool = tuckedHookCandidates.length ? tuckedHookCandidates : (hookCandidates.length ? hookCandidates : postShoulder)
   const tip = hookPool.reduce((best, point) => {
-    if (point.z < best.z - 0.000001) return point
-    if (Math.abs(point.z - best.z) <= 0.000001 && point.x < best.x) return point
+    if (point.x < best.x - 0.000001) return point
+    if (Math.abs(point.x - best.x) <= 0.000001 && point.z < best.z) return point
     return best
   }, hookPool[0])
   const postTip = points.filter((point) => point.col > tip.col && point.col <= tip.col + 8)

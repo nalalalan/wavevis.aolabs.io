@@ -78,7 +78,7 @@ export default function TargetShapeControls({
           <RangeInput
             label="lip dip"
             value={config.overhangAngleDeg}
-            min={40}
+            min={90}
             max={120}
             step={1}
             formatValue={(value) => `${Math.round(value)} deg`}

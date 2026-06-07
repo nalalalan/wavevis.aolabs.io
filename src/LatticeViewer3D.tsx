@@ -45,7 +45,7 @@ export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequ
         <directionalLight position={[8, -8, 10]} intensity={1.1} />
         <directionalLight position={[-5, 7, 5]} intensity={0.42} />
         <Suspense fallback={null}>
-          <LatticeModelGroup model={model} selected={selected} onEdgePick={onEdgePick} />
+          <LatticeModelGroup model={model} selected={selected} view={viewRequest.view} onEdgePick={onEdgePick} />
         </Suspense>
         <SceneGrid bounds={model.bounds} />
         <AxisLabels bounds={model.bounds} />
@@ -81,10 +81,12 @@ function ViewerSelectionCallout({
 function LatticeModelGroup({
   model,
   selected,
+  view,
   onEdgePick,
 }: {
   model: LatticeModel
   selected: SelectedElement
+  view: CameraViewRequest['view']
   onEdgePick: (edgeId: string) => void
 }) {
   const nodeById = useMemo(() => new Map(model.nodes.map((node) => [node.id, node])), [model.nodes])
@@ -95,9 +97,10 @@ function LatticeModelGroup({
   const surfaceGeometry = useMemo(() => buildSurfaceGeometry(model, nodeById, quadMetricById, dihedralByQuad), [model, nodeById, quadMetricById, dihedralByQuad])
   const labelsVisible = model.config.showLabels && model.config.rows <= 15 && model.config.columns <= 15
   const largeGrid = model.config.rows > 30 || model.config.columns > 30
+  const sideProfileView = view === 'side'
   const edgePickRadius = Math.max(model.config.spacing * (largeGrid ? 0.08 : 0.09), 0.035)
   const connectorSize = Math.max(model.config.spacing * (largeGrid ? 0.052 : 0.12), 0.026)
-  const surfaceOpacity = largeGrid ? 0.3 : 0.42
+  const surfaceOpacity = sideProfileView ? 0.58 : (largeGrid ? 0.3 : 0.42)
 
   return (
     <group>
@@ -111,8 +114,8 @@ function LatticeModelGroup({
           <meshStandardMaterial vertexColors side={THREE.DoubleSide} transparent opacity={surfaceOpacity} roughness={0.78} metalness={0.02} />
         </mesh>
       )}
-      {model.config.showNodes && <RigidCellGlyphs model={model} mechanism={mechanism} />}
-      {model.config.showEdges && (
+      {model.config.showNodes && !sideProfileView && <RigidCellGlyphs model={model} mechanism={mechanism} />}
+      {model.config.showEdges && !sideProfileView && (
         <>
           <EdgeHitTargets
             model={model}
@@ -124,8 +127,79 @@ function LatticeModelGroup({
           <ConnectorInstances model={model} mechanism={mechanism} radius={connectorSize} />
         </>
       )}
+      {sideProfileView && <SideProfileSilhouette model={model} />}
       {labelsVisible && <NodeLabels nodes={model.nodes} />}
       <SelectedHighlight selected={selected} model={model} nodeById={nodeById} mechanism={mechanism} />
+    </group>
+  )
+}
+
+function SideProfileSilhouette({ model }: { model: LatticeModel }) {
+  const profile = useMemo(() => {
+    if (model.summary.maxHeight <= model.config.spacing * 0.2) return null
+
+    const lowerRow = Math.floor((model.config.rows - 1) / 2)
+    const upperRow = Math.ceil((model.config.rows - 1) / 2)
+    const frontY = model.bounds.min[1] - model.config.spacing * 0.16
+    const rawPoints: Vec3[] = []
+    const activeFlags: boolean[] = []
+
+    for (let col = 0; col < model.config.columns; col += 1) {
+      const lowerA = model.nodes.find((node) => node.row === lowerRow && node.col === col)
+      const upperA = model.nodes.find((node) => node.row === upperRow && node.col === col)
+      if (!lowerA || !upperA) continue
+
+      const point: Vec3 = [
+        (lowerA.currentPosition[0] + upperA.currentPosition[0]) * 0.5,
+        frontY,
+        (lowerA.currentPosition[2] + upperA.currentPosition[2]) * 0.5 + model.config.spacing * 0.12,
+      ]
+      const displacement = Math.max(
+        Math.hypot(
+          lowerA.currentPosition[0] - lowerA.restPosition[0],
+          lowerA.currentPosition[1] - lowerA.restPosition[1],
+          lowerA.currentPosition[2] - lowerA.restPosition[2],
+        ),
+        Math.hypot(
+          upperA.currentPosition[0] - upperA.restPosition[0],
+          upperA.currentPosition[1] - upperA.restPosition[1],
+          upperA.currentPosition[2] - upperA.restPosition[2],
+        ),
+      )
+
+      rawPoints.push(point)
+      activeFlags.push(point[2] > model.summary.maxHeight * 0.055 || displacement > model.config.spacing * 1.6)
+    }
+
+    const firstActive = activeFlags.findIndex(Boolean)
+    const lastActive = activeFlags.length - 1 - [...activeFlags].reverse().findIndex(Boolean)
+    if (firstActive < 0 || lastActive <= firstActive) return null
+
+    const start = Math.max(0, firstActive - 1)
+    const end = Math.min(rawPoints.length - 1, lastActive + 1)
+    const points = rawPoints.slice(start, end + 1).map((point) => new THREE.Vector3(...point))
+    if (points.length < 2) return null
+
+    const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal', 0.35)
+    const coreRadius = Math.max(model.config.spacing * (model.config.rows > 30 || model.config.columns > 30 ? 0.032 : 0.045), 0.022)
+    const haloRadius = coreRadius * 1.75
+
+    return {
+      core: new THREE.TubeGeometry(curve, Math.max(points.length * 12, 64), coreRadius, 10, false),
+      halo: new THREE.TubeGeometry(curve, Math.max(points.length * 12, 64), haloRadius, 10, false),
+    }
+  }, [model])
+
+  if (!profile) return null
+
+  return (
+    <group>
+      <mesh geometry={profile.halo} renderOrder={19}>
+        <meshBasicMaterial color="#fff8ee" transparent opacity={0.62} depthTest={false} depthWrite={false} />
+      </mesh>
+      <mesh geometry={profile.core} renderOrder={20}>
+        <meshBasicMaterial color="#141713" depthTest={false} depthWrite={false} />
+      </mesh>
     </group>
   )
 }
@@ -529,7 +603,7 @@ function positionCamera(
   view: CameraViewRequest['view'],
   selected?: SelectedElement,
 ): void {
-  const { bounds } = model
+  const bounds = !selected && view === 'side' ? activeSideProfileBounds(model) : model.bounds
   const maxSpan = Math.max(bounds.span[0], bounds.span[1], bounds.span[2], 2)
   const focus = focusForSelected(model, selected ?? null)
   const fov = focus ? 32 : view === 'side' ? 34 : 42
@@ -559,6 +633,43 @@ function positionCamera(
 
   controls?.target.copy(target)
   controls?.update()
+}
+
+function activeSideProfileBounds(model: LatticeModel): LatticeBounds {
+  const maxHeight = Math.max(model.summary.maxHeight, 0.000001)
+  const activeNodes = model.nodes.filter((node) => {
+    const displacement = Math.hypot(
+      node.currentPosition[0] - node.restPosition[0],
+      node.currentPosition[1] - node.restPosition[1],
+      node.currentPosition[2] - node.restPosition[2],
+    )
+
+    return node.currentPosition[2] > maxHeight * 0.06 ||
+      displacement > Math.max(model.config.spacing * 2.4, model.summary.overhangAmount * 0.42)
+  })
+
+  if (activeNodes.length < 2) return model.bounds
+
+  const minX = Math.min(...activeNodes.map((node) => node.currentPosition[0]))
+  const maxX = Math.max(...activeNodes.map((node) => node.currentPosition[0]))
+  const minZ = Math.min(...activeNodes.map((node) => node.currentPosition[2]), 0)
+  const maxZ = Math.max(...activeNodes.map((node) => node.currentPosition[2]))
+  const padX = Math.max(model.config.spacing * 3.4, (maxX - minX) * 0.18)
+  const padZ = Math.max(model.config.spacing * 1.4, (maxZ - minZ) * 0.34)
+  const min: Vec3 = [minX - padX, model.bounds.min[1], Math.min(0, minZ - padZ * 0.34)]
+  const max: Vec3 = [maxX + padX, model.bounds.max[1], maxZ + padZ]
+  const center: Vec3 = [
+    (min[0] + max[0]) * 0.5,
+    model.bounds.center[1],
+    (min[2] + max[2]) * 0.5,
+  ]
+
+  return {
+    min,
+    max,
+    center,
+    span: [max[0] - min[0], model.bounds.span[1], max[2] - min[2]],
+  }
 }
 
 function cameraDistanceForView(
