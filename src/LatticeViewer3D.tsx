@@ -94,7 +94,7 @@ function LatticeModelGroup({
     ? Math.max(model.config.spacing * 0.078, 0.044)
     : Math.max(model.config.spacing * (largeGrid ? 0.052 : 0.12), 0.026)
   const surfaceOpacity = sideProfileView ? 0.18 : (largeGrid ? 0.3 : 0.42)
-  const profileOverlayVisible = sideProfileView && !model.config.showNodes && !model.config.showEdges
+  const profileOverlayVisible = sideProfileView
 
   return (
     <group>
@@ -122,7 +122,7 @@ function LatticeModelGroup({
           <ConnectorInstances model={model} mechanism={mechanism} scope={mechanismScope} radius={connectorSize} />
         </>
       )}
-      {profileOverlayVisible && <SideProfileSilhouette model={model} />}
+      {profileOverlayVisible && <SideProfileSilhouette model={model} compact={model.config.showNodes || model.config.showEdges} />}
       {labelsVisible && <NodeLabels nodes={model.nodes} />}
       <SelectedHighlight selected={selected} model={model} nodeById={nodeById} mechanism={mechanism} view={view} />
     </group>
@@ -190,33 +190,23 @@ function SideProfileSilhouette({ model, compact = false }: { model: LatticeModel
   const profile = useMemo(() => {
     if (model.summary.maxHeight <= model.config.spacing * 0.2) return null
 
-    const lowerRow = Math.floor((model.config.rows - 1) / 2)
-    const upperRow = Math.ceil((model.config.rows - 1) / 2)
-    const frontY = model.bounds.min[1] - model.config.spacing * 0.16
+    const sliceRow = Math.round((model.config.rows - 1) * 0.5)
     const rawPoints: Vec3[] = []
     const activeFlags: boolean[] = []
 
     for (let col = 0; col < model.config.columns; col += 1) {
-      const lowerA = model.nodes.find((node) => node.row === lowerRow && node.col === col)
-      const upperA = model.nodes.find((node) => node.row === upperRow && node.col === col)
-      if (!lowerA || !upperA) continue
+      const node = model.nodes.find((candidate) => candidate.row === sliceRow && candidate.col === col)
+      if (!node) continue
 
       const point: Vec3 = [
-        (lowerA.currentPosition[0] + upperA.currentPosition[0]) * 0.5,
-        frontY,
-        (lowerA.currentPosition[2] + upperA.currentPosition[2]) * 0.5 + model.config.spacing * 0.12,
+        node.currentPosition[0],
+        node.currentPosition[1],
+        node.currentPosition[2],
       ]
-      const displacement = Math.max(
-        Math.hypot(
-          lowerA.currentPosition[0] - lowerA.restPosition[0],
-          lowerA.currentPosition[1] - lowerA.restPosition[1],
-          lowerA.currentPosition[2] - lowerA.restPosition[2],
-        ),
-        Math.hypot(
-          upperA.currentPosition[0] - upperA.restPosition[0],
-          upperA.currentPosition[1] - upperA.restPosition[1],
-          upperA.currentPosition[2] - upperA.restPosition[2],
-        ),
+      const displacement = Math.hypot(
+        node.currentPosition[0] - node.restPosition[0],
+        node.currentPosition[1] - node.restPosition[1],
+        node.currentPosition[2] - node.restPosition[2],
       )
 
       rawPoints.push(point)
@@ -234,8 +224,8 @@ function SideProfileSilhouette({ model, compact = false }: { model: LatticeModel
 
     const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal', 0.35)
     const coreRadius = Math.max(
-      model.config.spacing * (model.config.rows > 30 || model.config.columns > 30 ? 0.032 : 0.045) * (compact ? 0.68 : 1),
-      0.018,
+      model.config.spacing * (model.config.rows > 30 || model.config.columns > 30 ? 0.055 : 0.07) * (compact ? 0.86 : 1),
+      0.026,
     )
     const haloRadius = coreRadius * 1.75
 
