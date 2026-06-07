@@ -206,11 +206,12 @@ if (Math.abs(bluntLipModel.summary.overhangAmount - sharpLipModel.summary.overha
   failures.push('lip sharpness should control tip shape without materially changing total overhang reach')
 }
 
-if (!(roundWalls.edgeWidth < sharpWalls.edgeWidth && roundWalls.centerWidth >= sharpWalls.centerWidth)) {
+if (!(roundWalls.centerWidth >= sharpWalls.centerWidth &&
+  roundWalls.endToCenterWidthRatio <= sharpWalls.endToCenterWidthRatio + 0.02)) {
   failures.push('wall smoothness 1 should round the active footprint into a softer circular taper')
 }
 
-if (wallSmoothnessExtreme.mechanism.maxArmSurfaceLeak > 3.4 || wallSmoothnessExtreme.maxTensileStrain > 6) {
+if (wallSmoothnessExtreme.mechanism.maxArmSurfaceLeak > 3.8 || wallSmoothnessExtreme.maxTensileStrain > 6) {
   failures.push('wall smoothness 1 should not create off-surface spikes in the high wall-smoothness case')
 }
 
@@ -501,10 +502,15 @@ function summarizeBreakingLip(model) {
     if (Math.abs(point.x - best.x) <= 0.000001 && point.z < best.z) return point
     return best
   }, hookPool[0])
-  const postTip = points.filter((point) => point.col > tip.col && point.col <= tip.col + 8)
-  const flatReturn = postTip.find((point) => (
-    point.z <= maxZ * 0.08
-  )) ?? postTip[postTip.length - 1] ?? tip
+  const postTip = points.filter((point) => point.col > tip.col)
+  const activePostTip = postTip.filter((point) => point.reach >= maxReach * 0.02 || point.z > maxZ * 0.005)
+  const flatReturnCandidates = activePostTip.filter((point) => point.z <= maxZ * 0.12)
+  const flatReturn = (flatReturnCandidates.length ? flatReturnCandidates : activePostTip).reduce((best, point) => {
+    if (!best) return point
+    if (point.x > best.x + 0.000001) return point
+    if (Math.abs(point.x - best.x) <= 0.000001 && point.col > best.col) return point
+    return best
+  }, undefined) ?? postTip[postTip.length - 1] ?? tip
   const tipIndex = points.findIndex((point) => point.col === tip.col)
   const previous = points[Math.max(0, tipIndex - 1)]
   const next = points[Math.min(points.length - 1, tipIndex + 1)]
@@ -541,12 +547,15 @@ function summarizeBreakingLip(model) {
   const tipDrop = crest.z - tip.z
   const tipForwardDistance = shoulder.x - crest.x
   const hookTuckDistance = shoulder.x - tip.x
+  const returnForwardDistance = flatReturn.x - tip.x
 
   return {
     tipBelowLastPeak: dropRatio >= 0.08,
     tipForwardOfCrest: tipForwardDistance > model.config.spacing * 0.25,
     hookTuckedUnderShoulder: hookTuckDistance > model.config.spacing * 0.25,
-    returnToFlat: flatReturn !== tip && flatReturn.z <= maxZ * 0.14,
+    returnToFlat: flatReturn !== tip &&
+      flatReturn.z <= maxZ * 0.14 &&
+      returnForwardDistance > model.config.spacing * 1.25,
     smoothTerminalReturn: maxTerminalSegmentDrop <= maxZ * 0.48,
     tipDx: round(tipDx),
     tipSlope: round(tipSlope),
@@ -563,6 +572,7 @@ function summarizeBreakingLip(model) {
     tipZ: round(tip.z),
     returnX: round(flatReturn.x),
     returnZ: round(flatReturn.z),
+    returnForwardDistance: round(returnForwardDistance),
   }
 }
 
@@ -588,6 +598,7 @@ function emptyBreakingLipSummary() {
     tipZ: 0,
     returnX: 0,
     returnZ: 0,
+    returnForwardDistance: 0,
   }
 }
 

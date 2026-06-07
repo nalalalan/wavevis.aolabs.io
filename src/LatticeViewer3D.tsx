@@ -21,6 +21,7 @@ import {
   rigidCellBodyThickness,
   type CellArmDirection,
   type RigidCellMechanism,
+  type RigidCellFrame,
 } from './rigidCellMechanism'
 
 const inverseLinkageColor = '#111111'
@@ -37,6 +38,8 @@ type LatticeViewer3DProps = {
 }
 
 export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequest, focusRequest, onEdgePick }: LatticeViewer3DProps) {
+  void pickedEdges
+
   return (
     <section className="scene-shell inverse-scene" aria-label="Inverse Sheet 3D lattice view">
       <Canvas dpr={[1, 1.8]} gl={{ antialias: true, preserveDrawingBuffer: true }}>
@@ -51,30 +54,8 @@ export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequ
         <AxisLabels bounds={model.bounds} />
         <CameraRig model={model} viewRequest={viewRequest} focusRequest={focusRequest} />
       </Canvas>
-      <ViewerSelectionCallout selected={selected} pickedEdges={pickedEdges} model={model} />
       {model.config.showHeatmap && <SceneColorBar model={model} />}
     </section>
-  )
-}
-
-function ViewerSelectionCallout({
-  selected,
-  pickedEdges,
-  model,
-}: {
-  selected: SelectedElement
-  pickedEdges: string[]
-  model: LatticeModel
-}) {
-  const details = viewerCalloutDetails(model, selected, pickedEdges)
-  if (!details) return null
-
-  return (
-    <div className={`scene-callout viewport-callout ${details.kind}`}>
-      <span>{details.title}</span>
-      <strong>{details.value}</strong>
-      {details.detail && <em>{details.detail}</em>}
-    </div>
   )
 }
 
@@ -100,7 +81,7 @@ function LatticeModelGroup({
   const sideProfileView = view === 'side'
   const edgePickRadius = Math.max(model.config.spacing * (largeGrid ? 0.08 : 0.09), 0.035)
   const connectorSize = Math.max(model.config.spacing * (largeGrid ? 0.052 : 0.12), 0.026)
-  const surfaceOpacity = sideProfileView ? 0.58 : (largeGrid ? 0.3 : 0.42)
+  const surfaceOpacity = sideProfileView ? 0.42 : (largeGrid ? 0.3 : 0.42)
 
   return (
     <group>
@@ -127,10 +108,69 @@ function LatticeModelGroup({
           <ConnectorInstances model={model} mechanism={mechanism} radius={connectorSize} />
         </>
       )}
+      {sideProfileView && <SideMechanismSlice model={model} mechanism={mechanism} />}
       {sideProfileView && <SideProfileSilhouette model={model} />}
       {labelsVisible && <NodeLabels nodes={model.nodes} />}
       <SelectedHighlight selected={selected} model={model} nodeById={nodeById} mechanism={mechanism} />
     </group>
+  )
+}
+
+function SideMechanismSlice({ model, mechanism }: { model: LatticeModel; mechanism: RigidCellMechanism }) {
+  const centerRow = Math.round((model.config.rows - 1) * 0.5)
+  const adjacentRow = Math.min(model.config.rows - 1, centerRow + 1)
+  const sliceNodeIds = useMemo(() => new Set(
+    mechanism.frames
+      .filter((frame) => {
+        const node = model.nodes.find((candidate) => candidate.id === frame.nodeId)
+        return node?.row === centerRow || node?.row === adjacentRow
+      })
+      .map((frame) => frame.nodeId),
+  ), [adjacentRow, centerRow, mechanism.frames, model.nodes])
+  const frames = mechanism.frames.filter((frame) => sliceNodeIds.has(frame.nodeId))
+  const sliceEdges = model.edges.filter((edge) => sliceNodeIds.has(edge.nodeA) && sliceNodeIds.has(edge.nodeB))
+  const connectorRadius = Math.max(model.config.spacing * 0.04, 0.018)
+  const armRadius = Math.max(model.config.spacing * 0.017, 0.009)
+
+  return (
+    <group>
+      {sliceEdges.map((edge) => {
+        const endpoints = mechanism.endpointsByEdgeId.get(edge.id)
+        const connector = mechanism.connectorByEdgeId.get(edge.id)
+        if (!endpoints || !connector) return null
+
+        return (
+          <group key={edge.id}>
+            <TubeSegment start={endpoints.endpointA} end={connector} radius={armRadius} color="#10110f" />
+            <TubeSegment start={connector} end={endpoints.endpointB} radius={armRadius} color="#10110f" />
+            <mesh position={connector}>
+              <sphereGeometry args={[connectorRadius, 10, 8]} />
+              <meshStandardMaterial color="#10110f" emissive="#10110f" emissiveIntensity={0.06} roughness={0.52} />
+            </mesh>
+          </group>
+        )
+      })}
+      {frames.map((frame) => (
+        <SideCellBody key={frame.nodeId} frame={frame} model={model} />
+      ))}
+    </group>
+  )
+}
+
+function SideCellBody({ frame, model }: { frame: RigidCellFrame; model: LatticeModel }) {
+  const bodySize = model.config.spacing * (model.config.rows > 30 || model.config.columns > 30 ? 0.13 : 0.22)
+  const bodyThickness = rigidCellBodyThickness(model.config.spacing) * 0.75
+  const matrix = useMemo(() => {
+    const next = new THREE.Matrix4()
+    setBoxMatrix(next, toThree(frame.center), toThree(frame.xAxis), toThree(frame.yAxis), toThree(frame.zAxis), bodySize, bodySize, bodyThickness)
+    return next
+  }, [bodySize, bodyThickness, frame.center, frame.xAxis, frame.yAxis, frame.zAxis])
+
+  return (
+    <mesh matrix={matrix} matrixAutoUpdate={false}>
+      <boxGeometry args={[1, 1, 1]} />
+      <meshStandardMaterial color="#242624" roughness={0.68} metalness={0.02} />
+    </mesh>
   )
 }
 
@@ -202,64 +242,6 @@ function SideProfileSilhouette({ model }: { model: LatticeModel }) {
       </mesh>
     </group>
   )
-}
-
-function viewerCalloutDetails(
-  model: LatticeModel,
-  selected: SelectedElement,
-  pickedEdges: string[],
-): { kind: 'tensile' | 'compressive' | 'neutral'; title: string; value: string; detail?: string } | null {
-  const edgeId = selected?.kind === 'edge' ? selected.id : pickedEdges[pickedEdges.length - 1]
-
-  if (edgeId) {
-    const metric = model.edgeMetrics.find((candidate) => candidate.edgeId === edgeId)
-    if (!metric) return null
-
-    const angle = pickedEdges.length === 2 ? edgeAngle(model, pickedEdges[0], pickedEdges[1]) : null
-    const kind = metric.strain >= 0 ? 'tensile' : 'compressive'
-
-    return {
-      kind,
-      title: `${kind} strain`,
-      value: formatSignedPercent(metric.strain),
-      detail: angle !== null ? `angle ${formatAngle(angle)}` : undefined,
-    }
-  }
-
-  if (!selected) return null
-
-  if (selected.kind === 'node') {
-    const metric = model.nodeMetrics.find((candidate) => candidate.nodeId === selected.id)
-    if (!metric) return null
-
-    return {
-      kind: 'neutral',
-      title: 'node displacement',
-      value: `URES ${formatLength(metric.displacement)}`,
-      detail: `bend ${formatAngle(metric.nodeBendDeg)}`,
-    }
-  }
-
-  if (selected.kind === 'quad') {
-    const metric = model.quadMetrics.find((candidate) => candidate.quadId === selected.id)
-    if (!metric) return null
-
-    return {
-      kind: 'neutral',
-      title: metric.areaChange >= 0 ? 'area expansion' : 'area compression',
-      value: formatSignedPercent(metric.areaChange),
-      detail: `normal ${formatAngle(metric.normalRotationDeg)}`,
-    }
-  }
-
-  const metric = model.dihedralMetrics.find((candidate) => candidate.pairId === selected.id)
-  if (!metric) return null
-
-  return {
-    kind: 'neutral',
-    title: 'fold angle',
-    value: formatAngle(metric.dihedralDeg),
-  }
 }
 
 function RigidCellGlyphs({
@@ -777,56 +759,6 @@ function focusForSelected(
   return { center, radius }
 }
 
-function edgeAngle(model: LatticeModel, edgeAId: string, edgeBId: string): number | null {
-  const edgeA = model.edges.find((edge) => edge.id === edgeAId)
-  const edgeB = model.edges.find((edge) => edge.id === edgeBId)
-  if (!edgeA || !edgeB) return null
-
-  const vectorA = edgeVector(model, edgeA.nodeA, edgeA.nodeB)
-  const vectorB = edgeVector(model, edgeB.nodeA, edgeB.nodeB)
-  const lengthProduct = lengthVec(vectorA) * lengthVec(vectorB)
-  if (lengthProduct <= 0.000001) return null
-
-  const cosine = Math.min(1, Math.max(-1, dotVec(vectorA, vectorB) / lengthProduct))
-  return (Math.acos(cosine) * 180) / Math.PI
-}
-
-function edgeVector(model: LatticeModel, nodeAId: string, nodeBId: string): Vec3 {
-  const nodeA = model.nodes.find((node) => node.id === nodeAId)
-  const nodeB = model.nodes.find((node) => node.id === nodeBId)
-  if (!nodeA || !nodeB) return [0, 0, 0]
-  return [
-    nodeB.currentPosition[0] - nodeA.currentPosition[0],
-    nodeB.currentPosition[1] - nodeA.currentPosition[1],
-    nodeB.currentPosition[2] - nodeA.currentPosition[2],
-  ]
-}
-
-function lengthVec(vector: Vec3): number {
-  return Math.hypot(vector[0], vector[1], vector[2])
-}
-
-function dotVec(a: Vec3, b: Vec3): number {
-  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
-
-function formatSignedPercent(value: number): string {
-  if (!Number.isFinite(value)) return '0%'
-  const percent = value * 100
-  const sign = percent > 0 ? '+' : ''
-  return `${sign}${percent.toFixed(1).replace(/\.0$/, '')}%`
-}
-
-function formatAngle(value: number): string {
-  if (!Number.isFinite(value)) return '0 deg'
-  return `${value.toFixed(1).replace(/\.0$/, '')} deg`
-}
-
-function formatLength(value: number): string {
-  if (!Number.isFinite(value)) return '0'
-  return value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')
-}
-
 function setBoxInstance(
   matrix: THREE.Matrix4,
   mesh: THREE.InstancedMesh,
@@ -846,6 +778,24 @@ function setBoxInstance(
   )
   matrix.setPosition(center)
   mesh.setMatrixAt(index, matrix)
+}
+
+function setBoxMatrix(
+  matrix: THREE.Matrix4,
+  center: THREE.Vector3,
+  xAxis: THREE.Vector3,
+  yAxis: THREE.Vector3,
+  zAxis: THREE.Vector3,
+  width: number,
+  height: number,
+  depth: number,
+): void {
+  matrix.makeBasis(
+    xAxis.clone().multiplyScalar(width),
+    yAxis.clone().multiplyScalar(height),
+    zAxis.clone().multiplyScalar(depth),
+  )
+  matrix.setPosition(center)
 }
 
 function setCylinderInstance(

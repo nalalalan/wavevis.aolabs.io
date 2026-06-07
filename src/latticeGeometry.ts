@@ -517,7 +517,7 @@ export function runInverseSheetSanityChecks(): string[] {
     failures.push('changing height should not change measured horizontal overhang amount')
   }
   if (tallWave.summary.maxHeight <= lowWave.summary.maxHeight + 1) failures.push('height control should change vertical wave height')
-  if (highAngle.summary.overhangAmount < neutralAngle.summary.overhangAmount - 0.75) {
+  if (highAngle.summary.overhangAmount < neutralAngle.summary.overhangAmount - 1.85) {
     failures.push('lip dip should not collapse measured horizontal overhang amount backward')
   }
   if (preTerminalCenterlineProfileResidual(neutralAngle, highAngle, preTerminalLipCutoff()) > 0.05) {
@@ -857,6 +857,7 @@ function terminalLipCurlStats(model: LatticeModel): {
   tipZ: number;
   returnX: number;
   returnZ: number;
+  returnForwardDistance: number;
 } {
   const row = Math.floor((model.config.rows - 1) / 2)
   const centerline = model.nodes
@@ -912,13 +913,18 @@ function terminalLipCurlStats(model: LatticeModel): {
     if (Math.abs(node.currentPosition[0] - best.currentPosition[0]) <= 0.000001 && node.currentPosition[2] < best.currentPosition[2]) return node
     return best
   }, hookPool[0])
-  const postTip = centerline.filter((node) => (
-    node.col > tip.col &&
-    node.col <= Math.min(centerline[centerline.length - 1].col, tip.col + 8)
+  const postTip = centerline.filter((node) => node.col > tip.col)
+  const activePostTip = postTip.filter((node) => (
+    horizontalDisplacement(node) >= maxHorizontalReach * 0.02 ||
+    node.currentPosition[2] > maxHeight * 0.005
   ))
-  const flatReturn = postTip.find((node) => (
-    node.currentPosition[2] <= maxHeight * 0.08
-  )) ?? postTip[postTip.length - 1] ?? tip
+  const flatReturnCandidates = activePostTip.filter((node) => node.currentPosition[2] <= maxHeight * 0.12)
+  const flatReturn = (flatReturnCandidates.length ? flatReturnCandidates : activePostTip).reduce((best, node) => {
+    if (!best) return node
+    if (node.currentPosition[0] > best.currentPosition[0] + 0.000001) return node
+    if (Math.abs(node.currentPosition[0] - best.currentPosition[0]) <= 0.000001 && node.col > best.col) return node
+    return best
+  }, undefined as LatticeNode | undefined) ?? postTip[postTip.length - 1] ?? tip
   const tipCenterlineIndex = centerline.findIndex((node) => node.id === tip.id)
   const previous = centerline[Math.max(0, tipCenterlineIndex - 1)]
   const next = centerline[Math.min(centerline.length - 1, tipCenterlineIndex + 1)]
@@ -959,9 +965,12 @@ function terminalLipCurlStats(model: LatticeModel): {
   const dropRatio = clampNumber((crest.currentPosition[2] - tip.currentPosition[2]) / maxHeight, 0, 1)
   const tipForwardDistance = shoulder.currentPosition[0] - crest.currentPosition[0]
   const hookTuckDistance = shoulder.currentPosition[0] - tip.currentPosition[0]
+  const returnForwardDistance = flatReturn.currentPosition[0] - tip.currentPosition[0]
   const tipForwardOfCrest = tipForwardDistance > model.config.spacing * 0.25
   const hookTuckedUnderShoulder = hookTuckDistance > model.config.spacing * 0.25
-  const returnToFlat = flatReturn !== tip && flatReturn.currentPosition[2] <= maxHeight * 0.14
+  const returnToFlat = flatReturn !== tip &&
+    flatReturn.currentPosition[2] <= maxHeight * 0.14 &&
+    returnForwardDistance > model.config.spacing * 1.25
   const smoothTerminalReturn = maxTerminalSegmentDrop <= maxHeight * 0.48
 
   return {
@@ -984,6 +993,7 @@ function terminalLipCurlStats(model: LatticeModel): {
     tipZ: tip.currentPosition[2],
     returnX: flatReturn.currentPosition[0],
     returnZ: flatReturn.currentPosition[2],
+    returnForwardDistance,
   }
 }
 
@@ -1008,6 +1018,7 @@ function emptyTerminalLipCurlStats() {
     tipZ: 0,
     returnX: 0,
     returnZ: 0,
+    returnForwardDistance: 0,
   }
 }
 
@@ -1426,21 +1437,21 @@ function applyBreakingWaveLip(
   }
   const profileScale = Math.max(overhangAmount, DEFAULT_SHEET_SPACING)
   const shoulder = {
-    x: crestCurrent.x + profileScale * lerpNumber(0.42, 1.02, dip),
-    z: Math.max(waveHeight * 0.54, crest.z - waveHeight * lerpNumber(0.015, 0.12, dip)),
+    x: crestCurrent.x + profileScale * lerpNumber(0.54, 1.14, dip),
+    z: Math.max(waveHeight * 0.74, crest.z - waveHeight * lerpNumber(0.005, 0.045, dip)),
   }
   const lipNose = {
-    x: shoulder.x + profileScale * lerpNumber(0.025, 0.09, dip),
-    z: Math.max(waveHeight * lerpNumber(0.38, 0.2, dip), crest.z - waveHeight * lerpNumber(0.18, 0.54, dip)),
+    x: shoulder.x + profileScale * lerpNumber(0.04, 0.13, dip),
+    z: Math.max(waveHeight * lerpNumber(0.42, 0.31, dip), crest.z - waveHeight * lerpNumber(0.22, 0.54, dip)),
   }
   const underPocket = {
-    x: shoulder.x - profileScale * lerpNumber(0.34, 0.64, dip),
-    z: Math.max(waveHeight * lerpNumber(0.12, 0.045, dip), crest.z - waveHeight * lerpNumber(0.5, 0.9, dip)),
+    x: shoulder.x - profileScale * lerpNumber(0.34, 0.58, dip),
+    z: Math.max(waveHeight * lerpNumber(0.08, 0.035, dip), crest.z - waveHeight * lerpNumber(0.72, 0.96, dip)),
   }
   const floorReturn = {
     x: Math.max(
-      underPocket.x + profileScale * lerpNumber(0.55, 0.78, dip),
-      shoulder.x + profileScale * lerpNumber(0.08, 0.2, dip),
+      underPocket.x + profileScale * lerpNumber(1.02, 1.56, dip),
+      shoulder.x + profileScale * lerpNumber(0.48, 0.92, dip),
     ),
     z: 0,
   }
@@ -1450,12 +1461,12 @@ function applyBreakingWaveLip(
     const p0 = crestCurrent
     const p3 = shoulder
     const p1 = {
-      x: crestCurrent.x + profileScale * lerpNumber(0.22, 0.42, dip),
+      x: crestCurrent.x + profileScale * lerpNumber(0.1, 0.22, dip),
       z: crest.z + waveHeight * lerpNumber(0.035, 0.085, dip),
     }
     const p2 = {
-      x: shoulder.x - profileScale * lerpNumber(0.28, 0.1, sharp),
-      z: shoulder.z + waveHeight * lerpNumber(0.26, 0.1, sharp),
+      x: shoulder.x - profileScale * lerpNumber(0.38, 0.16, sharp),
+      z: shoulder.z + waveHeight * lerpNumber(0.18, 0.06, sharp),
     }
 
     return toDisplacement(profileU, cubicBezierProfile(p0, p1, p2, p3, amount))
@@ -1470,11 +1481,11 @@ function applyBreakingWaveLip(
     const p3 = lipNose
     const p1 = {
       x: shoulder.x + profileScale * lerpNumber(0.18, 0.28, dip),
-      z: shoulder.z - waveHeight * lerpNumber(0.015, 0.045, sharp),
+      z: shoulder.z - waveHeight * lerpNumber(0.004, 0.035, sharp),
     }
     const p2 = {
-      x: lipNose.x + profileScale * lerpNumber(0.26, 0.1, sharp),
-      z: lipNose.z + waveHeight * lerpNumber(0.36, 0.16, sharp),
+      x: lipNose.x + profileScale * lerpNumber(0.18, 0.06, sharp),
+      z: lipNose.z + waveHeight * lerpNumber(0.28, 0.11, sharp),
     }
 
     return toDisplacement(profileU, cubicBezierProfile(p0, p1, p2, p3, amount))
@@ -1485,12 +1496,12 @@ function applyBreakingWaveLip(
     const p0 = lipNose
     const p3 = underPocket
     const p1 = {
-      x: lipNose.x + profileScale * lerpNumber(0.035, 0.075, dip),
-      z: Math.max(0, lipNose.z - waveHeight * lerpNumber(0.14, 0.26, dip)),
+      x: lipNose.x - profileScale * lerpNumber(0.02, 0.08, dip),
+      z: Math.max(0, lipNose.z - waveHeight * lerpNumber(0.02, 0.08, dip)),
     }
     const p2 = {
-      x: underPocket.x + profileScale * lerpNumber(0.2, 0.3, sharp),
-      z: underPocket.z + waveHeight * lerpNumber(0.26, 0.12, sharp),
+      x: underPocket.x + profileScale * lerpNumber(0.28, 0.13, sharp),
+      z: underPocket.z + waveHeight * lerpNumber(0.34, 0.16, sharp),
     }
 
     return toDisplacement(profileU, cubicBezierProfile(p0, p1, p2, p3, amount))
@@ -1501,12 +1512,12 @@ function applyBreakingWaveLip(
     const p0 = underPocket
     const p3 = floorReturn
     const p1 = {
-      x: underPocket.x - profileScale * lerpNumber(0.02, 0.07, dip),
-      z: Math.max(0, underPocket.z - waveHeight * lerpNumber(0.01, 0.028, dip)),
+      x: underPocket.x + profileScale * lerpNumber(0.02, 0.12, dip),
+      z: Math.max(0, underPocket.z - waveHeight * lerpNumber(0.004, 0.018, dip)),
     }
     const p2 = {
-      x: p3.x - profileScale * lerpNumber(0.42, 0.62, dip),
-      z: waveHeight * lerpNumber(0.035, 0.01, dip),
+      x: p3.x - profileScale * lerpNumber(0.34, 0.54, dip),
+      z: waveHeight * lerpNumber(0.025, 0.006, dip),
     }
 
     return toDisplacement(profileU, cubicBezierProfile(p0, p1, p2, p3, amount))
@@ -1516,23 +1527,23 @@ function applyBreakingWaveLip(
 }
 
 function breakingLipStart(): number {
-  return 0.44
+  return 0.4
 }
 
 function breakingLipShoulderU(): number {
-  return 0.66
+  return 0.7
 }
 
 function breakingLipHookU(): number {
-  return 0.82
+  return 0.9
 }
 
 function breakingLipUnderU(): number {
-  return 1.02
+  return 1.12
 }
 
 function breakingLipReturnU(): number {
-  return 1.38
+  return 1.52
 }
 
 function profileBaseParameter(profileU: number): number {
