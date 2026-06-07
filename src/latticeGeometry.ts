@@ -1332,6 +1332,7 @@ function canonicalOverhangTargetPosition(
       eased,
       overhangAmount,
       waveHeight,
+      DEFAULT_WAVE_FIELD_LENGTH * remainingU,
       lipDip,
       config.lipSharpness,
       config.conicRho,
@@ -1380,6 +1381,7 @@ function applyBreakingWaveLip(
   t: number,
   overhangAmount: number,
   waveHeight: number,
+  profileRestLength: number,
   lipDip: number,
   lipSharpness: number,
   conicRho: number,
@@ -1391,6 +1393,11 @@ function applyBreakingWaveLip(
   const shoulderU = breakingLipShoulderU()
   const hookU = breakingLipHookU()
   const returnU = breakingLipReturnU()
+  const restXAt = (amount: number) => profileRestLength * amount
+  const toDisplacement = (amount: number, current: { x: number; z: number }) => ({
+    x: current.x - restXAt(amount),
+    z: current.z,
+  })
 
   if (dip <= 0.000001 || profileU < crestU || overhangAmount <= 0.000001 || waveHeight <= 0.000001) {
     return baseWaveProfile(t, overhangAmount, waveHeight, CORE_PROFILE_SMOOTHING, conicRho, curlRadius)
@@ -1398,29 +1405,33 @@ function applyBreakingWaveLip(
 
   const crestT = profileBaseParameter(crestU)
   const crest = baseWaveProfile(crestT, overhangAmount, waveHeight, CORE_PROFILE_SMOOTHING, conicRho, curlRadius)
+  const crestCurrent = {
+    x: restXAt(crestU) + crest.x,
+    z: crest.z,
+  }
   const shoulder = {
-    x: crest.x + overhangAmount * lerpNumber(0.32, 0.58, dip),
-    z: crest.z + waveHeight * lerpNumber(0.04, 0.13, dip),
+    x: crestCurrent.x + overhangAmount * lerpNumber(0.78, 1.28, dip),
+    z: Math.max(waveHeight * 0.16, crest.z - waveHeight * lerpNumber(0.06, 0.28, dip)),
   }
   const hookTip = {
-    x: shoulder.x - overhangAmount * lerpNumber(0.32, 0.78, dip),
-    z: Math.max(waveHeight * lerpNumber(0.12, 0.06, dip), crest.z - waveHeight * lerpNumber(0.36, 0.78, dip)),
+    x: shoulder.x - overhangAmount * lerpNumber(0.30, 0.62, dip),
+    z: Math.max(waveHeight * lerpNumber(0.11, 0.055, dip), crest.z - waveHeight * lerpNumber(0.42, 0.74, dip)),
   }
 
   if (profileU <= shoulderU) {
     const amount = smootherStep((profileU - crestU) / Math.max(shoulderU - crestU, 0.000001))
-    const p0 = crest
+    const p0 = crestCurrent
     const p3 = shoulder
     const p1 = {
-      x: crest.x + overhangAmount * lerpNumber(0.16, 0.28, dip),
-      z: crest.z + waveHeight * lerpNumber(0.08, 0.15, dip),
+      x: crestCurrent.x + overhangAmount * lerpNumber(0.42, 0.64, dip),
+      z: crest.z + waveHeight * lerpNumber(0.045, 0.085, dip),
     }
     const p2 = {
       x: shoulder.x - overhangAmount * lerpNumber(0.10, 0.04, sharp),
-      z: shoulder.z + waveHeight * lerpNumber(0.05, 0.015, sharp),
+      z: shoulder.z + waveHeight * lerpNumber(0.025, 0.006, sharp),
     }
 
-    return cubicBezierProfile(p0, p1, p2, p3, amount)
+    return toDisplacement(profileU, cubicBezierProfile(p0, p1, p2, p3, amount))
   }
 
   if (profileU <= hookU) {
@@ -1431,31 +1442,31 @@ function applyBreakingWaveLip(
     const p0 = shoulder
     const p3 = hookTip
     const p1 = {
-      x: shoulder.x - overhangAmount * lerpNumber(0.02, 0.06, sharp),
-      z: shoulder.z - waveHeight * lerpNumber(0.01, 0.04, sharp),
+      x: shoulder.x + overhangAmount * lerpNumber(0.08, 0.22, dip),
+      z: shoulder.z - waveHeight * lerpNumber(0.01, 0.035, sharp),
     }
     const p2 = {
-      x: hookTip.x - overhangAmount * lerpNumber(0.18, 0.04, sharp),
+      x: hookTip.x + overhangAmount * lerpNumber(0.38, 0.12, sharp),
       z: hookTip.z + waveHeight * lerpNumber(0.58, 0.14, sharp),
     }
 
-    return cubicBezierProfile(p0, p1, p2, p3, amount)
+    return toDisplacement(profileU, cubicBezierProfile(p0, p1, p2, p3, amount))
   }
 
   if (profileU <= returnU) {
     const amount = smootherStep((profileU - hookU) / Math.max(returnU - hookU, 0.000001))
     const p0 = hookTip
-    const p3 = { x: 0, z: 0 }
+    const p3 = { x: restXAt(returnU), z: 0 }
     const p1 = {
-      x: hookTip.x - overhangAmount * lerpNumber(0.42, 0.7, dip),
-      z: Math.max(0, hookTip.z - waveHeight * lerpNumber(0.16, 0.34, dip)),
+      x: hookTip.x - overhangAmount * lerpNumber(0.05, 0.16, dip),
+      z: Math.max(0, hookTip.z - waveHeight * lerpNumber(0.08, 0.18, dip)),
     }
     const p2 = {
-      x: -overhangAmount * lerpNumber(0.02, 0.16, dip),
+      x: p3.x - profileRestLength * lerpNumber(0.16, 0.26, dip),
       z: waveHeight * lerpNumber(0.045, 0.012, dip),
     }
 
-    return cubicBezierProfile(p0, p1, p2, p3, amount)
+    return toDisplacement(profileU, cubicBezierProfile(p0, p1, p2, p3, amount))
   }
 
   return { x: 0, z: 0 }
@@ -1474,7 +1485,7 @@ function breakingLipHookU(): number {
 }
 
 function breakingLipReturnU(): number {
-  return 1.18
+  return 1.36
 }
 
 function profileBaseParameter(profileU: number): number {

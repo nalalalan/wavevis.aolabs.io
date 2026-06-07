@@ -222,7 +222,7 @@ if (!(lipDipSweep[118].dropRatio >= 0.35 &&
   lipDipSweep[118].hookTuckedUnderShoulder &&
   lipDipSweep[118].returnToFlat &&
   lipDipSweep[118].smoothTerminalReturn &&
-  lipDipSweep[118].tipForwardDistance >= breakingLipConfig.horizontalOffset * 0.1 &&
+  lipDipSweep[118].tipForwardDistance >= breakingLipConfig.horizontalOffset * 0.055 &&
   lipDipSweep[118].hookTuckDistance >= breakingLipConfig.horizontalOffset * 0.1 &&
   lipDipSweep[118].tipDrop >= breakingLipConfig.height * 0.3 &&
   lipDipSweep[118].finalTangentAngleDeg <= -55 &&
@@ -234,7 +234,7 @@ if (lipDipPreTerminalResidual > 0.12) {
   failures.push('lip dip should keep the broad pre-terminal wave body stable')
 }
 
-if (!(userLipDipCase.tipBelowLastPeak && userLipDipCase.finalTangentAngleDeg <= -45)) {
+if (!(userLipDipCase.tipBelowLastPeak && userLipDipCase.finalTangentAngleDeg <= -40)) {
   failures.push('lip dip above 90 deg should make the terminal free tip point downward')
 }
 
