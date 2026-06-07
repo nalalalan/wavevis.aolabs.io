@@ -178,9 +178,9 @@ function readNumberParam(search: URLSearchParams, name: string, fallback: number
 }
 
 function readInitialTab(): SimulatorTab {
-  if (typeof window === 'undefined') return 'sarrus'
+  if (typeof window === 'undefined') return 'inverse'
   const search = new URLSearchParams(window.location.search)
-  return search.get('tab') === 'inverse' ? 'inverse' : 'sarrus'
+  return search.get('tab') === 'sarrus' ? 'sarrus' : 'inverse'
 }
 
 function stateKey(params: CellParams, grid: CellState[][]): string {
