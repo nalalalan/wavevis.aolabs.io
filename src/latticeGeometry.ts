@@ -175,7 +175,7 @@ function calculateInverseSheetUsableRanges(
     DEFAULT_SHEET_LENGTH / 2 - DEFAULT_SHEET_SPACING * 1.5 - placedWaveEndX,
   )
   const dip = lipDipAmount(overhangAngleDeg)
-  const terminalReachMultiplier = dip > 0.000001 ? 1 + lerpNumber(0.16, 0.3, dip) : 1
+  const terminalReachMultiplier = dip > 0.000001 ? 1 + lerpNumber(0.1, 0.32, dip) : 1
   const frontSafeHorizontalOffset = availableForward / Math.max(terminalReachMultiplier, 0.000001)
 
   return {
@@ -784,6 +784,9 @@ function terminalLipCurlIsDownward(model: LatticeModel): boolean {
   const stats = terminalLipCurlStats(model)
   return stats.tipBelowLastPeak &&
     stats.tipForwardOfCrest &&
+    stats.hookTuckedUnderShoulder &&
+    stats.returnToFlat &&
+    stats.smoothTerminalReturn &&
     stats.tipSlope < -0.6 &&
     stats.finalTangentAngleDeg <= -35
 }
@@ -831,18 +834,30 @@ function terminalLipCurlStats(model: LatticeModel): {
   tipSlope: number;
   tipDx: number;
   tipForwardOfCrest: boolean;
+  hookTuckedUnderShoulder: boolean;
+  returnToFlat: boolean;
+  smoothTerminalReturn: boolean;
   dropRatio: number;
   tipForwardDistance: number;
+  hookTuckDistance: number;
   finalTangentAngleDeg: number;
   crestX: number;
   crestZ: number;
+  shoulderX: number;
+  shoulderZ: number;
   tipX: number;
   tipZ: number;
+  returnX: number;
+  returnZ: number;
 } {
   const row = Math.floor((model.config.rows - 1) / 2)
   const centerline = model.nodes
     .filter((node) => node.row === row)
     .sort((a, b) => a.col - b.col)
+  if (lipDipAmount(model.config.overhangAngleDeg) <= 0.000001) {
+    return emptyTerminalLipCurlStats()
+  }
+
   const maxHeight = Math.max(model.summary.maxHeight, 0.000001)
   const maxHorizontalReach = maxValue(centerline.map(horizontalDisplacement), (value) => value, 0)
   const active = centerline.filter((node) => (
@@ -869,16 +884,39 @@ function terminalLipCurlStats(model: LatticeModel): {
     return best
   }, terminal[0])
   const postCrest = terminal.filter((node) => node.col > crest.col)
-  const forwardPostCrest = postCrest.filter((node) => (
-    node.currentPosition[0] > crest.currentPosition[0] + model.config.spacing * 0.25 &&
-    horizontalDisplacement(node) >= maxHorizontalReach * 0.58
-  ))
-  const candidates = forwardPostCrest.length ? forwardPostCrest : (postCrest.length ? postCrest : terminal)
-  const tip = candidates.reduce((best, node) => {
-    if (node.currentPosition[2] < best.currentPosition[2] - 0.000001) return node
-    if (Math.abs(node.currentPosition[2] - best.currentPosition[2]) <= 0.000001 && node.currentPosition[0] > best.currentPosition[0]) return node
+  if (!postCrest.length) return emptyTerminalLipCurlStats()
+
+  const shoulder = postCrest.reduce((best, node) => {
+    const reach = horizontalDisplacement(node)
+    const bestReach = horizontalDisplacement(best)
+    if (reach > bestReach + 0.000001) return node
+    if (Math.abs(reach - bestReach) <= 0.000001 && node.currentPosition[0] > best.currentPosition[0]) return node
     return best
-  }, candidates[0])
+  }, postCrest[0])
+  const postShoulder = terminal.filter((node) => node.col > shoulder.col)
+  if (!postShoulder.length) return emptyTerminalLipCurlStats()
+
+  const hookCandidates = postShoulder.filter((node) => (
+    horizontalDisplacement(node) >= maxHorizontalReach * 0.34 &&
+    node.currentPosition[2] > maxHeight * 0.07
+  ))
+  const tuckedHookCandidates = hookCandidates.filter((node) => (
+    shoulder.currentPosition[0] - node.currentPosition[0] > model.config.spacing * 0.18
+  ))
+  const hookPool = tuckedHookCandidates.length ? tuckedHookCandidates : (hookCandidates.length ? hookCandidates : postShoulder)
+  const tip = hookPool.reduce((best, node) => {
+    if (node.currentPosition[2] < best.currentPosition[2] - 0.000001) return node
+    if (Math.abs(node.currentPosition[2] - best.currentPosition[2]) <= 0.000001 && node.currentPosition[0] < best.currentPosition[0]) return node
+    return best
+  }, hookPool[0])
+  const postTip = centerline.filter((node) => (
+    node.col > tip.col &&
+    node.col <= Math.min(centerline[centerline.length - 1].col, tip.col + 4)
+  ))
+  const flatReturn = postTip.find((node) => (
+    node.currentPosition[2] <= maxHeight * 0.08 ||
+    horizontalDisplacement(node) <= maxHorizontalReach * 0.12
+  )) ?? postTip[postTip.length - 1] ?? tip
   const tipCenterlineIndex = centerline.findIndex((node) => node.id === tip.id)
   const previous = centerline[Math.max(0, tipCenterlineIndex - 1)]
   const next = centerline[Math.min(centerline.length - 1, tipCenterlineIndex + 1)]
@@ -887,22 +925,28 @@ function terminalLipCurlStats(model: LatticeModel): {
   const nextPoint = next.currentPosition
   const incomingDx = tipPoint[0] - previousPoint[0]
   const outgoingDx = nextPoint[0] - tipPoint[0]
+  const shoulderToTipDx = tipPoint[0] - shoulder.currentPosition[0]
+  const shoulderToTipDz = tipPoint[2] - shoulder.currentPosition[2]
   let tipSlope = Math.min(
     (tipPoint[2] - previousPoint[2]) / Math.max(Math.abs(incomingDx), 0.000001),
     (nextPoint[2] - tipPoint[2]) / Math.max(Math.abs(outgoingDx), 0.000001),
+    shoulderToTipDz / Math.max(Math.abs(shoulderToTipDx), 0.000001),
   )
   let finalTangentAngleDeg = Math.min(
     Math.atan2(tipPoint[2] - previousPoint[2], Math.abs(incomingDx)) * 180 / Math.PI,
     Math.atan2(nextPoint[2] - tipPoint[2], Math.abs(outgoingDx)) * 180 / Math.PI,
+    Math.atan2(shoulderToTipDz, Math.abs(shoulderToTipDx)) * 180 / Math.PI,
   )
   const curlPath = centerline.slice(
     Math.max(0, centerline.findIndex((node) => node.id === crest.id)),
-    Math.max(tipCenterlineIndex + 1, centerline.findIndex((node) => node.id === crest.id) + 2),
+    Math.max(centerline.findIndex((node) => node.id === flatReturn.id) + 1, tipCenterlineIndex + 1),
   )
+  let maxTerminalSegmentDrop = 0
   for (let index = 0; index < curlPath.length - 1; index += 1) {
     const a = curlPath[index].currentPosition
     const b = curlPath[index + 1].currentPosition
-    if (b[0] <= crest.currentPosition[0] || horizontalDisplacement(curlPath[index + 1]) < maxHorizontalReach * 0.58) continue
+    maxTerminalSegmentDrop = Math.max(maxTerminalSegmentDrop, Math.max(0, a[2] - b[2]))
+    if (horizontalDisplacement(curlPath[index + 1]) < maxHorizontalReach * 0.34) continue
     const dx = b[0] - a[0]
     const dz = b[2] - a[2]
     const slope = dz / Math.max(Math.abs(dx), 0.000001)
@@ -910,23 +954,34 @@ function terminalLipCurlStats(model: LatticeModel): {
     tipSlope = Math.min(tipSlope, slope)
     finalTangentAngleDeg = Math.min(finalTangentAngleDeg, angle)
   }
-  const peakHeight = crest.currentPosition[2]
-  const dropRatio = clampNumber((peakHeight - tip.currentPosition[2]) / maxHeight, 0, 1)
-  const tipForwardDistance = tip.currentPosition[0] - crest.currentPosition[0]
+  const dropRatio = clampNumber((shoulder.currentPosition[2] - tip.currentPosition[2]) / maxHeight, 0, 1)
+  const tipForwardDistance = shoulder.currentPosition[0] - crest.currentPosition[0]
+  const hookTuckDistance = shoulder.currentPosition[0] - tip.currentPosition[0]
   const tipForwardOfCrest = tipForwardDistance > model.config.spacing * 0.25
+  const hookTuckedUnderShoulder = hookTuckDistance > model.config.spacing * 0.25
+  const returnToFlat = flatReturn !== tip && flatReturn.currentPosition[2] <= maxHeight * 0.14
+  const smoothTerminalReturn = maxTerminalSegmentDrop <= maxHeight * 0.48
 
   return {
     tipBelowLastPeak: dropRatio >= 0.08,
     tipSlope,
     tipDx: incomingDx,
     tipForwardOfCrest,
+    hookTuckedUnderShoulder,
+    returnToFlat,
+    smoothTerminalReturn,
     dropRatio,
     tipForwardDistance,
+    hookTuckDistance,
     finalTangentAngleDeg,
     crestX: crest.currentPosition[0],
     crestZ: crest.currentPosition[2],
+    shoulderX: shoulder.currentPosition[0],
+    shoulderZ: shoulder.currentPosition[2],
     tipX: tip.currentPosition[0],
     tipZ: tip.currentPosition[2],
+    returnX: flatReturn.currentPosition[0],
+    returnZ: flatReturn.currentPosition[2],
   }
 }
 
@@ -936,13 +991,21 @@ function emptyTerminalLipCurlStats() {
     tipSlope: 0,
     tipDx: 0,
     tipForwardOfCrest: false,
+    hookTuckedUnderShoulder: false,
+    returnToFlat: false,
+    smoothTerminalReturn: false,
     dropRatio: 0,
     tipForwardDistance: 0,
+    hookTuckDistance: 0,
     finalTangentAngleDeg: 0,
     crestX: 0,
     crestZ: 0,
+    shoulderX: 0,
+    shoulderZ: 0,
     tipX: 0,
     tipZ: 0,
+    returnX: 0,
+    returnZ: 0,
   }
 }
 
@@ -1321,48 +1384,73 @@ function applyBreakingWaveLip(
 ): { x: number; z: number } {
   const dip = clampNumber(lipDip, 0, 1)
   const sharp = smootherStep(clampNumber(lipSharpness, 0, 1))
-  const start = breakingLipStart(lipSharpness)
+  const crestU = breakingLipStart(lipSharpness)
+  const hookU = breakingLipHookU()
+  const returnU = breakingLipReturnU()
 
-  if (dip <= 0.000001 || profileU < start || overhangAmount <= 0.000001 || waveHeight <= 0.000001) {
+  if (dip <= 0.000001 || profileU < crestU || overhangAmount <= 0.000001 || waveHeight <= 0.000001) {
     return baseWaveProfile(t, overhangAmount, waveHeight, CORE_PROFILE_SMOOTHING, conicRho, curlRadius)
   }
 
-  const crestT = profileBaseParameter(start)
+  const crestT = profileBaseParameter(crestU)
   const crest = baseWaveProfile(crestT, overhangAmount, waveHeight, CORE_PROFILE_SMOOTHING, conicRho, curlRadius)
-  const forwardReach = overhangAmount * lerpNumber(0.13, 0.24, dip)
-  const downwardDrop = waveHeight * lerpNumber(0.18, 0.68, dip)
-  const minTipHeight = waveHeight * lerpNumber(0.46, 0.2, dip)
-  const tip = {
-    x: crest.x + forwardReach,
-    z: Math.max(minTipHeight, crest.z - downwardDrop),
+  const shoulder = {
+    x: crest.x + overhangAmount * lerpNumber(0.14, 0.32, dip),
+    z: crest.z + waveHeight * lerpNumber(0.005, 0.035, dip),
   }
-  const finalAngle = -lerpNumber(48, 84, dip) * (Math.PI / 180)
-  const finalTangent = {
-    x: Math.cos(finalAngle),
-    z: Math.sin(finalAngle),
-  }
-  const segmentLength = Math.max(Math.hypot(tip.x - crest.x, tip.z - crest.z), 0.000001)
-  const p0 = crest
-  const p1 = {
-    x: p0.x + segmentLength * lerpNumber(0.45, 0.08, sharp),
-    z: p0.z + waveHeight * lerpNumber(0.035, 0.1, dip) * lerpNumber(1, 0.35, sharp),
-  }
-  const p3 = tip
-  const terminalHandle = segmentLength * lerpNumber(0.72, 0.035, sharp)
-  const p2 = {
-    x: p3.x - finalTangent.x * terminalHandle,
-    z: p3.z - finalTangent.z * terminalHandle,
+  const hookTip = {
+    x: shoulder.x - overhangAmount * lerpNumber(0.3, 0.66, dip),
+    z: Math.max(waveHeight * lerpNumber(0.12, 0.075, dip), crest.z - waveHeight * lerpNumber(0.25, 0.62, dip)),
   }
 
-  const lipProgress = smootherStep((profileU - start) / Math.max(1 - start, 0.000001))
-  const q = Math.pow(lipProgress, lerpNumber(0.85, 3.4, sharp))
+  if (profileU <= hookU) {
+    const amount = Math.pow(
+      smootherStep((profileU - crestU) / Math.max(hookU - crestU, 0.000001)),
+      lerpNumber(0.72, 1.02, sharp),
+    )
+    const p0 = crest
+    const p3 = hookTip
+    const p1 = {
+      x: crest.x + overhangAmount * lerpNumber(0.24, 0.34, dip),
+      z: crest.z + waveHeight * lerpNumber(0.02, 0.055, dip),
+    }
+    const p2 = {
+      x: shoulder.x + overhangAmount * lerpNumber(0.12, 0.025, sharp),
+      z: hookTip.z + waveHeight * lerpNumber(0.42, 0.16, sharp),
+    }
 
-  return cubicBezierProfile(p0, p1, p2, p3, q)
+    return cubicBezierProfile(p0, p1, p2, p3, amount)
+  }
+
+  if (profileU <= returnU) {
+    const amount = smootherStep((profileU - hookU) / Math.max(returnU - hookU, 0.000001))
+    const p0 = hookTip
+    const p3 = { x: 0, z: 0 }
+    const p1 = {
+      x: hookTip.x - overhangAmount * lerpNumber(0.16, 0.32, dip),
+      z: Math.max(0, hookTip.z - waveHeight * lerpNumber(0.02, 0.07, dip)),
+    }
+    const p2 = {
+      x: overhangAmount * lerpNumber(0.08, 0.02, dip),
+      z: waveHeight * lerpNumber(0.055, 0.018, dip),
+    }
+
+    return cubicBezierProfile(p0, p1, p2, p3, amount)
+  }
+
+  return { x: 0, z: 0 }
 }
 
-function breakingLipStart(lipSharpness: number): number {
-  const sharp = smootherStep(clampNumber(lipSharpness, 0, 1))
-  return clampNumber(lerpNumber(0.64, 0.74, sharp), 0.6, 0.78)
+function breakingLipStart(_lipSharpness: number): number {
+  return 0.56
+}
+
+function breakingLipHookU(): number {
+  return 0.82
+}
+
+function breakingLipReturnU(): number {
+  return 0.96
 }
 
 function profileBaseParameter(profileU: number): number {

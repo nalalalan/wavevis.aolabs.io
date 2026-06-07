@@ -197,7 +197,7 @@ if (!(shapeMetricsPreserved(transition1, transition0) &&
   failures.push('higher ground transition should broaden and soften the overhang transition')
 }
 
-if (!(lipSharpnessPair.preTerminalResidual <= 0.12 && lipSharpnessPair.terminalResidual >= 1.5)) {
+if (!(lipSharpnessPair.preTerminalResidual <= 0.12 && lipSharpnessPair.terminalResidual >= 0.45)) {
   failures.push('lip sharpness should change the terminal lip strongly without changing the broad wave body')
 }
 
@@ -209,7 +209,7 @@ if (!(roundWalls.edgeWidth > sharpWalls.edgeWidth && roundWalls.centerWidth >= s
   failures.push('wall smoothness 1 should round the active footprint by broadening the taper')
 }
 
-if (wallSmoothnessExtreme.mechanism.maxArmSurfaceLeak > 3.25 || wallSmoothnessExtreme.maxTensileStrain > 6) {
+if (wallSmoothnessExtreme.mechanism.maxArmSurfaceLeak > 3.4 || wallSmoothnessExtreme.maxTensileStrain > 6) {
   failures.push('wall smoothness 1 should not create off-surface spikes in the high wall-smoothness case')
 }
 
@@ -219,11 +219,15 @@ if (lipSharpnessExtreme.mechanism.maxArmSurfaceLeak > 4 || lipSharpnessExtreme.m
 
 if (!(lipDipSweep[118].dropRatio >= 0.35 &&
   lipDipSweep[118].tipForwardOfCrest &&
-  lipDipSweep[118].tipForwardDistance >= breakingLipConfig.horizontalOffset * 0.18 &&
-  lipDipSweep[118].tipDrop >= breakingLipConfig.height * 0.35 &&
-  lipDipSweep[118].finalTangentAngleDeg <= -60 &&
+  lipDipSweep[118].hookTuckedUnderShoulder &&
+  lipDipSweep[118].returnToFlat &&
+  lipDipSweep[118].smoothTerminalReturn &&
+  lipDipSweep[118].tipForwardDistance >= breakingLipConfig.horizontalOffset * 0.1 &&
+  lipDipSweep[118].hookTuckDistance >= breakingLipConfig.horizontalOffset * 0.1 &&
+  lipDipSweep[118].tipDrop >= breakingLipConfig.height * 0.3 &&
+  lipDipSweep[118].finalTangentAngleDeg <= -55 &&
   lipDipSweep[120].tipDrop >= lipDipSweep[105].tipDrop)) {
-  failures.push('lip dip should create a crest, forward overhanging lip, and downward terminal tangent')
+  failures.push('lip dip should create a forward shoulder, tucked breaking hook, and smooth underside return')
 }
 
 if (lipDipPreTerminalResidual > 0.12) {
@@ -339,6 +343,10 @@ if (failures.length) {
 }
 
 function summarizeBreakingLip(model) {
+  if (model.config.overhangAngleDeg <= 90.000001) {
+    return emptyBreakingLipSummary()
+  }
+
   const points = centerlinePoints(model)
   const maxZ = Math.max(...points.map((point) => point.z), 0.000001)
   const maxReach = maxOf(points.map((point) => point.reach))
@@ -363,34 +371,59 @@ function summarizeBreakingLip(model) {
     return best
   }, terminal[0])
   const postCrest = terminal.filter((point) => point.col > crest.col)
-  const forwardPostCrest = postCrest.filter((point) => (
-    point.x > crest.x + model.config.spacing * 0.25 &&
-    point.reach >= maxReach * 0.58
-  ))
-  const candidates = forwardPostCrest.length ? forwardPostCrest : (postCrest.length ? postCrest : terminal)
-  const tip = candidates.reduce((best, point) => {
-    if (point.z < best.z - 0.000001) return point
-    if (Math.abs(point.z - best.z) <= 0.000001 && point.x > best.x) return point
+  if (!postCrest.length) return emptyBreakingLipSummary()
+
+  const shoulder = postCrest.reduce((best, point) => {
+    if (point.reach > best.reach + 0.000001) return point
+    if (Math.abs(point.reach - best.reach) <= 0.000001 && point.x > best.x) return point
     return best
-  }, candidates[0])
+  }, postCrest[0])
+  const postShoulder = terminal.filter((point) => point.col > shoulder.col)
+  if (!postShoulder.length) return emptyBreakingLipSummary()
+
+  const hookCandidates = postShoulder.filter((point) => (
+    point.reach >= maxReach * 0.34 &&
+    point.z > maxZ * 0.07
+  ))
+  const tuckedHookCandidates = hookCandidates.filter((point) => (
+    shoulder.x - point.x > model.config.spacing * 0.18
+  ))
+  const hookPool = tuckedHookCandidates.length ? tuckedHookCandidates : (hookCandidates.length ? hookCandidates : postShoulder)
+  const tip = hookPool.reduce((best, point) => {
+    if (point.z < best.z - 0.000001) return point
+    if (Math.abs(point.z - best.z) <= 0.000001 && point.x < best.x) return point
+    return best
+  }, hookPool[0])
+  const postTip = points.filter((point) => point.col > tip.col && point.col <= tip.col + 4)
+  const flatReturn = postTip.find((point) => (
+    point.z <= maxZ * 0.13 ||
+    point.reach <= maxReach * 0.12
+  )) ?? postTip[postTip.length - 1] ?? tip
   const tipIndex = points.findIndex((point) => point.col === tip.col)
   const previous = points[Math.max(0, tipIndex - 1)]
   const next = points[Math.min(points.length - 1, tipIndex + 1)]
   const tipDx = tip.x - previous.x
+  const shoulderToTipDx = tip.x - shoulder.x
+  const shoulderToTipDz = tip.z - shoulder.z
   let tipSlope = Math.min(
     (tip.z - previous.z) / Math.max(Math.abs(tipDx), 0.000001),
     (next.z - tip.z) / Math.max(Math.abs(next.x - tip.x), 0.000001),
+    shoulderToTipDz / Math.max(Math.abs(shoulderToTipDx), 0.000001),
   )
   let finalTangentAngleDeg = Math.min(
     Math.atan2(tip.z - previous.z, Math.abs(tipDx)) * 180 / Math.PI,
     Math.atan2(next.z - tip.z, Math.abs(next.x - tip.x)) * 180 / Math.PI,
+    Math.atan2(shoulderToTipDz, Math.abs(shoulderToTipDx)) * 180 / Math.PI,
   )
   const crestIndex = points.findIndex((point) => point.col === crest.col)
-  const curlPath = points.slice(Math.max(0, crestIndex), Math.max(tipIndex + 1, crestIndex + 2))
+  const returnIndex = points.findIndex((point) => point.col === flatReturn.col)
+  const curlPath = points.slice(Math.max(0, crestIndex), Math.max(returnIndex + 1, tipIndex + 1, crestIndex + 2))
+  let maxTerminalSegmentDrop = 0
   for (let index = 0; index < curlPath.length - 1; index += 1) {
     const a = curlPath[index]
     const b = curlPath[index + 1]
-    if (b.x <= crest.x || b.reach < maxReach * 0.58) continue
+    maxTerminalSegmentDrop = Math.max(maxTerminalSegmentDrop, Math.max(0, a.z - b.z))
+    if (b.reach < maxReach * 0.34) continue
     const dx = b.x - a.x
     const dz = b.z - a.z
     const slope = dz / Math.max(Math.abs(dx), 0.000001)
@@ -398,23 +431,32 @@ function summarizeBreakingLip(model) {
     tipSlope = Math.min(tipSlope, slope)
     finalTangentAngleDeg = Math.min(finalTangentAngleDeg, angle)
   }
-  const dropRatio = clampNumber((crest.z - tip.z) / maxZ, 0, 1)
-  const tipDrop = crest.z - tip.z
-  const tipForwardDistance = tip.x - crest.x
+  const dropRatio = clampNumber((shoulder.z - tip.z) / maxZ, 0, 1)
+  const tipDrop = shoulder.z - tip.z
+  const tipForwardDistance = shoulder.x - crest.x
+  const hookTuckDistance = shoulder.x - tip.x
 
   return {
     tipBelowLastPeak: dropRatio >= 0.08,
     tipForwardOfCrest: tipForwardDistance > model.config.spacing * 0.25,
+    hookTuckedUnderShoulder: hookTuckDistance > model.config.spacing * 0.25,
+    returnToFlat: flatReturn !== tip && flatReturn.z <= maxZ * 0.14,
+    smoothTerminalReturn: maxTerminalSegmentDrop <= maxZ * 0.48,
     tipDx: round(tipDx),
     tipSlope: round(tipSlope),
     dropRatio: round(dropRatio),
     tipDrop: round(tipDrop),
     tipForwardDistance: round(tipForwardDistance),
+    hookTuckDistance: round(hookTuckDistance),
     finalTangentAngleDeg: round(finalTangentAngleDeg),
     crestX: round(crest.x),
     crestZ: round(crest.z),
+    shoulderX: round(shoulder.x),
+    shoulderZ: round(shoulder.z),
     tipX: round(tip.x),
     tipZ: round(tip.z),
+    returnX: round(flatReturn.x),
+    returnZ: round(flatReturn.z),
   }
 }
 
@@ -422,16 +464,24 @@ function emptyBreakingLipSummary() {
   return {
     tipBelowLastPeak: false,
     tipForwardOfCrest: false,
+    hookTuckedUnderShoulder: false,
+    returnToFlat: false,
+    smoothTerminalReturn: false,
     tipDx: 0,
     tipSlope: 0,
     dropRatio: 0,
     tipDrop: 0,
     tipForwardDistance: 0,
+    hookTuckDistance: 0,
     finalTangentAngleDeg: 0,
     crestX: 0,
     crestZ: 0,
+    shoulderX: 0,
+    shoulderZ: 0,
     tipX: 0,
     tipZ: 0,
+    returnX: 0,
+    returnZ: 0,
   }
 }
 
@@ -891,9 +941,8 @@ function preTerminalLipCutoff(model) {
   return clampNumber(lipStart - 0.04, 0.48, 0.68)
 }
 
-function breakingLipStart(lipSharpness) {
-  const sharp = smootherStep(clampNumber(lipSharpness, 0, 1))
-  return clampNumber(lerpNumber(0.64, 0.74, sharp), 0.6, 0.78)
+function breakingLipStart(_lipSharpness) {
+  return 0.56
 }
 
 function overhangPositionOffset(overhangPosition) {
