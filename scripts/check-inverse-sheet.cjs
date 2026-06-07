@@ -1059,7 +1059,7 @@ function preTerminalLipCutoff(model) {
 }
 
 function breakingLipStart(_lipSharpness) {
-  return 0.44
+  return 0.38
 }
 
 function overhangPositionOffset(overhangPosition) {

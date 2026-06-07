@@ -21,7 +21,6 @@ import {
   rigidCellBodyThickness,
   type CellArmDirection,
   type RigidCellMechanism,
-  type RigidCellFrame,
 } from './rigidCellMechanism'
 
 const inverseLinkageColor = '#111111'
@@ -81,7 +80,7 @@ function LatticeModelGroup({
   const sideProfileView = view === 'side'
   const edgePickRadius = Math.max(model.config.spacing * (largeGrid ? 0.08 : 0.09), 0.035)
   const connectorSize = Math.max(model.config.spacing * (largeGrid ? 0.052 : 0.12), 0.026)
-  const surfaceOpacity = sideProfileView ? 0.42 : (largeGrid ? 0.3 : 0.42)
+  const surfaceOpacity = sideProfileView ? 0.34 : (largeGrid ? 0.3 : 0.42)
 
   return (
     <group>
@@ -95,8 +94,8 @@ function LatticeModelGroup({
           <meshStandardMaterial vertexColors side={THREE.DoubleSide} transparent opacity={surfaceOpacity} roughness={0.78} metalness={0.02} />
         </mesh>
       )}
-      {model.config.showNodes && !sideProfileView && <RigidCellGlyphs model={model} mechanism={mechanism} />}
-      {model.config.showEdges && !sideProfileView && (
+      {model.config.showNodes && <RigidCellGlyphs model={model} mechanism={mechanism} />}
+      {model.config.showEdges && (
         <>
           <EdgeHitTargets
             model={model}
@@ -108,69 +107,10 @@ function LatticeModelGroup({
           <ConnectorInstances model={model} mechanism={mechanism} radius={connectorSize} />
         </>
       )}
-      {sideProfileView && <SideMechanismSlice model={model} mechanism={mechanism} />}
-      {sideProfileView && <SideProfileSilhouette model={model} />}
+      {sideProfileView && !model.config.showNodes && !model.config.showEdges && <SideProfileSilhouette model={model} />}
       {labelsVisible && <NodeLabels nodes={model.nodes} />}
       <SelectedHighlight selected={selected} model={model} nodeById={nodeById} mechanism={mechanism} />
     </group>
-  )
-}
-
-function SideMechanismSlice({ model, mechanism }: { model: LatticeModel; mechanism: RigidCellMechanism }) {
-  const centerRow = Math.round((model.config.rows - 1) * 0.5)
-  const adjacentRow = Math.min(model.config.rows - 1, centerRow + 1)
-  const sliceNodeIds = useMemo(() => new Set(
-    mechanism.frames
-      .filter((frame) => {
-        const node = model.nodes.find((candidate) => candidate.id === frame.nodeId)
-        return node?.row === centerRow || node?.row === adjacentRow
-      })
-      .map((frame) => frame.nodeId),
-  ), [adjacentRow, centerRow, mechanism.frames, model.nodes])
-  const frames = mechanism.frames.filter((frame) => sliceNodeIds.has(frame.nodeId))
-  const sliceEdges = model.edges.filter((edge) => sliceNodeIds.has(edge.nodeA) && sliceNodeIds.has(edge.nodeB))
-  const connectorRadius = Math.max(model.config.spacing * 0.04, 0.018)
-  const armRadius = Math.max(model.config.spacing * 0.017, 0.009)
-
-  return (
-    <group>
-      {sliceEdges.map((edge) => {
-        const endpoints = mechanism.endpointsByEdgeId.get(edge.id)
-        const connector = mechanism.connectorByEdgeId.get(edge.id)
-        if (!endpoints || !connector) return null
-
-        return (
-          <group key={edge.id}>
-            <TubeSegment start={endpoints.endpointA} end={connector} radius={armRadius} color="#10110f" />
-            <TubeSegment start={connector} end={endpoints.endpointB} radius={armRadius} color="#10110f" />
-            <mesh position={connector}>
-              <sphereGeometry args={[connectorRadius, 10, 8]} />
-              <meshStandardMaterial color="#10110f" emissive="#10110f" emissiveIntensity={0.06} roughness={0.52} />
-            </mesh>
-          </group>
-        )
-      })}
-      {frames.map((frame) => (
-        <SideCellBody key={frame.nodeId} frame={frame} model={model} />
-      ))}
-    </group>
-  )
-}
-
-function SideCellBody({ frame, model }: { frame: RigidCellFrame; model: LatticeModel }) {
-  const bodySize = model.config.spacing * (model.config.rows > 30 || model.config.columns > 30 ? 0.13 : 0.22)
-  const bodyThickness = rigidCellBodyThickness(model.config.spacing) * 0.75
-  const matrix = useMemo(() => {
-    const next = new THREE.Matrix4()
-    setBoxMatrix(next, toThree(frame.center), toThree(frame.xAxis), toThree(frame.yAxis), toThree(frame.zAxis), bodySize, bodySize, bodyThickness)
-    return next
-  }, [bodySize, bodyThickness, frame.center, frame.xAxis, frame.yAxis, frame.zAxis])
-
-  return (
-    <mesh matrix={matrix} matrixAutoUpdate={false}>
-      <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial color="#242624" roughness={0.68} metalness={0.02} />
-    </mesh>
   )
 }
 
@@ -778,24 +718,6 @@ function setBoxInstance(
   )
   matrix.setPosition(center)
   mesh.setMatrixAt(index, matrix)
-}
-
-function setBoxMatrix(
-  matrix: THREE.Matrix4,
-  center: THREE.Vector3,
-  xAxis: THREE.Vector3,
-  yAxis: THREE.Vector3,
-  zAxis: THREE.Vector3,
-  width: number,
-  height: number,
-  depth: number,
-): void {
-  matrix.makeBasis(
-    xAxis.clone().multiplyScalar(width),
-    yAxis.clone().multiplyScalar(height),
-    zAxis.clone().multiplyScalar(depth),
-  )
-  matrix.setPosition(center)
 }
 
 function setCylinderInstance(
