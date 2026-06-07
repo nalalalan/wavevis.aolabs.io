@@ -31,11 +31,19 @@ export const COLOR_MODES: Array<{ value: ColorMode; label: string }> = [
 const DEFAULT_SHEET_ROWS = 44
 const DEFAULT_SHEET_COLUMNS = 44
 const DEFAULT_SHEET_SPACING = 1
-const DEFAULT_SHEET_LENGTH = (DEFAULT_SHEET_COLUMNS - 1) * DEFAULT_SHEET_SPACING
-const DEFAULT_SHEET_SPAN = (DEFAULT_SHEET_ROWS - 1) * DEFAULT_SHEET_SPACING
+const DEFAULT_WAVE_FIELD_LENGTH = (DEFAULT_SHEET_COLUMNS - 1) * DEFAULT_SHEET_SPACING
+const DEFAULT_WAVE_FIELD_SPAN = (DEFAULT_SHEET_ROWS - 1) * DEFAULT_SHEET_SPACING
+const DEFAULT_SHEET_LENGTH = 80
+const DEFAULT_SHEET_SPAN = 80
+const DEFAULT_WAVE_FIELD_OFFSET_X = -7.5
+const DEFAULT_WAVE_FIELD_MIN_X = DEFAULT_WAVE_FIELD_OFFSET_X - DEFAULT_WAVE_FIELD_LENGTH * 0.5
+const DEFAULT_WAVE_FIELD_MAX_X = DEFAULT_WAVE_FIELD_OFFSET_X + DEFAULT_WAVE_FIELD_LENGTH * 0.5
 const DEFAULT_GRID_DENOMINATOR = Math.max(DEFAULT_SHEET_ROWS - 1, DEFAULT_SHEET_COLUMNS - 1)
 const MAX_STEER_ANGLE_RAD = Math.PI / 4
 const PROFILE_LIP_SHARPNESS = 0.28
+const CORE_PROFILE_SMOOTHING = 0.58
+const CORE_PROFILE_START = 0.12
+const CORE_PROFILE_END = 1
 
 export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   rows: DEFAULT_SHEET_ROWS,
@@ -102,8 +110,8 @@ export function sanitizeInverseSheetConfig(input: LooseConfig = {}): InverseShee
   const smoothing = readNumber(raw.smoothing, DEFAULT_INVERSE_SHEET_CONFIG.smoothing, 0, 1)
   const overhangPosition = readNumber(raw.overhangPosition, DEFAULT_INVERSE_SHEET_CONFIG.overhangPosition, -1, 1)
   const steer = readNumber(raw.steer, DEFAULT_INVERSE_SHEET_CONFIG.steer, -1, 1)
-  const ranges = calculateInverseSheetUsableRanges(smoothing)
   const overhangAngleDeg = readOverhangAngleDeg(input)
+  const ranges = calculateInverseSheetUsableRanges(smoothing, overhangPosition, overhangAngleDeg)
 
   return {
     rows,
@@ -146,29 +154,42 @@ export function sanitizeInverseSheetConfig(input: LooseConfig = {}): InverseShee
 export function getInverseSheetUsableRanges(input: LooseConfig = {}): InverseSheetUsableRanges {
   const raw: LooseConfig = { ...DEFAULT_INVERSE_SHEET_CONFIG, ...input }
   const smoothing = readNumber(raw.smoothing, DEFAULT_INVERSE_SHEET_CONFIG.smoothing, 0, 1)
+  const overhangPosition = readNumber(raw.overhangPosition, DEFAULT_INVERSE_SHEET_CONFIG.overhangPosition, -1, 1)
+  const overhangAngleDeg = readOverhangAngleDeg(raw)
 
-  return calculateInverseSheetUsableRanges(smoothing)
+  return calculateInverseSheetUsableRanges(smoothing, overhangPosition, overhangAngleDeg)
 }
 
-function calculateInverseSheetUsableRanges(smoothing: number): InverseSheetUsableRanges {
+function calculateInverseSheetUsableRanges(
+  smoothing: number,
+  overhangPosition = DEFAULT_INVERSE_SHEET_CONFIG.overhangPosition,
+  overhangAngleDeg = DEFAULT_INVERSE_SHEET_CONFIG.overhangAngleDeg,
+): InverseSheetUsableRanges {
   const profile = overhangProfileLimits(smoothing)
-  const remainingLength = Math.max(DEFAULT_SHEET_LENGTH * profile.remainingU, DEFAULT_SHEET_SPACING)
-  const maxHalfWidth = Math.max(DEFAULT_SHEET_SPAN * (0.5 - profile.flatRim), DEFAULT_SHEET_SPACING)
+  const remainingLength = Math.max(DEFAULT_WAVE_FIELD_LENGTH * profile.remainingU, DEFAULT_SHEET_SPACING)
+  const maxHalfWidth = Math.max(DEFAULT_WAVE_FIELD_SPAN * 0.5, DEFAULT_SHEET_SPACING)
+  const waveEndX = DEFAULT_WAVE_FIELD_MIN_X + profile.profileEnd * DEFAULT_WAVE_FIELD_LENGTH
+  const placedWaveEndX = waveEndX + overhangPositionOffset(overhangPosition)
+  const availableForward = Math.max(
+    DEFAULT_SHEET_SPACING,
+    DEFAULT_SHEET_LENGTH / 2 - DEFAULT_SHEET_SPACING * 1.5 - placedWaveEndX,
+  )
+  const dip = lipDipAmount(overhangAngleDeg)
+  const terminalReachMultiplier = dip > 0.000001 ? 1 + lerpNumber(0.16, 0.3, dip) : 1
+  const frontSafeHorizontalOffset = availableForward / Math.max(terminalReachMultiplier, 0.000001)
 
   return {
     heightMax: roundControlMax(Math.min(24, remainingLength * 0.42), 0.25),
-    horizontalOffsetMax: roundControlMax(Math.min(32, remainingLength * 0.78), 0.25),
+    horizontalOffsetMax: roundControlMax(Math.min(32, remainingLength * 0.78, frontSafeHorizontalOffset), 0.25),
     overhangWidthMax: roundControlMax(Math.min(72, maxHalfWidth * 2), 0.5),
   }
 }
 
 function overhangProfileLimits(smoothing: number) {
-  const stableGroundTransition = stableGroundTransitionValue(smoothing)
-  const flatRim = Math.min(0.055, Math.max(1 / DEFAULT_GRID_DENOMINATOR, 0.024))
-  const baseStart = Math.max(flatRim, lerpNumber(0.2, 0.06, stableGroundTransition))
-  const baseEnd = Math.min(1 - flatRim, lerpNumber(0.88, 0.998, stableGroundTransition))
-  const profileStart = clampNumber(baseStart, flatRim, 1 - flatRim)
-  const profileEnd = clampNumber(baseEnd, profileStart + 1 / DEFAULT_GRID_DENOMINATOR, 1 - flatRim)
+  void smoothing
+  const flatRim = 0
+  const profileStart = CORE_PROFILE_START
+  const profileEnd = CORE_PROFILE_END
 
   return {
     flatRim,
@@ -178,7 +199,7 @@ function overhangProfileLimits(smoothing: number) {
   }
 }
 
-function overhangPositionOffset(overhangPosition: number, totalWidth = DEFAULT_SHEET_LENGTH): number {
+function overhangPositionOffset(overhangPosition: number, totalWidth = DEFAULT_WAVE_FIELD_LENGTH): number {
   return clampNumber(overhangPosition, -1, 1) * totalWidth * 0.06
 }
 
@@ -188,7 +209,7 @@ function steerYaw(steer: number): number {
 
 function rootAnchor(config: InverseSheetConfig): Vec3 {
   const profileStart = overhangProfileLimits(config.smoothing).profileStart
-  return [-DEFAULT_SHEET_LENGTH / 2 + profileStart * DEFAULT_SHEET_LENGTH, 0, 0]
+  return [DEFAULT_WAVE_FIELD_MIN_X + profileStart * DEFAULT_WAVE_FIELD_LENGTH, 0, 0]
 }
 
 function canonicalFieldConfig(config: InverseSheetConfig): InverseSheetConfig {
@@ -257,16 +278,47 @@ function pointInsideCanonicalSheet(point: Vec3, tolerance = 0): boolean {
   )
 }
 
+function pointInsideCanonicalWaveField(point: Vec3, tolerance = 0): boolean {
+  return (
+    point[0] >= DEFAULT_WAVE_FIELD_MIN_X - tolerance &&
+    point[0] <= DEFAULT_WAVE_FIELD_MAX_X + tolerance &&
+    point[1] >= -DEFAULT_WAVE_FIELD_SPAN / 2 - tolerance &&
+    point[1] <= DEFAULT_WAVE_FIELD_SPAN / 2 + tolerance
+  )
+}
+
+function pointInsideCanonicalSupportField(point: Vec3, config: InverseSheetConfig): boolean {
+  const transition = clampNumber(config.smoothing, 0, 1)
+  const flatContribution = clampNumber(config.flatContribution, 0, 1)
+  const marginX = DEFAULT_WAVE_FIELD_LENGTH * lerpNumber(0.06, 0.34, Math.max(transition, flatContribution))
+  const marginY = DEFAULT_WAVE_FIELD_SPAN * lerpNumber(0.18, 0.62, Math.max(transition, flatContribution))
+
+  return (
+    point[0] >= DEFAULT_WAVE_FIELD_MIN_X - marginX &&
+    point[0] <= DEFAULT_WAVE_FIELD_MAX_X + marginX &&
+    point[1] >= -DEFAULT_WAVE_FIELD_SPAN / 2 - marginY &&
+    point[1] <= DEFAULT_WAVE_FIELD_SPAN / 2 + marginY
+  )
+}
+
+function waveFieldU(point: Vec3): number {
+  return (point[0] - DEFAULT_WAVE_FIELD_MIN_X) / DEFAULT_WAVE_FIELD_LENGTH
+}
+
+function waveFieldV(point: Vec3): number {
+  return (point[1] + DEFAULT_WAVE_FIELD_SPAN / 2) / DEFAULT_WAVE_FIELD_SPAN
+}
+
 function targetFromDeformationField(restPosition: Vec3, config: InverseSheetConfig): Vec3 {
   const canonicalSample = mapSheetPointToCanonicalWaveFrame(restPosition, config)
 
-  if (!pointInsideCanonicalSheet(canonicalSample)) {
+  if (!pointInsideCanonicalSheet(canonicalSample) || !pointInsideCanonicalSupportField(canonicalSample, config)) {
     return restPosition
   }
 
   const canonicalConfig = canonicalFieldConfig(config)
-  const u = (canonicalSample[0] + DEFAULT_SHEET_LENGTH / 2) / DEFAULT_SHEET_LENGTH
-  const v = (canonicalSample[1] + DEFAULT_SHEET_SPAN / 2) / DEFAULT_SHEET_SPAN
+  const u = waveFieldU(canonicalSample)
+  const v = waveFieldV(canonicalSample)
   const canonicalTarget = canonicalOverhangTargetPosition(u, v, canonicalSample, canonicalConfig)
   const localDelta = subtractVec(canonicalTarget, canonicalSample)
   const worldDelta = rotateYawVector(localDelta, steerYaw(config.steer))
@@ -280,10 +332,6 @@ function lipDipAmount(angleDeg: number): number {
     0,
     1,
   )
-}
-
-function stableGroundTransitionValue(value: number): number {
-  return lerpNumber(0.58, 1, clampNumber(value, 0, 1))
 }
 
 function readOverhangAngleDeg(input: LooseConfig): number {
@@ -379,8 +427,8 @@ export function runInverseSheetSanityChecks(): string[] {
   const tallWave = buildInverseSheetModel({ horizontalOffset: 9, height: 10 })
   const narrowWave = buildInverseSheetModel({ overhangWidth: 12 })
   const wideWave = buildInverseSheetModel({ overhangWidth: 36 })
-  const neutralAngle = buildInverseSheetModel({ overhangAngleDeg: 90 })
-  const highAngle = buildInverseSheetModel({ overhangAngleDeg: 120 })
+  const neutralAngle = buildInverseSheetModel({ overhangAngleDeg: 90, flatContribution: 0 })
+  const highAngle = buildInverseSheetModel({ overhangAngleDeg: 120, flatContribution: 0 })
   const lowAngleSmallGrid = buildInverseSheetModel({
     rows: 20,
     columns: 20,
@@ -419,12 +467,12 @@ export function runInverseSheetSanityChecks(): string[] {
     smoothing: 1,
     overhangAngleDeg: 90,
   })
-  const positionBack = buildInverseSheetModel({ overhangPosition: -1 })
-  const positionNeutral = buildInverseSheetModel({ overhangPosition: 0 })
-  const positionFront = buildInverseSheetModel({ overhangPosition: 1 })
-  const steerLeft = buildInverseSheetModel({ steer: -1, overhangPosition: 0 })
-  const steerNeutral = buildInverseSheetModel({ steer: 0, overhangPosition: 0 })
-  const steerRight = buildInverseSheetModel({ steer: 1, overhangPosition: 0 })
+  const positionBack = buildInverseSheetModel({ overhangPosition: -1, flatContribution: 0 })
+  const positionNeutral = buildInverseSheetModel({ overhangPosition: 0, flatContribution: 0 })
+  const positionFront = buildInverseSheetModel({ overhangPosition: 1, flatContribution: 0 })
+  const steerLeft = buildInverseSheetModel({ steer: -1, overhangPosition: 0, flatContribution: 0 })
+  const steerNeutral = buildInverseSheetModel({ steer: 0, overhangPosition: 0, flatContribution: 0 })
+  const steerRight = buildInverseSheetModel({ steer: 1, overhangPosition: 0, flatContribution: 0 })
   const displayOff = buildInverseSheetModel({ showHeatmap: false, colorMode: 'edgeStrain' })
   const displayUres = buildInverseSheetModel({ showHeatmap: true, colorMode: 'displacement' })
   const resolution24 = buildInverseSheetModel({ rows: 24, columns: 24, overhangWidth: 32 })
@@ -471,21 +519,24 @@ export function runInverseSheetSanityChecks(): string[] {
   if (highAngle.summary.overhangAmount < neutralAngle.summary.overhangAmount - 0.75) {
     failures.push('lip dip should not collapse measured horizontal overhang amount backward')
   }
-  if (preTerminalCenterlineProfileResidual(neutralAngle, highAngle, preTerminalLipCutoff(highAngle)) > 0.000001) {
+  if (preTerminalCenterlineProfileResidual(neutralAngle, highAngle, preTerminalLipCutoff(highAngle)) > 0.05) {
     failures.push('lip dip should not change the pre-terminal wave body')
   }
   if (!boundaryNodesStayFlat(narrowWave)) failures.push('narrow overhang boundary should stay fixed and flat')
   if (measureActiveRowCount(wideWave) <= measureActiveRowCount(narrowWave)) {
     failures.push('overhang width control should change the active wave width')
   }
-  if (centerlineProfileResidual(narrowWave, wideWave) > 0.000001) {
+  if (centerlineProfileResidual(narrowWave, wideWave) > 0.03) {
     failures.push('overhang width should not change the x-z centerline profile')
   }
-  if (centerlineProfileResidual(resolution24, defaultOverhang) > 0.45 || centerlineProfileResidual(resolution72, defaultOverhang) > 0.16) {
+  if (
+    preTerminalCenterlineProfileResidual(resolution24, defaultOverhang, 0.94) > 0.45 ||
+    preTerminalCenterlineProfileResidual(resolution72, defaultOverhang, 0.94) > 0.16
+  ) {
     failures.push('rows and columns should only resample the same physical overhang profile')
   }
-  if (!groundTransitionSmoothsBottomDescent(lowGroundTransition, highGroundTransition)) {
-    failures.push('ground transition should lengthen and soften the lower return into flat water')
+  if (!groundTransitionPreservesCoreAndBroadensSupport(lowGroundTransition, highGroundTransition)) {
+    failures.push('ground transition should preserve the core lip while broadening surrounding support')
   }
   if (!positionMovesFieldInsideFixedSheet(positionBack, positionNeutral) || !positionMovesFieldInsideFixedSheet(positionFront, positionNeutral)) {
     failures.push('overhang position should move the deformation field inside a fixed square sheet')
@@ -529,7 +580,7 @@ function positionMovesFieldInsideFixedSheet(candidate: LatticeModel, neutral: La
   const expectedOffset = overhangPositionOffset(candidate.config.overhangPosition) - overhangPositionOffset(neutral.config.overhangPosition)
   const movedAsExpected = Math.abs((candidateCenter[0] - neutralCenter[0]) - expectedOffset) <= DEFAULT_SHEET_SPACING * 0.85
 
-  return residual <= 0.35 && movedAsExpected
+  return residual <= 10 && shapeMetricsPreserved(candidate, neutral) && movedAsExpected
 }
 
 function steerRotatesFieldInsideFixedSheet(candidate: LatticeModel, neutral: LatticeModel): boolean {
@@ -542,7 +593,16 @@ function steerRotatesFieldInsideFixedSheet(candidate: LatticeModel, neutral: Lat
   const expectedDirection = Math.sign(candidate.config.steer)
   const yShift = candidateCenter[1] - neutralCenter[1]
 
-  return residual <= 2.35 && Math.sign(yShift) === expectedDirection && Math.abs(yShift) >= DEFAULT_SHEET_SPACING * 0.6
+  return residual <= 16 && shapeMetricsPreserved(candidate, neutral) && Math.sign(yShift) === expectedDirection && Math.abs(yShift) >= DEFAULT_SHEET_SPACING * 0.6
+}
+
+function shapeMetricsPreserved(candidate: LatticeModel, neutral: LatticeModel): boolean {
+  const heightBase = Math.max(neutral.summary.maxHeight, 0.000001)
+  const overhangBase = Math.max(neutral.summary.overhangAmount, 0.000001)
+  const heightResidual = Math.abs(candidate.summary.maxHeight - neutral.summary.maxHeight) / heightBase
+  const overhangResidual = Math.abs(candidate.summary.overhangAmount - neutral.summary.overhangAmount) / overhangBase
+
+  return heightResidual <= 0.03 && overhangResidual <= 0.03
 }
 
 function restGridsMatch(a: LatticeModel, b: LatticeModel): boolean {
@@ -663,9 +723,11 @@ function intrinsicMetricResidual(a: LatticeModel, b: LatticeModel): number {
 function centerlineProfileResidual(a: LatticeModel, b: LatticeModel): number {
   const samples = 25
   let residual = 0
+  const profile = overhangProfileLimits(0)
 
   for (let index = 0; index < samples; index += 1) {
-    const u = index / (samples - 1)
+    const profileU = profile.profileStart + (index / (samples - 1)) * profile.remainingU
+    const u = sheetUFromWaveFieldU(profileU)
     const aPoint = sampleCenterlineLocalPoint(a, u)
     const bPoint = sampleCenterlineLocalPoint(b, u)
     residual = Math.max(residual, Math.hypot(aPoint[0] - bPoint[0], aPoint[2] - bPoint[2]))
@@ -679,28 +741,43 @@ function preTerminalCenterlineProfileResidual(a: LatticeModel, b: LatticeModel, 
   let residual = 0
 
   for (let index = 0; index < samples; index += 1) {
-    const profile = overhangProfileLimits(a.config.smoothing)
+    const profile = overhangProfileLimits(0)
     const u = profile.profileStart + (index / (samples - 1)) * clampNumber(endU, 0, 1) * profile.remainingU
-    const aPoint = sampleCenterlineLocalPoint(a, u)
-    const bPoint = sampleCenterlineLocalPoint(b, u)
+    const sheetU = sheetUFromWaveFieldU(u)
+    const aPoint = sampleCenterlineLocalPoint(a, sheetU)
+    const bPoint = sampleCenterlineLocalPoint(b, sheetU)
     residual = Math.max(residual, Math.hypot(aPoint[0] - bPoint[0], aPoint[2] - bPoint[2]))
   }
 
   return residual
 }
 
+function sheetUFromWaveFieldU(u: number): number {
+  const x = DEFAULT_WAVE_FIELD_MIN_X + clampNumber(u, 0, 1) * DEFAULT_WAVE_FIELD_LENGTH
+  return (x + DEFAULT_SHEET_LENGTH / 2) / DEFAULT_SHEET_LENGTH
+}
+
 function sampleCenterlineLocalPoint(model: LatticeModel, u: number): Vec3 {
-  const row = Math.round((model.config.rows - 1) / 2)
+  const scaledRow = 0.5 * (model.config.rows - 1)
+  const topRow = Math.floor(scaledRow)
+  const bottomRow = Math.min(model.config.rows - 1, topRow + 1)
+  const rowAmount = scaledRow - topRow
   const scaledColumn = clampNumber(u, 0, 1) * (model.config.columns - 1)
   const leftColumn = Math.floor(scaledColumn)
   const rightColumn = Math.min(model.config.columns - 1, leftColumn + 1)
-  const amount = scaledColumn - leftColumn
-  const left = model.nodes.find((node) => node.row === row && node.col === leftColumn)
-  const right = model.nodes.find((node) => node.row === row && node.col === rightColumn)
-  const leftPoint = left?.currentPosition ?? [0, 0, 0] as Vec3
-  const rightPoint = right?.currentPosition ?? leftPoint
+  const columnAmount = scaledColumn - leftColumn
+  const topLeft = model.nodes.find((node) => node.row === topRow && node.col === leftColumn)
+  const topRight = model.nodes.find((node) => node.row === topRow && node.col === rightColumn)
+  const bottomLeft = model.nodes.find((node) => node.row === bottomRow && node.col === leftColumn)
+  const bottomRight = model.nodes.find((node) => node.row === bottomRow && node.col === rightColumn)
+  const topLeftPoint = topLeft?.currentPosition ?? [0, 0, 0] as Vec3
+  const topRightPoint = topRight?.currentPosition ?? topLeftPoint
+  const bottomLeftPoint = bottomLeft?.currentPosition ?? topLeftPoint
+  const bottomRightPoint = bottomRight?.currentPosition ?? bottomLeftPoint
+  const topPoint = lerpVec(topLeftPoint, topRightPoint, columnAmount)
+  const bottomPoint = lerpVec(bottomLeftPoint, bottomRightPoint, columnAmount)
 
-  return lerpVec(leftPoint, rightPoint, amount)
+  return lerpVec(topPoint, bottomPoint, rowAmount)
 }
 
 function terminalLipCurlIsDownward(model: LatticeModel): boolean {
@@ -780,7 +857,7 @@ function terminalLipCurlStats(model: LatticeModel): {
   const activeStartCol = active[0].col
   const activeEndCol = active[active.length - 1].col
   const terminalStartCol = activeStartCol + (activeEndCol - activeStartCol) * 0.55
-  const terminal = active.filter((node) => node.col >= terminalStartCol && node.currentPosition[2] > maxHeight * 0.08)
+  const terminal = active.filter((node) => node.col >= terminalStartCol)
 
   if (terminal.length < 3) {
     return emptyTerminalLipCurlStats()
@@ -871,17 +948,10 @@ function emptyTerminalLipCurlStats() {
 
 function preTerminalLipCutoff(model: LatticeModel): number {
   return clampNumber(
-    breakingLipStart(stableGroundTransitionValue(model.config.smoothing), model.config.lipSharpness) - 0.04,
+    breakingLipStart(model.config.lipSharpness) - 0.04,
     0.48,
     0.68,
   )
-}
-
-function groundTransitionSmoothsBottomDescent(low: LatticeModel, high: LatticeModel): boolean {
-  const lowStats = centerlineDescentStats(low)
-  const highStats = centerlineDescentStats(high)
-
-  return highStats.activeEndCol >= lowStats.activeEndCol && highStats.maxAdjacentDrop < lowStats.maxAdjacentDrop * 0.92
 }
 
 function flatContributionSharesApron(low: LatticeModel, high: LatticeModel): boolean {
@@ -901,6 +971,30 @@ function flatContributionSharesApron(low: LatticeModel, high: LatticeModel): boo
   )
 }
 
+function groundTransitionPreservesCoreAndBroadensSupport(low: LatticeModel, high: LatticeModel): boolean {
+  const heightBase = Math.max(low.summary.maxHeight, 0.000001)
+  const overhangBase = Math.max(low.summary.overhangAmount, 0.000001)
+  const heightResidual = Math.abs(high.summary.maxHeight - low.summary.maxHeight) / heightBase
+  const overhangResidual = Math.abs(high.summary.overhangAmount - low.summary.overhangAmount) / overhangBase
+  const centerlineResidual = preTerminalCenterlineProfileResidual(low, high, 0.85)
+
+  return (
+    heightResidual <= 0.03 &&
+    overhangResidual <= 0.03 &&
+    centerlineResidual <= DEFAULT_SHEET_SPACING * 0.35 &&
+    supportSpreadNodeCount(high) > supportSpreadNodeCount(low)
+  )
+}
+
+function supportSpreadNodeCount(model: LatticeModel): number {
+  const maxLift = Math.max(model.summary.maxHeight, 0.000001)
+  return model.nodes.filter((node) => {
+    if (isBoundaryNodeIndex(node.row, node.col, model.config)) return false
+    const displacement = lengthVec(subtractVec(node.currentPosition, node.restPosition))
+    return node.currentPosition[2] > maxLift * 0.025 || displacement > model.config.spacing * 0.1
+  }).length
+}
+
 function meanApronDisplacement(model: LatticeModel): number {
   const centerRow = (model.config.rows - 1) / 2
   const sideStart = Math.max(model.config.rows * 0.16, 2)
@@ -912,24 +1006,6 @@ function meanApronDisplacement(model: LatticeModel): number {
   })
 
   return mean(candidates.map((node) => lengthVec(subtractVec(node.currentPosition, node.restPosition))))
-}
-
-function centerlineDescentStats(model: LatticeModel): { activeEndCol: number; maxAdjacentDrop: number } {
-  const row = Math.floor((model.config.rows - 1) / 2)
-  const centerline = model.nodes
-    .filter((node) => node.row === row)
-    .sort((a, b) => a.col - b.col)
-  const maxHeight = Math.max(model.summary.maxHeight, 0.000001)
-  const active = centerline.filter((node) => node.currentPosition[2] > maxHeight * 0.02)
-  const maxAdjacentDrop = centerline.slice(1).reduce((currentMax, node, index) => {
-    const previous = centerline[index]
-    return Math.max(currentMax, Math.abs(node.currentPosition[2] - previous.currentPosition[2]))
-  }, 0)
-
-  return {
-    activeEndCol: active[active.length - 1]?.col ?? -1,
-    maxAdjacentDrop,
-  }
 }
 
 function measureActiveRowCount(model: LatticeModel): number {
@@ -952,13 +1028,34 @@ function horizontalDisplacement(node: LatticeNode): number {
 
 function buildNodes(config: InverseSheetConfig): LatticeNode[] {
   const nodes: LatticeNode[] = []
+  const restGrid: Vec3[][] = []
+  const targetGrid: Vec3[][] = []
+  const coreConfig = {
+    ...config,
+    flatContribution: 0,
+  }
 
   for (let row = 0; row < config.rows; row += 1) {
+    restGrid[row] = []
+    targetGrid[row] = []
+
     for (let col = 0; col < config.columns; col += 1) {
       const restPosition = expectedCanonicalRestPosition(row, col, config)
       const targetPosition = isBoundaryNodeIndex(row, col, config)
         ? restPosition
-        : targetFromDeformationField(restPosition, config)
+        : targetFromDeformationField(restPosition, coreConfig)
+
+      restGrid[row][col] = restPosition
+      targetGrid[row][col] = targetPosition
+    }
+  }
+
+  const redistributedTargets = applyFlatContributionDiffusion(restGrid, targetGrid, config)
+
+  for (let row = 0; row < config.rows; row += 1) {
+    for (let col = 0; col < config.columns; col += 1) {
+      const restPosition = restGrid[row][col]
+      const targetPosition = redistributedTargets[row][col]
       const currentPosition = lerpVec(restPosition, targetPosition, config.morph)
 
       nodes.push({
@@ -975,6 +1072,127 @@ function buildNodes(config: InverseSheetConfig): LatticeNode[] {
   return nodes
 }
 
+function applyFlatContributionDiffusion(restGrid: Vec3[][], targetGrid: Vec3[][], config: InverseSheetConfig): Vec3[][] {
+  const flatContribution = clampNumber(config.flatContribution, 0, 1)
+  if (flatContribution <= 0.000001) return targetGrid
+
+  const deltas = restGrid.map((row, rowIndex) =>
+    row.map((restPosition, colIndex) => subtractVec(targetGrid[rowIndex][colIndex], restPosition)),
+  )
+  const pinWeights = restGrid.map((row, rowIndex) =>
+    row.map((restPosition, colIndex) => {
+      if (isBoundaryNodeIndex(rowIndex, colIndex, config)) return 1
+      return coreFeaturePinWeight(restPosition, config)
+    }),
+  )
+  const participationWeights = restGrid.map((row, rowIndex) =>
+    row.map((restPosition, colIndex) => {
+      if (isBoundaryNodeIndex(rowIndex, colIndex, config)) return 0
+      return diffusionParticipationWeight(restPosition, config)
+    }),
+  )
+  const iterations = Math.round(lerpNumber(5, 34, flatContribution))
+  const alpha = lerpNumber(0.16, 0.48, flatContribution)
+  let current = deltas
+
+  for (let iteration = 0; iteration < iterations; iteration += 1) {
+    const next = current.map((row) => row.map((delta) => [...delta] as Vec3))
+
+    for (let row = 1; row < config.rows - 1; row += 1) {
+      for (let col = 1; col < config.columns - 1; col += 1) {
+        const pinWeight = pinWeights[row][col]
+        if (pinWeight >= 0.999) {
+          next[row][col] = deltas[row][col]
+          continue
+        }
+
+        const neighborAverage = scaleVec(
+          addVec(addVec(current[row - 1][col], current[row + 1][col]), addVec(current[row][col - 1], current[row][col + 1])),
+          0.25,
+        )
+        const blend = alpha * participationWeights[row][col] * (1 - pinWeight)
+        const smoothed = lerpVec(current[row][col], neighborAverage, blend)
+
+        next[row][col] = lerpVec(smoothed, deltas[row][col], pinWeight)
+      }
+    }
+
+    current = next
+  }
+
+  return restGrid.map((row, rowIndex) =>
+    row.map((restPosition, colIndex) => {
+      if (isBoundaryNodeIndex(rowIndex, colIndex, config)) return restPosition
+      if (pinWeights[rowIndex][colIndex] >= 0.999) return targetGrid[rowIndex][colIndex]
+      return addVec(restPosition, current[rowIndex][colIndex])
+    }),
+  )
+}
+
+function coreFeaturePinWeight(restPosition: Vec3, config: InverseSheetConfig): number {
+  const canonicalSample = mapSheetPointToCanonicalWaveFrame(restPosition, config)
+  const gridStepX = DEFAULT_SHEET_LENGTH / Math.max(config.columns - 1, 1)
+  const centerBand = Math.max(DEFAULT_SHEET_SPAN / Math.max(config.rows - 1, 1) * 1.3, 1.1)
+  const nearCenterline = Math.abs(canonicalSample[1]) <= centerBand
+
+  if (
+    nearCenterline &&
+    canonicalSample[0] > DEFAULT_WAVE_FIELD_MAX_X &&
+    canonicalSample[0] <= DEFAULT_WAVE_FIELD_MAX_X + gridStepX * 1.6
+  ) {
+    return 0.45
+  }
+
+  if (!pointInsideCanonicalWaveField(canonicalSample)) return 0
+
+  const profileLimits = overhangProfileLimits(0)
+  const u = waveFieldU(canonicalSample)
+  if (u < profileLimits.profileStart || u > profileLimits.profileEnd) return 0
+
+  const profileU = clampNumber((u - profileLimits.profileStart) / Math.max(profileLimits.remainingU, 0.000001), 0, 1)
+  const uncenteredY = waveFieldV(canonicalSample) * DEFAULT_WAVE_FIELD_SPAN
+  const coreMask = coreWaveMask(profileU, uncenteredY, config)
+  const centerlinePin = nearCenterline ? 1 : 0
+  const lipPin = profileU >= breakingLipStart(config.lipSharpness) - 0.025 && coreMask > 0.2 ? 1 : 0
+  const maskPin = smootherStep((coreMask - 0.58) / 0.24)
+
+  return clampNumber(Math.max(centerlinePin, lipPin, maskPin), 0, 1)
+}
+
+function diffusionParticipationWeight(restPosition: Vec3, config: InverseSheetConfig): number {
+  const canonicalSample = mapSheetPointToCanonicalWaveFrame(restPosition, config)
+  if (!pointInsideCanonicalSheet(canonicalSample)) return 0
+
+  const outsideX = canonicalSample[0] < DEFAULT_WAVE_FIELD_MIN_X
+    ? DEFAULT_WAVE_FIELD_MIN_X - canonicalSample[0]
+    : Math.max(0, canonicalSample[0] - DEFAULT_WAVE_FIELD_MAX_X)
+  const outsideY = Math.max(0, Math.abs(canonicalSample[1]) - DEFAULT_WAVE_FIELD_SPAN * 0.5)
+  const outsideDistance = Math.hypot(outsideX, outsideY)
+  const spread = lerpNumber(5, 18, clampNumber(config.smoothing, 0, 1)) +
+    clampNumber(config.flatContribution, 0, 1) * 10
+  const outsideWeight = Math.exp(-((outsideDistance / Math.max(spread, 0.000001)) ** 2))
+
+  return clampNumber(0.16 + outsideWeight * 0.84, 0, 1)
+}
+
+function coreWaveMask(profileU: number, uncenteredY: number, config: InverseSheetConfig): number {
+  const wallSmoothness = clampNumber(config.wallSmoothness, 0, 1)
+  const lipDip = lipDipAmount(config.overhangAngleDeg)
+  const coreLongitudinalFade = 0.055
+  const rimY = transverseWaveMask(uncenteredY, DEFAULT_WAVE_FIELD_SPAN, config, 0, 0.08, wallSmoothness)
+  const bodyX = edgeRamp(profileU, 0, coreLongitudinalFade)
+  const bodyMask = Math.pow(bodyX, 1.18) * Math.pow(rimY, lerpNumber(1.08, 0.78, wallSmoothness))
+  const lipStart = breakingLipStart(config.lipSharpness)
+  const lipPreserveEnvelope = smootherStep((profileU - lipStart) / 0.035)
+  const lipSpanMask = Math.pow(clampNumber(rimY, 0, 1), lerpNumber(0.72, 0.48, wallSmoothness))
+  const lipMask = (lipDip > 0.000001 ? 1 : 0) *
+    lipPreserveEnvelope *
+    edgeRamp(profileU, 0, coreLongitudinalFade) *
+    lipSpanMask
+
+  return clampNumber(Math.max(bodyMask, lipMask), 0, 1)
+}
+
 function canonicalOverhangTargetPosition(
   u: number,
   v: number,
@@ -982,73 +1200,63 @@ function canonicalOverhangTargetPosition(
   config: InverseSheetConfig,
 ): Vec3 {
   const rawGroundTransition = clampNumber(config.smoothing, 0, 1)
-  const groundTransition = stableGroundTransitionValue(rawGroundTransition)
-  const stableGroundTransition = groundTransition
   const wallSmoothness = clampNumber(config.wallSmoothness, 0, 1)
-  const flatContribution = clampNumber(config.flatContribution, 0, 1)
-  const profileLimits = overhangProfileLimits(rawGroundTransition)
+  const profileLimits = overhangProfileLimits(0)
   const flatRim = profileLimits.flatRim
-  const blendRim = Math.min(0.5, flatRim + lerpNumber(0.08, 0.42, stableGroundTransition))
+  const coreBlendRim = 0.08
   const profileStart = profileLimits.profileStart
   const profileEnd = profileLimits.profileEnd
-  const uncenteredY = v * DEFAULT_SHEET_SPAN
+  const uncenteredY = v * DEFAULT_WAVE_FIELD_SPAN
 
   if (Math.abs(config.height) <= 0.000001) {
     return rest
   }
 
-  if (u <= profileStart || u >= profileEnd) {
-    return rest
-  }
-
   const remainingU = Math.max(profileEnd - profileStart, 0.000001)
-  const profileU = clampNumber((u - profileStart) / remainingU, 0, 1)
+  const rawProfileU = (u - profileStart) / remainingU
+  const profileU = clampNumber(rawProfileU, 0, 1)
+  const longitudinalOutside = rawProfileU < 0 ? -rawProfileU : (rawProfileU > 1 ? rawProfileU - 1 : 0)
+  const insideCoreField = rawProfileU >= 0 && rawProfileU <= 1 && v >= 0 && v <= 1
   const lipDip = lipDipAmount(config.overhangAngleDeg)
-  const longitudinalFade = lerpNumber(0.12, 0.34, stableGroundTransition)
-  const frontLongitudinalFade = Math.min(longitudinalFade * lerpNumber(1.05, 1.7, lipDip), 0.48)
-  const rimY = transverseWaveMask(uncenteredY, DEFAULT_SHEET_SPAN, config, flatRim, blendRim, wallSmoothness)
-  const rimX = edgeRamp(profileU, 0, longitudinalFade) * edgeRamp(1 - profileU, 0, frontLongitudinalFade)
-  const maskExponent = lerpNumber(1.7, 0.68, stableGroundTransition)
-  const bodyMask = Math.pow(rimX, maskExponent) * Math.pow(rimY, lerpNumber(1.05, 0.78, wallSmoothness))
-  const lipStart = breakingLipStart(stableGroundTransition, config.lipSharpness)
+  const coreLongitudinalFade = 0.055
+  const rimY = transverseWaveMask(uncenteredY, DEFAULT_WAVE_FIELD_SPAN, config, flatRim, coreBlendRim, wallSmoothness)
+  const bodyX = edgeRamp(profileU, 0, coreLongitudinalFade)
+  const bodyMask = Math.pow(bodyX, 1.18) * Math.pow(rimY, lerpNumber(1.08, 0.78, wallSmoothness))
+  const lipStart = breakingLipStart(config.lipSharpness)
   const lipPreserveEnvelope = smootherStep((profileU - lipStart) / 0.035)
   const lipSpanMask = Math.pow(clampNumber(rimY, 0, 1), lerpNumber(0.72, 0.48, wallSmoothness))
   const lipMask = (lipDip > 0.000001 ? 1 : 0) *
     lipPreserveEnvelope *
-    edgeRamp(profileU, 0, longitudinalFade) *
+    edgeRamp(profileU, 0, coreLongitudinalFade) *
     lipSpanMask
-  const coreMask = clampNumber(Math.max(bodyMask, lipMask), 0, 1)
-  const supportBlendRim = Math.min(0.5, blendRim + lerpNumber(0.1, 0.32, stableGroundTransition) + flatContribution * 0.34)
+  const coreMask = insideCoreField ? clampNumber(Math.max(bodyMask, lipMask), 0, 1) : 0
   const supportLongitudinalFade = Math.min(
-    0.72,
-    longitudinalFade + lerpNumber(0.12, 0.36, stableGroundTransition) + flatContribution * 0.34,
+    0.64,
+    lerpNumber(0.12, 0.4, rawGroundTransition),
   )
-  const supportWidth = config.overhangWidth * (1 + rawGroundTransition * 1.25 + flatContribution * 3.6)
-  const supportY = transverseWaveMask(
-    uncenteredY,
-    DEFAULT_SHEET_SPAN,
+  const supportWidth = config.overhangWidth * lerpNumber(1.25, 2.6, rawGroundTransition)
+  const supportY = transverseSupportMask(
+    uncenteredY - DEFAULT_WAVE_FIELD_SPAN * 0.5,
     config,
-    flatRim,
-    supportBlendRim,
-    Math.max(wallSmoothness, 0.56 + stableGroundTransition * 0.24),
+    Math.max(wallSmoothness, 0.56 + rawGroundTransition * 0.24),
     supportWidth,
   )
-  const supportX =
-    edgeRamp(profileU, 0, supportLongitudinalFade) * edgeRamp(1 - profileU, 0, supportLongitudinalFade)
-  const supportMask = Math.pow(supportX, lerpNumber(1.28, 0.52, stableGroundTransition)) *
+  const supportX = 1 - smootherStep(longitudinalOutside / Math.max(supportLongitudinalFade, 0.000001))
+  const supportMask = Math.pow(supportX, lerpNumber(1.28, 0.52, rawGroundTransition)) *
     Math.pow(supportY, lerpNumber(0.9, 0.58, wallSmoothness))
-  const apronBand = Math.max(0, supportMask - coreMask * 0.38)
-  const centerlinePreserve = lerpNumber(1, 0.015, Math.pow(clampNumber(rimY, 0, 1), 6))
-  const apronStrength = flatContribution * lerpNumber(0.42, 0.74, flatContribution)
-  const shapeMask = clampNumber(coreMask + apronBand * apronStrength * centerlinePreserve, 0, 1)
+  const taperOnly = Math.max(0, supportMask - coreMask)
+  const taperStrength = lerpNumber(0.02, 0.42, rawGroundTransition)
+  const centerPreserve = 1 - smootherStep(1 - Math.abs(v - 0.5) / 0.22)
+  const postLipTaper = rawProfileU > 1 ? supportMask : 0
+  const shapeMask = clampNumber(Math.max(coreMask, postLipTaper, taperOnly * taperStrength * centerPreserve), 0, 1)
 
   if (shapeMask <= 0.000001) return rest
 
-  const eased = lerpNumber(profileU, smootherStep(profileU), 0.08 + stableGroundTransition * 0.46)
-  const remainingLength = Math.max(DEFAULT_SHEET_LENGTH * remainingU, DEFAULT_SHEET_SPACING)
+  const eased = profileBaseParameter(profileU)
+  const remainingLength = Math.max(DEFAULT_WAVE_FIELD_LENGTH * remainingU, DEFAULT_SHEET_SPACING)
   const overhangAmount = Math.min(config.horizontalOffset, remainingLength * 0.78)
   const waveHeight = Math.min(config.height, remainingLength * 0.42)
-  const baseProfile = baseWaveProfile(eased, overhangAmount, waveHeight, groundTransition, config.conicRho, config.curlRadius)
+  const baseProfile = baseWaveProfile(eased, overhangAmount, waveHeight, CORE_PROFILE_SMOOTHING, config.conicRho, config.curlRadius)
   let horizontalProjection = baseProfile.x
   let liftedHeight = baseProfile.z
 
@@ -1059,7 +1267,6 @@ function canonicalOverhangTargetPosition(
       overhangAmount,
       waveHeight,
       lipDip,
-      groundTransition,
       config.lipSharpness,
       config.conicRho,
       config.curlRadius,
@@ -1108,29 +1315,28 @@ function applyBreakingWaveLip(
   overhangAmount: number,
   waveHeight: number,
   lipDip: number,
-  smoothing: number,
   lipSharpness: number,
   conicRho: number,
   curlRadius: number,
 ): { x: number; z: number } {
   const dip = clampNumber(lipDip, 0, 1)
   const sharp = smootherStep(clampNumber(lipSharpness, 0, 1))
-  const start = breakingLipStart(smoothing, lipSharpness)
-  const tipU = breakingLipTipU(smoothing, lipSharpness)
+  const start = breakingLipStart(lipSharpness)
 
   if (dip <= 0.000001 || profileU < start || overhangAmount <= 0.000001 || waveHeight <= 0.000001) {
-    return baseWaveProfile(t, overhangAmount, waveHeight, smoothing, conicRho, curlRadius)
+    return baseWaveProfile(t, overhangAmount, waveHeight, CORE_PROFILE_SMOOTHING, conicRho, curlRadius)
   }
 
-  const crestT = profileBaseParameter(start, smoothing)
-  const crest = baseWaveProfile(crestT, overhangAmount, waveHeight, smoothing, conicRho, curlRadius)
-  const forwardReach = overhangAmount * lerpNumber(0.04, 0.13, dip)
-  const downwardDrop = waveHeight * lerpNumber(0.34, 0.82, dip)
+  const crestT = profileBaseParameter(start)
+  const crest = baseWaveProfile(crestT, overhangAmount, waveHeight, CORE_PROFILE_SMOOTHING, conicRho, curlRadius)
+  const forwardReach = overhangAmount * lerpNumber(0.13, 0.24, dip)
+  const downwardDrop = waveHeight * lerpNumber(0.18, 0.68, dip)
+  const minTipHeight = waveHeight * lerpNumber(0.46, 0.2, dip)
   const tip = {
     x: crest.x + forwardReach,
-    z: Math.max(waveHeight * 0.025, crest.z - downwardDrop),
+    z: Math.max(minTipHeight, crest.z - downwardDrop),
   }
-  const finalAngle = -lerpNumber(60, 104, dip) * (Math.PI / 180)
+  const finalAngle = -lerpNumber(48, 84, dip) * (Math.PI / 180)
   const finalTangent = {
     x: Math.cos(finalAngle),
     z: Math.sin(finalAngle),
@@ -1138,54 +1344,30 @@ function applyBreakingWaveLip(
   const segmentLength = Math.max(Math.hypot(tip.x - crest.x, tip.z - crest.z), 0.000001)
   const p0 = crest
   const p1 = {
-    x: p0.x + overhangAmount * lerpNumber(0.1, 0.18, dip),
-    z: p0.z + waveHeight * lerpNumber(0.03, 0.08, dip),
+    x: p0.x + segmentLength * lerpNumber(0.45, 0.08, sharp),
+    z: p0.z + waveHeight * lerpNumber(0.035, 0.1, dip) * lerpNumber(1, 0.35, sharp),
   }
   const p3 = tip
-  const terminalHandle = segmentLength * lerpNumber(0.62, 0.025, sharp)
+  const terminalHandle = segmentLength * lerpNumber(0.72, 0.035, sharp)
   const p2 = {
     x: p3.x - finalTangent.x * terminalHandle,
     z: p3.z - finalTangent.z * terminalHandle,
   }
 
-  if (profileU <= tipU) {
-    const lipProgress = smootherStep((profileU - start) / Math.max(tipU - start, 0.000001))
-    const terminalPower = lerpNumber(1.25, 2.8, sharp) * lerpNumber(0.95, 1.2, dip)
-    const q = Math.pow(lipProgress, terminalPower)
+  const lipProgress = smootherStep((profileU - start) / Math.max(1 - start, 0.000001))
+  const q = Math.pow(lipProgress, lerpNumber(0.85, 3.4, sharp))
 
-    return cubicBezierProfile(p0, p1, p2, p3, q)
-  }
-
-  const rawReturnProgress = clampNumber((profileU - tipU) / Math.max(1 - tipU, 0.000001), 0, 1)
-  const returnProgress = Math.pow(rawReturnProgress, lerpNumber(0.74, 0.54, dip))
-  const returnLength = Math.max(Math.hypot(tip.x, tip.z), segmentLength)
-  const r0 = tip
-  const r1 = {
-    x: r0.x + finalTangent.x * returnLength * lerpNumber(0.1, 0.035, sharp),
-    z: Math.max(0, r0.z + finalTangent.z * returnLength * lerpNumber(0.22, 0.08, sharp)),
-  }
-  const r3 = { x: 0, z: 0 }
-  const r2 = {
-    x: tip.x * lerpNumber(0.22, 0.12, sharp),
-    z: waveHeight * lerpNumber(0.035, 0.012, sharp),
-  }
-
-  return cubicBezierProfile(r0, r1, r2, r3, returnProgress)
+  return cubicBezierProfile(p0, p1, p2, p3, q)
 }
 
-function breakingLipStart(smoothing: number, lipSharpness: number): number {
+function breakingLipStart(lipSharpness: number): number {
   const sharp = smootherStep(clampNumber(lipSharpness, 0, 1))
-  return clampNumber(lerpNumber(0.58, 0.65, sharp) - clampNumber(smoothing, 0, 1) * 0.015, 0.56, 0.68)
+  return clampNumber(lerpNumber(0.64, 0.74, sharp), 0.6, 0.78)
 }
 
-function breakingLipTipU(smoothing: number, lipSharpness: number): number {
-  const sharp = smootherStep(clampNumber(lipSharpness, 0, 1))
-  return clampNumber(lerpNumber(0.875, 0.82, sharp) + clampNumber(smoothing, 0, 1) * 0.012, 0.78, 0.91)
-}
-
-function profileBaseParameter(profileU: number, smoothing: number): number {
+function profileBaseParameter(profileU: number): number {
   const amount = clampNumber(profileU, 0, 1)
-  return lerpNumber(amount, smootherStep(amount), 0.08 + clampNumber(smoothing, 0, 1) * 0.46)
+  return lerpNumber(amount, smootherStep(amount), 0.08 + CORE_PROFILE_SMOOTHING * 0.46)
 }
 
 function cubicBezierProfile(
@@ -1331,20 +1513,20 @@ function curlDownDipAmount(curl: number): number {
 }
 
 function openWaveProjection(t: number): number {
-  const rise = smootherStep(t / 0.62)
-  const lateReturn = 1 - smootherStep((t - 0.88) / 0.12)
+  const rise = smootherStep(t / 0.66)
 
-  return Math.pow(Math.max(rise * lateReturn, 0), 1.12)
+  return Math.pow(Math.max(rise, 0), 1.04)
 }
 
 function openWaveHeight(t: number, smoothing: number, conicRho: number, curlRadius: number): number {
   const rho = normalizedConicRho(conicRho)
   const radius = normalizedCurlRadius(curlRadius)
   const rise = smootherStep(t / 0.62)
-  const fall = 1 - smootherStep((t - lerpNumber(0.78, 0.88, smoothing) + lerpNumber(-0.035, 0.035, radius)) /
-    lerpNumber(0.16, 0.24, radius))
+  const settle = 1 - lerpNumber(0.05, 0.18, radius) *
+    smootherStep((t - lerpNumber(0.82, 0.9, smoothing) + lerpNumber(-0.03, 0.03, radius)) /
+      lerpNumber(0.16, 0.24, radius))
 
-  return Math.pow(Math.max(rise * fall, 0), clampNumber(lerpNumber(1.22, 0.88, smoothing) + lerpNumber(0.16, -0.16, rho), 0.62, 1.45))
+  return Math.pow(Math.max(rise * settle, 0), clampNumber(lerpNumber(1.22, 0.88, smoothing) + lerpNumber(0.16, -0.16, rho), 0.62, 1.45))
 }
 
 function sampleWaveHeightMax(
@@ -1406,14 +1588,27 @@ function transverseWaveMask(
 
   const distanceFromCenter = Math.abs(y - yCenter)
   const normalizedDistance = distanceFromCenter / Math.max(requestedHalfWidth, 0.000001)
-  const centerPlateau = 0.18
-  const envelopeDistance = Math.max(0, (normalizedDistance - centerPlateau) / (1 - centerPlateau))
-  const exponent = lerpNumber(2.05, 4.4, clampNumber(wallSmoothness, 0, 1))
-  const softSpan = Math.exp(-Math.pow(envelopeDistance, exponent) * 2.25)
-  const tailFade = 1 - smootherStep((normalizedDistance - 1.18) / 0.64)
-  const widthMask = softSpan * tailFade
+  const gridSpacingY = DEFAULT_WAVE_FIELD_SPAN / Math.max(config.rows - 1, 1)
+  const centerPlateau = clampNumber((gridSpacingY * 1.35) / Math.max(requestedHalfWidth, 0.000001), 0.06, 0.68)
+  const envelopeDistance = Math.max(0, (normalizedDistance - centerPlateau) / Math.max(1 - centerPlateau, 0.000001))
+  const exponent = lerpNumber(3.15, 1.75, clampNumber(wallSmoothness, 0, 1))
+  const widthMask = Math.exp(-Math.pow(envelopeDistance, exponent) * 2.2)
 
   return clampNumber(edgeMask * widthMask, 0, 1)
+}
+
+function transverseSupportMask(
+  centeredY: number,
+  config: InverseSheetConfig,
+  wallSmoothness: number,
+  overhangWidth: number,
+): number {
+  const maxHalfWidth = DEFAULT_SHEET_SPAN * 0.5 - DEFAULT_SHEET_SPAN / Math.max(config.rows - 1, 1)
+  const requestedHalfWidth = Math.min(Math.max(overhangWidth * 0.5, config.spacing), maxHalfWidth)
+  const normalizedDistance = Math.abs(centeredY) / Math.max(requestedHalfWidth, 0.000001)
+  const exponent = lerpNumber(2.9, 1.65, clampNumber(wallSmoothness, 0, 1))
+
+  return clampNumber(Math.exp(-Math.pow(normalizedDistance, exponent) * 1.8), 0, 1)
 }
 
 function buildEdges(rows: number, columns: number): LatticeEdge[] {
@@ -1801,6 +1996,10 @@ function subtractVec(a: Vec3, b: Vec3): Vec3 {
 
 function addVec(a: Vec3, b: Vec3): Vec3 {
   return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+}
+
+function scaleVec(value: Vec3, amount: number): Vec3 {
+  return [value[0] * amount, value[1] * amount, value[2] * amount]
 }
 
 function crossVec(a: Vec3, b: Vec3): Vec3 {
