@@ -358,7 +358,7 @@ function summarizeBreakingLip(model) {
 
   const activeStartCol = activePoints[0].col
   const activeEndCol = activePoints[activePoints.length - 1].col
-  const terminalStartCol = activeStartCol + (activeEndCol - activeStartCol) * 0.55
+  const terminalStartCol = activeStartCol + (activeEndCol - activeStartCol) * 0.38
   const terminal = activePoints.filter((point) => point.col >= terminalStartCol)
 
   if (terminal.length < 3) {
@@ -373,17 +373,19 @@ function summarizeBreakingLip(model) {
   const postCrest = terminal.filter((point) => point.col > crest.col)
   if (!postCrest.length) return emptyBreakingLipSummary()
 
-  const shoulder = postCrest.reduce((best, point) => {
-    if (point.reach > best.reach + 0.000001) return point
-    if (Math.abs(point.reach - best.reach) <= 0.000001 && point.x > best.x) return point
+  const shoulderCandidates = postCrest.filter((point) => point.z >= crest.z * 0.55)
+  const shoulderPool = shoulderCandidates.length ? shoulderCandidates : postCrest
+  const shoulder = shoulderPool.reduce((best, point) => {
+    if (point.x > best.x + 0.000001) return point
+    if (Math.abs(point.x - best.x) <= 0.000001 && point.col < best.col) return point
     return best
-  }, postCrest[0])
+  }, shoulderPool[0])
   const postShoulder = terminal.filter((point) => point.col > shoulder.col)
   if (!postShoulder.length) return emptyBreakingLipSummary()
 
   const hookCandidates = postShoulder.filter((point) => (
-    point.reach >= maxReach * 0.34 &&
-    point.z > maxZ * 0.07
+    point.z > maxZ * 0.16 &&
+    point.z <= shoulder.z - maxZ * 0.08
   ))
   const tuckedHookCandidates = hookCandidates.filter((point) => (
     shoulder.x - point.x > model.config.spacing * 0.18
@@ -394,10 +396,9 @@ function summarizeBreakingLip(model) {
     if (Math.abs(point.z - best.z) <= 0.000001 && point.x < best.x) return point
     return best
   }, hookPool[0])
-  const postTip = points.filter((point) => point.col > tip.col && point.col <= tip.col + 4)
+  const postTip = points.filter((point) => point.col > tip.col && point.col <= tip.col + 8)
   const flatReturn = postTip.find((point) => (
-    point.z <= maxZ * 0.13 ||
-    point.reach <= maxReach * 0.12
+    point.z <= maxZ * 0.08
   )) ?? postTip[postTip.length - 1] ?? tip
   const tipIndex = points.findIndex((point) => point.col === tip.col)
   const previous = points[Math.max(0, tipIndex - 1)]
@@ -423,7 +424,7 @@ function summarizeBreakingLip(model) {
     const a = curlPath[index]
     const b = curlPath[index + 1]
     maxTerminalSegmentDrop = Math.max(maxTerminalSegmentDrop, Math.max(0, a.z - b.z))
-    if (b.reach < maxReach * 0.34) continue
+    if (b.x < crest.x) continue
     const dx = b.x - a.x
     const dz = b.z - a.z
     const slope = dz / Math.max(Math.abs(dx), 0.000001)
@@ -431,8 +432,8 @@ function summarizeBreakingLip(model) {
     tipSlope = Math.min(tipSlope, slope)
     finalTangentAngleDeg = Math.min(finalTangentAngleDeg, angle)
   }
-  const dropRatio = clampNumber((shoulder.z - tip.z) / maxZ, 0, 1)
-  const tipDrop = shoulder.z - tip.z
+  const dropRatio = clampNumber((crest.z - tip.z) / maxZ, 0, 1)
+  const tipDrop = crest.z - tip.z
   const tipForwardDistance = shoulder.x - crest.x
   const hookTuckDistance = shoulder.x - tip.x
 
@@ -938,11 +939,11 @@ function overhangProfileLimits() {
 function preTerminalLipCutoff(model) {
   const lipStart = breakingLipStart(model.config.lipSharpness)
 
-  return clampNumber(lipStart - 0.04, 0.48, 0.68)
+  return clampNumber(lipStart - 0.1, 0.32, 0.44)
 }
 
 function breakingLipStart(_lipSharpness) {
-  return 0.56
+  return 0.48
 }
 
 function overhangPositionOffset(overhangPosition) {
