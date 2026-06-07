@@ -38,7 +38,7 @@ const { buildInverseSheetModel, getInverseSheetUsableRanges, runInverseSheetSani
 const { rigidCellMechanismStats } = require(path.join(outDir, 'rigidCellMechanism.js'))
 
 const DEFAULT_SHEET_ROWS = 44
-const DEFAULT_SHEET_COLUMNS = 64
+const DEFAULT_SHEET_COLUMNS = 72
 const DEFAULT_SHEET_SPACING = 1
 const DEFAULT_WAVE_FIELD_LENGTH = 43 * DEFAULT_SHEET_SPACING
 const DEFAULT_WAVE_FIELD_SPAN = (DEFAULT_SHEET_ROWS - 1) * DEFAULT_SHEET_SPACING
@@ -441,7 +441,7 @@ function summarizeModelHealth(model) {
     maxSegment = Math.max(maxSegment, Math.hypot(b.x - a.x, b.z - a.z))
     maxVerticalStep = Math.max(maxVerticalStep, Math.abs(b.z - a.z))
   }
-  const segmentLimit = Math.max(14, model.summary.overhangAmount * 0.82, model.summary.maxHeight * 1.65)
+  const segmentLimit = Math.max(14, model.summary.overhangAmount * 0.82, model.summary.maxHeight * 1.75)
   const verticalStepLimit = Math.max(9, model.summary.maxHeight * 0.78)
 
   return {
