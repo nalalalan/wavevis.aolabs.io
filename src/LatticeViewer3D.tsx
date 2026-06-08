@@ -104,7 +104,7 @@ function LatticeModelGroup({
     : sideProjectionView
       ? Math.max(model.config.spacing * 0.074, 0.04)
     : Math.max(model.config.spacing * (largeGrid ? 0.052 : 0.12), 0.026)
-  const surfaceOpacity = sliceProfileView ? 0.2 : sideProjectionView ? 0.18 : (largeGrid ? 0.3 : 0.42)
+  const surfaceOpacity = sliceProfileView ? 0.2 : sideProjectionView ? 0.18 : (largeGrid ? 0.38 : 0.42)
   const profileOverlayVisible = sliceProfileView || sideProjectionView
 
   return (
@@ -297,28 +297,30 @@ function RigidCellGlyphs({
   model: LatticeModel
   scope: MechanismRenderScope
 }) {
+  const largeGrid = model.config.rows > 30 || model.config.columns > 30
+  const ghostDenseGrid = largeGrid && !scope.sideSlice && !scope.sideProjection
   const armRef = useRef<THREE.InstancedMesh>(null)
   const bodyRef = useRef<THREE.InstancedMesh>(null)
   const bodyGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
   const armGeometry = useMemo(() => new THREE.CylinderGeometry(1, 1, 1, model.config.rows > 30 || model.config.columns > 30 ? 7 : 10), [model.config.columns, model.config.rows])
   const rodMaterial = useMemo(() => new THREE.MeshStandardMaterial({
     color: inverseLinkageColor,
-    transparent: scope.sideProjection,
-    opacity: scope.sideProjection ? 0.88 : 1,
+    transparent: scope.sideProjection || ghostDenseGrid,
+    opacity: scope.sideProjection ? 0.88 : ghostDenseGrid ? 0.26 : 1,
     roughness: 0.62,
     metalness: 0.04,
     depthTest: !scope.sideSlice && !scope.sideProjection,
-    depthWrite: !scope.sideSlice && !scope.sideProjection,
-  }), [scope.sideProjection, scope.sideSlice])
+    depthWrite: !scope.sideSlice && !scope.sideProjection && !ghostDenseGrid,
+  }), [ghostDenseGrid, scope.sideProjection, scope.sideSlice])
   const bodyMaterial = useMemo(() => new THREE.MeshStandardMaterial({
     color: inverseCellBodyColor,
-    transparent: scope.sideProjection,
-    opacity: scope.sideProjection ? 0.88 : 1,
+    transparent: scope.sideProjection || ghostDenseGrid,
+    opacity: scope.sideProjection ? 0.88 : ghostDenseGrid ? 0.34 : 1,
     roughness: 0.7,
     metalness: 0.04,
     depthTest: !scope.sideSlice && !scope.sideProjection,
-    depthWrite: !scope.sideSlice && !scope.sideProjection,
-  }), [scope.sideProjection, scope.sideSlice])
+    depthWrite: !scope.sideSlice && !scope.sideProjection && !ghostDenseGrid,
+  }), [ghostDenseGrid, scope.sideProjection, scope.sideSlice])
   const armInstanceCount = useMemo(() =>
     scope.frames.reduce((sum, frame) => sum + (scope.directionsByNodeId.get(frame.nodeId)?.length ?? 0), 0),
   [scope])
@@ -328,7 +330,6 @@ function RigidCellGlyphs({
     const bodyMesh = bodyRef.current
     if (!armMesh || !bodyMesh) return
 
-    const largeGrid = model.config.rows > 30 || model.config.columns > 30
     const rodWidth = Math.max(model.config.spacing * (scope.sideSlice ? 0.034 : scope.sideProjection ? 0.035 : (largeGrid ? 0.016 : 0.048)), 0.01)
     const bodySize = model.config.spacing * (scope.sideSlice ? 0.32 : scope.sideProjection ? 0.26 : (largeGrid ? 0.18 : 0.34))
     const bodyThickness = rigidCellBodyThickness(model.config.spacing)
@@ -357,7 +358,7 @@ function RigidCellGlyphs({
 
     armMesh.instanceMatrix.needsUpdate = true
     bodyMesh.instanceMatrix.needsUpdate = true
-  }, [model, scope])
+  }, [largeGrid, model, scope])
 
   return (
     <>
@@ -409,19 +410,21 @@ function ConnectorInstances({
   scope: MechanismRenderScope
   radius: number
 }) {
+  const largeGrid = model.config.rows > 30 || model.config.columns > 30
+  const ghostDenseGrid = largeGrid && !scope.sideSlice && !scope.sideProjection
   const ref = useRef<THREE.InstancedMesh>(null)
   const geometry = useMemo(() => new THREE.SphereGeometry(1, model.config.rows > 30 || model.config.columns > 30 ? 8 : 14, 8), [model.config.columns, model.config.rows])
   const material = useMemo(() => new THREE.MeshStandardMaterial({
     color: inverseConnectorColor,
     emissive: inverseConnectorColor,
     emissiveIntensity: 0.08,
-    transparent: scope.sideProjection,
-    opacity: scope.sideProjection ? 0.9 : 1,
+    transparent: scope.sideProjection || ghostDenseGrid,
+    opacity: scope.sideProjection ? 0.9 : ghostDenseGrid ? 0.42 : 1,
     roughness: 0.45,
     metalness: 0.03,
     depthTest: !scope.sideSlice && !scope.sideProjection,
-    depthWrite: !scope.sideSlice && !scope.sideProjection,
-  }), [scope.sideProjection, scope.sideSlice])
+    depthWrite: !scope.sideSlice && !scope.sideProjection && !ghostDenseGrid,
+  }), [ghostDenseGrid, scope.sideProjection, scope.sideSlice])
 
   useLayoutEffect(() => {
     if (!ref.current) return
