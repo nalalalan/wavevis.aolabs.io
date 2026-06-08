@@ -44,6 +44,7 @@ const PROFILE_LIP_SHARPNESS = 0.28
 const CORE_PROFILE_SMOOTHING = 0.58
 const CORE_PROFILE_START = 0.02
 const CORE_PROFILE_END = 1
+const CORE_OVERHANG_HEIGHT_FRACTION = 0.28
 
 export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   rows: DEFAULT_SHEET_ROWS,
@@ -1223,9 +1224,9 @@ function coreFeaturePinWeight(restPosition: Vec3, config: InverseSheetConfig): n
   if (
     nearCenterline &&
     canonicalSample[0] > DEFAULT_WAVE_FIELD_MAX_X &&
-    canonicalSample[0] <= DEFAULT_WAVE_FIELD_MAX_X + gridStepX * 1.6
+    canonicalSample[0] <= DEFAULT_WAVE_FIELD_MAX_X + gridStepX * 3.2
   ) {
-    return 0.45
+    return 1
   }
 
   if (!pointInsideCanonicalWaveField(canonicalSample)) return 0
@@ -1416,10 +1417,11 @@ function applyBreakingWaveLip(
   const rawDip = clampNumber(lipDip, 0, 1)
   const dip = smootherStep(rawDip)
   const sharp = smootherStep(clampNumber(lipSharpness, 0, 1))
-  const crestU = 0.56
-  const shoulderU = 0.69
-  const noseU = 1
-  const underU = 1.26
+  const crestU = 0.5
+  const shoulderU = 0.64
+  const noseU = 0.84
+  const innerRoofU = 0.99
+  const underU = 1.14
   const returnU = breakingLipReturnU()
   const restXAt = (amount: number) => profileRestLength * amount
   const toDisplacement = (amount: number, current: { x: number; z: number }) => ({
@@ -1435,27 +1437,32 @@ function applyBreakingWaveLip(
     z: base.z,
   }
   const profileScale = Math.max(overhangAmount, profileRestLength * 0.34, DEFAULT_SHEET_SPACING)
+  const barrelSpan = Math.max(restXAt(returnU), profileScale * 2.55, DEFAULT_SHEET_SPACING)
   const maxHeight = waveHeight * lerpNumber(0.92, 1, dip)
   const start = { x: 0, z: 0 }
   const crest = {
-    x: restXAt(crestU) + profileScale * lerpNumber(0.22, 0.46, dip),
+    x: lerpNumber(restXAt(crestU) + profileScale * 0.22, barrelSpan * 0.53, dip),
     z: maxHeight,
   }
   const shoulder = {
-    x: crest.x + profileScale * lerpNumber(0.18, 0.56, dip),
-    z: maxHeight - waveHeight * lerpNumber(0.015, 0.04, dip),
+    x: lerpNumber(crest.x + profileScale * 0.16, barrelSpan * 0.69, dip),
+    z: waveHeight * lerpNumber(0.9, 0.94, dip),
   }
   const lipNose = {
-    x: shoulder.x + profileScale * lerpNumber(0.18, 0.44, dip),
-    z: waveHeight * lerpNumber(0.22, 0.2, dip),
+    x: lerpNumber(shoulder.x + profileScale * 0.18, barrelSpan * 0.78, dip),
+    z: waveHeight * lerpNumber(0.34, 0.36, dip),
+  }
+  const innerRoof = {
+    x: lerpNumber(shoulder.x - profileScale * 0.08, barrelSpan * 0.61, dip),
+    z: waveHeight * lerpNumber(0.42, 0.55, dip),
   }
   const underPocket = {
-    x: crest.x + profileScale * lerpNumber(0.04, 0.18, dip),
-    z: waveHeight * lerpNumber(0.085, 0.045, dip),
+    x: lerpNumber(crest.x + profileScale * 0.02, barrelSpan * 0.47, dip),
+    z: waveHeight * lerpNumber(0.11, 0.075, dip),
   }
   const floorReturn = {
-    x: restXAt(returnU),
-    z: 0,
+    x: barrelSpan,
+    z: waveHeight * lerpNumber(0.028, 0.018, dip),
   }
   let target: { x: number; z: number }
 
@@ -1464,12 +1471,12 @@ function applyBreakingWaveLip(
     const p0 = start
     const p3 = crest
     const p1 = {
-      x: restXAt(0.14),
+      x: barrelSpan * lerpNumber(0.13, 0.15, dip),
       z: 0,
     }
     const p2 = {
-      x: crest.x - profileScale * 0.28,
-      z: crest.z - waveHeight * 0.01,
+      x: crest.x - barrelSpan * lerpNumber(0.1, 0.12, dip),
+      z: crest.z - waveHeight * lerpNumber(0.015, 0.035, dip),
     }
 
     target = cubicBezierProfile(p0, p1, p2, p3, amount)
@@ -1478,12 +1485,12 @@ function applyBreakingWaveLip(
     const p0 = crest
     const p3 = shoulder
     const p1 = {
-      x: crest.x + profileScale * lerpNumber(0.18, 0.28, dip),
-      z: crest.z + waveHeight * lerpNumber(0.015, 0.04, dip),
+      x: crest.x + barrelSpan * lerpNumber(0.055, 0.08, dip),
+      z: crest.z + waveHeight * lerpNumber(0.012, 0.02, dip),
     }
     const p2 = {
-      x: shoulder.x - profileScale * 0.24,
-      z: shoulder.z + waveHeight * 0.04,
+      x: shoulder.x - barrelSpan * lerpNumber(0.055, 0.075, dip),
+      z: shoulder.z + waveHeight * lerpNumber(0.018, 0.028, dip),
     }
 
     target = cubicBezierProfile(p0, p1, p2, p3, amount)
@@ -1492,26 +1499,40 @@ function applyBreakingWaveLip(
     const p0 = shoulder
     const p3 = lipNose
     const p1 = {
-      x: shoulder.x + profileScale * lerpNumber(0.38, 0.62, dip),
-      z: shoulder.z - waveHeight * lerpNumber(0.05, 0.12, sharp),
+      x: shoulder.x + barrelSpan * lerpNumber(0.06, 0.1, dip),
+      z: shoulder.z - waveHeight * lerpNumber(0.01, 0.025, dip),
     }
     const p2 = {
-      x: lipNose.x - profileScale * lerpNumber(0.08, 0.035, sharp),
-      z: lipNose.z + waveHeight * lerpNumber(0.46, 0.24, sharp),
+      x: lipNose.x + barrelSpan * lerpNumber(0.025, 0.01, sharp),
+      z: lipNose.z + waveHeight * lerpNumber(0.16, 0.08, sharp),
+    }
+
+    target = cubicBezierProfile(p0, p1, p2, p3, amount)
+  } else if (profileU <= innerRoofU) {
+    const amount = smootherStep((profileU - noseU) / Math.max(innerRoofU - noseU, 0.000001))
+    const p0 = lipNose
+    const p3 = innerRoof
+    const p1 = {
+      x: lipNose.x + barrelSpan * lerpNumber(0.006, 0, sharp),
+      z: lipNose.z - waveHeight * lerpNumber(0.035, 0.018, sharp),
+    }
+    const p2 = {
+      x: innerRoof.x + barrelSpan * lerpNumber(0.065, 0.035, sharp),
+      z: innerRoof.z + waveHeight * lerpNumber(0.045, 0.02, sharp),
     }
 
     target = cubicBezierProfile(p0, p1, p2, p3, amount)
   } else if (profileU <= underU) {
-    const amount = smootherStep((profileU - noseU) / Math.max(underU - noseU, 0.000001))
-    const p0 = lipNose
+    const amount = smootherStep((profileU - innerRoofU) / Math.max(underU - innerRoofU, 0.000001))
+    const p0 = innerRoof
     const p3 = underPocket
     const p1 = {
-      x: lipNose.x - profileScale * lerpNumber(0.03, 0.1, dip),
-      z: lipNose.z - waveHeight * lerpNumber(0.005, 0.035, dip),
+      x: innerRoof.x - barrelSpan * lerpNumber(0.055, 0.075, dip),
+      z: innerRoof.z - waveHeight * lerpNumber(0.01, 0.025, dip),
     }
     const p2 = {
-      x: underPocket.x + profileScale * lerpNumber(0.6, 0.42, sharp),
-      z: underPocket.z + waveHeight * lerpNumber(0.64, 0.42, sharp),
+      x: underPocket.x - barrelSpan * lerpNumber(0.012, 0.025, dip),
+      z: underPocket.z + waveHeight * lerpNumber(0.11, 0.16, 1 - sharp),
     }
 
     target = cubicBezierProfile(p0, p1, p2, p3, amount)
@@ -1520,12 +1541,12 @@ function applyBreakingWaveLip(
     const p0 = underPocket
     const p3 = floorReturn
     const p1 = {
-      x: underPocket.x + profileScale * lerpNumber(0.02, 0.08, dip),
+      x: underPocket.x + barrelSpan * lerpNumber(0.03, 0.055, dip),
       z: Math.max(0, underPocket.z - waveHeight * lerpNumber(0.002, 0.012, dip)),
     }
     const p2 = {
-      x: p3.x - profileScale * lerpNumber(0.62, 0.9, dip),
-      z: waveHeight * lerpNumber(0.025, 0.004, dip),
+      x: p3.x - barrelSpan * lerpNumber(0.34, 0.42, dip),
+      z: waveHeight * lerpNumber(0.035, 0.02, dip),
     }
 
     target = cubicBezierProfile(p0, p1, p2, p3, amount)
@@ -1545,7 +1566,7 @@ function breakingLipStart(): number {
 }
 
 function breakingLipReturnU(): number {
-  return 1.5
+  return 1.42
 }
 
 function profileBaseParameter(profileU: number): number {
@@ -1770,12 +1791,14 @@ function transverseWaveMask(
   if (requestedHalfWidth <= 0.000001) return 0
 
   const gridSpacingY = DEFAULT_WAVE_FIELD_SPAN / Math.max(config.rows - 1, 1)
+  const centerSampleSpacingY = Math.max(gridSpacingY, DEFAULT_SHEET_SPAN / Math.max(config.rows - 1, 1))
   const smooth = clampNumber(wallSmoothness, 0, 1)
   const minFeather = gridSpacingY * lerpNumber(4.25, 7.25, smooth)
   const desiredFeather = requestedHalfWidth * lerpNumber(0.3, 0.86, smooth)
   const fadeWidth = Math.min(requestedHalfWidth, Math.max(minFeather, desiredFeather))
   const coreHalfWidth = Math.max(requestedHalfWidth - fadeWidth, 0)
   const distanceFromCenter = Math.abs(y - yCenter)
+  if (distanceFromCenter <= centerSampleSpacingY * 0.62) return clampNumber(edgeMask, 0, 1)
   const widthMask = 1 - smootherStep((distanceFromCenter - coreHalfWidth) / Math.max(fadeWidth, 0.000001))
 
   return clampNumber(edgeMask * widthMask, 0, 1)
@@ -1797,6 +1820,7 @@ function transverseSupportMask(
   )
   const coreHalfWidth = Math.max(requestedHalfWidth - fadeWidth, 0)
   const distance = Math.abs(centeredY)
+  if (distance <= gridSpacingY * 0.6) return 1
 
   return clampNumber(1 - smootherStep((distance - coreHalfWidth) / Math.max(fadeWidth, 0.000001)), 0, 1)
 }
@@ -2018,7 +2042,9 @@ function measureOverhangAmount(nodes: LatticeNode[]): number {
   const maxLift = maxValue(nodes.map((node) => Math.abs(node.currentPosition[2])), (value) => value, 0)
   if (maxLift <= 0.000001) return 0
 
-  const liftedNodes = nodes.filter((node) => Math.abs(node.currentPosition[2]) >= maxLift * 0.1)
+  const liftedNodes = nodes.filter((node) => (
+    Math.abs(node.currentPosition[2]) >= maxLift * CORE_OVERHANG_HEIGHT_FRACTION
+  ))
   const horizontalProjection = liftedNodes.map((node) => {
     const dx = node.currentPosition[0] - node.restPosition[0]
     const dy = node.currentPosition[1] - node.restPosition[1]

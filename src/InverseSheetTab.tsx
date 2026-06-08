@@ -155,9 +155,9 @@ function readInitialInverseSheetConfig(): InverseSheetConfig {
 }
 
 function readInitialInverseSheetView(): CameraView {
-  if (typeof window === 'undefined') return 'isometric'
+  if (typeof window === 'undefined') return 'side'
   const view = new URLSearchParams(window.location.search).get('view')
-  return view === 'side' || view === 'slice' || view === 'top' || view === 'isometric' ? view : 'isometric'
+  return view === 'side' || view === 'slice' || view === 'top' || view === 'isometric' ? view : 'side'
 }
 
 function readNumberConfigParam<Key extends keyof InverseSheetConfig>(

@@ -98,7 +98,7 @@ function LatticeModelGroup({
     ? Math.max(model.config.spacing * 0.078, 0.044)
     : Math.max(model.config.spacing * (largeGrid ? 0.052 : 0.12), 0.026)
   const surfaceOpacity = sliceProfileView ? 0.18 : (largeGrid ? 0.3 : 0.42)
-  const profileOverlayVisible = sliceProfileView
+  const profileOverlayVisible = sliceProfileView || sideProjectionView
 
   return (
     <group>
@@ -147,14 +147,24 @@ function buildMechanismRenderScope(
   sideProjection: boolean,
 ): MechanismRenderScope {
   if (!sideSlice) {
+    const sideProjectionNodeIds = sideProjection ? sideProjectionVisibleNodeIds(model) : null
     const directionsByNodeId = new Map<string, CellArmDirection[]>()
-    mechanism.frames.forEach((frame) => {
+    const frames = sideProjectionNodeIds
+      ? mechanism.frames.filter((frame) => sideProjectionNodeIds.has(frame.nodeId))
+      : mechanism.frames
+    frames.forEach((frame) => {
       directionsByNodeId.set(frame.nodeId, sideProjection ? ['east', 'west'] : allCellArmDirections)
     })
 
     return {
-      frames: mechanism.frames,
-      edges: sideProjection ? model.edges.filter((edge) => edge.orientation === 'horizontal') : model.edges,
+      frames,
+      edges: sideProjection
+        ? model.edges.filter((edge) =>
+          edge.orientation === 'horizontal' &&
+          sideProjectionNodeIds?.has(edge.nodeA) &&
+          sideProjectionNodeIds.has(edge.nodeB),
+        )
+        : model.edges,
       directionsByNodeId,
       sideSlice: false,
       sideProjection,
@@ -191,6 +201,13 @@ function buildMechanismRenderScope(
     sideSlice: true,
     sideProjection: false,
   }
+}
+
+function sideProjectionVisibleNodeIds(model: LatticeModel): Set<string> {
+  const centerRow = Math.round((model.config.rows - 1) * 0.5)
+  const visibleRows = new Set<number>([centerRow])
+
+  return new Set(model.nodes.filter((node) => visibleRows.has(node.row)).map((node) => node.id))
 }
 
 function SideProfileSilhouette({ model, compact = false }: { model: LatticeModel; compact?: boolean }) {
