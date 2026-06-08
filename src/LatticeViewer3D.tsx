@@ -298,29 +298,29 @@ function RigidCellGlyphs({
   scope: MechanismRenderScope
 }) {
   const largeGrid = model.config.rows > 30 || model.config.columns > 30
-  const ghostDenseGrid = largeGrid && !scope.sideSlice && !scope.sideProjection
+  const denseFullArray = largeGrid && !scope.sideSlice && !scope.sideProjection
   const armRef = useRef<THREE.InstancedMesh>(null)
   const bodyRef = useRef<THREE.InstancedMesh>(null)
   const bodyGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
   const armGeometry = useMemo(() => new THREE.CylinderGeometry(1, 1, 1, model.config.rows > 30 || model.config.columns > 30 ? 7 : 10), [model.config.columns, model.config.rows])
   const rodMaterial = useMemo(() => new THREE.MeshStandardMaterial({
     color: inverseLinkageColor,
-    transparent: scope.sideProjection || ghostDenseGrid,
-    opacity: scope.sideProjection ? 0.88 : ghostDenseGrid ? 0.26 : 1,
+    transparent: scope.sideProjection,
+    opacity: scope.sideProjection ? 0.88 : 1,
     roughness: 0.62,
     metalness: 0.04,
     depthTest: !scope.sideSlice && !scope.sideProjection,
-    depthWrite: !scope.sideSlice && !scope.sideProjection && !ghostDenseGrid,
-  }), [ghostDenseGrid, scope.sideProjection, scope.sideSlice])
+    depthWrite: !scope.sideSlice && !scope.sideProjection,
+  }), [scope.sideProjection, scope.sideSlice])
   const bodyMaterial = useMemo(() => new THREE.MeshStandardMaterial({
     color: inverseCellBodyColor,
-    transparent: scope.sideProjection || ghostDenseGrid,
-    opacity: scope.sideProjection ? 0.88 : ghostDenseGrid ? 0.34 : 1,
+    transparent: scope.sideProjection,
+    opacity: scope.sideProjection ? 0.88 : 1,
     roughness: 0.7,
     metalness: 0.04,
     depthTest: !scope.sideSlice && !scope.sideProjection,
-    depthWrite: !scope.sideSlice && !scope.sideProjection && !ghostDenseGrid,
-  }), [ghostDenseGrid, scope.sideProjection, scope.sideSlice])
+    depthWrite: !scope.sideSlice && !scope.sideProjection,
+  }), [scope.sideProjection, scope.sideSlice])
   const armInstanceCount = useMemo(() =>
     scope.frames.reduce((sum, frame) => sum + (scope.directionsByNodeId.get(frame.nodeId)?.length ?? 0), 0),
   [scope])
@@ -328,7 +328,7 @@ function RigidCellGlyphs({
   useLayoutEffect(() => {
     const armMesh = armRef.current
     const bodyMesh = bodyRef.current
-    if (!armMesh || !bodyMesh) return
+    if (!bodyMesh || (!denseFullArray && !armMesh)) return
 
     const rodWidth = Math.max(model.config.spacing * (scope.sideSlice ? 0.034 : scope.sideProjection ? 0.035 : (largeGrid ? 0.016 : 0.048)), 0.01)
     const bodySize = model.config.spacing * (scope.sideSlice ? 0.32 : scope.sideProjection ? 0.26 : (largeGrid ? 0.18 : 0.34))
@@ -350,21 +350,54 @@ function RigidCellGlyphs({
 
       setBoxInstance(matrix, bodyMesh, index, center, bodyXAxis, bodyYAxis, bodyZAxis, bodySize, bodySize, bodyDepth)
       directions.forEach((direction) => {
+        if (!armMesh) return
         const connectedEndpoint = frame.armEndpoints[direction]
         setCylinderInstance(dummy, armMesh, armIndex, center, connectedEndpoint ? toThree(connectedEndpoint) : center, rodWidth)
         armIndex += 1
       })
     })
 
-    armMesh.instanceMatrix.needsUpdate = true
+    if (armMesh) armMesh.instanceMatrix.needsUpdate = true
     bodyMesh.instanceMatrix.needsUpdate = true
-  }, [largeGrid, model, scope])
+  }, [denseFullArray, largeGrid, model, scope])
 
   return (
     <>
-      <instancedMesh ref={armRef} args={[armGeometry, rodMaterial, armInstanceCount]} renderOrder={scope.sideSlice || scope.sideProjection ? 22 : 0} />
+      {denseFullArray ? (
+        <RigidCellArmLineSegments scope={scope} />
+      ) : (
+        <instancedMesh ref={armRef} args={[armGeometry, rodMaterial, armInstanceCount]} renderOrder={scope.sideSlice || scope.sideProjection ? 22 : 0} />
+      )}
       <instancedMesh ref={bodyRef} args={[bodyGeometry, bodyMaterial, scope.frames.length]} renderOrder={scope.sideSlice || scope.sideProjection ? 23 : 0} />
     </>
+  )
+}
+
+function RigidCellArmLineSegments({ scope }: { scope: MechanismRenderScope }) {
+  const geometry = useMemo(() => {
+    const positions: number[] = []
+
+    scope.frames.forEach((frame) => {
+      const center = toThree(frame.center)
+      const directions = scope.directionsByNodeId.get(frame.nodeId) ?? []
+
+      directions.forEach((direction) => {
+        const endpoint = frame.armEndpoints[direction]
+        if (!endpoint) return
+        const target = toThree(endpoint)
+        positions.push(center.x, center.y, center.z, target.x, target.y, target.z)
+      })
+    })
+
+    const next = new THREE.BufferGeometry()
+    next.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+    return next
+  }, [scope])
+
+  return (
+    <lineSegments geometry={geometry} renderOrder={1}>
+      <lineBasicMaterial color={inverseLinkageColor} transparent={false} opacity={1} depthTest depthWrite />
+    </lineSegments>
   )
 }
 
@@ -410,21 +443,19 @@ function ConnectorInstances({
   scope: MechanismRenderScope
   radius: number
 }) {
-  const largeGrid = model.config.rows > 30 || model.config.columns > 30
-  const ghostDenseGrid = largeGrid && !scope.sideSlice && !scope.sideProjection
   const ref = useRef<THREE.InstancedMesh>(null)
   const geometry = useMemo(() => new THREE.SphereGeometry(1, model.config.rows > 30 || model.config.columns > 30 ? 8 : 14, 8), [model.config.columns, model.config.rows])
   const material = useMemo(() => new THREE.MeshStandardMaterial({
     color: inverseConnectorColor,
     emissive: inverseConnectorColor,
     emissiveIntensity: 0.08,
-    transparent: scope.sideProjection || ghostDenseGrid,
-    opacity: scope.sideProjection ? 0.9 : ghostDenseGrid ? 0.42 : 1,
+    transparent: scope.sideProjection,
+    opacity: scope.sideProjection ? 0.9 : 1,
     roughness: 0.45,
     metalness: 0.03,
     depthTest: !scope.sideSlice && !scope.sideProjection,
-    depthWrite: !scope.sideSlice && !scope.sideProjection && !ghostDenseGrid,
-  }), [ghostDenseGrid, scope.sideProjection, scope.sideSlice])
+    depthWrite: !scope.sideSlice && !scope.sideProjection,
+  }), [scope.sideProjection, scope.sideSlice])
 
   useLayoutEffect(() => {
     if (!ref.current) return

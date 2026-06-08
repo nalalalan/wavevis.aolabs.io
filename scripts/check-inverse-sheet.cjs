@@ -161,6 +161,24 @@ const steerField = {
 const widthInvariant = {
   narrowToWideCenterlineResidual: summarizeCenterlineProfileResidual(buildInverseSheetModel({ overhangWidth: 12 }), buildInverseSheetModel({ overhangWidth: 36 })),
 }
+const lateralSmoothness = {
+  default: summarizeLateralSmoothness(buildInverseSheetModel()),
+  compactUser: summarizeLateralSmoothness(buildInverseSheetModel({
+    rows: 24,
+    columns: 24,
+    height: 8,
+    horizontalOffset: 9,
+    overhangPosition: -0.15,
+    steer: 0,
+    overhangAngleDeg: 118,
+    overhangWidth: 17,
+    lipSharpness: 0.28,
+    smoothing: 1,
+    wallSmoothness: 0.18,
+    flatContribution: 0.35,
+  })),
+  breakingWide: summarizeLateralSmoothness(lipDipSweepModels[118]),
+}
 const resolutionInvariant = {
   grid24Residual: summarizeCenterlineProfileResidual(buildInverseSheetModel({ rows: 24, columns: 24, overhangWidth: 32 }), buildInverseSheetModel({ rows: 44, columns: 44, overhangWidth: 32 })),
   grid72Residual: summarizeCenterlineProfileResidual(buildInverseSheetModel({ rows: 72, columns: 72, overhangWidth: 32 }), buildInverseSheetModel({ rows: 44, columns: 44, overhangWidth: 32 })),
@@ -259,6 +277,14 @@ if (widthInvariant.narrowToWideCenterlineResidual > 0.03) {
   failures.push('width should only change y/span, not the x-z centerline')
 }
 
+if (!Object.values(lateralSmoothness).every((summary) => (
+  summary.maxSpanStepRatio <= 0.42 &&
+  summary.maxSpanCurvatureRatio <= 0.38 &&
+  summary.maxSpanToLongStepRatio <= 1.55
+))) {
+  failures.push('span taper should stay smooth without side walls, divots, or lateral zigzags')
+}
+
 if (resolutionInvariant.grid24CoreResidual > 1.6 || resolutionInvariant.grid72CoreResidual > 0.85) {
   failures.push('rows and columns should only resample the same physical overhang')
 }
@@ -337,6 +363,7 @@ const report = {
   overhangPosition: positionField,
   steer: steerField,
   widthInvariant,
+  lateralSmoothness,
   resolutionInvariant,
   displayInvariant,
   sliderRobustness,
@@ -711,6 +738,54 @@ function summarizeWallSmoothness(model) {
     edgeWidth: round(edgeWidth),
     centerWidth: round(centerWidth),
     endToCenterWidthRatio: round(edgeWidth / Math.max(centerWidth, 0.0001)),
+  }
+}
+
+function summarizeLateralSmoothness(model) {
+  const nodeById = new Map(model.nodes.map((node) => [node.id, node]))
+  let maxSpanStep = 0
+  let maxLongStep = 0
+  let maxSpanCurvature = 0
+
+  for (let row = 0; row < model.config.rows; row += 1) {
+    for (let col = 0; col < model.config.columns; col += 1) {
+      const node = nodeById.get(`n-${row}-${col}`)
+      if (!node) continue
+
+      const spanNeighbor = nodeById.get(`n-${row + 1}-${col}`)
+      if (spanNeighbor) {
+        maxSpanStep = Math.max(maxSpanStep, Math.abs(spanNeighbor.currentPosition[2] - node.currentPosition[2]))
+      }
+
+      const longitudinalNeighbor = nodeById.get(`n-${row}-${col + 1}`)
+      if (longitudinalNeighbor) {
+        maxLongStep = Math.max(maxLongStep, Math.abs(longitudinalNeighbor.currentPosition[2] - node.currentPosition[2]))
+      }
+    }
+  }
+
+  for (let col = 0; col < model.config.columns; col += 1) {
+    for (let row = 1; row < model.config.rows - 1; row += 1) {
+      const previous = nodeById.get(`n-${row - 1}-${col}`)
+      const current = nodeById.get(`n-${row}-${col}`)
+      const next = nodeById.get(`n-${row + 1}-${col}`)
+      if (!previous || !current || !next) continue
+
+      maxSpanCurvature = Math.max(
+        maxSpanCurvature,
+        Math.abs(previous.currentPosition[2] - 2 * current.currentPosition[2] + next.currentPosition[2]),
+      )
+    }
+  }
+
+  const height = Math.max(model.summary.maxHeight, 0.000001)
+  return {
+    maxSpanStep: round(maxSpanStep),
+    maxLongStep: round(maxLongStep),
+    maxSpanCurvature: round(maxSpanCurvature),
+    maxSpanStepRatio: round(maxSpanStep / height),
+    maxSpanCurvatureRatio: round(maxSpanCurvature / height),
+    maxSpanToLongStepRatio: round(maxSpanStep / Math.max(maxLongStep, 0.000001)),
   }
 }
 
