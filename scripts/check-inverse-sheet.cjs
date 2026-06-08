@@ -372,6 +372,7 @@ function summarizeSliderRobustness() {
     ['full-ground-transition', { smoothing: 1 }],
   ]
   const sweeps = [
+    ['morph', [0, 0.15, 0.3, 0.5, 0.75, 1], (value) => ({ morph: value })],
     ['height', [0, 3, 6, 10, 14.75], (value) => ({ height: value })],
     ['overhang', [0, 4, 8, 12, 16.25], (value) => ({ horizontalOffset: value })],
     ['lipDip', [90, 98, 105, 112, 118, 120], (value) => ({ overhangAngleDeg: value })],

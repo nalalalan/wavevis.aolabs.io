@@ -37,6 +37,11 @@ export default function InverseSheetTab({ activeTab, onTabChange, resizeHandle }
 
   const requestView = (view: CameraView) => {
     setViewRequest((current) => ({ view, version: current.version + 1 }))
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.searchParams.set('view', view)
+      window.history.replaceState(null, '', url)
+    }
   }
 
   const exportCsv = () => {
@@ -96,6 +101,7 @@ export default function InverseSheetTab({ activeTab, onTabChange, resizeHandle }
 
         <TargetShapeControls
           config={config}
+          currentView={viewRequest.view}
           onConfigChange={updateConfig}
           onRun={() => {
             setConfig((current) => sanitizeInverseSheetConfig(current))

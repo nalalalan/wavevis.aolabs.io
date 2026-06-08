@@ -89,7 +89,11 @@ function LatticeModelGroup({
     buildMechanismRenderScope(model, mechanism, sliceProfileView, sideProjectionView),
   [mechanism, model, sideProjectionView, sliceProfileView])
   const restGhostGeometry = useMemo(() => buildRestGhostGeometry(model, nodeById), [model, nodeById])
-  const surfaceQuads = useMemo(() => (sliceProfileView ? buildSideSurfaceQuads(model) : model.quads), [model, sliceProfileView])
+  const surfaceQuads = useMemo(() => {
+    if (sliceProfileView) return buildSideSurfaceQuads(model, 1)
+    if (sideProjectionView) return buildSideSurfaceQuads(model, 5)
+    return model.quads
+  }, [model, sideProjectionView, sliceProfileView])
   const surfaceGeometry = useMemo(() => buildSurfaceGeometry(model, nodeById, quadMetricById, dihedralByQuad, surfaceQuads), [model, nodeById, quadMetricById, dihedralByQuad, surfaceQuads])
   const labelsVisible = model.config.showLabels && model.config.rows <= 15 && model.config.columns <= 15
   const largeGrid = model.config.rows > 30 || model.config.columns > 30
@@ -97,7 +101,7 @@ function LatticeModelGroup({
   const connectorSize = sliceProfileView
     ? Math.max(model.config.spacing * 0.078, 0.044)
     : Math.max(model.config.spacing * (largeGrid ? 0.052 : 0.12), 0.026)
-  const surfaceOpacity = sliceProfileView ? 0.18 : (largeGrid ? 0.3 : 0.42)
+  const surfaceOpacity = sliceProfileView ? 0.2 : sideProjectionView ? 0.12 : (largeGrid ? 0.3 : 0.42)
   const profileOverlayVisible = sliceProfileView || sideProjectionView
 
   return (
@@ -126,6 +130,7 @@ function LatticeModelGroup({
           <ConnectorInstances model={model} mechanism={mechanism} scope={mechanismScope} radius={connectorSize} />
         </>
       )}
+      {sideProjectionView && <SideBandWireframe model={model} rowBand={5} />}
       {profileOverlayVisible && <SideProfileSilhouette model={model} compact={model.config.showNodes || model.config.showEdges} />}
       {labelsVisible && <NodeLabels nodes={model.nodes} />}
       <SelectedHighlight selected={selected} model={model} nodeById={nodeById} mechanism={mechanism} view={view} />
@@ -133,11 +138,14 @@ function LatticeModelGroup({
   )
 }
 
-function buildSideSurfaceQuads(model: LatticeModel): LatticeQuad[] {
+function buildSideSurfaceQuads(model: LatticeModel, rowBand = 1): LatticeQuad[] {
   if (model.config.rows < 2) return model.quads
   const centerQuadRow = Math.max(0, Math.min(model.config.rows - 2, Math.floor((model.config.rows - 2) * 0.5)))
+  const halfBand = Math.max(0, Math.floor(rowBand * 0.5))
+  const minRow = Math.max(0, centerQuadRow - halfBand)
+  const maxRow = Math.min(model.config.rows - 2, centerQuadRow + halfBand)
 
-  return model.quads.filter((quad) => quad.row === centerQuadRow)
+  return model.quads.filter((quad) => quad.row >= minRow && quad.row <= maxRow)
 }
 
 function buildMechanismRenderScope(
@@ -147,7 +155,7 @@ function buildMechanismRenderScope(
   sideProjection: boolean,
 ): MechanismRenderScope {
   if (!sideSlice) {
-    const sideProjectionNodeIds = sideProjection ? sideProjectionVisibleNodeIds(model) : null
+    const sideProjectionNodeIds = sideProjection ? sideProjectionVisibleNodeIds(model, 5) : null
     const directionsByNodeId = new Map<string, CellArmDirection[]>()
     const frames = sideProjectionNodeIds
       ? mechanism.frames.filter((frame) => sideProjectionNodeIds.has(frame.nodeId))
@@ -203,11 +211,17 @@ function buildMechanismRenderScope(
   }
 }
 
-function sideProjectionVisibleNodeIds(model: LatticeModel): Set<string> {
+function sideProjectionVisibleNodeIds(model: LatticeModel, rowBand: number): Set<string> {
   const centerRow = Math.round((model.config.rows - 1) * 0.5)
-  const visibleRows = new Set<number>([centerRow])
+  const halfBand = Math.max(0, Math.floor(rowBand * 0.5))
+  const minRow = Math.max(0, centerRow - halfBand)
+  const maxRow = Math.min(model.config.rows - 1, centerRow + halfBand)
 
-  return new Set(model.nodes.filter((node) => visibleRows.has(node.row)).map((node) => node.id))
+  return new Set(
+    model.nodes
+      .filter((node) => node.row >= minRow && node.row <= maxRow)
+      .map((node) => node.id),
+  )
 }
 
 function SideProfileSilhouette({ model, compact = false }: { model: LatticeModel; compact?: boolean }) {
@@ -287,19 +301,19 @@ function RigidCellGlyphs({
   const rodMaterial = useMemo(() => new THREE.MeshStandardMaterial({
     color: inverseLinkageColor,
     transparent: scope.sideProjection,
-    opacity: scope.sideProjection ? 0.68 : 1,
+    opacity: scope.sideProjection ? 0.88 : 1,
     roughness: 0.62,
     metalness: 0.04,
-    depthTest: !scope.sideSlice,
+    depthTest: !scope.sideSlice && !scope.sideProjection,
     depthWrite: !scope.sideSlice && !scope.sideProjection,
   }), [scope.sideProjection, scope.sideSlice])
   const bodyMaterial = useMemo(() => new THREE.MeshStandardMaterial({
     color: inverseCellBodyColor,
     transparent: scope.sideProjection,
-    opacity: scope.sideProjection ? 0.76 : 1,
+    opacity: scope.sideProjection ? 0.88 : 1,
     roughness: 0.7,
     metalness: 0.04,
-    depthTest: !scope.sideSlice,
+    depthTest: !scope.sideSlice && !scope.sideProjection,
     depthWrite: !scope.sideSlice && !scope.sideProjection,
   }), [scope.sideProjection, scope.sideSlice])
   const armInstanceCount = useMemo(() =>
@@ -312,8 +326,8 @@ function RigidCellGlyphs({
     if (!armMesh || !bodyMesh) return
 
     const largeGrid = model.config.rows > 30 || model.config.columns > 30
-    const rodWidth = Math.max(model.config.spacing * (scope.sideSlice ? 0.034 : (largeGrid ? 0.016 : 0.048)), 0.01)
-    const bodySize = model.config.spacing * (scope.sideSlice ? 0.32 : (largeGrid ? 0.18 : 0.34))
+    const rodWidth = Math.max(model.config.spacing * (scope.sideSlice ? 0.034 : scope.sideProjection ? 0.032 : (largeGrid ? 0.016 : 0.048)), 0.01)
+    const bodySize = model.config.spacing * (scope.sideSlice ? 0.32 : scope.sideProjection ? 0.24 : (largeGrid ? 0.18 : 0.34))
     const bodyThickness = rigidCellBodyThickness(model.config.spacing)
     const sideBodyXAxis = new THREE.Vector3(1, 0, 0)
     const sideBodyYAxis = new THREE.Vector3(0, 0, 1)
@@ -344,9 +358,39 @@ function RigidCellGlyphs({
 
   return (
     <>
-      <instancedMesh ref={armRef} args={[armGeometry, rodMaterial, armInstanceCount]} renderOrder={scope.sideSlice ? 22 : 0} />
-      <instancedMesh ref={bodyRef} args={[bodyGeometry, bodyMaterial, scope.frames.length]} renderOrder={scope.sideSlice ? 23 : 0} />
+      <instancedMesh ref={armRef} args={[armGeometry, rodMaterial, armInstanceCount]} renderOrder={scope.sideSlice || scope.sideProjection ? 22 : 0} />
+      <instancedMesh ref={bodyRef} args={[bodyGeometry, bodyMaterial, scope.frames.length]} renderOrder={scope.sideSlice || scope.sideProjection ? 23 : 0} />
     </>
+  )
+}
+
+function SideBandWireframe({ model, rowBand }: { model: LatticeModel; rowBand: number }) {
+  const geometry = useMemo(() => {
+    const visibleNodeIds = sideProjectionVisibleNodeIds(model, rowBand)
+    const nodeById = new Map(model.nodes.map((node) => [node.id, node]))
+    const positions: number[] = []
+
+    model.edges.forEach((edge) => {
+      if (!visibleNodeIds.has(edge.nodeA) || !visibleNodeIds.has(edge.nodeB)) return
+      const nodeA = nodeById.get(edge.nodeA)
+      const nodeB = nodeById.get(edge.nodeB)
+      if (!nodeA || !nodeB) return
+
+      positions.push(
+        nodeA.currentPosition[0], nodeA.currentPosition[1], nodeA.currentPosition[2],
+        nodeB.currentPosition[0], nodeB.currentPosition[1], nodeB.currentPosition[2],
+      )
+    })
+
+    const next = new THREE.BufferGeometry()
+    next.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+    return next
+  }, [model, rowBand])
+
+  return (
+    <lineSegments geometry={geometry} renderOrder={21}>
+      <lineBasicMaterial color="#111111" transparent opacity={0.5} depthTest={false} depthWrite={false} />
+    </lineSegments>
   )
 }
 
@@ -368,10 +412,10 @@ function ConnectorInstances({
     emissive: inverseConnectorColor,
     emissiveIntensity: 0.08,
     transparent: scope.sideProjection,
-    opacity: scope.sideProjection ? 0.72 : 1,
+    opacity: scope.sideProjection ? 0.9 : 1,
     roughness: 0.45,
     metalness: 0.03,
-    depthTest: !scope.sideSlice,
+    depthTest: !scope.sideSlice && !scope.sideProjection,
     depthWrite: !scope.sideSlice && !scope.sideProjection,
   }), [scope.sideProjection, scope.sideSlice])
 
@@ -388,7 +432,7 @@ function ConnectorInstances({
     ref.current.instanceMatrix.needsUpdate = true
   }, [mechanism, radius, scope.edges])
 
-  return <instancedMesh ref={ref} args={[geometry, material, scope.edges.length]} renderOrder={scope.sideSlice ? 24 : 0} />
+  return <instancedMesh ref={ref} args={[geometry, material, scope.edges.length]} renderOrder={scope.sideSlice || scope.sideProjection ? 24 : 0} />
 }
 
 function EdgeHitTargets({
@@ -669,7 +713,9 @@ function positionCamera(
   const position =
     view === 'top'
       ? new THREE.Vector3(target.x, target.y, target.z + distance)
-      : sideLikeView
+      : view === 'side'
+        ? new THREE.Vector3(target.x + distance * 0.48, target.y - distance * 0.9, target.z + distance * 0.08)
+        : view === 'slice'
         ? new THREE.Vector3(target.x, target.y - distance, target.z)
         : new THREE.Vector3(target.x + distance * 0.95, target.y - distance * 0.9, target.z + distance * 0.55)
 

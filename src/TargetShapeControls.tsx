@@ -4,6 +4,7 @@ import { getInverseSheetUsableRanges } from './latticeGeometry'
 
 type TargetShapeControlsProps = {
   config: InverseSheetConfig
+  currentView: CameraView
   onConfigChange: (next: InverseSheetConfig) => void
   onRun: () => void
   onReset: () => void
@@ -31,6 +32,7 @@ type BooleanKey = 'showSurface' | 'showRestGhost' | 'showNodes' | 'showEdges'
 
 export default function TargetShapeControls({
   config,
+  currentView,
   onConfigChange,
   onRun,
   onReset,
@@ -67,6 +69,21 @@ export default function TargetShapeControls({
         <div className="two-col">
           <NumberInput label="rows" value={config.rows} min={2} max={72} step={1} onChange={(value) => setNumber('rows', value)} />
           <NumberInput label="columns" value={config.columns} min={2} max={120} step={1} onChange={(value) => setNumber('columns', value)} />
+        </div>
+
+        <div className="view-buttons">
+          <button type="button" className={currentView === 'isometric' ? 'secondary active' : 'secondary'} aria-pressed={currentView === 'isometric'} onClick={() => onView('isometric')}>
+            3D
+          </button>
+          <button type="button" className={currentView === 'top' ? 'secondary active' : 'secondary'} aria-pressed={currentView === 'top'} onClick={() => onView('top')}>
+            Top
+          </button>
+          <button type="button" className={currentView === 'side' ? 'secondary active' : 'secondary'} aria-pressed={currentView === 'side'} onClick={() => onView('side')}>
+            Side
+          </button>
+          <button type="button" className={currentView === 'slice' ? 'secondary active' : 'secondary'} aria-pressed={currentView === 'slice'} onClick={() => onView('slice')}>
+            Cross Section
+          </button>
         </div>
 
         <div className="slider-stack">
@@ -127,20 +144,6 @@ export default function TargetShapeControls({
           ))}
         </div>
 
-        <div className="view-buttons">
-          <button type="button" className="secondary" onClick={() => onView('isometric')}>
-            Isometric View
-          </button>
-          <button type="button" className="secondary" onClick={() => onView('top')}>
-            Top View
-          </button>
-          <button type="button" className="secondary" onClick={() => onView('side')}>
-            Side View
-          </button>
-          <button type="button" className="secondary" onClick={() => onView('slice')}>
-            Slice View
-          </button>
-        </div>
       </section>
 
       <section className="button-row inverse-export-row">

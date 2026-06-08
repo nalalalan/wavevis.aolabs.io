@@ -1319,10 +1319,10 @@ function canonicalOverhangTargetPosition(
   const coreMask = insideCoreField ? clampNumber(Math.max(bodyMask, lipMask), 0, 1) : 0
   const supportControl = Math.max(rawGroundTransition, flatShare * 0.92)
   const supportLongitudinalFade = Math.min(
-    0.64,
-    lerpNumber(0.12, 0.46, supportControl),
+    0.72,
+    lerpNumber(0.14, 0.52, supportControl),
   )
-  const supportWidth = config.overhangWidth * lerpNumber(1.25, 3.15, supportControl)
+  const supportWidth = config.overhangWidth * lerpNumber(1.32, 3.45, supportControl)
   const supportY = transverseSupportMask(
     uncenteredY - DEFAULT_WAVE_FIELD_SPAN * 0.5,
     config,
@@ -1334,9 +1334,9 @@ function canonicalOverhangTargetPosition(
     Math.pow(supportY, lerpNumber(0.9, 0.58, wallSmoothness))
   const taperOnly = Math.max(0, supportMask - coreMask)
   const taperStrength = clampNumber(
-    lerpNumber(0.02, 0.42, rawGroundTransition) + flatShare * 0.36,
+    lerpNumber(0.03, 0.5, rawGroundTransition) + flatShare * 0.42,
     0,
-    0.72,
+    0.82,
   )
   const centerPreserveBand = lerpNumber(0.22, 0.48, Math.max(rawGroundTransition, flatShare))
   const centerPreserve = 1 - smootherStep(1 - Math.abs(v - 0.5) / centerPreserveBand)
@@ -1417,11 +1417,11 @@ function applyBreakingWaveLip(
   const rawDip = clampNumber(lipDip, 0, 1)
   const dip = smootherStep(rawDip)
   const sharp = smootherStep(clampNumber(lipSharpness, 0, 1))
-  const crestU = 0.5
+  const crestU = 0.49
   const shoulderU = 0.64
-  const noseU = 0.84
+  const noseU = 0.82
   const innerRoofU = 0.99
-  const underU = 1.14
+  const underU = 1.13
   const returnU = breakingLipReturnU()
   const restXAt = (amount: number) => profileRestLength * amount
   const toDisplacement = (amount: number, current: { x: number; z: number }) => ({
@@ -1437,32 +1437,32 @@ function applyBreakingWaveLip(
     z: base.z,
   }
   const profileScale = Math.max(overhangAmount, profileRestLength * 0.34, DEFAULT_SHEET_SPACING)
-  const barrelSpan = Math.max(restXAt(returnU), profileScale * 2.55, DEFAULT_SHEET_SPACING)
+  const barrelSpan = Math.max(restXAt(returnU), profileScale * 2.5, DEFAULT_SHEET_SPACING)
   const maxHeight = waveHeight * lerpNumber(0.92, 1, dip)
   const start = { x: 0, z: 0 }
   const crest = {
-    x: lerpNumber(restXAt(crestU) + profileScale * 0.22, barrelSpan * 0.53, dip),
+    x: lerpNumber(restXAt(crestU) + profileScale * 0.22, barrelSpan * 0.54, dip),
     z: maxHeight,
   }
   const shoulder = {
     x: lerpNumber(crest.x + profileScale * 0.16, barrelSpan * 0.69, dip),
-    z: waveHeight * lerpNumber(0.9, 0.94, dip),
+    z: waveHeight * lerpNumber(0.86, 0.84, dip),
   }
   const lipNose = {
-    x: lerpNumber(shoulder.x + profileScale * 0.18, barrelSpan * 0.78, dip),
-    z: waveHeight * lerpNumber(0.34, 0.36, dip),
+    x: lerpNumber(shoulder.x + profileScale * 0.16, barrelSpan * 0.79, dip),
+    z: waveHeight * lerpNumber(0.38, 0.42, dip),
   }
   const innerRoof = {
-    x: lerpNumber(shoulder.x - profileScale * 0.08, barrelSpan * 0.61, dip),
-    z: waveHeight * lerpNumber(0.42, 0.55, dip),
+    x: lerpNumber(shoulder.x - profileScale * 0.08, barrelSpan * 0.6, dip),
+    z: waveHeight * lerpNumber(0.46, 0.6, dip),
   }
   const underPocket = {
-    x: lerpNumber(crest.x + profileScale * 0.02, barrelSpan * 0.47, dip),
-    z: waveHeight * lerpNumber(0.11, 0.075, dip),
+    x: lerpNumber(crest.x + profileScale * 0.02, barrelSpan * 0.46, dip),
+    z: waveHeight * lerpNumber(0.1, 0.06, dip),
   }
   const floorReturn = {
-    x: barrelSpan,
-    z: waveHeight * lerpNumber(0.028, 0.018, dip),
+    x: barrelSpan * 0.995,
+    z: waveHeight * lerpNumber(0.045, 0.035, dip),
   }
   let target: { x: number; z: number }
 
@@ -1471,12 +1471,12 @@ function applyBreakingWaveLip(
     const p0 = start
     const p3 = crest
     const p1 = {
-      x: barrelSpan * lerpNumber(0.13, 0.15, dip),
+      x: barrelSpan * lerpNumber(0.1, 0.095, dip),
       z: 0,
     }
     const p2 = {
-      x: crest.x - barrelSpan * lerpNumber(0.1, 0.12, dip),
-      z: crest.z - waveHeight * lerpNumber(0.015, 0.035, dip),
+      x: crest.x - barrelSpan * lerpNumber(0.12, 0.15, dip),
+      z: crest.z - waveHeight * lerpNumber(0.035, 0.06, dip),
     }
 
     target = cubicBezierProfile(p0, p1, p2, p3, amount)
@@ -1486,11 +1486,11 @@ function applyBreakingWaveLip(
     const p3 = shoulder
     const p1 = {
       x: crest.x + barrelSpan * lerpNumber(0.055, 0.08, dip),
-      z: crest.z + waveHeight * lerpNumber(0.012, 0.02, dip),
+      z: crest.z - waveHeight * lerpNumber(0.005, 0.015, dip),
     }
     const p2 = {
-      x: shoulder.x - barrelSpan * lerpNumber(0.055, 0.075, dip),
-      z: shoulder.z + waveHeight * lerpNumber(0.018, 0.028, dip),
+      x: shoulder.x - barrelSpan * lerpNumber(0.06, 0.08, dip),
+      z: shoulder.z + waveHeight * lerpNumber(0.01, 0.02, dip),
     }
 
     target = cubicBezierProfile(p0, p1, p2, p3, amount)
@@ -1499,12 +1499,12 @@ function applyBreakingWaveLip(
     const p0 = shoulder
     const p3 = lipNose
     const p1 = {
-      x: shoulder.x + barrelSpan * lerpNumber(0.06, 0.1, dip),
-      z: shoulder.z - waveHeight * lerpNumber(0.01, 0.025, dip),
+      x: shoulder.x + barrelSpan * lerpNumber(0.07, 0.11, dip),
+      z: shoulder.z - waveHeight * lerpNumber(0.02, 0.04, dip),
     }
     const p2 = {
-      x: lipNose.x + barrelSpan * lerpNumber(0.025, 0.01, sharp),
-      z: lipNose.z + waveHeight * lerpNumber(0.16, 0.08, sharp),
+      x: lipNose.x + barrelSpan * lerpNumber(0.04, 0.018, sharp),
+      z: lipNose.z + waveHeight * lerpNumber(0.18, 0.09, sharp),
     }
 
     target = cubicBezierProfile(p0, p1, p2, p3, amount)
@@ -1514,11 +1514,11 @@ function applyBreakingWaveLip(
     const p3 = innerRoof
     const p1 = {
       x: lipNose.x + barrelSpan * lerpNumber(0.006, 0, sharp),
-      z: lipNose.z - waveHeight * lerpNumber(0.035, 0.018, sharp),
+      z: lipNose.z - waveHeight * lerpNumber(0.02, 0.012, sharp),
     }
     const p2 = {
-      x: innerRoof.x + barrelSpan * lerpNumber(0.065, 0.035, sharp),
-      z: innerRoof.z + waveHeight * lerpNumber(0.045, 0.02, sharp),
+      x: innerRoof.x + barrelSpan * lerpNumber(0.07, 0.04, sharp),
+      z: innerRoof.z + waveHeight * lerpNumber(0.035, 0.018, sharp),
     }
 
     target = cubicBezierProfile(p0, p1, p2, p3, amount)
@@ -1527,12 +1527,12 @@ function applyBreakingWaveLip(
     const p0 = innerRoof
     const p3 = underPocket
     const p1 = {
-      x: innerRoof.x - barrelSpan * lerpNumber(0.055, 0.075, dip),
-      z: innerRoof.z - waveHeight * lerpNumber(0.01, 0.025, dip),
+      x: innerRoof.x - barrelSpan * lerpNumber(0.075, 0.095, dip),
+      z: innerRoof.z - waveHeight * lerpNumber(0.015, 0.03, dip),
     }
     const p2 = {
-      x: underPocket.x - barrelSpan * lerpNumber(0.012, 0.025, dip),
-      z: underPocket.z + waveHeight * lerpNumber(0.11, 0.16, 1 - sharp),
+      x: underPocket.x - barrelSpan * lerpNumber(0.018, 0.032, dip),
+      z: underPocket.z + waveHeight * lerpNumber(0.09, 0.14, 1 - sharp),
     }
 
     target = cubicBezierProfile(p0, p1, p2, p3, amount)
@@ -1541,12 +1541,12 @@ function applyBreakingWaveLip(
     const p0 = underPocket
     const p3 = floorReturn
     const p1 = {
-      x: underPocket.x + barrelSpan * lerpNumber(0.03, 0.055, dip),
-      z: Math.max(0, underPocket.z - waveHeight * lerpNumber(0.002, 0.012, dip)),
+      x: underPocket.x + barrelSpan * lerpNumber(0.04, 0.07, dip),
+      z: Math.max(0, underPocket.z - waveHeight * lerpNumber(0.001, 0.006, dip)),
     }
     const p2 = {
-      x: p3.x - barrelSpan * lerpNumber(0.34, 0.42, dip),
-      z: waveHeight * lerpNumber(0.035, 0.02, dip),
+      x: p3.x - barrelSpan * lerpNumber(0.34, 0.4, dip),
+      z: waveHeight * lerpNumber(0.055, 0.042, dip),
     }
 
     target = cubicBezierProfile(p0, p1, p2, p3, amount)
