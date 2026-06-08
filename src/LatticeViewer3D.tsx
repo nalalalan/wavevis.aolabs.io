@@ -34,6 +34,7 @@ type MechanismRenderScope = {
   edges: LatticeEdge[]
   directionsByNodeId: Map<string, CellArmDirection[]>
   sideSlice: boolean
+  sideProjection: boolean
 }
 
 type LatticeViewer3DProps = {
@@ -82,19 +83,22 @@ function LatticeModelGroup({
   const quadMetricById = useMemo(() => new Map(model.quadMetrics.map((metric) => [metric.quadId, metric])), [model.quadMetrics])
   const dihedralByQuad = useMemo(() => buildDihedralByQuad(model.dihedralMetrics), [model.dihedralMetrics])
   const mechanism = useMemo(() => buildRigidCellMechanism(model), [model])
-  const mechanismScope = useMemo(() => buildMechanismRenderScope(model, mechanism, view === 'side'), [mechanism, model, view])
+  const sliceProfileView = view === 'slice'
+  const sideProjectionView = view === 'side'
+  const mechanismScope = useMemo(() =>
+    buildMechanismRenderScope(model, mechanism, sliceProfileView, sideProjectionView),
+  [mechanism, model, sideProjectionView, sliceProfileView])
   const restGhostGeometry = useMemo(() => buildRestGhostGeometry(model, nodeById), [model, nodeById])
-  const surfaceQuads = useMemo(() => (view === 'side' ? buildSideSurfaceQuads(model) : model.quads), [model, view])
+  const surfaceQuads = useMemo(() => (sliceProfileView ? buildSideSurfaceQuads(model) : model.quads), [model, sliceProfileView])
   const surfaceGeometry = useMemo(() => buildSurfaceGeometry(model, nodeById, quadMetricById, dihedralByQuad, surfaceQuads), [model, nodeById, quadMetricById, dihedralByQuad, surfaceQuads])
   const labelsVisible = model.config.showLabels && model.config.rows <= 15 && model.config.columns <= 15
   const largeGrid = model.config.rows > 30 || model.config.columns > 30
-  const sideProfileView = view === 'side'
   const edgePickRadius = Math.max(model.config.spacing * (largeGrid ? 0.08 : 0.09), 0.035)
-  const connectorSize = sideProfileView
+  const connectorSize = sliceProfileView
     ? Math.max(model.config.spacing * 0.078, 0.044)
     : Math.max(model.config.spacing * (largeGrid ? 0.052 : 0.12), 0.026)
-  const surfaceOpacity = sideProfileView ? 0.18 : (largeGrid ? 0.3 : 0.42)
-  const profileOverlayVisible = sideProfileView
+  const surfaceOpacity = sliceProfileView ? 0.18 : (largeGrid ? 0.3 : 0.42)
+  const profileOverlayVisible = sliceProfileView
 
   return (
     <group>
@@ -140,18 +144,20 @@ function buildMechanismRenderScope(
   model: LatticeModel,
   mechanism: RigidCellMechanism,
   sideSlice: boolean,
+  sideProjection: boolean,
 ): MechanismRenderScope {
   if (!sideSlice) {
     const directionsByNodeId = new Map<string, CellArmDirection[]>()
     mechanism.frames.forEach((frame) => {
-      directionsByNodeId.set(frame.nodeId, allCellArmDirections)
+      directionsByNodeId.set(frame.nodeId, sideProjection ? ['east', 'west'] : allCellArmDirections)
     })
 
     return {
       frames: mechanism.frames,
-      edges: model.edges,
+      edges: sideProjection ? model.edges.filter((edge) => edge.orientation === 'horizontal') : model.edges,
       directionsByNodeId,
       sideSlice: false,
+      sideProjection,
     }
   }
 
@@ -183,6 +189,7 @@ function buildMechanismRenderScope(
     edges,
     directionsByNodeId,
     sideSlice: true,
+    sideProjection: false,
   }
 }
 
@@ -262,18 +269,22 @@ function RigidCellGlyphs({
   const armGeometry = useMemo(() => new THREE.CylinderGeometry(1, 1, 1, model.config.rows > 30 || model.config.columns > 30 ? 7 : 10), [model.config.columns, model.config.rows])
   const rodMaterial = useMemo(() => new THREE.MeshStandardMaterial({
     color: inverseLinkageColor,
+    transparent: scope.sideProjection,
+    opacity: scope.sideProjection ? 0.68 : 1,
     roughness: 0.62,
     metalness: 0.04,
     depthTest: !scope.sideSlice,
-    depthWrite: !scope.sideSlice,
-  }), [scope.sideSlice])
+    depthWrite: !scope.sideSlice && !scope.sideProjection,
+  }), [scope.sideProjection, scope.sideSlice])
   const bodyMaterial = useMemo(() => new THREE.MeshStandardMaterial({
     color: inverseCellBodyColor,
+    transparent: scope.sideProjection,
+    opacity: scope.sideProjection ? 0.76 : 1,
     roughness: 0.7,
     metalness: 0.04,
     depthTest: !scope.sideSlice,
-    depthWrite: !scope.sideSlice,
-  }), [scope.sideSlice])
+    depthWrite: !scope.sideSlice && !scope.sideProjection,
+  }), [scope.sideProjection, scope.sideSlice])
   const armInstanceCount = useMemo(() =>
     scope.frames.reduce((sum, frame) => sum + (scope.directionsByNodeId.get(frame.nodeId)?.length ?? 0), 0),
   [scope])
@@ -339,11 +350,13 @@ function ConnectorInstances({
     color: inverseConnectorColor,
     emissive: inverseConnectorColor,
     emissiveIntensity: 0.08,
+    transparent: scope.sideProjection,
+    opacity: scope.sideProjection ? 0.72 : 1,
     roughness: 0.45,
     metalness: 0.03,
     depthTest: !scope.sideSlice,
-    depthWrite: !scope.sideSlice,
-  }), [scope.sideSlice])
+    depthWrite: !scope.sideSlice && !scope.sideProjection,
+  }), [scope.sideProjection, scope.sideSlice])
 
   useLayoutEffect(() => {
     if (!ref.current) return
@@ -450,7 +463,7 @@ function SelectedHighlight({
 
   if (selected.kind === 'edge') {
     const edge = model.edges.find((candidate) => candidate.id === selected.id)
-    if (view === 'side' && edge?.orientation !== 'horizontal') return null
+    if (view === 'slice' && edge?.orientation !== 'horizontal') return null
     const nodeA = edge ? nodeById.get(edge.nodeA) : undefined
     const nodeB = edge ? nodeById.get(edge.nodeB) : undefined
     if (!edge || !nodeA || !nodeB) return null
@@ -627,10 +640,11 @@ function positionCamera(
   view: CameraViewRequest['view'],
   selected?: SelectedElement,
 ): void {
-  const bounds = !selected && view === 'side' ? activeSideProfileBounds(model) : model.bounds
+  const sideLikeView = view === 'side' || view === 'slice'
+  const bounds = !selected && sideLikeView ? activeSideProfileBounds(model) : model.bounds
   const maxSpan = Math.max(bounds.span[0], bounds.span[1], bounds.span[2], 2)
   const focus = focusForSelected(model, selected ?? null)
-  const fov = focus ? 32 : view === 'side' ? 34 : 42
+  const fov = focus ? 32 : sideLikeView ? 34 : 42
   const distance = focus
     ? Math.max(focus.radius * 7.5, model.config.spacing * 12, maxSpan * 0.22)
     : cameraDistanceForView(bounds, view, fov, camera.aspect)
@@ -638,7 +652,7 @@ function positionCamera(
   const position =
     view === 'top'
       ? new THREE.Vector3(target.x, target.y, target.z + distance)
-      : view === 'side'
+      : sideLikeView
         ? new THREE.Vector3(target.x, target.y - distance, target.z)
         : new THREE.Vector3(target.x + distance * 0.95, target.y - distance * 0.9, target.z + distance * 0.55)
 
@@ -706,7 +720,7 @@ function cameraDistanceForView(
   const fov = THREE.MathUtils.degToRad(fovDeg)
   const tanHalfFov = Math.tan(fov / 2)
 
-  if (view === 'side') {
+  if (view === 'side' || view === 'slice') {
     return fitPerspectiveDistance(bounds.span[0], bounds.span[2], tanHalfFov, safeAspect, 1.06)
   }
 

@@ -137,6 +137,9 @@ export default function TargetShapeControls({
           <button type="button" className="secondary" onClick={() => onView('side')}>
             Side View
           </button>
+          <button type="button" className="secondary" onClick={() => onView('slice')}>
+            Slice View
+          </button>
         </div>
       </section>
 

@@ -1417,9 +1417,9 @@ function applyBreakingWaveLip(
   const dip = smootherStep(rawDip)
   const sharp = smootherStep(clampNumber(lipSharpness, 0, 1))
   const crestU = 0.56
-  const shoulderU = 0.7
-  const noseU = 0.92
-  const underU = 1.16
+  const shoulderU = 0.69
+  const noseU = 1
+  const underU = 1.26
   const returnU = breakingLipReturnU()
   const restXAt = (amount: number) => profileRestLength * amount
   const toDisplacement = (amount: number, current: { x: number; z: number }) => ({
@@ -1443,15 +1443,15 @@ function applyBreakingWaveLip(
   }
   const shoulder = {
     x: crest.x + profileScale * lerpNumber(0.18, 0.56, dip),
-    z: maxHeight - waveHeight * lerpNumber(0.02, 0.09, dip),
+    z: maxHeight - waveHeight * lerpNumber(0.015, 0.04, dip),
   }
   const lipNose = {
-    x: shoulder.x + profileScale * lerpNumber(0.22, 0.52, dip),
-    z: waveHeight * lerpNumber(0.28, 0.3, dip),
+    x: shoulder.x + profileScale * lerpNumber(0.18, 0.44, dip),
+    z: waveHeight * lerpNumber(0.22, 0.2, dip),
   }
   const underPocket = {
-    x: crest.x + profileScale * lerpNumber(-0.12, -0.02, dip),
-    z: waveHeight * lerpNumber(0.07, 0.018, dip),
+    x: crest.x + profileScale * lerpNumber(0.04, 0.18, dip),
+    z: waveHeight * lerpNumber(0.085, 0.045, dip),
   }
   const floorReturn = {
     x: restXAt(returnU),
@@ -1496,8 +1496,8 @@ function applyBreakingWaveLip(
       z: shoulder.z - waveHeight * lerpNumber(0.05, 0.12, sharp),
     }
     const p2 = {
-      x: lipNose.x + profileScale * lerpNumber(0.055, 0, sharp),
-      z: lipNose.z + waveHeight * lerpNumber(0.48, 0.18, sharp),
+      x: lipNose.x - profileScale * lerpNumber(0.08, 0.035, sharp),
+      z: lipNose.z + waveHeight * lerpNumber(0.46, 0.24, sharp),
     }
 
     target = cubicBezierProfile(p0, p1, p2, p3, amount)
@@ -1506,12 +1506,12 @@ function applyBreakingWaveLip(
     const p0 = lipNose
     const p3 = underPocket
     const p1 = {
-      x: lipNose.x - profileScale * lerpNumber(0.08, 0.18, dip),
-      z: lipNose.z - waveHeight * lerpNumber(0.18, 0.3, dip),
+      x: lipNose.x - profileScale * lerpNumber(0.03, 0.1, dip),
+      z: lipNose.z - waveHeight * lerpNumber(0.005, 0.035, dip),
     }
     const p2 = {
-      x: underPocket.x + profileScale * lerpNumber(0.46, 0.22, sharp),
-      z: underPocket.z + waveHeight * lerpNumber(0.52, 0.22, sharp),
+      x: underPocket.x + profileScale * lerpNumber(0.6, 0.42, sharp),
+      z: underPocket.z + waveHeight * lerpNumber(0.64, 0.42, sharp),
     }
 
     target = cubicBezierProfile(p0, p1, p2, p3, amount)
