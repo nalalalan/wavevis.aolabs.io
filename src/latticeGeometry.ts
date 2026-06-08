@@ -57,18 +57,18 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   supportFraction: 0.14,
   radiusMode: 'autoPreserveLength',
   bendRadius: 4,
-  horizontalOffset: 16.25,
+  horizontalOffset: 18,
   overhangPosition: -0.15,
   steer: 0,
-  height: 16,
+  height: 10,
   overhangWidth: 32,
   overhangAngleDeg: 120,
   conicRho: 0.5,
   curlRadius: 0.65,
   smoothing: 1,
   lipSharpness: 0.28,
-  wallSmoothness: 0.22,
-  flatContribution: 0,
+  wallSmoothness: 0.35,
+  flatContribution: 0.35,
   widthScale: 1,
   strainWeight: 1,
   bendWeight: 0.02,
@@ -1275,7 +1275,7 @@ function coreWaveMask(profileU: number, uncenteredY: number, config: InverseShee
   const bodyMask = Math.pow(bodyX, 1.18) * Math.pow(rimY, lerpNumber(1.08, 0.78, wallSmoothness))
   const lipStart = breakingLipStart()
   const lipPreserveEnvelope = smootherStep((profileU - lipStart) / 0.035)
-  const lipSpanMask = Math.pow(clampNumber(rimY, 0, 1), lerpNumber(0.62, 0.44, Math.max(wallSmoothness, lipDip)))
+  const lipSpanMask = Math.pow(clampNumber(rimY, 0, 1), lerpNumber(1.42, 1.12, Math.max(wallSmoothness, lipDip)))
   const lipMask = (lipDip > 0.000001 ? 1 : 0) *
     lipPreserveEnvelope *
     edgeRamp(profileU, 0, coreLongitudinalFade) *
@@ -1316,7 +1316,7 @@ function canonicalOverhangTargetPosition(
   const bodyMask = Math.pow(bodyX, 1.18) * Math.pow(rimY, lerpNumber(1.08, 0.78, wallSmoothness))
   const lipStart = breakingLipStart()
   const lipPreserveEnvelope = smootherStep((profileU - lipStart) / 0.035)
-  const lipSpanMask = Math.pow(clampNumber(rimY, 0, 1), lerpNumber(0.62, 0.44, Math.max(wallSmoothness, lipDip)))
+  const lipSpanMask = Math.pow(clampNumber(rimY, 0, 1), lerpNumber(1.42, 1.12, Math.max(wallSmoothness, lipDip)))
   const lipMask = (lipDip > 0.000001 ? 1 : 0) *
     lipPreserveEnvelope *
     edgeRamp(profileU, 0, coreLongitudinalFade) *
@@ -1478,32 +1478,39 @@ function breakingWaveBarrelSegments(
   sharp: number,
 ): Array<[ProfilePoint, ProfilePoint, ProfilePoint, ProfilePoint]> {
   const start = point(0, 0)
-  const crest = point(span * lerpNumber(0.45, 0.47, dip), height)
-  const shoulder = point(span * lerpNumber(0.62, 0.65, dip), height * lerpNumber(0.88, 0.86, dip))
-  const nose = point(span * lerpNumber(0.78, 0.8, dip), height * lerpNumber(0.43, 0.4, dip))
-  const innerRoof = point(span * lerpNumber(0.65, 0.62, dip), height * lerpNumber(0.53, 0.59, dip))
-  const underPocket = point(span * lerpNumber(0.56, 0.52, dip), height * lerpNumber(0.12, 0.075, dip))
-  const floorReturn = point(lerpNumber(restEndX * 0.86, restEndX * 0.93, dip), height * lerpNumber(0.045, 0.03, dip))
+  const liftKnee = point(span * lerpNumber(0.31, 0.33, dip), height * lerpNumber(0.76, 0.79, dip))
+  const crest = point(span * lerpNumber(0.5, 0.53, dip), height)
+  const shoulder = point(span * lerpNumber(0.66, 0.69, dip), height * lerpNumber(0.94, 0.92, dip))
+  const nose = point(span * lerpNumber(0.78, 0.81, dip), height * lerpNumber(0.58, 0.52, dip))
+  const innerRoof = point(span * lerpNumber(0.66, 0.63, dip), height * lerpNumber(0.51, 0.57, dip))
+  const underPocket = point(span * lerpNumber(0.55, 0.52, dip), height * lerpNumber(0.115, 0.075, dip))
+  const floorReturn = point(lerpNumber(restEndX * 0.86, restEndX * 0.94, dip), height * lerpNumber(0.04, 0.025, dip))
   const end = point(restEndX, 0)
   const tight = lerpNumber(1, 0.52, sharp)
 
   return [
     [
       start,
-      point(span * 0.08, 0),
-      point(crest.x - span * 0.2, crest.z - height * 0.08),
+      point(span * 0.09, 0),
+      point(liftKnee.x - span * 0.16, liftKnee.z - height * 0.1),
+      liftKnee,
+    ],
+    [
+      liftKnee,
+      point(liftKnee.x + span * 0.08, liftKnee.z + height * 0.08),
+      point(crest.x - span * 0.12, crest.z - height * 0.03),
       crest,
     ],
     [
       crest,
-      point(crest.x + span * 0.08, crest.z + height * 0.01),
-      point(shoulder.x - span * 0.1, shoulder.z + height * 0.03),
+      point(crest.x + span * 0.1, crest.z + height * 0.015),
+      point(shoulder.x - span * 0.1, shoulder.z + height * 0.035),
       shoulder,
     ],
     [
       shoulder,
-      point(shoulder.x + span * 0.11, shoulder.z - height * 0.025),
-      point(nose.x + span * 0.045 * tight, nose.z + height * lerpNumber(0.18, 0.08, sharp)),
+      point(shoulder.x + span * 0.1, shoulder.z - height * 0.03),
+      point(nose.x + span * 0.07 * tight, nose.z + height * lerpNumber(0.16, 0.07, sharp)),
       nose,
     ],
     [
@@ -1815,20 +1822,21 @@ function transverseWaveMask(
   const smooth = clampNumber(wallSmoothness, 0, 1)
   const centerCoreHalfWidth = Math.min(
     requestedHalfWidth,
-    Math.max(gridSpacingY * lerpNumber(1.7, 2.35, smooth), requestedHalfWidth * lerpNumber(0.18, 0.1, smooth)),
+    Math.max(gridSpacingY * lerpNumber(1.25, 1.65, smooth), requestedHalfWidth * lerpNumber(0.3, 0.18, smooth)),
   )
   const taperHalfWidth = Math.min(
     maxHalfWidth,
     Math.max(
-      requestedHalfWidth,
-      requestedHalfWidth * lerpNumber(1.18, 1.42, smooth) + gridSpacingY * lerpNumber(2.6, 4.4, smooth),
+      centerCoreHalfWidth + gridSpacingY * lerpNumber(7.5, 11.5, smooth),
+      requestedHalfWidth * lerpNumber(2.05, 2.9, smooth) + gridSpacingY * lerpNumber(1.8, 3.2, smooth),
     ),
   )
-  const fadeWidth = Math.max(taperHalfWidth - centerCoreHalfWidth, gridSpacingY * lerpNumber(4.5, 7, smooth))
+  const fadeWidth = Math.max(taperHalfWidth - centerCoreHalfWidth, gridSpacingY * lerpNumber(7.5, 11.5, smooth))
   const distanceFromCenter = Math.abs(y - yCenter)
-  const widthMask = distanceFromCenter <= centerCoreHalfWidth
+  const rawWidthMask = distanceFromCenter <= centerCoreHalfWidth
     ? 1
     : 1 - smootherStep((distanceFromCenter - centerCoreHalfWidth) / Math.max(fadeWidth, 0.000001))
+  const widthMask = Math.pow(clampNumber(rawWidthMask, 0, 1), lerpNumber(0.98, 1.08, smooth))
 
   return clampNumber(edgeMask * widthMask, 0, 1)
 }

@@ -179,6 +179,24 @@ const lateralSmoothness = {
   })),
   breakingWide: summarizeLateralSmoothness(lipDipSweepModels[118]),
 }
+const outerRadiusSmoothness = {
+  default: summarizeOuterRadiusSmoothness(buildInverseSheetModel()),
+  compactUser: summarizeOuterRadiusSmoothness(buildInverseSheetModel({
+    rows: 24,
+    columns: 24,
+    height: 8,
+    horizontalOffset: 9,
+    overhangPosition: -0.15,
+    steer: 0,
+    overhangAngleDeg: 118,
+    overhangWidth: 17,
+    lipSharpness: 0.28,
+    smoothing: 1,
+    wallSmoothness: 0.18,
+    flatContribution: 0.35,
+  })),
+  breakingWide: summarizeOuterRadiusSmoothness(lipDipSweepModels[118]),
+}
 const resolutionInvariant = {
   grid24Residual: summarizeCenterlineProfileResidual(buildInverseSheetModel({ rows: 24, columns: 24, overhangWidth: 32 }), buildInverseSheetModel({ rows: 44, columns: 44, overhangWidth: 32 })),
   grid72Residual: summarizeCenterlineProfileResidual(buildInverseSheetModel({ rows: 72, columns: 72, overhangWidth: 32 }), buildInverseSheetModel({ rows: 44, columns: 44, overhangWidth: 32 })),
@@ -277,12 +295,16 @@ if (widthInvariant.narrowToWideCenterlineResidual > 0.03) {
   failures.push('width should only change y/span, not the x-z centerline')
 }
 
-if (!Object.values(lateralSmoothness).every((summary) => (
-  summary.maxSpanStepRatio <= 0.42 &&
-  summary.maxSpanCurvatureRatio <= 0.38 &&
-  summary.maxSpanToLongStepRatio <= 1.55
-))) {
+if (!Object.values(lateralSmoothness).every(lateralSmoothnessPasses)) {
   failures.push('span taper should stay smooth without side walls, divots, or lateral zigzags')
+}
+
+if (!Object.values(outerRadiusSmoothness).every((summary) => (
+  summary.maxTopCurvatureRatio <= (summary.topPointCount <= 5 ? 0.32 : 0.26) &&
+  summary.maxTopAngleJumpDeg <= 24 &&
+  summary.hasSingleCrest
+))) {
+  failures.push('outer crest should stay a continuous round radius without top dents')
 }
 
 if (resolutionInvariant.grid24CoreResidual > 1.6 || resolutionInvariant.grid72CoreResidual > 0.85) {
@@ -364,6 +386,7 @@ const report = {
   steer: steerField,
   widthInvariant,
   lateralSmoothness,
+  outerRadiusSmoothness,
   resolutionInvariant,
   displayInvariant,
   sliderRobustness,
@@ -786,6 +809,65 @@ function summarizeLateralSmoothness(model) {
     maxSpanStepRatio: round(maxSpanStep / height),
     maxSpanCurvatureRatio: round(maxSpanCurvature / height),
     maxSpanToLongStepRatio: round(maxSpanStep / Math.max(maxLongStep, 0.000001)),
+  }
+}
+
+function lateralSmoothnessPasses(summary) {
+  const absoluteSmooth = summary.maxSpanStepRatio <= 0.26 && summary.maxSpanCurvatureRatio <= 0.14
+  const ratioSmooth = summary.maxSpanStepRatio <= 0.42 &&
+    summary.maxSpanCurvatureRatio <= 0.38 &&
+    summary.maxSpanToLongStepRatio <= 1.55
+
+  return absoluteSmooth || ratioSmooth
+}
+
+function summarizeOuterRadiusSmoothness(model) {
+  const points = centerlinePoints(model)
+  const maxZ = Math.max(...points.map((point) => point.z), 0.000001)
+  const peakIndex = points.reduce((bestIndex, point, index) => (point.z > points[bestIndex].z ? index : bestIndex), 0)
+  let startIndex = peakIndex
+  while (startIndex > 0 && points[startIndex - 1].z >= maxZ * 0.48) startIndex -= 1
+
+  let endIndex = peakIndex
+  while (endIndex < points.length - 1 && points[endIndex + 1].z >= maxZ * 0.56) endIndex += 1
+  for (let index = peakIndex + 1; index <= endIndex; index += 1) {
+    if (points[index].x < points[index - 1].x - model.config.spacing * 0.35) {
+      endIndex = index - 1
+      break
+    }
+  }
+
+  const active = points.slice(startIndex, endIndex + 1)
+  let maxTopCurvature = 0
+  let maxTopAngleJumpDeg = 0
+  let signChanges = 0
+  let previousSlopeSign = 0
+
+  for (let index = 1; index < active.length - 1; index += 1) {
+    const previous = active[index - 1]
+    const current = active[index]
+    const next = active[index + 1]
+    const dxA = Math.max(Math.hypot(current.x - previous.x, current.reach - previous.reach), 0.000001)
+    const dxB = Math.max(Math.hypot(next.x - current.x, next.reach - current.reach), 0.000001)
+    const slopeA = (current.z - previous.z) / dxA
+    const slopeB = (next.z - current.z) / dxB
+    const angleA = Math.atan(slopeA)
+    const angleB = Math.atan(slopeB)
+    const slopeSign = Math.sign(slopeB)
+
+    if (previousSlopeSign !== 0 && slopeSign !== 0 && slopeSign !== previousSlopeSign) signChanges += 1
+    if (slopeSign !== 0) previousSlopeSign = slopeSign
+
+    maxTopCurvature = Math.max(maxTopCurvature, Math.abs(previous.z - 2 * current.z + next.z))
+    maxTopAngleJumpDeg = Math.max(maxTopAngleJumpDeg, Math.abs(angleB - angleA) * 180 / Math.PI)
+  }
+
+  return {
+    maxTopCurvature: round(maxTopCurvature),
+    maxTopCurvatureRatio: round(maxTopCurvature / maxZ),
+    maxTopAngleJumpDeg: round(maxTopAngleJumpDeg),
+    topPointCount: active.length,
+    hasSingleCrest: signChanges <= 1,
   }
 }
 

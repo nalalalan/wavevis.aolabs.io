@@ -28,7 +28,7 @@ const inverseLinkageColor = '#111111'
 const inverseCellBodyColor = '#2f3130'
 const inverseConnectorColor = '#111111'
 const allCellArmDirections: CellArmDirection[] = ['east', 'west', 'north', 'south']
-const sideProjectionRowBand = 3
+const sideProjectionRowBand = 1
 
 type MechanismRenderScope = {
   frames: RigidCellMechanism['frames']
@@ -298,7 +298,6 @@ function RigidCellGlyphs({
   scope: MechanismRenderScope
 }) {
   const largeGrid = model.config.rows > 30 || model.config.columns > 30
-  const denseFullArray = largeGrid && !scope.sideSlice && !scope.sideProjection
   const armRef = useRef<THREE.InstancedMesh>(null)
   const bodyRef = useRef<THREE.InstancedMesh>(null)
   const bodyGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
@@ -328,10 +327,10 @@ function RigidCellGlyphs({
   useLayoutEffect(() => {
     const armMesh = armRef.current
     const bodyMesh = bodyRef.current
-    if (!bodyMesh || (!denseFullArray && !armMesh)) return
+    if (!bodyMesh || !armMesh) return
 
-    const rodWidth = Math.max(model.config.spacing * (scope.sideSlice ? 0.034 : scope.sideProjection ? 0.035 : (largeGrid ? 0.016 : 0.048)), 0.01)
-    const bodySize = model.config.spacing * (scope.sideSlice ? 0.32 : scope.sideProjection ? 0.26 : (largeGrid ? 0.18 : 0.34))
+    const rodWidth = Math.max(model.config.spacing * (scope.sideSlice ? 0.034 : scope.sideProjection ? 0.035 : (largeGrid ? 0.012 : 0.048)), 0.008)
+    const bodySize = model.config.spacing * (scope.sideSlice ? 0.32 : scope.sideProjection ? 0.26 : (largeGrid ? 0.22 : 0.34))
     const bodyThickness = rigidCellBodyThickness(model.config.spacing)
     const sideBodyXAxis = new THREE.Vector3(1, 0, 0)
     const sideBodyYAxis = new THREE.Vector3(0, 0, 1)
@@ -359,45 +358,13 @@ function RigidCellGlyphs({
 
     if (armMesh) armMesh.instanceMatrix.needsUpdate = true
     bodyMesh.instanceMatrix.needsUpdate = true
-  }, [denseFullArray, largeGrid, model, scope])
+  }, [largeGrid, model, scope])
 
   return (
     <>
-      {denseFullArray ? (
-        <RigidCellArmLineSegments scope={scope} />
-      ) : (
-        <instancedMesh ref={armRef} args={[armGeometry, rodMaterial, armInstanceCount]} renderOrder={scope.sideSlice || scope.sideProjection ? 22 : 0} />
-      )}
+      <instancedMesh ref={armRef} args={[armGeometry, rodMaterial, armInstanceCount]} renderOrder={scope.sideSlice || scope.sideProjection ? 22 : 0} />
       <instancedMesh ref={bodyRef} args={[bodyGeometry, bodyMaterial, scope.frames.length]} renderOrder={scope.sideSlice || scope.sideProjection ? 23 : 0} />
     </>
-  )
-}
-
-function RigidCellArmLineSegments({ scope }: { scope: MechanismRenderScope }) {
-  const geometry = useMemo(() => {
-    const positions: number[] = []
-
-    scope.frames.forEach((frame) => {
-      const center = toThree(frame.center)
-      const directions = scope.directionsByNodeId.get(frame.nodeId) ?? []
-
-      directions.forEach((direction) => {
-        const endpoint = frame.armEndpoints[direction]
-        if (!endpoint) return
-        const target = toThree(endpoint)
-        positions.push(center.x, center.y, center.z, target.x, target.y, target.z)
-      })
-    })
-
-    const next = new THREE.BufferGeometry()
-    next.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-    return next
-  }, [scope])
-
-  return (
-    <lineSegments geometry={geometry} renderOrder={1}>
-      <lineBasicMaterial color={inverseLinkageColor} transparent={false} opacity={1} depthTest depthWrite />
-    </lineSegments>
   )
 }
 
@@ -795,8 +762,9 @@ function activeSideProfileBounds(model: LatticeModel): LatticeBounds {
   const maxZ = Math.max(...activeNodes.map((node) => node.currentPosition[2]))
   const padX = Math.max(model.config.spacing * 2, (maxX - minX) * 0.1)
   const padZ = Math.max(model.config.spacing * 0.9, (maxZ - minZ) * 0.2)
-  const min: Vec3 = [minX - padX, model.bounds.min[1], Math.min(0, minZ - padZ * 0.34)]
-  const max: Vec3 = [maxX + padX, model.bounds.max[1], maxZ + padZ]
+  const sideDepth = Math.max(model.config.spacing * 2, (maxX - minX) * 0.025)
+  const min: Vec3 = [minX - padX, model.bounds.center[1] - sideDepth * 0.5, Math.min(0, minZ - padZ * 0.34)]
+  const max: Vec3 = [maxX + padX, model.bounds.center[1] + sideDepth * 0.5, maxZ + padZ]
   const center: Vec3 = [
     (min[0] + max[0]) * 0.5,
     model.bounds.center[1],
@@ -807,7 +775,7 @@ function activeSideProfileBounds(model: LatticeModel): LatticeBounds {
     min,
     max,
     center,
-    span: [max[0] - min[0], model.bounds.span[1], max[2] - min[2]],
+    span: [max[0] - min[0], max[1] - min[1], max[2] - min[2]],
   }
 }
 
@@ -829,7 +797,7 @@ function cameraDistanceForView(
     return fitPerspectiveDistance(bounds.span[0], bounds.span[1], tanHalfFov, safeAspect, 1.18)
   }
 
-  return Math.max(bounds.span[0], bounds.span[1], bounds.span[2], 2) * 1.75
+  return Math.max(bounds.span[0], bounds.span[1], bounds.span[2], 2) * 1.42
 }
 
 function fitPerspectiveDistance(
