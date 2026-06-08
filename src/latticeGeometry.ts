@@ -60,15 +60,15 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   horizontalOffset: 16.25,
   overhangPosition: -0.15,
   steer: 0,
-  height: 14.75,
+  height: 16,
   overhangWidth: 32,
   overhangAngleDeg: 120,
   conicRho: 0.5,
   curlRadius: 0.65,
   smoothing: 1,
   lipSharpness: 0.28,
-  wallSmoothness: 0.28,
-  flatContribution: 0.35,
+  wallSmoothness: 0.22,
+  flatContribution: 0,
   widthScale: 1,
   strainWeight: 1,
   bendWeight: 0.02,
@@ -1134,7 +1134,7 @@ function buildNodes(config: InverseSheetConfig): LatticeNode[] {
     for (let col = 0; col < config.columns; col += 1) {
       const restPosition = restGrid[row][col]
       const targetPosition = redistributedTargets[row][col]
-      const currentPosition = lerpVec(restPosition, targetPosition, config.morph)
+      const currentPosition = lerpVec(restPosition, targetPosition, morphGrowthAmount(config.morph))
 
       nodes.push({
         id: nodeId(row, col),
@@ -1148,6 +1148,11 @@ function buildNodes(config: InverseSheetConfig): LatticeNode[] {
   }
 
   return nodes
+}
+
+function morphGrowthAmount(value: number): number {
+  const morph = clampNumber(value, 0, 1)
+  return Math.sin(morph * Math.PI * 0.5)
 }
 
 function applyFlatContributionDiffusion(restGrid: Vec3[][], targetGrid: Vec3[][], config: InverseSheetConfig): Vec3[][] {
@@ -1295,7 +1300,7 @@ function canonicalOverhangTargetPosition(
   const profileEnd = profileLimits.profileEnd
   const uncenteredY = v * DEFAULT_WAVE_FIELD_SPAN
 
-  if (Math.abs(config.height) <= 0.000001) {
+  if (Math.abs(config.height) <= 0.000001 || config.overhangWidth <= 0.000001) {
     return rest
   }
 
