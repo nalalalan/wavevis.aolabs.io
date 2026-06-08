@@ -292,7 +292,15 @@ function pointInsideCanonicalWaveField(point: Vec3, tolerance = 0): boolean {
 function pointInsideCanonicalSupportField(point: Vec3, config: InverseSheetConfig): boolean {
   const transition = clampNumber(config.smoothing, 0, 1)
   const flatContribution = clampNumber(config.flatContribution, 0, 1)
-  const marginX = DEFAULT_WAVE_FIELD_LENGTH * lerpNumber(0.06, 0.34, Math.max(transition, flatContribution))
+  const reachShare = clampNumber(config.horizontalOffset / DEFAULT_WAVE_FIELD_LENGTH, 0, 0.45)
+  const maxForwardMargin = Math.max(DEFAULT_SHEET_LENGTH / 2 - DEFAULT_WAVE_FIELD_MAX_X - DEFAULT_SHEET_SPACING * 2, DEFAULT_SHEET_SPACING)
+  const marginX = Math.min(
+    maxForwardMargin,
+    DEFAULT_WAVE_FIELD_LENGTH * (
+      lerpNumber(0.1, 0.34, Math.max(transition, flatContribution)) +
+      reachShare * 0.64
+    ),
+  )
   const marginY = DEFAULT_WAVE_FIELD_SPAN * lerpNumber(0.18, 0.62, Math.max(transition, flatContribution))
 
   return (
@@ -334,6 +342,11 @@ function lipDipAmount(angleDeg: number): number {
     0,
     1,
   )
+}
+
+function breakingLipStrength(lipDip: number): number {
+  const curlStart = 0.35
+  return smootherStep((clampNumber(lipDip, 0, 1) - curlStart) / (1 - curlStart))
 }
 
 function readOverhangAngleDeg(input: LooseConfig): number {
@@ -1269,14 +1282,15 @@ function diffusionParticipationWeight(restPosition: Vec3, config: InverseSheetCo
 function coreWaveMask(profileU: number, uncenteredY: number, config: InverseSheetConfig): number {
   const wallSmoothness = clampNumber(config.wallSmoothness, 0, 1)
   const lipDip = lipDipAmount(config.overhangAngleDeg)
+  const lipStrength = breakingLipStrength(lipDip)
   const coreLongitudinalFade = 0.055
   const rimY = transverseWaveMask(uncenteredY, DEFAULT_WAVE_FIELD_SPAN, config, 0, 0.08, wallSmoothness)
   const bodyX = edgeRamp(profileU, 0, coreLongitudinalFade)
   const bodyMask = Math.pow(bodyX, 1.18) * Math.pow(rimY, lerpNumber(1.08, 0.78, wallSmoothness))
   const lipStart = breakingLipStart()
   const lipPreserveEnvelope = smootherStep((profileU - lipStart) / 0.035)
-  const lipSpanMask = Math.pow(clampNumber(rimY, 0, 1), lerpNumber(1.42, 1.12, Math.max(wallSmoothness, lipDip)))
-  const lipMask = (lipDip > 0.000001 ? 1 : 0) *
+  const lipSpanMask = Math.pow(clampNumber(rimY, 0, 1), lerpNumber(1.42, 1.12, Math.max(wallSmoothness, lipStrength)))
+  const lipMask = lipStrength *
     lipPreserveEnvelope *
     edgeRamp(profileU, 0, coreLongitudinalFade) *
     lipSpanMask
@@ -1310,14 +1324,15 @@ function canonicalOverhangTargetPosition(
   const longitudinalOutside = rawProfileU < 0 ? -rawProfileU : (rawProfileU > 1 ? rawProfileU - 1 : 0)
   const insideCoreField = rawProfileU >= 0 && rawProfileU <= 1 && v >= 0 && v <= 1
   const lipDip = lipDipAmount(config.overhangAngleDeg)
+  const lipStrength = breakingLipStrength(lipDip)
   const coreLongitudinalFade = 0.055
   const rimY = transverseWaveMask(uncenteredY, DEFAULT_WAVE_FIELD_SPAN, config, flatRim, coreBlendRim, wallSmoothness)
   const bodyX = edgeRamp(profileU, 0, coreLongitudinalFade)
   const bodyMask = Math.pow(bodyX, 1.18) * Math.pow(rimY, lerpNumber(1.08, 0.78, wallSmoothness))
   const lipStart = breakingLipStart()
   const lipPreserveEnvelope = smootherStep((profileU - lipStart) / 0.035)
-  const lipSpanMask = Math.pow(clampNumber(rimY, 0, 1), lerpNumber(1.42, 1.12, Math.max(wallSmoothness, lipDip)))
-  const lipMask = (lipDip > 0.000001 ? 1 : 0) *
+  const lipSpanMask = Math.pow(clampNumber(rimY, 0, 1), lerpNumber(1.42, 1.12, Math.max(wallSmoothness, lipStrength)))
+  const lipMask = lipStrength *
     lipPreserveEnvelope *
     edgeRamp(profileU, 0, coreLongitudinalFade) *
     lipSpanMask
@@ -1335,9 +1350,11 @@ function canonicalOverhangTargetPosition(
     supportWidth,
   )
   const supportX = 1 - smootherStep(longitudinalOutside / Math.max(supportLongitudinalFade, 0.000001))
+  const postSupportX = 1 - smootherStep(longitudinalOutside / Math.max(supportLongitudinalFade * 2.15, 0.000001))
   const supportMask = Math.pow(supportX, lerpNumber(1.28, 0.52, rawGroundTransition)) *
     Math.pow(supportY, lerpNumber(0.9, 0.58, wallSmoothness))
   const taperOnly = Math.max(0, supportMask - coreMask)
+  const postCoreTaper = rawProfileU > 1 ? clampNumber(Math.max(bodyMask, lipMask) * postSupportX, 0, 1) : 0
   const taperStrength = clampNumber(
     lerpNumber(0.03, 0.5, rawGroundTransition) + flatShare * 0.42,
     0,
@@ -1345,8 +1362,7 @@ function canonicalOverhangTargetPosition(
   )
   const centerPreserveBand = lerpNumber(0.22, 0.48, Math.max(rawGroundTransition, flatShare))
   const centerPreserve = smootherStep(1 - Math.abs(v - 0.5) / centerPreserveBand)
-  const postLipTaper = rawProfileU > 1 ? supportMask : 0
-  const shapeMask = clampNumber(Math.max(coreMask, postLipTaper, taperOnly * taperStrength * centerPreserve), 0, 1)
+  const shapeMask = clampNumber(Math.max(coreMask, postCoreTaper, taperOnly * taperStrength * centerPreserve), 0, 1)
 
   if (shapeMask <= 0.000001) return rest
 
@@ -1358,14 +1374,14 @@ function canonicalOverhangTargetPosition(
   let horizontalProjection = baseProfile.x
   let liftedHeight = baseProfile.z
 
-  if (lipDip > 0.000001) {
+  if (lipStrength > 0.000001) {
     const terminalLip = applyBreakingWaveLip(
       clampNumber(rawProfileU, 0, breakingLipReturnU()),
       eased,
       overhangAmount,
       waveHeight,
       DEFAULT_WAVE_FIELD_LENGTH * remainingU,
-      lipDip,
+      lipStrength,
       config.lipSharpness,
       config.conicRho,
       config.curlRadius,
@@ -1391,7 +1407,7 @@ function baseWaveProfile(
   conicRho: number,
   curlRadius: number,
 ): { x: number; z: number } {
-  const curl = PARALLEL_ANGLE_CURL
+  const curl = 0
   const heightProfile = waveHeightProfile(t, curl, smoothing, PROFILE_LIP_SHARPNESS, conicRho, curlRadius)
   const horizontalProjection = overhangAmount * curlProjectionProfile(
     t,
@@ -1420,7 +1436,7 @@ function applyBreakingWaveLip(
   curlRadius: number,
 ): { x: number; z: number } {
   const rawDip = clampNumber(lipDip, 0, 1)
-  const dip = smootherStep(rawDip)
+  const dip = rawDip
   const sharp = smootherStep(clampNumber(lipSharpness, 0, 1))
   const returnU = breakingLipReturnU()
   const restXAt = (amount: number) => profileRestLength * amount
@@ -1447,7 +1463,7 @@ function applyBreakingWaveLip(
     sharp,
   )
 
-  const targetBlend = smootherStep(rawDip)
+  const targetBlend = rawDip
   return toDisplacement(profileU, {
     x: lerpNumber(baseCurrent.x, target.x, targetBlend),
     z: lerpNumber(baseCurrent.z, target.z, targetBlend),
@@ -1754,11 +1770,21 @@ function openWaveHeight(t: number, smoothing: number, conicRho: number, curlRadi
   const rho = normalizedConicRho(conicRho)
   const radius = normalizedCurlRadius(curlRadius)
   const rise = smootherStep(t / 0.62)
-  const settle = 1 - lerpNumber(0.05, 0.18, radius) *
-    smootherStep((t - lerpNumber(0.82, 0.9, smoothing) + lerpNumber(-0.03, 0.03, radius)) /
-      lerpNumber(0.16, 0.24, radius))
+  const shoulderSettle = 1 - lerpNumber(0.04, 0.1, radius) *
+    smootherStep((t - lerpNumber(0.72, 0.82, smoothing) + lerpNumber(-0.025, 0.02, radius)) /
+      lerpNumber(0.18, 0.25, radius))
+  const returnStart = clampNumber(
+    lerpNumber(0.58, 0.72, smoothing) + lerpNumber(-0.016, 0.014, radius) + lerpNumber(0.014, -0.014, rho),
+    0.56,
+    0.78,
+  )
+  const returnFall = smootherStep((t - returnStart) / Math.max(1 - returnStart, 0.000001))
+  const terminalReturn = 1 - returnFall
 
-  return Math.pow(Math.max(rise * settle, 0), clampNumber(lerpNumber(1.22, 0.88, smoothing) + lerpNumber(0.16, -0.16, rho), 0.62, 1.45))
+  return Math.pow(
+    Math.max(rise * shoulderSettle * terminalReturn, 0),
+    clampNumber(lerpNumber(1.22, 0.88, smoothing) + lerpNumber(0.16, -0.16, rho), 0.62, 1.45),
+  )
 }
 
 function sampleWaveHeightMax(

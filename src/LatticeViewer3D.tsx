@@ -28,7 +28,7 @@ const inverseLinkageColor = '#111111'
 const inverseCellBodyColor = '#2f3130'
 const inverseConnectorColor = '#111111'
 const allCellArmDirections: CellArmDirection[] = ['east', 'west', 'north', 'south']
-const sideProjectionRowBand = 1
+const sideProjectionRowBand = 4
 
 type MechanismRenderScope = {
   frames: RigidCellMechanism['frames']
@@ -92,7 +92,7 @@ function LatticeModelGroup({
   const restGhostGeometry = useMemo(() => buildRestGhostGeometry(model, nodeById), [model, nodeById])
   const surfaceQuads = useMemo(() => {
     if (sliceProfileView) return buildSideSurfaceQuads(model, 1)
-    if (sideProjectionView) return buildSideSurfaceQuads(model, sideProjectionRowBand)
+    if (sideProjectionView) return buildSideContourSurfaceQuads(model, sideProjectionRowBand)
     return model.quads
   }, [model, sideProjectionView, sliceProfileView])
   const surfaceGeometry = useMemo(() => buildSurfaceGeometry(model, nodeById, quadMetricById, dihedralByQuad, surfaceQuads), [model, nodeById, quadMetricById, dihedralByQuad, surfaceQuads])
@@ -104,8 +104,8 @@ function LatticeModelGroup({
     : sideProjectionView
       ? Math.max(model.config.spacing * 0.074, 0.04)
     : Math.max(model.config.spacing * (largeGrid ? 0.052 : 0.12), 0.026)
-  const surfaceOpacity = sliceProfileView ? 0.2 : sideProjectionView ? 0.18 : (largeGrid ? 0.38 : 0.42)
-  const profileOverlayVisible = sliceProfileView || sideProjectionView
+  const surfaceOpacity = sliceProfileView ? 0.2 : sideProjectionView ? 0.12 : (largeGrid ? 0.38 : 0.42)
+  const profileOverlayVisible = sliceProfileView
 
   return (
     <group>
@@ -116,7 +116,7 @@ function LatticeModelGroup({
       )}
       {model.config.showSurface && (
         <mesh geometry={surfaceGeometry}>
-          <meshStandardMaterial vertexColors side={THREE.DoubleSide} transparent opacity={surfaceOpacity} roughness={0.78} metalness={0.02} />
+          <meshStandardMaterial vertexColors side={THREE.DoubleSide} transparent opacity={surfaceOpacity} roughness={0.78} metalness={0.02} depthWrite={!sliceProfileView && !sideProjectionView} />
         </mesh>
       )}
       {model.config.showNodes && <RigidCellGlyphs model={model} scope={mechanismScope} />}
@@ -149,6 +149,16 @@ function buildSideSurfaceQuads(model: LatticeModel, rowBand = 1): LatticeQuad[] 
   const maxRow = Math.min(model.config.rows - 2, centerQuadRow + halfBand)
 
   return model.quads.filter((quad) => quad.row >= minRow && quad.row <= maxRow)
+}
+
+function buildSideContourSurfaceQuads(model: LatticeModel, rowBand = sideProjectionRowBand): LatticeQuad[] {
+  const range = sideContourRowRange(model, rowBand)
+  if (!range || model.config.rows < 2) return []
+
+  const minQuadRow = Math.max(0, Math.min(model.config.rows - 2, range.minRow))
+  const maxQuadRow = Math.max(minQuadRow, Math.min(model.config.rows - 2, range.maxRow - 1))
+
+  return model.quads.filter((quad) => quad.row >= minQuadRow && quad.row <= maxQuadRow)
 }
 
 function buildMechanismRenderScope(
@@ -215,16 +225,43 @@ function buildMechanismRenderScope(
 }
 
 function sideProjectionVisibleNodeIds(model: LatticeModel, rowBand: number): Set<string> {
-  const centerRow = Math.round((model.config.rows - 1) * 0.5)
-  const halfBand = Math.max(0, Math.floor(rowBand * 0.5))
-  const minRow = Math.max(0, centerRow - halfBand)
-  const maxRow = Math.min(model.config.rows - 1, centerRow + halfBand)
+  const range = sideContourRowRange(model, rowBand)
+  if (!range) return new Set()
 
   return new Set(
     model.nodes
-      .filter((node) => node.row >= minRow && node.row <= maxRow)
+      .filter((node) => node.row >= range.minRow && node.row <= range.maxRow)
       .map((node) => node.id),
   )
+}
+
+function sideContourRowRange(model: LatticeModel, rowBand: number): { minRow: number; maxRow: number } | null {
+  if (model.config.rows <= 0) return null
+
+  const maxHeight = Math.max(model.summary.maxHeight, 0.000001)
+  let nearActiveRow = Number.POSITIVE_INFINITY
+
+  model.nodes.forEach((node) => {
+    const displacement = Math.hypot(
+      node.currentPosition[0] - node.restPosition[0],
+      node.currentPosition[1] - node.restPosition[1],
+      node.currentPosition[2] - node.restPosition[2],
+    )
+    const active =
+      node.currentPosition[2] > maxHeight * 0.16 ||
+      displacement > Math.max(model.config.spacing * 1.35, model.summary.overhangAmount * 0.08)
+
+    if (active) nearActiveRow = Math.min(nearActiveRow, node.row)
+  })
+
+  const fallbackCenter = Math.round((model.config.rows - 1) * 0.5)
+  const start = Number.isFinite(nearActiveRow)
+    ? Math.max(0, nearActiveRow - 1)
+    : Math.max(0, fallbackCenter - Math.floor(rowBand * 0.5))
+  const minRow = Math.min(start, model.config.rows - 1)
+  const maxRow = Math.min(model.config.rows - 1, minRow + Math.max(1, rowBand))
+
+  return { minRow, maxRow }
 }
 
 function SideProfileSilhouette({ model, compact = false }: { model: LatticeModel; compact?: boolean }) {

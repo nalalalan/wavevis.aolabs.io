@@ -143,6 +143,7 @@ const lipDipSweepModels = {
 const lipDipSweep = Object.fromEntries(
   Object.entries(lipDipSweepModels).map(([angle, model]) => [angle, summarizeBreakingLip(model)]),
 )
+const lowLipDipStability = summarizeLowLipDipStability()
 const lipDipPreTerminalResidual = summarizePreTerminalProfileResidual(
   lipDipSweepModels[90],
   lipDipSweepModels[118],
@@ -319,6 +320,10 @@ if (!sliderRobustness.ok) {
   failures.push('slider sweeps should stay finite, boundary-pinned, and free of sudden range-clamp jumps')
 }
 
+if (!lowLipDipStability.ok) {
+  failures.push('low lip dip values should stay neutral/stable without partial-barrel mangling')
+}
+
 if (mechanism.maxConnectorEndpointGap > 0.0001) {
   failures.push('inverse-sheet arms should terminate directly at shared connector points')
 }
@@ -382,6 +387,7 @@ const report = {
     ...lipDipSweep,
     preTerminal118Residual: round(lipDipPreTerminalResidual),
   },
+  lowLipDipStability,
   overhangPosition: positionField,
   steer: steerField,
   widthInvariant,
@@ -473,6 +479,81 @@ function summarizeSliderRobustness() {
     badCases,
     maxRangeDelta: round(maxRangeDelta),
     sampleCases: Object.fromEntries(caseSummaries.slice(0, 6)),
+  }
+}
+
+function summarizeLowLipDipStability() {
+  const angles = [90, 95, 98, 100, 105]
+  const families = [
+    ['startup-morph-half', {
+      rows: 44,
+      columns: 96,
+      height: 10,
+      horizontalOffset: 18,
+      overhangWidth: 32,
+      smoothing: 1,
+      wallSmoothness: 0.35,
+      flatContribution: 0.35,
+      lipSharpness: 0.28,
+      morph: 0.5,
+    }],
+    ['breaking-preset', breakingLipConfig],
+  ]
+  const badCases = []
+  const cases = {}
+
+  for (const [family, baseConfig] of families) {
+    let previous = null
+
+    for (const angle of angles) {
+      const label = `${family}:${angle}`
+      const model = buildInverseSheetModel({ ...baseConfig, overhangAngleDeg: angle })
+      const mechanismStats = rigidCellMechanismStats(model)
+      const lateral = summarizeLateralSmoothness(model)
+      const outer = summarizeOuterRadiusSmoothness(model)
+      const health = summarizeModelHealth(model)
+      const summary = {
+        maxTensileStrain: round(model.summary.maxTensileStrain),
+        maxCompressStrain: round(model.summary.maxCompressiveStrain),
+        maxEdgeRotationDeg: round(model.summary.maxEdgeRotationDeg),
+        maxHeight: round(model.summary.maxHeight),
+        overhangAmount: round(model.summary.overhangAmount),
+        maxArmSurfaceLeak: round(mechanismStats.maxArmSurfaceLeak),
+        maxCenterShift: round(mechanismStats.maxCenterShift),
+        maxConnectorEndpointGap: round(mechanismStats.maxConnectorEndpointGap),
+        lateral,
+        outer,
+      }
+      const stable =
+        health.ok &&
+        boundaryNodesStayFlat(model) &&
+        lateralSmoothnessPasses(lateral) &&
+        outer.hasSingleCrest &&
+        outer.maxTopAngleJumpDeg <= 26 &&
+        model.summary.maxTensileStrain <= 6 &&
+        Math.abs(model.summary.maxCompressiveStrain) <= 4 &&
+        mechanismStats.maxArmSurfaceLeak <= 4.2 &&
+        mechanismStats.maxCenterShift <= 2.4 &&
+        mechanismStats.maxConnectorEndpointGap <= 0.0001
+
+      if (!stable) badCases.push(label)
+
+      if (previous) {
+        const heightJump = Math.abs(model.summary.maxHeight - previous.maxHeight)
+        const overhangJump = Math.abs(model.summary.overhangAmount - previous.overhangAmount)
+        if (heightJump > 2.2) badCases.push(`${label}:height-jump`)
+        if (overhangJump > 4.8) badCases.push(`${label}:overhang-jump`)
+      }
+
+      previous = model.summary
+      cases[label] = summary
+    }
+  }
+
+  return {
+    ok: badCases.length === 0,
+    badCases,
+    cases,
   }
 }
 
