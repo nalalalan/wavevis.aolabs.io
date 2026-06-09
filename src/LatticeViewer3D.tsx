@@ -31,7 +31,7 @@ const inverseCellBodyColor = '#2f3130'
 const inverseConnectorColor = '#111111'
 const allCellArmDirections: CellArmDirection[] = ['east', 'west', 'north', 'south']
 const crossSectionRowBand = 1
-const sideExteriorRowBand = 3
+const sideExteriorRowBand = 5
 
 type MechanismRenderScope = {
   frames: RigidCellMechanism['frames']
@@ -340,8 +340,8 @@ function SideProfileSilhouette({
       model.config.spacing * (model.config.rows > 30 || model.config.columns > 30 ? 0.055 : 0.07),
       0.026,
     )
-    const coreRadius = baseRadius * (subtle ? 1.28 : compact ? 1.85 : 1)
-    const haloRadius = coreRadius * (subtle ? 1.7 : compact ? 2.05 : 1.75)
+    const coreRadius = baseRadius * (subtle ? 0.92 : compact ? 1.85 : 1)
+    const haloRadius = coreRadius * (subtle ? 1.38 : compact ? 2.05 : 1.75)
 
     return {
       core: new THREE.TubeGeometry(curve, Math.max(points.length * 12, 64), coreRadius, 10, false),
@@ -354,10 +354,10 @@ function SideProfileSilhouette({
   return (
     <group>
       <mesh geometry={profile.halo} renderOrder={29}>
-        <meshBasicMaterial color="#fff8ee" transparent opacity={subtle ? 0.42 : compact ? 0.68 : 0.62} depthTest={false} depthWrite={false} />
+        <meshBasicMaterial color="#fff8ee" transparent opacity={subtle ? 0.26 : compact ? 0.68 : 0.62} depthTest={false} depthWrite={false} />
       </mesh>
       <mesh geometry={profile.core} renderOrder={30}>
-        <meshBasicMaterial color="#141713" transparent opacity={subtle ? 0.86 : compact ? 0.94 : 1} depthTest={false} depthWrite={false} />
+        <meshBasicMaterial color="#141713" transparent opacity={subtle ? 0.68 : compact ? 0.94 : 1} depthTest={false} depthWrite={false} />
       </mesh>
     </group>
   )
@@ -765,7 +765,7 @@ function positionCamera(
         ? new THREE.Vector3(target.x, target.y - distance, target.z)
       : view === 'slice'
         ? new THREE.Vector3(target.x, target.y - distance, target.z)
-        : new THREE.Vector3(target.x + distance * 0.96, target.y - distance * 1.08, target.z + distance * 0.24)
+        : new THREE.Vector3(target.x + distance * 0.96, target.y - distance * 1.08, target.z + distance * 0.34)
 
   camera.position.copy(position)
   if (view === 'top') {
@@ -776,7 +776,7 @@ function positionCamera(
   camera.lookAt(target)
 
   camera.fov = fov
-  camera.zoom = view === 'side' ? 0.98 : view === 'slice' ? 1.08 : view === 'isometric' ? 1.16 : 1
+  camera.zoom = view === 'side' ? 0.98 : view === 'slice' ? 1.08 : view === 'isometric' ? 1.36 : 1
   camera.near = 0.01
   camera.far = Math.max(distance * 8, 100)
   camera.updateProjectionMatrix()
@@ -845,7 +845,7 @@ function cameraDistanceForView(
     return fitPerspectiveDistance(bounds.span[0], bounds.span[1], tanHalfFov, safeAspect, 1.18)
   }
 
-  return Math.max(bounds.span[0], bounds.span[1], bounds.span[2], 2) * 1.42
+  return Math.max(bounds.span[0], bounds.span[1], bounds.span[2], 2) * 1.12
 }
 
 function fitPerspectiveDistance(
