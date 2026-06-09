@@ -1141,7 +1141,8 @@ function buildNodes(config: InverseSheetConfig): LatticeNode[] {
     }
   }
 
-  const redistributedTargets = applyFlatContributionDiffusion(restGrid, targetGrid, config)
+  const continuousTargets = applySpanContinuitySmoothing(restGrid, targetGrid, coreConfig)
+  const redistributedTargets = applyFlatContributionDiffusion(restGrid, continuousTargets, config)
 
   for (let row = 0; row < config.rows; row += 1) {
     for (let col = 0; col < config.columns; col += 1) {
@@ -1166,6 +1167,62 @@ function buildNodes(config: InverseSheetConfig): LatticeNode[] {
 function morphGrowthAmount(value: number): number {
   const morph = clampNumber(value, 0, 1)
   return Math.sin(morph * Math.PI * 0.5)
+}
+
+function applySpanContinuitySmoothing(restGrid: Vec3[][], targetGrid: Vec3[][], config: InverseSheetConfig): Vec3[][] {
+  const lipStrength = breakingLipStrength(lipDipAmount(config.overhangAngleDeg))
+  const active = smootherStep(lipStrength)
+  if (active <= 0.000001 || config.rows < 4 || config.columns < 4) return targetGrid
+
+  const deltas = restGrid.map((row, rowIndex) =>
+    row.map((restPosition, colIndex) => subtractVec(targetGrid[rowIndex][colIndex], restPosition)),
+  )
+  const requestedHalfWidth = Math.max(config.overhangWidth * 0.5, config.spacing)
+  const smooth = clampNumber(config.wallSmoothness, 0, 1)
+  const centerPreserveHalfWidth = Math.max(config.spacing * 1.65, requestedHalfWidth * 0.08)
+  const corePreserveHalfWidth = requestedHalfWidth * lerpNumber(0.38, 0.56, active)
+  const preserveFadeWidth = Math.max(config.spacing * 5.5, requestedHalfWidth * lerpNumber(0.28, 0.42, smooth))
+  const iterations = Math.round(lerpNumber(3, 7, active))
+  const alpha = lerpNumber(0.18, 0.42, active) * lerpNumber(0.92, 1.22, smooth)
+  let current = deltas
+
+  for (let iteration = 0; iteration < iterations; iteration += 1) {
+    const next = current.map((row) => row.map((delta) => [...delta] as Vec3))
+
+    for (let row = 1; row < config.rows - 1; row += 1) {
+      for (let col = 1; col < config.columns - 1; col += 1) {
+        const restPosition = restGrid[row][col]
+        const sample = mapSheetPointToCanonicalWaveFrame(restPosition, config)
+        if (!pointInsideCanonicalSupportField(sample, config)) continue
+
+        const profileLimits = overhangProfileLimits(0)
+        const profileU = clampNumber(
+          (waveFieldU(sample) - profileLimits.profileStart) / Math.max(profileLimits.remainingU, 0.000001),
+          0,
+          1,
+        )
+        const lipRegion = smootherStep((profileU - (breakingLipStart() - 0.04)) / 0.075) *
+          (1 - smootherStep((profileU - (breakingLipReturnU() + 0.04)) / 0.115))
+        const spanDistance = Math.abs(sample[1])
+        if (spanDistance <= centerPreserveHalfWidth) continue
+        const preserveCore = 1 - smootherStep((spanDistance - corePreserveHalfWidth) / Math.max(preserveFadeWidth, 0.000001))
+
+        const rowAverage = scaleVec(addVec(current[row - 1][col], current[row + 1][col]), 0.5)
+        const terminalCurlLock = active * lipRegion
+        const blend = alpha * (1 - preserveCore * 0.74) * (1 - terminalCurlLock * 0.4)
+        next[row][col] = lerpVec(current[row][col], rowAverage, blend)
+      }
+    }
+
+    current = next
+  }
+
+  return restGrid.map((row, rowIndex) =>
+    row.map((restPosition, colIndex) => {
+      if (isBoundaryNodeIndex(rowIndex, colIndex, config)) return restPosition
+      return addVec(restPosition, current[rowIndex][colIndex])
+    }),
+  )
 }
 
 function applyFlatContributionDiffusion(restGrid: Vec3[][], targetGrid: Vec3[][], config: InverseSheetConfig): Vec3[][] {
@@ -1257,7 +1314,7 @@ function coreFeaturePinWeight(restPosition: Vec3, config: InverseSheetConfig): n
   const uncenteredY = waveFieldV(canonicalSample) * DEFAULT_WAVE_FIELD_SPAN
   const coreMask = coreWaveMask(profileU, uncenteredY, config)
   const centerlinePin = nearCenterline ? 1 : 0
-  const lipPin = profileU >= breakingLipStart() - 0.025 && coreMask > 0.2 ? 1 : 0
+  const lipPin = profileU >= breakingLipStart() - 0.025 && coreMask > 0.045 ? 1 : 0
   const maskPin = smootherStep((coreMask - 0.58) / 0.24)
 
   return clampNumber(Math.max(centerlinePin, lipPin, maskPin), 0, 1)
@@ -1266,6 +1323,23 @@ function coreFeaturePinWeight(restPosition: Vec3, config: InverseSheetConfig): n
 function diffusionParticipationWeight(restPosition: Vec3, config: InverseSheetConfig): number {
   const canonicalSample = mapSheetPointToCanonicalWaveFrame(restPosition, config)
   if (!pointInsideCanonicalSheet(canonicalSample)) return 0
+  if (pointInsideCanonicalWaveField(canonicalSample)) {
+    const lipStrength = breakingLipStrength(lipDipAmount(config.overhangAngleDeg))
+    if (lipStrength > 0.000001) {
+      const profileLimits = overhangProfileLimits(0)
+      const u = waveFieldU(canonicalSample)
+      const profileU = clampNumber((u - profileLimits.profileStart) / Math.max(profileLimits.remainingU, 0.000001), 0, 1)
+      const lipRegion = smootherStep((profileU - (breakingLipStart() - 0.055)) / 0.08) *
+        (1 - smootherStep((profileU - (breakingLipReturnU() + 0.045)) / 0.12))
+
+      if (lipRegion > 0.000001) {
+        const uncenteredY = waveFieldV(canonicalSample) * DEFAULT_WAVE_FIELD_SPAN
+        const coreMask = coreWaveMask(profileU, uncenteredY, config)
+        const openBarrel = lipStrength * lipRegion * (1 - smootherStep((coreMask - 0.055) / 0.18))
+        if (openBarrel >= 0.92) return 0
+      }
+    }
+  }
 
   const outsideX = canonicalSample[0] < DEFAULT_WAVE_FIELD_MIN_X
     ? DEFAULT_WAVE_FIELD_MIN_X - canonicalSample[0]
@@ -1366,7 +1440,7 @@ function canonicalOverhangTargetPosition(
   const lipClearanceEnd = breakingLipReturnU() + 0.05
   const lipRegion = smootherStep((profileU - lipClearanceStart) / 0.08) *
     (1 - smootherStep((profileU - lipClearanceEnd) / 0.12))
-  const barrelClearance = 1 - lipStrength * lipRegion * 0.94
+  const barrelClearance = 1 - lipStrength * lipRegion
   const shapeMask = clampNumber(Math.max(
     coreMask,
     postCoreTaper,
@@ -1374,6 +1448,15 @@ function canonicalOverhangTargetPosition(
   ), 0, 1)
 
   if (shapeMask <= 0.000001) return rest
+
+  const lipOpeningStrength = lipStrength * lipRegion
+  const lipProfileMask = lipOpeningStrength > 0.000001
+    ? lerpNumber(
+      shapeMask,
+      smootherStep((shapeMask - 0.042) / 0.045),
+      lipOpeningStrength * 0.92,
+    )
+    : shapeMask
 
   const eased = profileBaseParameter(profileU)
   const remainingLength = Math.max(DEFAULT_WAVE_FIELD_LENGTH * remainingU, DEFAULT_SHEET_SPACING)
@@ -1400,9 +1483,9 @@ function canonicalOverhangTargetPosition(
   }
 
   const deformed: Vec3 = [
-    rest[0] + shapeMask * horizontalProjection,
+    rest[0] + lipProfileMask * horizontalProjection,
     rest[1],
-    shapeMask * liftedHeight,
+    lipProfileMask * liftedHeight,
   ]
 
   return deformed
@@ -1503,12 +1586,12 @@ function breakingWaveBarrelSegments(
   sharp: number,
 ): Array<[ProfilePoint, ProfilePoint, ProfilePoint, ProfilePoint]> {
   const start = point(0, 0)
-  const liftKnee = point(span * lerpNumber(0.3, 0.32, dip), height * lerpNumber(0.76, 0.82, dip))
+  const liftKnee = point(span * lerpNumber(0.3, 0.32, dip), height * lerpNumber(0.78, 0.88, dip))
   const crest = point(span * lerpNumber(0.5, 0.535, dip), height)
-  const shoulder = point(span * lerpNumber(0.68, 0.725, dip), height * lerpNumber(0.94, 0.9, dip))
-  const nose = point(span * lerpNumber(0.8, 0.845, dip), height * lerpNumber(0.48, 0.3, dip))
-  const innerRoof = point(span * lerpNumber(0.65, 0.61, dip), height * lerpNumber(0.5, 0.6, dip))
-  const underPocket = point(span * lerpNumber(0.53, 0.49, dip), height * lerpNumber(0.085, 0.035, dip))
+  const shoulder = point(span * lerpNumber(0.68, 0.735, dip), height * lerpNumber(0.94, 0.87, dip))
+  const nose = point(span * lerpNumber(0.8, 0.85, dip), height * lerpNumber(0.45, 0.2, dip))
+  const innerRoof = point(span * lerpNumber(0.65, 0.6, dip), height * lerpNumber(0.48, 0.55, dip))
+  const underPocket = point(span * lerpNumber(0.53, 0.47, dip), height * lerpNumber(0.075, 0.022, dip))
   const floorReturn = point(lerpNumber(restEndX * 0.86, restEndX * 0.95, dip), height * lerpNumber(0.035, 0.016, dip))
   const end = point(restEndX, 0)
   const tight = lerpNumber(1, 0.52, sharp)
@@ -1846,34 +1929,45 @@ function transverseWaveMask(
   overhangWidth = config.overhangWidth,
 ): number {
   const yCenter = totalHeight * 0.5
+  const gridSpacingY = DEFAULT_WAVE_FIELD_SPAN / Math.max(config.rows - 1, 1)
+  const smooth = clampNumber(wallSmoothness, 0, 1)
+  const lipStrength = breakingLipStrength(lipDipAmount(config.overhangAngleDeg))
+  const widthOpen = smootherStep(lipStrength)
   const edgeMask = edgeRamp(y / Math.max(totalHeight, 0.000001), flatRim, blendRim) *
     edgeRamp(1 - y / Math.max(totalHeight, 0.000001), flatRim, blendRim)
   const maxHalfWidth = Math.max(totalHeight * (0.5 - flatRim), config.spacing)
   const requestedHalfWidth = clampNumber(overhangWidth * 0.5, 0, maxHalfWidth)
 
   if (requestedHalfWidth <= 0.000001) return 0
-
-  const gridSpacingY = DEFAULT_WAVE_FIELD_SPAN / Math.max(config.rows - 1, 1)
-  const smooth = clampNumber(wallSmoothness, 0, 1)
-  const centerCoreHalfWidth = Math.min(
+  const coreWidthFactor = lerpNumber(
+    lerpNumber(0.32, 0.22, smooth),
+    lerpNumber(0.9, 0.82, smooth),
+    widthOpen * 0.94,
+  )
+  const taperWidthFactor = lerpNumber(
+    lerpNumber(2.05, 2.9, smooth),
+    lerpNumber(1.16, 1.34, smooth),
+    widthOpen * 0.86,
+  )
+  const coreHalfWidth = Math.min(
     requestedHalfWidth,
     Math.max(
-      gridSpacingY * lerpNumber(1.25, 1.65, smooth),
-      requestedHalfWidth * lerpNumber(0.3, 0.18, smooth),
+      gridSpacingY * lerpNumber(2.4, 3.2, smooth),
+      requestedHalfWidth * coreWidthFactor,
     ),
   )
   const taperHalfWidth = Math.min(
     maxHalfWidth,
     Math.max(
-      centerCoreHalfWidth + gridSpacingY * lerpNumber(7.5, 11.5, smooth),
-      requestedHalfWidth * lerpNumber(2.05, 2.9, smooth) + gridSpacingY * lerpNumber(1.8, 3.2, smooth),
+      coreHalfWidth + gridSpacingY * lerpNumber(7.5, 11.5, smooth),
+      requestedHalfWidth * taperWidthFactor + gridSpacingY * lerpNumber(1.4, 2.6, smooth),
     ),
   )
-  const fadeWidth = Math.max(taperHalfWidth - centerCoreHalfWidth, gridSpacingY * lerpNumber(7.5, 11.5, smooth))
   const distanceFromCenter = Math.abs(y - yCenter)
-  const rawWidthMask = distanceFromCenter <= centerCoreHalfWidth
+  const fadeWidth = Math.max(taperHalfWidth - coreHalfWidth, gridSpacingY * lerpNumber(7.5, 11.5, smooth))
+  const rawWidthMask = distanceFromCenter <= coreHalfWidth
     ? 1
-    : 1 - smootherStep((distanceFromCenter - centerCoreHalfWidth) / Math.max(fadeWidth, 0.000001))
+    : 1 - smootherStep((distanceFromCenter - coreHalfWidth) / Math.max(fadeWidth, 0.000001))
   const widthMask = Math.pow(clampNumber(rawWidthMask, 0, 1), lerpNumber(0.98, 1.08, smooth))
 
   return clampNumber(edgeMask * widthMask, 0, 1)
