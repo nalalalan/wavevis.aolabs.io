@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber'
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
+import CanvasSizeGuard from './CanvasSizeGuard'
 import type {
   CameraFocusRequest,
   CameraViewRequest,
@@ -23,6 +24,7 @@ import {
   type CellArmDirection,
   type RigidCellMechanism,
 } from './rigidCellMechanism'
+import { canvasResizeObserver } from './resizeObserverPolyfill'
 
 const inverseLinkageColor = '#111111'
 const inverseCellBodyColor = '#2f3130'
@@ -52,7 +54,8 @@ export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequ
 
   return (
     <section className="scene-shell inverse-scene" aria-label="Inverse Sheet 3D lattice view">
-      <Canvas dpr={[1, 1.8]} gl={{ antialias: true, preserveDrawingBuffer: true }} style={{ width: '100%', height: '100%' }}>
+      <Canvas dpr={[1, 1.8]} gl={{ antialias: true, preserveDrawingBuffer: true }} resize={{ offsetSize: true, polyfill: canvasResizeObserver }} style={{ width: '100%', height: '100%' }}>
+        <CanvasSizeGuard />
         <color attach="background" args={['#f7f3ed']} />
         <ambientLight intensity={0.72} />
         <directionalLight position={[8, -8, 10]} intensity={1.1} />

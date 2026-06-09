@@ -1,8 +1,10 @@
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Suspense, useMemo, useState } from 'react'
+import CanvasSizeGuard from './CanvasSizeGuard'
 import DoubleLayerCell from './DoubleLayerCell'
 import { buildArrayLayout, buildContactNodeOverrides, layoutBounds, nominalCellPitch } from './geometry'
+import { canvasResizeObserver } from './resizeObserverPolyfill'
 import { CELL_STATES, type CellGrid, type CellParams, type Vec3 } from './types'
 
 type Scene3DProps = {
@@ -26,7 +28,8 @@ export default function Scene3D({ grid, params }: Scene3DProps) {
 
   return (
     <section className="scene-shell" aria-label="3D Sarrus array view">
-      <Canvas dpr={[1, 1.8]} gl={{ antialias: true, preserveDrawingBuffer: true }} style={{ width: '100%', height: '100%' }}>
+      <Canvas dpr={[1, 1.8]} gl={{ antialias: true, preserveDrawingBuffer: true }} resize={{ offsetSize: true, polyfill: canvasResizeObserver }} style={{ width: '100%', height: '100%' }}>
+        <CanvasSizeGuard />
         <PerspectiveCamera
           makeDefault
           position={cameraPosition}
