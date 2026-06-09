@@ -26,7 +26,7 @@ export default function Scene3D({ grid, params }: Scene3DProps) {
 
   return (
     <section className="scene-shell" aria-label="3D Sarrus array view">
-      <Canvas dpr={[1, 1.8]} gl={{ antialias: true, preserveDrawingBuffer: true }}>
+      <Canvas dpr={[1, 1.8]} gl={{ antialias: true, preserveDrawingBuffer: true }} style={{ width: '100%', height: '100%' }}>
         <PerspectiveCamera
           makeDefault
           position={cameraPosition}

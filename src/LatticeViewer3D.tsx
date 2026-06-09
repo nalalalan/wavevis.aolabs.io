@@ -52,7 +52,7 @@ export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequ
 
   return (
     <section className="scene-shell inverse-scene" aria-label="Inverse Sheet 3D lattice view">
-      <Canvas dpr={[1, 1.8]} gl={{ antialias: true, preserveDrawingBuffer: true }}>
+      <Canvas dpr={[1, 1.8]} gl={{ antialias: true, preserveDrawingBuffer: true }} style={{ width: '100%', height: '100%' }}>
         <color attach="background" args={['#f7f3ed']} />
         <ambientLight intensity={0.72} />
         <directionalLight position={[8, -8, 10]} intensity={1.1} />
