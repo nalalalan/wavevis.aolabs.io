@@ -370,6 +370,7 @@ const report = {
     maxPairLengthSpread: round(mechanism.maxPairLengthSpread),
     maxOppositeColinearErrorDeg: round(mechanism.maxOppositeColinearErrorDeg),
     maxOrthogonalityErrorDeg: round(mechanism.maxOrthogonalityErrorDeg),
+    maxConnectorPathBendDeg: round(mechanism.maxConnectorPathBendDeg),
     maxConnectorEndpointGap: round(mechanism.maxConnectorEndpointGap),
     meanConnectorEndpointGap: round(mechanism.meanConnectorEndpointGap),
     rmsConnectorEndpointGap: round(mechanism.rmsConnectorEndpointGap),
@@ -520,6 +521,7 @@ function summarizeLowLipDipStability() {
         overhangAmount: round(model.summary.overhangAmount),
         maxArmSurfaceLeak: round(mechanismStats.maxArmSurfaceLeak),
         maxCenterShift: round(mechanismStats.maxCenterShift),
+        maxConnectorPathBendDeg: round(mechanismStats.maxConnectorPathBendDeg),
         maxConnectorEndpointGap: round(mechanismStats.maxConnectorEndpointGap),
         lateral,
         outer,
@@ -1325,6 +1327,7 @@ function summarizeExtremeShape(model) {
     mechanism: {
       maxLegLengthSpread: round(mechanismStats.maxLegLengthSpread),
       maxArmSurfaceLeak: round(mechanismStats.maxArmSurfaceLeak),
+      maxConnectorPathBendDeg: round(mechanismStats.maxConnectorPathBendDeg),
       maxConnectorEndpointGap: round(mechanismStats.maxConnectorEndpointGap),
     },
   }

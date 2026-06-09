@@ -17,6 +17,7 @@ export type RigidCellMechanismStats = {
   maxPairLengthSpread: number
   maxOppositeColinearErrorDeg: number
   maxOrthogonalityErrorDeg: number
+  maxConnectorPathBendDeg: number
   maxConnectorEndpointGap: number
   meanConnectorEndpointGap: number
   rmsConnectorEndpointGap: number
@@ -116,6 +117,7 @@ export function rigidCellMechanismStats(model: LatticeModel): RigidCellMechanism
   let maxPairLengthSpread = 0
   let maxOppositeColinearErrorDeg = 0
   let maxOrthogonalityErrorDeg = 0
+  let maxConnectorPathBendDeg = 0
   let maxConnectorEndpointGap = 0
   let connectorEndpointGapSum = 0
   let connectorEndpointGapSquaredSum = 0
@@ -195,11 +197,14 @@ export function rigidCellMechanismStats(model: LatticeModel): RigidCellMechanism
     maxArmSurfaceLeak = Math.max(maxArmSurfaceLeak, Math.abs(dotVec(subtractVec(connector, midpoint), localNormal)))
   })
 
+  maxConnectorPathBendDeg = measureConnectorPathBend(model, mechanism.connectorByEdgeId)
+
   return {
     maxLegLengthSpread,
     maxPairLengthSpread,
     maxOppositeColinearErrorDeg,
     maxOrthogonalityErrorDeg,
+    maxConnectorPathBendDeg,
     maxConnectorEndpointGap,
     meanConnectorEndpointGap: connectorEndpointGapCount ? connectorEndpointGapSum / connectorEndpointGapCount : 0,
     rmsConnectorEndpointGap: connectorEndpointGapCount
@@ -297,10 +302,55 @@ function solveOppositePairConnectorChain(centers: Array<Vec3 | undefined>): Vec3
     seedCount += 1
   }
 
-  const seed = seedCount ? scaleVec(seedSum, 1 / seedCount) : centers[0] ?? [0, 0, 0]
+  const midpointSeed = seedCount ? scaleVec(seedSum, 1 / seedCount) : centers[0] ?? [0, 0, 0]
+  const seed = solveSmoothConnectorChainSeed(centers, signs, offsets, midpointSeed)
   return Array.from({ length: edgeCount }, (_value, edgeIndex) =>
     addVec(scaleVec(seed, signs[edgeIndex]), offsets[edgeIndex]),
   )
+}
+
+function solveSmoothConnectorChainSeed(
+  centers: Array<Vec3 | undefined>,
+  signs: number[],
+  offsets: Vec3[],
+  fallbackSeed: Vec3,
+): Vec3 {
+  let denominator = 0
+  let numerator: Vec3 = [0, 0, 0]
+  const edgeCount = centers.length - 1
+  const midpointWeight = 1
+  const curvatureWeight = 0.08
+
+  for (let edgeIndex = 0; edgeIndex < edgeCount; edgeIndex += 1) {
+    const left = centers[edgeIndex]
+    const right = centers[edgeIndex + 1]
+    if (!left || !right) continue
+
+    const target = scaleVec(addVec(left, right), 0.5)
+    const coefficient = signs[edgeIndex]
+    const residualAtZero = subtractVec(offsets[edgeIndex], target)
+    denominator += midpointWeight * coefficient ** 2
+    numerator = addVec(numerator, scaleVec(residualAtZero, midpointWeight * coefficient))
+  }
+
+  for (let edgeIndex = 1; edgeIndex < edgeCount - 1; edgeIndex += 1) {
+    const previousCenter = centers[edgeIndex - 1]
+    const center = centers[edgeIndex]
+    const nextCenter = centers[edgeIndex + 1]
+    const afterNextCenter = centers[edgeIndex + 2]
+    if (!previousCenter || !center || !nextCenter || !afterNextCenter) continue
+
+    const coefficient = signs[edgeIndex - 1] - 2 * signs[edgeIndex] + signs[edgeIndex + 1]
+    const residualAtZero = addVec(
+      subtractVec(offsets[edgeIndex - 1], scaleVec(offsets[edgeIndex], 2)),
+      offsets[edgeIndex + 1],
+    )
+    denominator += curvatureWeight * coefficient ** 2
+    numerator = addVec(numerator, scaleVec(residualAtZero, curvatureWeight * coefficient))
+  }
+
+  if (denominator <= 0.000001) return fallbackSeed
+  return scaleVec(numerator, -1 / denominator)
 }
 
 function applyConnectedArmEndpoints(
@@ -427,6 +477,47 @@ function armDirectionForEdge(edge: LatticeEdge, node: LatticeNode, other: Lattic
   }
 
   return other.row >= node.row ? 'north' : 'south'
+}
+
+function measureConnectorPathBend(model: LatticeModel, connectorByEdgeId: Map<string, Vec3>): number {
+  let maxBend = 0
+
+  for (let row = 0; row < model.config.rows; row += 1) {
+    const chain = Array.from({ length: model.config.columns - 1 }, (_value, col) =>
+      connectorByEdgeId.get(`e-h-${row}-${col}`),
+    )
+    maxBend = Math.max(maxBend, measureConnectorChainBend(chain))
+  }
+
+  for (let col = 0; col < model.config.columns; col += 1) {
+    const chain = Array.from({ length: model.config.rows - 1 }, (_value, row) =>
+      connectorByEdgeId.get(`e-v-${row}-${col}`),
+    )
+    maxBend = Math.max(maxBend, measureConnectorChainBend(chain))
+  }
+
+  return maxBend
+}
+
+function measureConnectorChainBend(chain: Array<Vec3 | undefined>): number {
+  let maxBend = 0
+
+  for (let index = 1; index < chain.length - 1; index += 1) {
+    const previous = chain[index - 1]
+    const current = chain[index]
+    const next = chain[index + 1]
+    if (!previous || !current || !next) continue
+
+    const incoming = subtractVec(current, previous)
+    const outgoing = subtractVec(next, current)
+    const incomingLength = lengthVec(incoming)
+    const outgoingLength = lengthVec(outgoing)
+    if (incomingLength <= 0.000001 || outgoingLength <= 0.000001) continue
+
+    maxBend = Math.max(maxBend, angleDeg(incoming, outgoing))
+  }
+
+  return maxBend
 }
 
 function axisSeed(center: Vec3, negative?: Vec3, positive?: Vec3, fallback: Vec3 = [1, 0, 0]): Vec3 {

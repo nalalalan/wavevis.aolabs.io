@@ -60,7 +60,7 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   horizontalOffset: 18,
   overhangPosition: -0.15,
   steer: 0,
-  height: 10,
+  height: 12,
   overhangWidth: 32,
   overhangAngleDeg: 120,
   conicRho: 0.5,
@@ -74,7 +74,7 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   bendWeight: 0.02,
   shearWeight: 0.02,
   dihedralWeight: 0.02,
-  showSurface: true,
+  showSurface: false,
   showRestGhost: false,
   showNodes: true,
   showEdges: true,
@@ -1362,7 +1362,16 @@ function canonicalOverhangTargetPosition(
   )
   const centerPreserveBand = lerpNumber(0.22, 0.48, Math.max(rawGroundTransition, flatShare))
   const centerPreserve = smootherStep(1 - Math.abs(v - 0.5) / centerPreserveBand)
-  const shapeMask = clampNumber(Math.max(coreMask, postCoreTaper, taperOnly * taperStrength * centerPreserve), 0, 1)
+  const lipClearanceStart = lipStart - 0.03
+  const lipClearanceEnd = breakingLipReturnU() + 0.05
+  const lipRegion = smootherStep((profileU - lipClearanceStart) / 0.08) *
+    (1 - smootherStep((profileU - lipClearanceEnd) / 0.12))
+  const barrelClearance = 1 - lipStrength * lipRegion * 0.94
+  const shapeMask = clampNumber(Math.max(
+    coreMask,
+    postCoreTaper,
+    taperOnly * taperStrength * centerPreserve * barrelClearance,
+  ), 0, 1)
 
   if (shapeMask <= 0.000001) return rest
 
@@ -1494,13 +1503,13 @@ function breakingWaveBarrelSegments(
   sharp: number,
 ): Array<[ProfilePoint, ProfilePoint, ProfilePoint, ProfilePoint]> {
   const start = point(0, 0)
-  const liftKnee = point(span * lerpNumber(0.31, 0.33, dip), height * lerpNumber(0.76, 0.79, dip))
-  const crest = point(span * lerpNumber(0.5, 0.53, dip), height)
-  const shoulder = point(span * lerpNumber(0.66, 0.69, dip), height * lerpNumber(0.94, 0.92, dip))
-  const nose = point(span * lerpNumber(0.78, 0.81, dip), height * lerpNumber(0.58, 0.52, dip))
-  const innerRoof = point(span * lerpNumber(0.66, 0.63, dip), height * lerpNumber(0.51, 0.57, dip))
-  const underPocket = point(span * lerpNumber(0.55, 0.52, dip), height * lerpNumber(0.115, 0.075, dip))
-  const floorReturn = point(lerpNumber(restEndX * 0.86, restEndX * 0.94, dip), height * lerpNumber(0.04, 0.025, dip))
+  const liftKnee = point(span * lerpNumber(0.3, 0.32, dip), height * lerpNumber(0.76, 0.82, dip))
+  const crest = point(span * lerpNumber(0.5, 0.535, dip), height)
+  const shoulder = point(span * lerpNumber(0.68, 0.725, dip), height * lerpNumber(0.94, 0.9, dip))
+  const nose = point(span * lerpNumber(0.8, 0.845, dip), height * lerpNumber(0.48, 0.3, dip))
+  const innerRoof = point(span * lerpNumber(0.65, 0.61, dip), height * lerpNumber(0.5, 0.6, dip))
+  const underPocket = point(span * lerpNumber(0.53, 0.49, dip), height * lerpNumber(0.085, 0.035, dip))
+  const floorReturn = point(lerpNumber(restEndX * 0.86, restEndX * 0.95, dip), height * lerpNumber(0.035, 0.016, dip))
   const end = point(restEndX, 0)
   const tight = lerpNumber(1, 0.52, sharp)
 
@@ -1525,26 +1534,26 @@ function breakingWaveBarrelSegments(
     ],
     [
       shoulder,
-      point(shoulder.x + span * 0.1, shoulder.z - height * 0.03),
-      point(nose.x + span * 0.07 * tight, nose.z + height * lerpNumber(0.16, 0.07, sharp)),
+      point(shoulder.x + span * lerpNumber(0.11, 0.08, sharp), shoulder.z - height * 0.045),
+      point(nose.x + span * 0.075 * tight, nose.z + height * lerpNumber(0.18, 0.07, sharp)),
       nose,
     ],
     [
       nose,
-      point(nose.x + span * 0.018 * tight, nose.z - height * lerpNumber(0.04, 0.025, sharp)),
-      point(innerRoof.x + span * lerpNumber(0.11, 0.06, sharp), innerRoof.z + height * 0.035),
+      point(nose.x + span * 0.01 * tight, nose.z - height * lerpNumber(0.065, 0.032, sharp)),
+      point(innerRoof.x + span * lerpNumber(0.13, 0.07, sharp), innerRoof.z + height * 0.03),
       innerRoof,
     ],
     [
       innerRoof,
-      point(innerRoof.x - span * lerpNumber(0.09, 0.065, sharp), innerRoof.z - height * 0.02),
-      point(underPocket.x - span * 0.025, underPocket.z + height * lerpNumber(0.14, 0.06, sharp)),
+      point(innerRoof.x - span * lerpNumber(0.1, 0.07, sharp), innerRoof.z - height * 0.042),
+      point(underPocket.x - span * 0.028, underPocket.z + height * lerpNumber(0.16, 0.06, sharp)),
       underPocket,
     ],
     [
       underPocket,
-      point(underPocket.x + span * 0.1, Math.max(0, underPocket.z - height * 0.008)),
-      point(floorReturn.x - span * 0.28, floorReturn.z + height * 0.014),
+      point(underPocket.x + span * 0.12, Math.max(0, underPocket.z - height * 0.006)),
+      point(floorReturn.x - span * 0.3, floorReturn.z + height * 0.012),
       floorReturn,
     ],
     [
@@ -1848,7 +1857,10 @@ function transverseWaveMask(
   const smooth = clampNumber(wallSmoothness, 0, 1)
   const centerCoreHalfWidth = Math.min(
     requestedHalfWidth,
-    Math.max(gridSpacingY * lerpNumber(1.25, 1.65, smooth), requestedHalfWidth * lerpNumber(0.3, 0.18, smooth)),
+    Math.max(
+      gridSpacingY * lerpNumber(1.25, 1.65, smooth),
+      requestedHalfWidth * lerpNumber(0.3, 0.18, smooth),
+    ),
   )
   const taperHalfWidth = Math.min(
     maxHalfWidth,
