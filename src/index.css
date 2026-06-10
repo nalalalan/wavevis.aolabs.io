@@ -419,11 +419,6 @@ select:focus-visible {
   background: #f7f3ed;
 }
 
-.inverse-scene[data-view="side"] {
-  width: min(100%, 100vh);
-  justify-self: center;
-}
-
 .scene-shell canvas {
   display: block;
   width: 100% !important;

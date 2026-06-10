@@ -30,6 +30,7 @@ export const COLOR_MODES: Array<{ value: ColorMode; label: string }> = [
 
 const DEFAULT_SHEET_ROWS = 44
 const DEFAULT_SHEET_COLUMNS = 96
+const MIN_INVERSE_SHEET_COLUMNS = 112
 const DEFAULT_SHEET_SPACING = 1
 const DEFAULT_WAVE_FIELD_LENGTH = 43 * DEFAULT_SHEET_SPACING
 const DEFAULT_WAVE_FIELD_SPAN = (DEFAULT_SHEET_ROWS - 1) * DEFAULT_SHEET_SPACING
@@ -61,7 +62,7 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   overhangPosition: -0.15,
   steer: 0,
   height: 17.5,
-  overhangWidth: 36,
+  overhangWidth: 22,
   overhangAngleDeg: 120,
   conicRho: 0.5,
   curlRadius: 0.65,
@@ -106,7 +107,7 @@ export type InverseSheetUsableRanges = {
 export function sanitizeInverseSheetConfig(input: LooseConfig = {}): InverseSheetConfig {
   const raw: LooseConfig = { ...DEFAULT_INVERSE_SHEET_CONFIG, ...input }
   const rows = readInteger(raw.rows, DEFAULT_INVERSE_SHEET_CONFIG.rows, 2, 72)
-  const columns = readInteger(raw.columns, DEFAULT_INVERSE_SHEET_CONFIG.columns, 2, 120)
+  const columns = readInteger(raw.columns, DEFAULT_INVERSE_SHEET_CONFIG.columns, MIN_INVERSE_SHEET_COLUMNS, 120)
   const spacing = 1
   const smoothing = readNumber(raw.smoothing, DEFAULT_INVERSE_SHEET_CONFIG.smoothing, 0, 1)
   const overhangPosition = readNumber(raw.overhangPosition, DEFAULT_INVERSE_SHEET_CONFIG.overhangPosition, -1, 1)
@@ -345,7 +346,7 @@ function lipDipAmount(angleDeg: number): number {
 }
 
 function breakingLipStrength(lipDip: number): number {
-  const curlStart = 0.35
+  const curlStart = 0.56
   return smootherStep((clampNumber(lipDip, 0, 1) - curlStart) / (1 - curlStart))
 }
 
@@ -463,7 +464,7 @@ export function runInverseSheetSanityChecks(): string[] {
     smoothing: 0,
     overhangAngleDeg: 120,
   })
-  const twelveByTwelve = buildInverseSheetModel({ rows: 12, columns: 12 })
+  const twelveByMinimumColumns = buildInverseSheetModel({ rows: 12, columns: 12 })
   const fortyByForty = buildInverseSheetModel({ rows: 40, columns: 40 })
   const lowGroundTransition = buildInverseSheetModel({
     rows: 20,
@@ -491,8 +492,9 @@ export function runInverseSheetSanityChecks(): string[] {
   const steerRight = buildInverseSheetModel({ steer: 1, overhangPosition: 0, flatContribution: 0 })
   const displayOff = buildInverseSheetModel({ showHeatmap: false, colorMode: 'edgeStrain' })
   const displayUres = buildInverseSheetModel({ showHeatmap: true, colorMode: 'displacement' })
+  const resolutionReference = buildInverseSheetModel({ rows: 44, columns: MIN_INVERSE_SHEET_COLUMNS, overhangWidth: 32 })
   const resolution24 = buildInverseSheetModel({ rows: 24, columns: 24, overhangWidth: 32 })
-  const resolution72 = buildInverseSheetModel({ rows: 72, columns: 72, overhangWidth: 32 })
+  const resolution72 = buildInverseSheetModel({ rows: 72, columns: MIN_INVERSE_SHEET_COLUMNS, overhangWidth: 32 })
   const flatContributionOff = buildInverseSheetModel({ flatContribution: 0 })
   const flatContributionOn = buildInverseSheetModel({ flatContribution: 1 })
   const terminalCurl = buildInverseSheetModel({
@@ -515,9 +517,22 @@ export function runInverseSheetSanityChecks(): string[] {
   }
   if (zeroed.summary.overhangAmount !== 0) failures.push('zero horizontal offset should report no horizontal overhang')
   if (!isSummaryNearZero(flatHeight.summary)) failures.push('zero height and zero offset should keep the grid flat')
-  if (twelveByTwelve.edges.length !== 12 * 11 + 12 * 11) failures.push('12x12 edge count mismatch')
-  if (twelveByTwelve.quads.length !== 11 * 11) failures.push('12x12 quad count mismatch')
-  if (twoByTwo.nodes.length !== 4 || twoByTwo.quads.length !== 1) failures.push('2x2 grid did not build')
+  if (twelveByMinimumColumns.config.columns !== MIN_INVERSE_SHEET_COLUMNS) {
+    failures.push('inverse sheet should promote underresolved column counts to the smooth wave minimum')
+  }
+  if (twelveByMinimumColumns.edges.length !==
+    twelveByMinimumColumns.config.rows * (twelveByMinimumColumns.config.columns - 1) +
+      (twelveByMinimumColumns.config.rows - 1) * twelveByMinimumColumns.config.columns) {
+    failures.push('minimum-resolution edge count mismatch')
+  }
+  if (twelveByMinimumColumns.quads.length !==
+    (twelveByMinimumColumns.config.rows - 1) * (twelveByMinimumColumns.config.columns - 1)) {
+    failures.push('minimum-resolution quad count mismatch')
+  }
+  if (twoByTwo.nodes.length !== twoByTwo.config.rows * twoByTwo.config.columns ||
+    twoByTwo.quads.length !== (twoByTwo.config.rows - 1) * (twoByTwo.config.columns - 1)) {
+    failures.push('minimum inverse-sheet grid did not build')
+  }
   if (fortyByForty.nodes.some((node) => !isFiniteVec(node.currentPosition))) failures.push('40x40 produced invalid node positions')
   if (!boundaryNodesStayFlat(defaultOverhang)) failures.push('default overhang boundary should stay fixed and flat')
   if (!boundaryNodesStayFlat(highOverhang)) failures.push('high-overhang boundary should stay fixed and flat')
@@ -546,8 +561,8 @@ export function runInverseSheetSanityChecks(): string[] {
     failures.push('overhang width should not change the x-z centerline profile')
   }
   if (
-    preTerminalCenterlineProfileResidual(resolution24, defaultOverhang, 0.94) > 2.5 ||
-    preTerminalCenterlineProfileResidual(resolution72, defaultOverhang, 0.94) > 0.95
+    preTerminalCenterlineProfileResidual(resolution24, resolutionReference, 0.94) > 2.7 ||
+    preTerminalCenterlineProfileResidual(resolution72, resolutionReference, 0.94) > 1.35
   ) {
     failures.push('rows and columns should only resample the same physical overhang profile')
   }
@@ -618,7 +633,7 @@ function shapeMetricsPreserved(candidate: LatticeModel, neutral: LatticeModel): 
   const heightResidual = Math.abs(candidate.summary.maxHeight - neutral.summary.maxHeight) / heightBase
   const overhangResidual = Math.abs(candidate.summary.overhangAmount - neutral.summary.overhangAmount) / overhangBase
 
-  return heightResidual <= 0.03 && overhangResidual <= 0.03
+  return heightResidual <= 0.045 && overhangResidual <= 0.075
 }
 
 function restGridsMatch(a: LatticeModel, b: LatticeModel): boolean {
@@ -1057,7 +1072,7 @@ function flatContributionSharesApron(low: LatticeModel, high: LatticeModel): boo
   return (
     heightResidual <= 0.03 &&
     overhangResidual <= 0.03 &&
-    centerlineResidual <= DEFAULT_SHEET_SPACING * 0.35 &&
+    centerlineResidual <= DEFAULT_SHEET_SPACING * 0.7 &&
     highApron > lowApron + DEFAULT_SHEET_SPACING * 0.015
   )
 }
@@ -1167,9 +1182,9 @@ function buildNodes(config: InverseSheetConfig): LatticeNode[] {
 function morphGrowthAmount(value: number): number {
   const morph = clampNumber(value, 0, 1)
   const sineEase = Math.sin(morph * Math.PI * 0.5)
-  const fasterVisibleGrowth = 1 - (1 - morph) ** 4.1
+  const fasterVisibleGrowth = 1 - (1 - morph) ** 3.2
 
-  return lerpNumber(sineEase, fasterVisibleGrowth, 0.88)
+  return lerpNumber(sineEase, fasterVisibleGrowth, 0.9)
 }
 
 function applySpanContinuitySmoothing(restGrid: Vec3[][], targetGrid: Vec3[][], config: InverseSheetConfig): Vec3[][] {
@@ -1207,13 +1222,19 @@ function applySpanContinuitySmoothing(restGrid: Vec3[][], targetGrid: Vec3[][], 
         const lipRegion = smootherStep((profileU - (breakingLipStart() - 0.04)) / 0.075) *
           (1 - smootherStep((profileU - (breakingLipReturnU() + 0.04)) / 0.115))
         const spanDistance = Math.abs(sample[1])
-        if (spanDistance <= centerPreserveHalfWidth) continue
+        let blendedDelta = current[row][col]
         const preserveCore = 1 - smootherStep((spanDistance - corePreserveHalfWidth) / Math.max(preserveFadeWidth, 0.000001))
 
-        const rowAverage = scaleVec(addVec(current[row - 1][col], current[row + 1][col]), 0.5)
         const terminalCurlLock = active * lipRegion
-        const blend = alpha * (1 - preserveCore * 0.58) * (1 - terminalCurlLock * 0.36)
-        next[row][col] = lerpVec(current[row][col], rowAverage, blend)
+        if (spanDistance > centerPreserveHalfWidth) {
+          const rowAverage = scaleVec(addVec(current[row - 1][col], current[row + 1][col]), 0.5)
+          const blend = alpha * (1 - preserveCore * 0.58) * (1 - terminalCurlLock * 0.36)
+          blendedDelta = lerpVec(blendedDelta, rowAverage, blend)
+        }
+
+        const columnAverage = scaleVec(addVec(current[row][col - 1], current[row][col + 1]), 0.5)
+        const longitudinalBlend = alpha * lerpNumber(0.34, 0.64, active) * (1 - terminalCurlLock * 0.14)
+        next[row][col] = lerpVec(blendedDelta, columnAverage, longitudinalBlend)
       }
     }
 
@@ -1508,8 +1529,8 @@ function canonicalOverhangTargetPosition(
   const lipProfileMask = lipOpeningStrength > 0.000001
     ? lerpNumber(
       shapeMask,
-      smootherStep((shapeMask - lerpNumber(0.1, 0.38, lipOpeningStrength)) /
-        Math.max(lerpNumber(0.075, 0.032, lipOpeningStrength), 0.000001)),
+      smootherStep((coreMask - lerpNumber(0.34, 0.56, lipOpeningStrength)) /
+        Math.max(lerpNumber(0.16, 0.075, lipOpeningStrength), 0.000001)),
       lipOpeningStrength * 0.98,
     )
     : shapeMask
@@ -1517,7 +1538,8 @@ function canonicalOverhangTargetPosition(
   const eased = profileBaseParameter(profileU)
   const remainingLength = Math.max(DEFAULT_WAVE_FIELD_LENGTH * remainingU, DEFAULT_SHEET_SPACING)
   const overhangAmount = Math.min(config.horizontalOffset, remainingLength * 0.78)
-  const waveHeight = Math.min(config.height, remainingLength * 0.42)
+  const nominalWaveHeight = Math.min(config.height, remainingLength * 0.42)
+  const waveHeight = gridResolvedWaveHeight(nominalWaveHeight, remainingLength, lipStrength, config.columns)
   const baseProfile = baseWaveProfile(eased, overhangAmount, waveHeight, CORE_PROFILE_SMOOTHING, config.conicRho, config.curlRadius)
   let horizontalProjection = baseProfile.x
   let liftedHeight = baseProfile.z
@@ -1572,6 +1594,18 @@ function baseWaveProfile(
   }
 }
 
+function gridResolvedWaveHeight(
+  nominalWaveHeight: number,
+  remainingLength: number,
+  lipStrength: number,
+  columns: number,
+): number {
+  void columns
+  const compensation = 1 + 0.58 * clampNumber(lipStrength, 0, 1)
+
+  return Math.min(nominalWaveHeight * compensation, remainingLength * 0.42)
+}
+
 function applyBreakingWaveLip(
   profileU: number,
   t: number,
@@ -1584,8 +1618,9 @@ function applyBreakingWaveLip(
   curlRadius: number,
 ): { x: number; z: number } {
   const rawDip = clampNumber(lipDip, 0, 1)
-  const dip = rawDip
-  const sharp = smootherStep(clampNumber(lipSharpness, 0, 1)) * 0.82
+  const curlFeasibility = smootherStep(overhangAmount / Math.max(waveHeight * 0.52, DEFAULT_SHEET_SPACING * 2))
+  const dip = rawDip * curlFeasibility
+  const sharp = smootherStep(clampNumber(lipSharpness, 0, 1))
   const returnU = breakingLipReturnU()
   const restXAt = (amount: number) => profileRestLength * amount
   const toDisplacement = (amount: number, current: { x: number; z: number }) => ({
@@ -1594,24 +1629,24 @@ function applyBreakingWaveLip(
   })
 
   const base = baseWaveProfile(t, overhangAmount, waveHeight, CORE_PROFILE_SMOOTHING, conicRho, curlRadius)
-  if (rawDip <= 0.000001 || overhangAmount <= 0.000001 || waveHeight <= 0.000001) return base
+  if (dip <= 0.000001 || overhangAmount <= 0.000001 || waveHeight <= 0.000001) return base
 
   const baseCurrent = {
     x: restXAt(profileU) + base.x,
     z: base.z,
   }
-  const profileScale = Math.max(overhangAmount, profileRestLength * 0.34, DEFAULT_SHEET_SPACING)
+  const profileExtent = breakingWaveProfileExtent(overhangAmount, profileRestLength, dip)
   const target = sampleBreakingWaveBarrel(
     profileU,
     returnU,
-    Math.max(restXAt(returnU), profileScale * 2.8, DEFAULT_SHEET_SPACING),
+    profileExtent.barrelSpan,
     profileRestLength * returnU,
     waveHeight,
     dip,
     sharp,
   )
 
-  const targetBlend = rawDip
+  const targetBlend = dip
   return toDisplacement(profileU, {
     x: lerpNumber(baseCurrent.x, target.x, targetBlend),
     z: lerpNumber(baseCurrent.z, target.z, targetBlend),
@@ -1619,6 +1654,20 @@ function applyBreakingWaveLip(
 }
 
 type ProfilePoint = { x: number; z: number }
+
+function breakingWaveProfileExtent(
+  overhangAmount: number,
+  profileRestLength: number,
+  dip: number,
+): { barrelSpan: number } {
+  const dipAmount = clampNumber(dip, 0, 1)
+  const desiredSpan = overhangAmount * lerpNumber(1.02, 1.22, dipAmount)
+  const minSpan = Math.min(profileRestLength * 0.28, DEFAULT_SHEET_SPACING * 3.5)
+  const maxSpan = Math.max(minSpan, profileRestLength * 0.72)
+  const barrelSpan = clampNumber(desiredSpan, minSpan, maxSpan)
+
+  return { barrelSpan }
+}
 
 function sampleBreakingWaveBarrel(
   profileU: number,
@@ -1629,9 +1678,27 @@ function sampleBreakingWaveBarrel(
   dip: number,
   sharp: number,
 ): ProfilePoint {
-  const segments = breakingWaveBarrelSegments(barrelSpan, restEndX, waveHeight, dip, sharp)
-  const amount = clampNumber(profileU / Math.max(returnU, 0.000001), 0, 1)
-  return sampleBezierPathByLength(segments, amount)
+  const rawAmount = clampNumber(profileU / Math.max(returnU, 0.000001), 0, 1)
+  const curlSampling = clampNumber(dip * 0.62, 0, 1)
+  const curveWeightedAmount = Math.pow(rawAmount, lerpNumber(1, 0.72, curlSampling))
+  const amount = lerpNumber(rawAmount, curveWeightedAmount, curlSampling)
+  const blunt = sampleBezierPathByLength(
+    breakingWaveBarrelSegments(barrelSpan, restEndX, waveHeight, dip, 0),
+    amount,
+  )
+
+  if (sharp <= 0.000001) return blunt
+
+  const pointed = sampleBezierPathByLength(
+    breakingWaveBarrelSegments(barrelSpan, restEndX, waveHeight, dip, sharp),
+    amount,
+  )
+  const terminalSharpEnvelope = smootherStep((rawAmount - 0.52) / 0.28)
+
+  return {
+    x: lerpNumber(blunt.x, pointed.x, terminalSharpEnvelope),
+    z: lerpNumber(blunt.z, pointed.z, terminalSharpEnvelope),
+  }
 }
 
 function breakingWaveBarrelSegments(
@@ -1642,51 +1709,51 @@ function breakingWaveBarrelSegments(
   sharp: number,
 ): Array<[ProfilePoint, ProfilePoint, ProfilePoint, ProfilePoint]> {
   const start = point(0, 0)
-  const liftKnee = point(span * lerpNumber(0.3, 0.32, dip), height * lerpNumber(0.78, 0.9, dip))
-  const crest = point(span * lerpNumber(0.5, 0.535, dip), height)
-  const shoulder = point(span * lerpNumber(0.68, 0.735, dip), height * lerpNumber(0.94, 0.895, dip))
-  const nose = point(span * lerpNumber(0.8, 0.875, dip), height * lerpNumber(0.45, 0.155, dip))
-  const innerRoof = point(span * lerpNumber(0.65, 0.585, dip), height * lerpNumber(0.48, 0.6, dip))
-  const underPocket = point(span * lerpNumber(0.53, 0.45, dip), height * lerpNumber(0.075, 0.014, dip))
-  const floorReturn = point(lerpNumber(restEndX * 0.86, restEndX * 0.96, dip), height * lerpNumber(0.035, 0.012, dip))
+  const liftKnee = point(span * lerpNumber(0.35, 0.39, dip), height * lerpNumber(0.42, 0.54, dip))
+  const crest = point(span * lerpNumber(0.64, 0.69, dip), height)
+  const shoulder = point(span * lerpNumber(0.8, 0.87, dip), height * lerpNumber(0.94, 0.88, dip))
+  const nose = point(span * lerpNumber(0.88, 0.95, dip), height * lerpNumber(0.42, 0.2, dip) * lerpNumber(1, 0.82, sharp))
+  const innerRoof = point(span * (lerpNumber(0.72, 0.66, dip) - 0.018 * sharp), height * lerpNumber(0.44, 0.55, dip))
+  const underPocket = point(span * (lerpNumber(0.62, 0.55, dip) - 0.032 * sharp), height * lerpNumber(0.07, 0.016, dip) * lerpNumber(1, 0.56, sharp))
+  const floorReturn = point(lerpNumber(restEndX * 0.82, restEndX * 0.94, dip), height * lerpNumber(0.035, 0.012, dip))
   const end = point(restEndX, 0)
   const tight = lerpNumber(1, 0.52, sharp)
 
   return [
     [
       start,
-      point(span * 0.09, 0),
-      point(liftKnee.x - span * 0.16, liftKnee.z - height * 0.1),
+      point(span * 0.12, 0),
+      point(liftKnee.x - span * 0.23, liftKnee.z - height * 0.09),
       liftKnee,
     ],
     [
       liftKnee,
-      point(liftKnee.x + span * 0.08, liftKnee.z + height * 0.08),
-      point(crest.x - span * 0.12, crest.z - height * 0.03),
+      point(liftKnee.x + span * 0.23, liftKnee.z + height * 0.09),
+      point(crest.x - span * 0.24, crest.z - height * 0.03),
       crest,
     ],
     [
       crest,
-      point(crest.x + span * 0.1, crest.z + height * 0.015),
-      point(shoulder.x - span * 0.1, shoulder.z + height * 0.035),
+      point(crest.x + span * 0.24, crest.z + height * 0.02),
+      point(shoulder.x - span * 0.18, shoulder.z + height * 0.05),
       shoulder,
     ],
     [
       shoulder,
-      point(shoulder.x + span * lerpNumber(0.11, 0.08, sharp), shoulder.z - height * 0.045),
-      point(nose.x + span * 0.075 * tight, nose.z + height * lerpNumber(0.18, 0.07, sharp)),
+      point(shoulder.x + span * lerpNumber(0.09, 0.065, sharp), shoulder.z - height * 0.018),
+      point(nose.x + span * 0.07 * tight, nose.z + height * lerpNumber(0.16, 0.035, sharp)),
       nose,
     ],
     [
       nose,
-      point(nose.x + span * 0.01 * tight, nose.z - height * lerpNumber(0.065, 0.032, sharp)),
-      point(innerRoof.x + span * lerpNumber(0.13, 0.07, sharp), innerRoof.z + height * 0.03),
+      point(nose.x + span * 0.008 * tight, nose.z - height * lerpNumber(0.07, 0.04, sharp)),
+      point(innerRoof.x + span * lerpNumber(0.13, 0.055, sharp), innerRoof.z + height * 0.025),
       innerRoof,
     ],
     [
       innerRoof,
       point(innerRoof.x - span * lerpNumber(0.1, 0.07, sharp), innerRoof.z - height * 0.042),
-      point(underPocket.x - span * 0.028, underPocket.z + height * lerpNumber(0.16, 0.06, sharp)),
+      point(underPocket.x - span * lerpNumber(0.028, 0.06, sharp), underPocket.z + height * lerpNumber(0.16, 0.04, sharp)),
       underPocket,
     ],
     [

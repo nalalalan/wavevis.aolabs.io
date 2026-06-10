@@ -1,6 +1,6 @@
 import { Billboard, OrbitControls, PerspectiveCamera, Text } from '@react-three/drei'
-import { Canvas } from '@react-three/fiber'
-import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { Canvas, useThree } from '@react-three/fiber'
+import { Suspense, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import CanvasSizeGuard from './CanvasSizeGuard'
@@ -53,7 +53,7 @@ export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequ
   void pickedEdges
 
   return (
-    <section className="scene-shell inverse-scene" data-view={viewRequest.view} aria-label="Inverse Sheet 3D lattice view">
+    <section className="scene-shell inverse-scene" aria-label="Inverse Sheet 3D lattice view">
       <Canvas dpr={[1, 1.8]} gl={{ antialias: true, preserveDrawingBuffer: true }} resize={{ offsetSize: true, polyfill: canvasResizeObserver }} style={{ width: '100%', height: '100%' }}>
         <CanvasSizeGuard />
         <color attach="background" args={['#f7f3ed']} />
@@ -135,10 +135,11 @@ function LatticeModelGroup({
           <ConnectorInstances model={model} mechanism={mechanism} scope={mechanismScope} radius={connectorSize} />
         </>
       )}
-      {sliceProfileView && (
+      {(sliceProfileView || sideMechanismView) && (
         <SideProfileSilhouette
           model={model}
           compact={model.config.showNodes || model.config.showEdges}
+          subtle={sideMechanismView}
         />
       )}
       {labelsVisible && <NodeLabels nodes={model.nodes} />}
@@ -163,6 +164,37 @@ function buildMechanismRenderScope(
   sideSlice: boolean,
   sideView = false,
 ): MechanismRenderScope {
+  if (sideView && !sideSlice) {
+    const nodeById = new Map(model.nodes.map((node) => [node.id, node]))
+    const activeNodeIds = new Set(model.nodes.map((node) => node.id))
+    const edges = model.edges.filter((edge) =>
+      edge.orientation === 'horizontal' &&
+      activeNodeIds.has(edge.nodeA) &&
+      activeNodeIds.has(edge.nodeB)
+    )
+    const directionsByNodeId = new Map<string, CellArmDirection[]>()
+
+    activeNodeIds.forEach((nodeIdValue) => {
+      directionsByNodeId.set(nodeIdValue, [])
+    })
+    edges.forEach((edge) => {
+      const nodeA = nodeById.get(edge.nodeA)
+      const nodeB = nodeById.get(edge.nodeB)
+      if (!nodeA || !nodeB) return
+
+      directionsByNodeId.get(edge.nodeA)?.push(directionTowardNode(nodeA, nodeB))
+      directionsByNodeId.get(edge.nodeB)?.push(directionTowardNode(nodeB, nodeA))
+    })
+
+    return {
+      frames: mechanism.frames.filter((frame) => activeNodeIds.has(frame.nodeId)),
+      edges,
+      directionsByNodeId,
+      sideSlice: false,
+      sideView: true,
+    }
+  }
+
   if (!sideSlice) {
     const directionsByNodeId = new Map<string, CellArmDirection[]>()
     mechanism.frames.forEach((frame) => {
@@ -210,6 +242,13 @@ function buildMechanismRenderScope(
   }
 }
 
+function directionTowardNode(node: LatticeNode, other: LatticeNode): CellArmDirection {
+  if (other.col > node.col) return 'east'
+  if (other.col < node.col) return 'west'
+  if (other.row > node.row) return 'north'
+  return 'south'
+}
+
 function SideProfileSilhouette({
   model,
   row,
@@ -225,8 +264,7 @@ function SideProfileSilhouette({
     if (model.summary.maxHeight <= model.config.spacing * 0.2) return null
 
     const sliceRow = clampIndex(row ?? Math.round((model.config.rows - 1) * 0.5), model.config.rows)
-    const rawPoints: Vec3[] = []
-    const activeFlags: boolean[] = []
+    const rawPoints: Array<{ point: Vec3; col: number }> = []
 
     for (let col = 0; col < model.config.columns; col += 1) {
       const node = model.nodes.find((candidate) => candidate.row === sliceRow && candidate.col === col)
@@ -237,23 +275,13 @@ function SideProfileSilhouette({
         node.currentPosition[1],
         node.currentPosition[2],
       ]
-      const displacement = Math.hypot(
-        node.currentPosition[0] - node.restPosition[0],
-        node.currentPosition[1] - node.restPosition[1],
-        node.currentPosition[2] - node.restPosition[2],
-      )
-
-      rawPoints.push(point)
-      activeFlags.push(point[2] > model.summary.maxHeight * 0.055 || displacement > model.config.spacing * 1.6)
+      rawPoints.push({ point, col })
     }
 
-    const firstActive = activeFlags.findIndex(Boolean)
-    const lastActive = activeFlags.length - 1 - [...activeFlags].reverse().findIndex(Boolean)
-    if (firstActive < 0 || lastActive <= firstActive) return null
-
-    const start = Math.max(0, firstActive - 1)
-    const end = Math.min(rawPoints.length - 1, lastActive + 1)
-    const points = rawPoints.slice(start, end + 1).map((point) => new THREE.Vector3(...point))
+    const columnRange = activeSideColumnRange(model, 'focus')
+    const points = rawPoints
+      .filter(({ col }) => col >= columnRange.minCol && col <= columnRange.maxCol)
+      .map(({ point }) => new THREE.Vector3(...point))
     if (points.length < 2) return null
 
     const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal', 0.35)
@@ -634,25 +662,33 @@ function CameraRig({
   const cameraRef = useRef<THREE.PerspectiveCamera>(null)
   const controlsRef = useRef<OrbitControlsImpl | null>(null)
   const modelRef = useRef(model)
+  const size = useThree((state) => state.size)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     modelRef.current = model
-  }, [model])
+    const camera = cameraRef.current
+    if (!camera || focusRequest.selected) return
 
-  useEffect(() => {
+    camera.aspect = Math.max(size.width / Math.max(size.height, 1), 0.2)
+    positionCamera(camera, controlsRef.current, model, viewRequest.view)
+  }, [focusRequest.selected, model, size.height, size.width, viewRequest.view])
+
+  useLayoutEffect(() => {
     const camera = cameraRef.current
     if (!camera) return
 
+    camera.aspect = Math.max(size.width / Math.max(size.height, 1), 0.2)
     positionCamera(camera, controlsRef.current, modelRef.current, viewRequest.view)
-  }, [viewRequest.version, viewRequest.view])
+  }, [size.height, size.width, viewRequest.version, viewRequest.view])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const camera = cameraRef.current
     const selected = focusRequest.selected
     if (!camera || !selected) return
 
+    camera.aspect = Math.max(size.width / Math.max(size.height, 1), 0.2)
     positionCamera(camera, controlsRef.current, modelRef.current, viewRequest.view, selected)
-  }, [focusRequest.selected, focusRequest.version, viewRequest.view])
+  }, [focusRequest.selected, focusRequest.version, size.height, size.width, viewRequest.view])
 
   return (
     <>
@@ -673,17 +709,18 @@ function positionCamera(
   const bounds = !selected && sideLikeView ? activeSideProfileBounds(model) : model.bounds
   const maxSpan = Math.max(bounds.span[0], bounds.span[1], bounds.span[2], 2)
   const focus = focusForSelected(model, selected ?? null)
-  const fov = focus ? 32 : view === 'side' ? 22 : view === 'slice' ? 26 : 42
+  const fov = focus ? 32 : view === 'side' ? 13 : view === 'slice' ? 14 : 42
   const fitDistance = cameraDistanceForView(bounds, view, fov, camera.aspect)
+  const sideProjectionScale = 1
   const distance = focus
     ? Math.max(focus.radius * 7.5, model.config.spacing * 12, maxSpan * 0.22)
-    : fitDistance
+    : fitDistance * sideProjectionScale
   const target = focus ? focus.center : new THREE.Vector3(...bounds.center)
   const position =
     view === 'top'
       ? new THREE.Vector3(target.x, target.y, target.z + distance)
     : view === 'side'
-      ? new THREE.Vector3(target.x + distance * 0.24, target.y - distance, target.z + maxSpan * 0.02)
+      ? new THREE.Vector3(target.x, target.y - distance, target.z)
       : view === 'slice'
         ? new THREE.Vector3(target.x, target.y - distance, target.z)
         : new THREE.Vector3(target.x + distance * 0.96, target.y - distance * 1.08, target.z + distance * 0.34)
@@ -697,7 +734,7 @@ function positionCamera(
   camera.lookAt(target)
 
   camera.fov = fov
-  camera.zoom = view === 'side' ? 1.08 : view === 'slice' ? 1.08 : view === 'isometric' ? 1.36 : 1
+  camera.zoom = view === 'side' ? 0.74 : view === 'slice' ? 0.72 : view === 'isometric' ? 1.36 : 1
   camera.near = 0.01
   camera.far = Math.max(distance * 8, 100)
   camera.updateProjectionMatrix()
@@ -711,48 +748,32 @@ function clampIndex(value: number, length: number): number {
 }
 
 function activeSideProfileBounds(model: LatticeModel): LatticeBounds {
-  const maxHeight = Math.max(model.summary.maxHeight, 0.000001)
-  const highNodes = model.nodes.filter((node) => node.currentPosition[2] > maxHeight * 0.16)
-  const highMinX = highNodes.length ? Math.min(...highNodes.map((node) => node.currentPosition[0])) : -Infinity
-  const highMaxX = highNodes.length ? Math.max(...highNodes.map((node) => node.currentPosition[0])) : Infinity
-  const lowCurlMargin = Math.max(maxHeight * 0.42, model.config.spacing * 3.5)
-  const activeNodes = model.nodes.filter((node) => {
-    const displacement = Math.hypot(
-      node.currentPosition[0] - node.restPosition[0],
-      node.currentPosition[1] - node.restPosition[1],
-      node.currentPosition[2] - node.restPosition[2],
-    )
-    const nearLiftedProfile = node.currentPosition[0] >= highMinX - lowCurlMargin &&
-      node.currentPosition[0] <= highMaxX + lowCurlMargin
+  const centerRow = clampIndex((model.config.rows - 1) * 0.5, model.config.rows)
+  const centerlineNodes = model.nodes
+    .filter((node) => node.row === centerRow)
+    .sort((a, b) => a.col - b.col)
+  const columnRange = activeSideColumnRange(model, 'focus')
 
-    return node.currentPosition[2] > maxHeight * 0.12 ||
-      (nearLiftedProfile &&
-        node.currentPosition[2] > maxHeight * 0.01 &&
-        displacement > Math.max(model.config.spacing * 0.7, model.summary.overhangAmount * 0.08))
-  })
+  if (centerlineNodes.length < 2 || columnRange.maxCol <= columnRange.minCol) return model.bounds
 
-  if (activeNodes.length < 2) return model.bounds
-
-  const activeMaxX = Math.max(...activeNodes.map((node) => node.currentPosition[0]))
-  const minZ = Math.min(...activeNodes.map((node) => node.currentPosition[2]), 0)
-  const maxZ = Math.max(...activeNodes.map((node) => node.currentPosition[2]))
+  const section = centerlineNodes.filter((node) => node.col >= columnRange.minCol && node.col <= columnRange.maxCol)
+  const minX = Math.min(...section.map((node) => node.currentPosition[0]))
+  const maxX = Math.max(...section.map((node) => node.currentPosition[0]))
+  const minZ = Math.min(...section.map((node) => node.currentPosition[2]), 0)
+  const maxZ = Math.max(...section.map((node) => node.currentPosition[2]))
   const profileHeight = Math.max(maxZ - minZ, model.config.spacing * 5)
-  const frontEdgeX = Number.isFinite(highMaxX)
-    ? highMaxX + Math.max(profileHeight * 0.08, model.config.spacing * 0.8)
-    : activeMaxX + Math.max(profileHeight * 0.08, model.config.spacing * 0.8)
-  const desiredSpanX = Math.max(
-    profileHeight * 1.32,
-    model.config.spacing * 7.5,
-  )
-  const padZ = Math.max(model.config.spacing * 1.1, profileHeight * 0.13)
+  const profileWidth = Math.max(maxX - minX, model.config.spacing * 5)
+  const desiredSpanX = Math.max(profileWidth + profileHeight * 0.9, profileHeight * 1.42, model.config.spacing * 9)
+  const padZ = Math.max(model.config.spacing * 1.7, profileHeight * 0.36)
   const sideDepth = Math.max(model.config.spacing * 3, desiredSpanX * 0.08)
+  const centerX = (minX + maxX) * 0.5
   const min: Vec3 = [
-    frontEdgeX - desiredSpanX,
+    centerX - desiredSpanX * 0.5,
     model.bounds.center[1] - sideDepth * 0.5,
     Math.min(0, minZ - padZ * 0.2),
   ]
   const max: Vec3 = [
-    frontEdgeX,
+    centerX + desiredSpanX * 0.5,
     model.bounds.center[1] + sideDepth * 0.5,
     maxZ + padZ,
   ]
@@ -770,6 +791,30 @@ function activeSideProfileBounds(model: LatticeModel): LatticeBounds {
   }
 }
 
+function activeSideColumnRange(model: LatticeModel, mode: 'render' | 'focus'): { minCol: number; maxCol: number } {
+  const maxHeight = Math.max(model.summary.maxHeight, 0.000001)
+  const centerRow = clampIndex((model.config.rows - 1) * 0.5, model.config.rows)
+  const centerlineNodes = model.nodes
+    .filter((node) => node.row === centerRow)
+    .sort((a, b) => a.col - b.col)
+  const threshold = mode === 'focus' ? 0.18 : 0.1
+  const lifted = centerlineNodes
+    .filter((node) => node.currentPosition[2] > maxHeight * threshold)
+    .map((node) => node.col)
+
+  if (lifted.length < 2) {
+    return { minCol: 0, maxCol: model.config.columns - 1 }
+  }
+
+  const padColumns = mode === 'focus'
+    ? Math.max(8, Math.ceil(model.config.columns * 0.1))
+    : Math.max(2, Math.ceil(model.config.columns * 0.035))
+  return {
+    minCol: Math.max(0, Math.min(...lifted) - padColumns),
+    maxCol: Math.min(model.config.columns - 1, Math.max(...lifted) + padColumns),
+  }
+}
+
 function cameraDistanceForView(
   bounds: LatticeBounds,
   view: CameraViewRequest['view'],
@@ -781,7 +826,7 @@ function cameraDistanceForView(
   const tanHalfFov = Math.tan(fov / 2)
 
   if (view === 'side' || view === 'slice') {
-    return fitPerspectiveDistance(bounds.span[0], bounds.span[2], tanHalfFov, safeAspect, view === 'side' ? 0.78 : 1.06)
+    return fitPerspectiveDistance(bounds.span[0], bounds.span[2], tanHalfFov, safeAspect, view === 'side' ? 1.42 : 1.34)
   }
 
   if (view === 'top') {
