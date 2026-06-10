@@ -20,6 +20,7 @@ import type {
 import { colorForQuad, legendForMode } from './metricVisuals'
 import {
   buildRigidCellMechanism,
+  connectedArmDirectionsForFrame,
   rigidCellBodyThickness,
   type CellArmDirection,
   type RigidCellMechanism,
@@ -29,7 +30,6 @@ import { canvasResizeObserver } from './resizeObserverPolyfill'
 const inverseLinkageColor = '#111111'
 const inverseCellBodyColor = '#2f3130'
 const inverseConnectorColor = '#111111'
-const allCellArmDirections: CellArmDirection[] = ['east', 'west', 'north', 'south']
 const crossSectionRowBand = 1
 
 type MechanismRenderScope = {
@@ -165,30 +165,15 @@ function buildMechanismRenderScope(
   sideView = false,
 ): MechanismRenderScope {
   if (sideView && !sideSlice) {
-    const nodeById = new Map(model.nodes.map((node) => [node.id, node]))
-    const activeNodeIds = new Set(model.nodes.map((node) => node.id))
-    const edges = model.edges.filter((edge) =>
-      edge.orientation === 'horizontal' &&
-      activeNodeIds.has(edge.nodeA) &&
-      activeNodeIds.has(edge.nodeB)
-    )
     const directionsByNodeId = new Map<string, CellArmDirection[]>()
 
-    activeNodeIds.forEach((nodeIdValue) => {
-      directionsByNodeId.set(nodeIdValue, [])
-    })
-    edges.forEach((edge) => {
-      const nodeA = nodeById.get(edge.nodeA)
-      const nodeB = nodeById.get(edge.nodeB)
-      if (!nodeA || !nodeB) return
-
-      directionsByNodeId.get(edge.nodeA)?.push(directionTowardNode(nodeA, nodeB))
-      directionsByNodeId.get(edge.nodeB)?.push(directionTowardNode(nodeB, nodeA))
+    mechanism.frames.forEach((frame) => {
+      directionsByNodeId.set(frame.nodeId, connectedArmDirectionsForFrame(frame))
     })
 
     return {
-      frames: mechanism.frames.filter((frame) => activeNodeIds.has(frame.nodeId)),
-      edges,
+      frames: mechanism.frames,
+      edges: model.edges,
       directionsByNodeId,
       sideSlice: false,
       sideView: true,
@@ -198,7 +183,7 @@ function buildMechanismRenderScope(
   if (!sideSlice) {
     const directionsByNodeId = new Map<string, CellArmDirection[]>()
     mechanism.frames.forEach((frame) => {
-      directionsByNodeId.set(frame.nodeId, allCellArmDirections)
+      directionsByNodeId.set(frame.nodeId, connectedArmDirectionsForFrame(frame))
     })
 
     return {
@@ -240,13 +225,6 @@ function buildMechanismRenderScope(
     sideSlice: true,
     sideView: false,
   }
-}
-
-function directionTowardNode(node: LatticeNode, other: LatticeNode): CellArmDirection {
-  if (other.col > node.col) return 'east'
-  if (other.col < node.col) return 'west'
-  if (other.row > node.row) return 'north'
-  return 'south'
 }
 
 function SideProfileSilhouette({
@@ -720,7 +698,7 @@ function positionCamera(
     view === 'top'
       ? new THREE.Vector3(target.x, target.y, target.z + distance)
     : view === 'side'
-      ? new THREE.Vector3(target.x, target.y - distance, target.z)
+      ? new THREE.Vector3(target.x + distance * 0.11, target.y - distance, target.z + distance * 0.025)
       : view === 'slice'
         ? new THREE.Vector3(target.x, target.y - distance, target.z)
         : new THREE.Vector3(target.x + distance * 0.96, target.y - distance * 1.08, target.z + distance * 0.34)

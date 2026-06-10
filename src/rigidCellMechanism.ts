@@ -1,6 +1,7 @@
 import type { LatticeEdge, LatticeModel, LatticeNode, Vec3 } from './inverseSheetTypes'
 
 export type CellArmDirection = 'east' | 'west' | 'north' | 'south'
+export const CELL_ARM_DIRECTIONS: CellArmDirection[] = ['east', 'west', 'north', 'south']
 
 export type RigidCellFrame = {
   nodeId: string
@@ -40,6 +41,10 @@ export function rigidCellBodyThickness(spacing: number): number {
 
 export function rigidCellBodyOffset(spacing: number): number {
   return rigidCellBodyThickness(spacing) * 0.72
+}
+
+export function connectedArmDirectionsForFrame(frame: RigidCellFrame): CellArmDirection[] {
+  return CELL_ARM_DIRECTIONS.filter((direction) => Boolean(frame.armEndpoints[direction]))
 }
 
 export function buildRigidCellFrame(

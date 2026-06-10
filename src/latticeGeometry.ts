@@ -2062,15 +2062,16 @@ function transverseWaveMask(
   const requestedHalfWidth = clampNumber(overhangWidth * 0.5, 0, maxHalfWidth)
 
   if (requestedHalfWidth <= 0.000001) return 0
+  const coneCurl = widthOpen * 0.94
   const coreWidthFactor = lerpNumber(
     lerpNumber(0.32, 0.22, smooth),
-    lerpNumber(0.9, 0.96, smooth),
-    widthOpen * 0.94,
+    lerpNumber(0.18, 0.13, smooth),
+    coneCurl,
   )
   const taperWidthFactor = lerpNumber(
     lerpNumber(2.05, 2.9, smooth),
-    lerpNumber(1.06, 1.14, smooth),
-    widthOpen * 0.86,
+    lerpNumber(1.34, 1.58, smooth),
+    coneCurl,
   )
   const coreHalfWidth = Math.min(
     requestedHalfWidth,
@@ -2082,20 +2083,23 @@ function transverseWaveMask(
   const taperHalfWidth = Math.min(
     maxHalfWidth,
     Math.max(
-      coreHalfWidth + gridSpacingY * lerpNumber(7.5, 11.5, smooth) * lerpNumber(1, 0.18, widthOpen),
+      coreHalfWidth + gridSpacingY * lerpNumber(7.5, 11.5, smooth) * lerpNumber(1, 0.64, coneCurl),
       requestedHalfWidth * taperWidthFactor +
-        gridSpacingY * lerpNumber(2.6, 4.6, smooth) * lerpNumber(1, 0.22, widthOpen),
+        gridSpacingY * lerpNumber(2.6, 4.6, smooth) * lerpNumber(1, 0.58, coneCurl),
     ),
   )
   const distanceFromCenter = Math.abs(y - yCenter)
   const fadeWidth = Math.max(
     taperHalfWidth - coreHalfWidth,
-    gridSpacingY * lerpNumber(8.5, 13.5, smooth) * lerpNumber(1, 0.22, widthOpen),
+    gridSpacingY * lerpNumber(8.5, 13.5, smooth) * lerpNumber(1, 0.68, coneCurl),
   )
   const rawWidthMask = distanceFromCenter <= coreHalfWidth
     ? 1
     : 1 - smootherStep((distanceFromCenter - coreHalfWidth) / Math.max(fadeWidth, 0.000001))
-  const widthMask = Math.pow(clampNumber(rawWidthMask, 0, 1), lerpNumber(0.98, 1.08, smooth))
+  const widthMask = Math.pow(
+    clampNumber(rawWidthMask, 0, 1),
+    lerpNumber(lerpNumber(0.98, 1.08, smooth), lerpNumber(1.18, 1.36, smooth), coneCurl),
+  )
 
   return clampNumber(edgeMask * widthMask, 0, 1)
 }
@@ -2119,13 +2123,17 @@ function transverseLipOpeningMask(
   const edgeMask = edgeRamp(y / Math.max(totalHeight, 0.000001), flatRim, blendRim) *
     edgeRamp(1 - y / Math.max(totalHeight, 0.000001), flatRim, blendRim)
   const distanceFromCenter = Math.abs(y - yCenter)
-  const coreHalfWidth = requestedHalfWidth * lerpNumber(0.9, 0.99, clampNumber(openingStrength, 0, 1))
-  const fadeWidth = Math.max(gridSpacingY * 1.1, requestedHalfWidth * lerpNumber(0.08, 0.032, openingStrength))
+  const coneOpening = clampNumber(openingStrength, 0, 1)
+  const coreHalfWidth = requestedHalfWidth * lerpNumber(0.22, 0.14, coneOpening)
+  const fadeWidth = Math.max(
+    gridSpacingY * lerpNumber(5.5, 7.2, coneOpening),
+    requestedHalfWidth * lerpNumber(0.68, 0.86, coneOpening),
+  )
   const widthMask = distanceFromCenter <= coreHalfWidth
     ? 1
     : 1 - smootherStep((distanceFromCenter - coreHalfWidth) / Math.max(fadeWidth, 0.000001))
 
-  return clampNumber(edgeMask * widthMask, 0, 1)
+  return clampNumber(edgeMask * Math.pow(clampNumber(widthMask, 0, 1), lerpNumber(1.12, 1.34, coneOpening)), 0, 1)
 }
 
 function transverseSupportMask(

@@ -35,7 +35,7 @@ execFileSync(
 )
 
 const { buildInverseSheetModel, getInverseSheetUsableRanges, runInverseSheetSanityChecks } = require(path.join(outDir, 'latticeGeometry.js'))
-const { rigidCellMechanismStats } = require(path.join(outDir, 'rigidCellMechanism.js'))
+const { buildRigidCellMechanism, connectedArmDirectionsForFrame, rigidCellMechanismStats } = require(path.join(outDir, 'rigidCellMechanism.js'))
 
 const DEFAULT_SHEET_ROWS = 44
 const DEFAULT_SHEET_COLUMNS = 96
@@ -81,6 +81,7 @@ const lipSharpnessPair = summarizeLipSharpnessPair(bluntLipModel, sharpLipModel)
 const sharpWalls = summarizeWallSmoothness(buildInverseSheetModel({ smoothing: 1, wallSmoothness: 0, flatContribution: 0 }))
 const roundWalls = summarizeWallSmoothness(buildInverseSheetModel({ smoothing: 1, wallSmoothness: 1, flatContribution: 0 }))
 const mechanism = rigidCellMechanismStats(buildInverseSheetModel())
+const sideRenderMechanism = summarizeSideRenderMechanism(buildInverseSheetModel())
 const wallSmoothnessExtreme = summarizeExtremeShape(buildInverseSheetModel({
   height: 14.75,
   horizontalOffset: 16.25,
@@ -194,6 +195,24 @@ const lateralSmoothness = {
     flatContribution: 0.35,
   })),
   breakingWide: summarizeLateralSmoothness(lipDipSweepModels[118]),
+}
+const conicalSpanTaper = {
+  default: summarizeConicalSpanTaper(buildInverseSheetModel()),
+  compactUser: summarizeConicalSpanTaper(buildInverseSheetModel({
+    rows: 24,
+    columns: 24,
+    height: 8,
+    horizontalOffset: 9,
+    overhangPosition: -0.15,
+    steer: 0,
+    overhangAngleDeg: 118,
+    overhangWidth: 17,
+    lipSharpness: 0.28,
+    smoothing: 1,
+    wallSmoothness: 0.18,
+    flatContribution: 0.35,
+  })),
+  breakingWide: summarizeConicalSpanTaper(lipDipSweepModels[118]),
 }
 const outerRadiusSmoothness = {
   default: summarizeOuterRadiusSmoothness(buildInverseSheetModel()),
@@ -319,6 +338,10 @@ if (!Object.values(lateralSmoothness).every(lateralSmoothnessPasses)) {
   failures.push('span taper should stay smooth without side walls, divots, or lateral zigzags')
 }
 
+if (!Object.values(conicalSpanTaper).every(conicalSpanTaperPasses)) {
+  failures.push('max lip dip should read as an inverted-cone taper with a curled tip, not a broad side wall')
+}
+
 if (!Object.values(outerRadiusSmoothness).every((summary) => (
   summary.maxTopCurvatureRatio <= (summary.topPointCount <= 5 ? 0.32 : 0.26) &&
   summary.maxTopAngleJumpDeg <= (summary.topPointCount <= 5 ? 60 : summary.topPointCount <= 8 ? 38 : 24) &&
@@ -354,6 +377,14 @@ if (mechanism.maxConnectorEndpointGap > 0.0001) {
 
 if (mechanism.maxExpectedArmCountResidual !== 0 || mechanism.minInteriorConnectedArmCount !== 4) {
   failures.push('every inverse-sheet cell should have all expected connected legs, with interior cells connected to four legs')
+}
+
+if (
+  sideRenderMechanism.maxRenderedArmCountResidual !== 0 ||
+  sideRenderMechanism.minRenderedInteriorArmCount !== 4 ||
+  sideRenderMechanism.renderedArmCount !== sideRenderMechanism.expectedArmCount
+) {
+  failures.push('side view should render the full four-leg cell grid, not only row-wise legs')
 }
 
 if (mechanism.maxPairLengthSpread > 0.005) {
@@ -407,6 +438,7 @@ const report = {
     maxArmSurfaceLeak: round(mechanism.maxArmSurfaceLeak),
     maxCenterShift: round(mechanism.maxCenterShift),
   },
+  sideRenderMechanism,
   extremeControls: {
     wallSmoothness1: wallSmoothnessExtreme,
     lipSharpness1: lipSharpnessExtreme,
@@ -423,6 +455,7 @@ const report = {
   steer: steerField,
   widthInvariant,
   lateralSmoothness,
+  conicalSpanTaper,
   outerRadiusSmoothness,
   resolutionInvariant,
   displayInvariant,
@@ -971,6 +1004,41 @@ function lateralSmoothnessPasses(summary) {
   return absoluteSmooth || ratioSmooth
 }
 
+function summarizeConicalSpanTaper(model) {
+  const centerRow = (model.config.rows - 1) * 0.5
+  const rowHeights = []
+
+  for (let row = 0; row < model.config.rows; row += 1) {
+    const rowNodes = model.nodes.filter((node) => node.row === row)
+    rowHeights.push({
+      row,
+      distance: Math.abs(row - centerRow),
+      maxHeight: maxOf(rowNodes.map((node) => node.currentPosition[2])),
+    })
+  }
+
+  const centerBand = rowHeights.filter((entry) => entry.distance <= 1)
+  const centerMax = maxOf(centerBand.map((entry) => entry.maxHeight))
+  const active = rowHeights.filter((entry) => entry.maxHeight >= centerMax * 0.045)
+  const activeHalfWidth = maxOf(active.map((entry) => entry.distance))
+  const outerBand = active.filter((entry) => entry.distance >= activeHalfWidth * 0.68)
+  const topBand = active.filter((entry) => entry.maxHeight >= centerMax * 0.82)
+  const outerMax = maxOf(outerBand.map((entry) => entry.maxHeight))
+
+  return {
+    activeRowCount: active.length,
+    centerMax: round(centerMax),
+    outerMaxRatio: round(outerMax / Math.max(centerMax, 0.000001)),
+    topBandFraction: round(topBand.length / Math.max(active.length, 1)),
+  }
+}
+
+function conicalSpanTaperPasses(summary) {
+  return summary.activeRowCount >= 4 &&
+    summary.outerMaxRatio <= 0.64 &&
+    summary.topBandFraction <= 0.54
+}
+
 function summarizeOuterRadiusSmoothness(model) {
   const points = centerlinePoints(model)
   const maxZ = Math.max(...points.map((point) => point.z), 0.000001)
@@ -1398,6 +1466,49 @@ function summarizeExtremeShape(model) {
       maxConnectorEndpointGap: round(mechanismStats.maxConnectorEndpointGap),
     },
   }
+}
+
+function summarizeSideRenderMechanism(model) {
+  const mechanism = buildRigidCellMechanism(model)
+  const nodeById = new Map(model.nodes.map((node) => [node.id, node]))
+  let renderedArmCount = 0
+  let expectedArmCount = 0
+  let maxRenderedArmCountResidual = 0
+  let minRenderedInteriorArmCount = Infinity
+
+  mechanism.frames.forEach((frame) => {
+    const node = nodeById.get(frame.nodeId)
+    if (!node) return
+
+    const renderedDirections = connectedArmDirectionsForFrame(frame)
+    const expectedCount = expectedNeighborCount(node, model)
+
+    renderedArmCount += renderedDirections.length
+    expectedArmCount += expectedCount
+    maxRenderedArmCountResidual = Math.max(
+      maxRenderedArmCountResidual,
+      Math.abs(renderedDirections.length - expectedCount),
+    )
+    if (expectedCount === 4) {
+      minRenderedInteriorArmCount = Math.min(minRenderedInteriorArmCount, renderedDirections.length)
+    }
+  })
+
+  return {
+    renderedArmCount,
+    expectedArmCount,
+    maxRenderedArmCountResidual,
+    minRenderedInteriorArmCount: Number.isFinite(minRenderedInteriorArmCount) ? minRenderedInteriorArmCount : 0,
+  }
+}
+
+function expectedNeighborCount(node, model) {
+  let count = 0
+  if (node.col > 0) count += 1
+  if (node.col < model.config.columns - 1) count += 1
+  if (node.row > 0) count += 1
+  if (node.row < model.config.rows - 1) count += 1
+  return count
 }
 
 function mean(values) {
