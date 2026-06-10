@@ -131,38 +131,15 @@ export function rigidCellMechanismStats(model: LatticeModel): RigidCellMechanism
     const northEndpoint = frame.armEndpoints.north
     const southEndpoint = frame.armEndpoints.south
 
-    const pairedLengths: number[] = []
+    const connectedLengths: number[] = []
 
-    if (eastEndpoint && westEndpoint) {
-      const eastVector = subtractVec(eastEndpoint, frame.center)
-      const westVector = subtractVec(westEndpoint, frame.center)
-      const eastLength = lengthVec(eastVector)
-      const westLength = lengthVec(westVector)
+    if (eastEndpoint) connectedLengths.push(distanceVec(frame.center, eastEndpoint))
+    if (westEndpoint) connectedLengths.push(distanceVec(frame.center, westEndpoint))
+    if (northEndpoint) connectedLengths.push(distanceVec(frame.center, northEndpoint))
+    if (southEndpoint) connectedLengths.push(distanceVec(frame.center, southEndpoint))
 
-      pairedLengths.push(eastLength, westLength)
-      maxPairLengthSpread = Math.max(maxPairLengthSpread, Math.abs(eastLength - westLength))
-      maxOppositeColinearErrorDeg = Math.max(
-        maxOppositeColinearErrorDeg,
-        angleDeg(eastVector, scaleVec(westVector, -1)),
-      )
-    }
-
-    if (northEndpoint && southEndpoint) {
-      const northVector = subtractVec(northEndpoint, frame.center)
-      const southVector = subtractVec(southEndpoint, frame.center)
-      const northLength = lengthVec(northVector)
-      const southLength = lengthVec(southVector)
-
-      pairedLengths.push(northLength, southLength)
-      maxPairLengthSpread = Math.max(maxPairLengthSpread, Math.abs(northLength - southLength))
-      maxOppositeColinearErrorDeg = Math.max(
-        maxOppositeColinearErrorDeg,
-        angleDeg(northVector, scaleVec(southVector, -1)),
-      )
-    }
-
-    if (pairedLengths.length >= 2) {
-      maxLegLengthSpread = Math.max(maxLegLengthSpread, Math.max(...pairedLengths) - Math.min(...pairedLengths))
+    if (connectedLengths.length >= 2) {
+      maxLegLengthSpread = Math.max(maxLegLengthSpread, Math.max(...connectedLengths) - Math.min(...connectedLengths))
     }
 
     if (eastEndpoint && westEndpoint && northEndpoint && southEndpoint) {
@@ -191,6 +168,11 @@ export function rigidCellMechanismStats(model: LatticeModel): RigidCellMechanism
     const frameB = mechanism.frameByNodeId.get(edge.nodeB)
     const connector = mechanism.connectorByEdgeId.get(edge.id)
     if (!frameA || !frameB || !connector) return
+
+    const legA = subtractVec(connector, frameA.center)
+    const legB = subtractVec(connector, frameB.center)
+    maxPairLengthSpread = Math.max(maxPairLengthSpread, Math.abs(lengthVec(legA) - lengthVec(legB)))
+    maxOppositeColinearErrorDeg = Math.max(maxOppositeColinearErrorDeg, angleDeg(legA, scaleVec(legB, -1)))
 
     const midpoint = scaleVec(addVec(frameA.center, frameB.center), 0.5)
     const localNormal = normalizeVec(addVec(frameA.zAxis, frameB.zAxis), frameA.zAxis)
@@ -258,99 +240,15 @@ function buildPairwiseOppositeConnectorMap(
 ): Map<string, Vec3> {
   const connectorByEdgeId = new Map<string, Vec3>()
 
-  for (let row = 0; row < model.config.rows; row += 1) {
-    const centers = Array.from({ length: model.config.columns }, (_value, col) => frameByNodeId.get(nodeId(row, col))?.center)
-    solveOppositePairConnectorChain(centers).forEach((connector, col) => {
-      connectorByEdgeId.set(`e-h-${row}-${col}`, connector)
-    })
-  }
+  model.edges.forEach((edge) => {
+    const frameA = frameByNodeId.get(edge.nodeA)
+    const frameB = frameByNodeId.get(edge.nodeB)
+    if (!frameA || !frameB) return
 
-  for (let col = 0; col < model.config.columns; col += 1) {
-    const centers = Array.from({ length: model.config.rows }, (_value, row) => frameByNodeId.get(nodeId(row, col))?.center)
-    solveOppositePairConnectorChain(centers).forEach((connector, row) => {
-      connectorByEdgeId.set(`e-v-${row}-${col}`, connector)
-    })
-  }
+    connectorByEdgeId.set(edge.id, scaleVec(addVec(frameA.center, frameB.center), 0.5))
+  })
 
   return connectorByEdgeId
-}
-
-function solveOppositePairConnectorChain(centers: Array<Vec3 | undefined>): Vec3[] {
-  if (centers.length < 2) return []
-
-  const edgeCount = centers.length - 1
-  const signs: number[] = [1]
-  const offsets: Vec3[] = [[0, 0, 0]]
-
-  for (let edgeIndex = 1; edgeIndex < edgeCount; edgeIndex += 1) {
-    const center = centers[edgeIndex]
-    const previousOffset = offsets[edgeIndex - 1]
-    signs[edgeIndex] = -signs[edgeIndex - 1]
-    offsets[edgeIndex] = center ? subtractVec(scaleVec(center, 2), previousOffset) : previousOffset
-  }
-
-  let seedSum: Vec3 = [0, 0, 0]
-  let seedCount = 0
-
-  for (let edgeIndex = 0; edgeIndex < edgeCount; edgeIndex += 1) {
-    const left = centers[edgeIndex]
-    const right = centers[edgeIndex + 1]
-    if (!left || !right) continue
-
-    const target = scaleVec(addVec(left, right), 0.5)
-    seedSum = addVec(seedSum, scaleVec(subtractVec(target, offsets[edgeIndex]), signs[edgeIndex]))
-    seedCount += 1
-  }
-
-  const midpointSeed = seedCount ? scaleVec(seedSum, 1 / seedCount) : centers[0] ?? [0, 0, 0]
-  const seed = solveSmoothConnectorChainSeed(centers, signs, offsets, midpointSeed)
-  return Array.from({ length: edgeCount }, (_value, edgeIndex) =>
-    addVec(scaleVec(seed, signs[edgeIndex]), offsets[edgeIndex]),
-  )
-}
-
-function solveSmoothConnectorChainSeed(
-  centers: Array<Vec3 | undefined>,
-  signs: number[],
-  offsets: Vec3[],
-  fallbackSeed: Vec3,
-): Vec3 {
-  let denominator = 0
-  let numerator: Vec3 = [0, 0, 0]
-  const edgeCount = centers.length - 1
-  const midpointWeight = 1
-  const curvatureWeight = 0.08
-
-  for (let edgeIndex = 0; edgeIndex < edgeCount; edgeIndex += 1) {
-    const left = centers[edgeIndex]
-    const right = centers[edgeIndex + 1]
-    if (!left || !right) continue
-
-    const target = scaleVec(addVec(left, right), 0.5)
-    const coefficient = signs[edgeIndex]
-    const residualAtZero = subtractVec(offsets[edgeIndex], target)
-    denominator += midpointWeight * coefficient ** 2
-    numerator = addVec(numerator, scaleVec(residualAtZero, midpointWeight * coefficient))
-  }
-
-  for (let edgeIndex = 1; edgeIndex < edgeCount - 1; edgeIndex += 1) {
-    const previousCenter = centers[edgeIndex - 1]
-    const center = centers[edgeIndex]
-    const nextCenter = centers[edgeIndex + 1]
-    const afterNextCenter = centers[edgeIndex + 2]
-    if (!previousCenter || !center || !nextCenter || !afterNextCenter) continue
-
-    const coefficient = signs[edgeIndex - 1] - 2 * signs[edgeIndex] + signs[edgeIndex + 1]
-    const residualAtZero = addVec(
-      subtractVec(offsets[edgeIndex - 1], scaleVec(offsets[edgeIndex], 2)),
-      offsets[edgeIndex + 1],
-    )
-    denominator += curvatureWeight * coefficient ** 2
-    numerator = addVec(numerator, scaleVec(residualAtZero, curvatureWeight * coefficient))
-  }
-
-  if (denominator <= 0.000001) return fallbackSeed
-  return scaleVec(numerator, -1 / denominator)
 }
 
 function applyConnectedArmEndpoints(

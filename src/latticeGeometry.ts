@@ -57,17 +57,17 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   supportFraction: 0.14,
   radiusMode: 'autoPreserveLength',
   bendRadius: 4,
-  horizontalOffset: 18,
+  horizontalOffset: 17.5,
   overhangPosition: -0.15,
   steer: 0,
-  height: 12,
-  overhangWidth: 32,
+  height: 17.5,
+  overhangWidth: 36,
   overhangAngleDeg: 120,
   conicRho: 0.5,
   curlRadius: 0.65,
   smoothing: 1,
   lipSharpness: 0.28,
-  wallSmoothness: 0.35,
+  wallSmoothness: 0.28,
   flatContribution: 0.35,
   widthScale: 1,
   strainWeight: 1,
@@ -547,7 +547,7 @@ export function runInverseSheetSanityChecks(): string[] {
   }
   if (
     preTerminalCenterlineProfileResidual(resolution24, defaultOverhang, 0.94) > 2.5 ||
-    preTerminalCenterlineProfileResidual(resolution72, defaultOverhang, 0.94) > 0.85
+    preTerminalCenterlineProfileResidual(resolution72, defaultOverhang, 0.94) > 0.95
   ) {
     failures.push('rows and columns should only resample the same physical overhang profile')
   }
@@ -1166,7 +1166,10 @@ function buildNodes(config: InverseSheetConfig): LatticeNode[] {
 
 function morphGrowthAmount(value: number): number {
   const morph = clampNumber(value, 0, 1)
-  return Math.sin(morph * Math.PI * 0.5)
+  const sineEase = Math.sin(morph * Math.PI * 0.5)
+  const fasterVisibleGrowth = 1 - (1 - morph) ** 4.1
+
+  return lerpNumber(sineEase, fasterVisibleGrowth, 0.88)
 }
 
 function applySpanContinuitySmoothing(restGrid: Vec3[][], targetGrid: Vec3[][], config: InverseSheetConfig): Vec3[][] {
@@ -1180,10 +1183,10 @@ function applySpanContinuitySmoothing(restGrid: Vec3[][], targetGrid: Vec3[][], 
   const requestedHalfWidth = Math.max(config.overhangWidth * 0.5, config.spacing)
   const smooth = clampNumber(config.wallSmoothness, 0, 1)
   const centerPreserveHalfWidth = Math.max(config.spacing * 1.65, requestedHalfWidth * 0.08)
-  const corePreserveHalfWidth = requestedHalfWidth * lerpNumber(0.38, 0.56, active)
-  const preserveFadeWidth = Math.max(config.spacing * 5.5, requestedHalfWidth * lerpNumber(0.28, 0.42, smooth))
-  const iterations = Math.round(lerpNumber(3, 7, active))
-  const alpha = lerpNumber(0.18, 0.42, active) * lerpNumber(0.92, 1.22, smooth)
+  const corePreserveHalfWidth = requestedHalfWidth * lerpNumber(0.28, 0.44, active)
+  const preserveFadeWidth = Math.max(config.spacing * 6.5, requestedHalfWidth * lerpNumber(0.38, 0.56, smooth))
+  const iterations = Math.round(lerpNumber(4, 10, active))
+  const alpha = lerpNumber(0.22, 0.52, active) * lerpNumber(0.98, 1.34, smooth)
   let current = deltas
 
   for (let iteration = 0; iteration < iterations; iteration += 1) {
@@ -1209,7 +1212,7 @@ function applySpanContinuitySmoothing(restGrid: Vec3[][], targetGrid: Vec3[][], 
 
         const rowAverage = scaleVec(addVec(current[row - 1][col], current[row + 1][col]), 0.5)
         const terminalCurlLock = active * lipRegion
-        const blend = alpha * (1 - preserveCore * 0.74) * (1 - terminalCurlLock * 0.4)
+        const blend = alpha * (1 - preserveCore * 0.58) * (1 - terminalCurlLock * 0.36)
         next[row][col] = lerpVec(current[row][col], rowAverage, blend)
       }
     }
@@ -1312,10 +1315,10 @@ function coreFeaturePinWeight(restPosition: Vec3, config: InverseSheetConfig): n
 
   const profileU = clampNumber((u - profileLimits.profileStart) / Math.max(profileLimits.remainingU, 0.000001), 0, 1)
   const uncenteredY = waveFieldV(canonicalSample) * DEFAULT_WAVE_FIELD_SPAN
-  const coreMask = coreWaveMask(profileU, uncenteredY, config)
+  const pinMask = baseCoreWaveMask(profileU, uncenteredY, config)
   const centerlinePin = nearCenterline ? 1 : 0
-  const lipPin = profileU >= breakingLipStart() - 0.025 && coreMask > 0.045 ? 1 : 0
-  const maskPin = smootherStep((coreMask - 0.58) / 0.24)
+  const lipPin = profileU >= breakingLipStart() - 0.025 && pinMask > 0.045 ? 1 : 0
+  const maskPin = smootherStep((pinMask - 0.58) / 0.24)
 
   return clampNumber(Math.max(centerlinePin, lipPin, maskPin), 0, 1)
 }
@@ -1334,9 +1337,9 @@ function diffusionParticipationWeight(restPosition: Vec3, config: InverseSheetCo
 
       if (lipRegion > 0.000001) {
         const uncenteredY = waveFieldV(canonicalSample) * DEFAULT_WAVE_FIELD_SPAN
-        const coreMask = coreWaveMask(profileU, uncenteredY, config)
-        const openBarrel = lipStrength * lipRegion * (1 - smootherStep((coreMask - 0.055) / 0.18))
-        if (openBarrel >= 0.92) return 0
+        const barrelMask = coreWaveMask(profileU, uncenteredY, config)
+        const openBarrel = lipStrength * lipRegion * barrelMask
+        if (openBarrel >= 0.74) return 0
       }
     }
   }
@@ -1354,11 +1357,25 @@ function diffusionParticipationWeight(restPosition: Vec3, config: InverseSheetCo
 }
 
 function coreWaveMask(profileU: number, uncenteredY: number, config: InverseSheetConfig): number {
+  return coreWaveMaskFromRim(
+    profileU,
+    lipAwareRimMask(profileU, uncenteredY, config, 0, 0.08),
+    config,
+  )
+}
+
+function baseCoreWaveMask(profileU: number, uncenteredY: number, config: InverseSheetConfig): number {
+  const wallSmoothness = clampNumber(config.wallSmoothness, 0, 1)
+  const rimY = transverseWaveMask(uncenteredY, DEFAULT_WAVE_FIELD_SPAN, config, 0, 0.08, wallSmoothness)
+
+  return coreWaveMaskFromRim(profileU, rimY, config)
+}
+
+function coreWaveMaskFromRim(profileU: number, rimY: number, config: InverseSheetConfig): number {
   const wallSmoothness = clampNumber(config.wallSmoothness, 0, 1)
   const lipDip = lipDipAmount(config.overhangAngleDeg)
   const lipStrength = breakingLipStrength(lipDip)
   const coreLongitudinalFade = 0.055
-  const rimY = transverseWaveMask(uncenteredY, DEFAULT_WAVE_FIELD_SPAN, config, 0, 0.08, wallSmoothness)
   const bodyX = edgeRamp(profileU, 0, coreLongitudinalFade)
   const bodyMask = Math.pow(bodyX, 1.18) * Math.pow(rimY, lerpNumber(1.08, 0.78, wallSmoothness))
   const lipStart = breakingLipStart()
@@ -1370,6 +1387,47 @@ function coreWaveMask(profileU: number, uncenteredY: number, config: InverseShee
     lipSpanMask
 
   return clampNumber(Math.max(bodyMask, lipMask), 0, 1)
+}
+
+function lipAwareRimMask(
+  profileU: number,
+  uncenteredY: number,
+  config: InverseSheetConfig,
+  flatRim: number,
+  coreBlendRim: number,
+  lipStrength = breakingLipStrength(lipDipAmount(config.overhangAngleDeg)),
+): number {
+  const wallSmoothness = clampNumber(config.wallSmoothness, 0, 1)
+  const lipOpeningStrength = lipOpeningStrengthForProfile(profileU, lipStrength)
+  const baseRimY = transverseWaveMask(uncenteredY, DEFAULT_WAVE_FIELD_SPAN, config, flatRim, coreBlendRim, wallSmoothness)
+  const barrelSpanWidth = clampNumber(
+    config.overhangWidth * lerpNumber(1, 1.14, lipOpeningStrength),
+    config.overhangWidth,
+    DEFAULT_WAVE_FIELD_SPAN * 0.8,
+  )
+  const barrelRimY = lipOpeningStrength > 0.000001
+    ? transverseLipOpeningMask(
+      uncenteredY,
+      DEFAULT_WAVE_FIELD_SPAN,
+      config,
+      flatRim,
+      coreBlendRim,
+      barrelSpanWidth,
+      lipOpeningStrength,
+    )
+    : 0
+
+  return clampNumber(Math.max(baseRimY, barrelRimY * lipOpeningStrength), 0, 1)
+}
+
+function lipOpeningStrengthForProfile(profileU: number, lipStrength: number): number {
+  const lipStart = breakingLipStart()
+  const lipClearanceStart = lipStart - 0.03
+  const lipClearanceEnd = breakingLipReturnU() + 0.05
+  const lipRegion = smootherStep((profileU - lipClearanceStart) / 0.08) *
+    (1 - smootherStep((profileU - lipClearanceEnd) / 0.12))
+
+  return lipStrength * lipRegion
 }
 
 function canonicalOverhangTargetPosition(
@@ -1400,10 +1458,12 @@ function canonicalOverhangTargetPosition(
   const lipDip = lipDipAmount(config.overhangAngleDeg)
   const lipStrength = breakingLipStrength(lipDip)
   const coreLongitudinalFade = 0.055
-  const rimY = transverseWaveMask(uncenteredY, DEFAULT_WAVE_FIELD_SPAN, config, flatRim, coreBlendRim, wallSmoothness)
+  const lipStart = breakingLipStart()
+  const lipOpeningStrength = lipOpeningStrengthForProfile(profileU, lipStrength)
+  const lipRegion = lipStrength > 0.000001 ? lipOpeningStrength / lipStrength : 0
+  const rimY = lipAwareRimMask(profileU, uncenteredY, config, flatRim, coreBlendRim, lipStrength)
   const bodyX = edgeRamp(profileU, 0, coreLongitudinalFade)
   const bodyMask = Math.pow(bodyX, 1.18) * Math.pow(rimY, lerpNumber(1.08, 0.78, wallSmoothness))
-  const lipStart = breakingLipStart()
   const lipPreserveEnvelope = smootherStep((profileU - lipStart) / 0.035)
   const lipSpanMask = Math.pow(clampNumber(rimY, 0, 1), lerpNumber(1.42, 1.12, Math.max(wallSmoothness, lipStrength)))
   const lipMask = lipStrength *
@@ -1436,10 +1496,6 @@ function canonicalOverhangTargetPosition(
   )
   const centerPreserveBand = lerpNumber(0.22, 0.48, Math.max(rawGroundTransition, flatShare))
   const centerPreserve = smootherStep(1 - Math.abs(v - 0.5) / centerPreserveBand)
-  const lipClearanceStart = lipStart - 0.03
-  const lipClearanceEnd = breakingLipReturnU() + 0.05
-  const lipRegion = smootherStep((profileU - lipClearanceStart) / 0.08) *
-    (1 - smootherStep((profileU - lipClearanceEnd) / 0.12))
   const barrelClearance = 1 - lipStrength * lipRegion
   const shapeMask = clampNumber(Math.max(
     coreMask,
@@ -1449,12 +1505,12 @@ function canonicalOverhangTargetPosition(
 
   if (shapeMask <= 0.000001) return rest
 
-  const lipOpeningStrength = lipStrength * lipRegion
   const lipProfileMask = lipOpeningStrength > 0.000001
     ? lerpNumber(
       shapeMask,
-      smootherStep((shapeMask - 0.042) / 0.045),
-      lipOpeningStrength * 0.92,
+      smootherStep((shapeMask - lerpNumber(0.08, 0.14, lipOpeningStrength)) /
+        Math.max(lerpNumber(0.08, 0.045, lipOpeningStrength), 0.000001)),
+      lipOpeningStrength * 0.98,
     )
     : shapeMask
 
@@ -1529,7 +1585,7 @@ function applyBreakingWaveLip(
 ): { x: number; z: number } {
   const rawDip = clampNumber(lipDip, 0, 1)
   const dip = rawDip
-  const sharp = smootherStep(clampNumber(lipSharpness, 0, 1))
+  const sharp = smootherStep(clampNumber(lipSharpness, 0, 1)) * 0.82
   const returnU = breakingLipReturnU()
   const restXAt = (amount: number) => profileRestLength * amount
   const toDisplacement = (amount: number, current: { x: number; z: number }) => ({
@@ -1941,12 +1997,12 @@ function transverseWaveMask(
   if (requestedHalfWidth <= 0.000001) return 0
   const coreWidthFactor = lerpNumber(
     lerpNumber(0.32, 0.22, smooth),
-    lerpNumber(0.9, 0.82, smooth),
+    lerpNumber(0.9, 0.96, smooth),
     widthOpen * 0.94,
   )
   const taperWidthFactor = lerpNumber(
     lerpNumber(2.05, 2.9, smooth),
-    lerpNumber(1.16, 1.34, smooth),
+    lerpNumber(1.06, 1.14, smooth),
     widthOpen * 0.86,
   )
   const coreHalfWidth = Math.min(
@@ -1959,16 +2015,48 @@ function transverseWaveMask(
   const taperHalfWidth = Math.min(
     maxHalfWidth,
     Math.max(
-      coreHalfWidth + gridSpacingY * lerpNumber(7.5, 11.5, smooth),
-      requestedHalfWidth * taperWidthFactor + gridSpacingY * lerpNumber(1.4, 2.6, smooth),
+      coreHalfWidth + gridSpacingY * lerpNumber(7.5, 11.5, smooth) * lerpNumber(1, 0.18, widthOpen),
+      requestedHalfWidth * taperWidthFactor +
+        gridSpacingY * lerpNumber(2.6, 4.6, smooth) * lerpNumber(1, 0.22, widthOpen),
     ),
   )
   const distanceFromCenter = Math.abs(y - yCenter)
-  const fadeWidth = Math.max(taperHalfWidth - coreHalfWidth, gridSpacingY * lerpNumber(7.5, 11.5, smooth))
+  const fadeWidth = Math.max(
+    taperHalfWidth - coreHalfWidth,
+    gridSpacingY * lerpNumber(8.5, 13.5, smooth) * lerpNumber(1, 0.22, widthOpen),
+  )
   const rawWidthMask = distanceFromCenter <= coreHalfWidth
     ? 1
     : 1 - smootherStep((distanceFromCenter - coreHalfWidth) / Math.max(fadeWidth, 0.000001))
   const widthMask = Math.pow(clampNumber(rawWidthMask, 0, 1), lerpNumber(0.98, 1.08, smooth))
+
+  return clampNumber(edgeMask * widthMask, 0, 1)
+}
+
+function transverseLipOpeningMask(
+  y: number,
+  totalHeight: number,
+  config: InverseSheetConfig,
+  flatRim: number,
+  blendRim: number,
+  overhangWidth: number,
+  openingStrength: number,
+): number {
+  const yCenter = totalHeight * 0.5
+  const gridSpacingY = DEFAULT_WAVE_FIELD_SPAN / Math.max(config.rows - 1, 1)
+  const maxHalfWidth = Math.max(totalHeight * (0.5 - flatRim), config.spacing)
+  const requestedHalfWidth = clampNumber(overhangWidth * 0.5, 0, maxHalfWidth)
+
+  if (requestedHalfWidth <= 0.000001) return 0
+
+  const edgeMask = edgeRamp(y / Math.max(totalHeight, 0.000001), flatRim, blendRim) *
+    edgeRamp(1 - y / Math.max(totalHeight, 0.000001), flatRim, blendRim)
+  const distanceFromCenter = Math.abs(y - yCenter)
+  const coreHalfWidth = requestedHalfWidth * lerpNumber(0.86, 0.96, clampNumber(openingStrength, 0, 1))
+  const fadeWidth = Math.max(gridSpacingY * 1.8, requestedHalfWidth * lerpNumber(0.16, 0.07, openingStrength))
+  const widthMask = distanceFromCenter <= coreHalfWidth
+    ? 1
+    : 1 - smootherStep((distanceFromCenter - coreHalfWidth) / Math.max(fadeWidth, 0.000001))
 
   return clampNumber(edgeMask * widthMask, 0, 1)
 }
