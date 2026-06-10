@@ -18,6 +18,8 @@ export type RigidCellMechanismStats = {
   maxOppositeColinearErrorDeg: number
   maxOrthogonalityErrorDeg: number
   maxConnectorPathBendDeg: number
+  maxExpectedArmCountResidual: number
+  minInteriorConnectedArmCount: number
   maxConnectorEndpointGap: number
   meanConnectorEndpointGap: number
   rmsConnectorEndpointGap: number
@@ -118,6 +120,8 @@ export function rigidCellMechanismStats(model: LatticeModel): RigidCellMechanism
   let maxOppositeColinearErrorDeg = 0
   let maxOrthogonalityErrorDeg = 0
   let maxConnectorPathBendDeg = 0
+  let maxExpectedArmCountResidual = 0
+  let minInteriorConnectedArmCount = Infinity
   let maxConnectorEndpointGap = 0
   let connectorEndpointGapSum = 0
   let connectorEndpointGapSquaredSum = 0
@@ -150,6 +154,12 @@ export function rigidCellMechanismStats(model: LatticeModel): RigidCellMechanism
 
     const sourceNode = nodeById.get(frame.nodeId)
     if (sourceNode) {
+      const expectedArmCount = expectedNeighborCount(sourceNode, model)
+      maxExpectedArmCountResidual = Math.max(maxExpectedArmCountResidual, Math.abs(connectedLengths.length - expectedArmCount))
+      if (expectedArmCount === 4) {
+        minInteriorConnectedArmCount = Math.min(minInteriorConnectedArmCount, connectedLengths.length)
+      }
+
       const baseFrame = buildRigidCellFrame(sourceNode, nodeById, model.config.spacing)
       maxCenterShift = Math.max(maxCenterShift, distanceVec(frame.center, baseFrame.center))
     }
@@ -187,6 +197,8 @@ export function rigidCellMechanismStats(model: LatticeModel): RigidCellMechanism
     maxOppositeColinearErrorDeg,
     maxOrthogonalityErrorDeg,
     maxConnectorPathBendDeg,
+    maxExpectedArmCountResidual,
+    minInteriorConnectedArmCount: Number.isFinite(minInteriorConnectedArmCount) ? minInteriorConnectedArmCount : 0,
     maxConnectorEndpointGap,
     meanConnectorEndpointGap: connectorEndpointGapCount ? connectorEndpointGapSum / connectorEndpointGapCount : 0,
     rmsConnectorEndpointGap: connectorEndpointGapCount
@@ -195,6 +207,15 @@ export function rigidCellMechanismStats(model: LatticeModel): RigidCellMechanism
     maxArmSurfaceLeak,
     maxCenterShift,
   }
+}
+
+function expectedNeighborCount(node: LatticeNode, model: LatticeModel): number {
+  let count = 0
+  if (node.col > 0) count += 1
+  if (node.col < model.config.columns - 1) count += 1
+  if (node.row > 0) count += 1
+  if (node.row < model.config.rows - 1) count += 1
+  return count
 }
 
 export function buildRigidCellMechanism(model: LatticeModel): RigidCellMechanism {

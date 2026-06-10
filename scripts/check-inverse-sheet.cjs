@@ -328,6 +328,10 @@ if (mechanism.maxConnectorEndpointGap > 0.0001) {
   failures.push('inverse-sheet arms should terminate directly at shared connector points')
 }
 
+if (mechanism.maxExpectedArmCountResidual !== 0 || mechanism.minInteriorConnectedArmCount !== 4) {
+  failures.push('every inverse-sheet cell should have all expected connected legs, with interior cells connected to four legs')
+}
+
 if (mechanism.maxPairLengthSpread > 0.005) {
   failures.push('opposite arms within each inverse-sheet pair should stay nearly equal length')
 }
@@ -371,6 +375,8 @@ const report = {
     maxOppositeColinearErrorDeg: round(mechanism.maxOppositeColinearErrorDeg),
     maxOrthogonalityErrorDeg: round(mechanism.maxOrthogonalityErrorDeg),
     maxConnectorPathBendDeg: round(mechanism.maxConnectorPathBendDeg),
+    maxExpectedArmCountResidual: round(mechanism.maxExpectedArmCountResidual),
+    minInteriorConnectedArmCount: mechanism.minInteriorConnectedArmCount,
     maxConnectorEndpointGap: round(mechanism.maxConnectorEndpointGap),
     meanConnectorEndpointGap: round(mechanism.meanConnectorEndpointGap),
     rmsConnectorEndpointGap: round(mechanism.rmsConnectorEndpointGap),

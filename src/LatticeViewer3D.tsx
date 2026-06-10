@@ -163,27 +163,6 @@ function buildMechanismRenderScope(
   sideSlice: boolean,
   sideView = false,
 ): MechanismRenderScope {
-  if (sideView && !sideSlice) {
-    const edges = model.edges.filter((edge) => edge.orientation === 'horizontal')
-    const activeNodeIds = new Set<string>()
-    const directionsByNodeId = new Map<string, CellArmDirection[]>()
-
-    edges.forEach((edge) => {
-      activeNodeIds.add(edge.nodeA)
-      activeNodeIds.add(edge.nodeB)
-      directionsByNodeId.set(edge.nodeA, ['east', 'west'])
-      directionsByNodeId.set(edge.nodeB, ['east', 'west'])
-    })
-
-    return {
-      frames: mechanism.frames.filter((frame) => activeNodeIds.has(frame.nodeId)),
-      edges,
-      directionsByNodeId,
-      sideSlice: false,
-      sideView,
-    }
-  }
-
   if (!sideSlice) {
     const directionsByNodeId = new Map<string, CellArmDirection[]>()
     mechanism.frames.forEach((frame) => {
@@ -694,7 +673,7 @@ function positionCamera(
   const bounds = !selected && sideLikeView ? activeSideProfileBounds(model) : model.bounds
   const maxSpan = Math.max(bounds.span[0], bounds.span[1], bounds.span[2], 2)
   const focus = focusForSelected(model, selected ?? null)
-  const fov = focus ? 32 : view === 'side' ? 12 : view === 'slice' ? 26 : 42
+  const fov = focus ? 32 : view === 'side' ? 22 : view === 'slice' ? 26 : 42
   const fitDistance = cameraDistanceForView(bounds, view, fov, camera.aspect)
   const distance = focus
     ? Math.max(focus.radius * 7.5, model.config.spacing * 12, maxSpan * 0.22)
@@ -704,7 +683,7 @@ function positionCamera(
     view === 'top'
       ? new THREE.Vector3(target.x, target.y, target.z + distance)
     : view === 'side'
-      ? new THREE.Vector3(target.x + distance * 0.08, target.y - distance, target.z + maxSpan * 0.018)
+      ? new THREE.Vector3(target.x + distance * 0.24, target.y - distance, target.z + maxSpan * 0.02)
       : view === 'slice'
         ? new THREE.Vector3(target.x, target.y - distance, target.z)
         : new THREE.Vector3(target.x + distance * 0.96, target.y - distance * 1.08, target.z + distance * 0.34)
@@ -718,7 +697,7 @@ function positionCamera(
   camera.lookAt(target)
 
   camera.fov = fov
-  camera.zoom = view === 'side' ? 1.04 : view === 'slice' ? 1.08 : view === 'isometric' ? 1.36 : 1
+  camera.zoom = view === 'side' ? 1.08 : view === 'slice' ? 1.08 : view === 'isometric' ? 1.36 : 1
   camera.near = 0.01
   camera.far = Math.max(distance * 8, 100)
   camera.updateProjectionMatrix()
@@ -733,28 +712,50 @@ function clampIndex(value: number, length: number): number {
 
 function activeSideProfileBounds(model: LatticeModel): LatticeBounds {
   const maxHeight = Math.max(model.summary.maxHeight, 0.000001)
+  const highNodes = model.nodes.filter((node) => node.currentPosition[2] > maxHeight * 0.16)
+  const highMinX = highNodes.length ? Math.min(...highNodes.map((node) => node.currentPosition[0])) : -Infinity
+  const highMaxX = highNodes.length ? Math.max(...highNodes.map((node) => node.currentPosition[0])) : Infinity
+  const lowCurlMargin = Math.max(maxHeight * 0.42, model.config.spacing * 3.5)
   const activeNodes = model.nodes.filter((node) => {
     const displacement = Math.hypot(
       node.currentPosition[0] - node.restPosition[0],
       node.currentPosition[1] - node.restPosition[1],
       node.currentPosition[2] - node.restPosition[2],
     )
+    const nearLiftedProfile = node.currentPosition[0] >= highMinX - lowCurlMargin &&
+      node.currentPosition[0] <= highMaxX + lowCurlMargin
 
-    return node.currentPosition[2] > maxHeight * 0.06 ||
-      displacement > Math.max(model.config.spacing * 2.4, model.summary.overhangAmount * 0.42)
+    return node.currentPosition[2] > maxHeight * 0.12 ||
+      (nearLiftedProfile &&
+        node.currentPosition[2] > maxHeight * 0.01 &&
+        displacement > Math.max(model.config.spacing * 0.7, model.summary.overhangAmount * 0.08))
   })
 
   if (activeNodes.length < 2) return model.bounds
 
-  const minX = Math.min(...activeNodes.map((node) => node.currentPosition[0]))
-  const maxX = Math.max(...activeNodes.map((node) => node.currentPosition[0]))
+  const activeMaxX = Math.max(...activeNodes.map((node) => node.currentPosition[0]))
   const minZ = Math.min(...activeNodes.map((node) => node.currentPosition[2]), 0)
   const maxZ = Math.max(...activeNodes.map((node) => node.currentPosition[2]))
-  const padX = Math.max(model.config.spacing * 2, (maxX - minX) * 0.1)
-  const padZ = Math.max(model.config.spacing * 0.9, (maxZ - minZ) * 0.2)
-  const sideDepth = Math.max(model.config.spacing * 2, (maxX - minX) * 0.025)
-  const min: Vec3 = [minX - padX, model.bounds.center[1] - sideDepth * 0.5, Math.min(0, minZ - padZ * 0.34)]
-  const max: Vec3 = [maxX + padX, model.bounds.center[1] + sideDepth * 0.5, maxZ + padZ]
+  const profileHeight = Math.max(maxZ - minZ, model.config.spacing * 5)
+  const frontEdgeX = Number.isFinite(highMaxX)
+    ? highMaxX + Math.max(profileHeight * 0.08, model.config.spacing * 0.8)
+    : activeMaxX + Math.max(profileHeight * 0.08, model.config.spacing * 0.8)
+  const desiredSpanX = Math.max(
+    profileHeight * 2.02,
+    model.config.spacing * 12,
+  )
+  const padZ = Math.max(model.config.spacing * 1.1, profileHeight * 0.13)
+  const sideDepth = Math.max(model.config.spacing * 3, desiredSpanX * 0.08)
+  const min: Vec3 = [
+    frontEdgeX - desiredSpanX,
+    model.bounds.center[1] - sideDepth * 0.5,
+    Math.min(0, minZ - padZ * 0.2),
+  ]
+  const max: Vec3 = [
+    frontEdgeX,
+    model.bounds.center[1] + sideDepth * 0.5,
+    maxZ + padZ,
+  ]
   const center: Vec3 = [
     (min[0] + max[0]) * 0.5,
     model.bounds.center[1],
@@ -780,7 +781,7 @@ function cameraDistanceForView(
   const tanHalfFov = Math.tan(fov / 2)
 
   if (view === 'side' || view === 'slice') {
-    return fitPerspectiveDistance(bounds.span[0], bounds.span[2], tanHalfFov, safeAspect, view === 'side' ? 0.92 : 1.06)
+    return fitPerspectiveDistance(bounds.span[0], bounds.span[2], tanHalfFov, safeAspect, view === 'side' ? 0.78 : 1.06)
   }
 
   if (view === 'top') {

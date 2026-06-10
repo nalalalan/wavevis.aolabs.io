@@ -1508,8 +1508,8 @@ function canonicalOverhangTargetPosition(
   const lipProfileMask = lipOpeningStrength > 0.000001
     ? lerpNumber(
       shapeMask,
-      smootherStep((shapeMask - lerpNumber(0.08, 0.14, lipOpeningStrength)) /
-        Math.max(lerpNumber(0.08, 0.045, lipOpeningStrength), 0.000001)),
+      smootherStep((shapeMask - lerpNumber(0.1, 0.38, lipOpeningStrength)) /
+        Math.max(lerpNumber(0.075, 0.032, lipOpeningStrength), 0.000001)),
       lipOpeningStrength * 0.98,
     )
     : shapeMask
@@ -1642,13 +1642,13 @@ function breakingWaveBarrelSegments(
   sharp: number,
 ): Array<[ProfilePoint, ProfilePoint, ProfilePoint, ProfilePoint]> {
   const start = point(0, 0)
-  const liftKnee = point(span * lerpNumber(0.3, 0.32, dip), height * lerpNumber(0.78, 0.88, dip))
+  const liftKnee = point(span * lerpNumber(0.3, 0.32, dip), height * lerpNumber(0.78, 0.9, dip))
   const crest = point(span * lerpNumber(0.5, 0.535, dip), height)
-  const shoulder = point(span * lerpNumber(0.68, 0.735, dip), height * lerpNumber(0.94, 0.87, dip))
-  const nose = point(span * lerpNumber(0.8, 0.85, dip), height * lerpNumber(0.45, 0.2, dip))
-  const innerRoof = point(span * lerpNumber(0.65, 0.6, dip), height * lerpNumber(0.48, 0.55, dip))
-  const underPocket = point(span * lerpNumber(0.53, 0.47, dip), height * lerpNumber(0.075, 0.022, dip))
-  const floorReturn = point(lerpNumber(restEndX * 0.86, restEndX * 0.95, dip), height * lerpNumber(0.035, 0.016, dip))
+  const shoulder = point(span * lerpNumber(0.68, 0.735, dip), height * lerpNumber(0.94, 0.895, dip))
+  const nose = point(span * lerpNumber(0.8, 0.875, dip), height * lerpNumber(0.45, 0.155, dip))
+  const innerRoof = point(span * lerpNumber(0.65, 0.585, dip), height * lerpNumber(0.48, 0.6, dip))
+  const underPocket = point(span * lerpNumber(0.53, 0.45, dip), height * lerpNumber(0.075, 0.014, dip))
+  const floorReturn = point(lerpNumber(restEndX * 0.86, restEndX * 0.96, dip), height * lerpNumber(0.035, 0.012, dip))
   const end = point(restEndX, 0)
   const tight = lerpNumber(1, 0.52, sharp)
 
@@ -2052,8 +2052,8 @@ function transverseLipOpeningMask(
   const edgeMask = edgeRamp(y / Math.max(totalHeight, 0.000001), flatRim, blendRim) *
     edgeRamp(1 - y / Math.max(totalHeight, 0.000001), flatRim, blendRim)
   const distanceFromCenter = Math.abs(y - yCenter)
-  const coreHalfWidth = requestedHalfWidth * lerpNumber(0.86, 0.96, clampNumber(openingStrength, 0, 1))
-  const fadeWidth = Math.max(gridSpacingY * 1.8, requestedHalfWidth * lerpNumber(0.16, 0.07, openingStrength))
+  const coreHalfWidth = requestedHalfWidth * lerpNumber(0.9, 0.99, clampNumber(openingStrength, 0, 1))
+  const fadeWidth = Math.max(gridSpacingY * 1.1, requestedHalfWidth * lerpNumber(0.08, 0.032, openingStrength))
   const widthMask = distanceFromCenter <= coreHalfWidth
     ? 1
     : 1 - smootherStep((distanceFromCenter - coreHalfWidth) / Math.max(fadeWidth, 0.000001))

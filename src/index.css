@@ -847,9 +847,9 @@ select:focus-visible {
 
   .scene-shell {
     width: 100%;
-    flex: 0 0 68vh;
-    min-height: 68vh;
-    height: 68vh;
+    flex: 0 0 min(100vw, 96vh);
+    min-height: min(100vw, 96vh);
+    height: min(100vw, 96vh);
   }
 
   .inverse-scene {
