@@ -53,7 +53,7 @@ export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequ
   void pickedEdges
 
   return (
-    <section className="scene-shell inverse-scene" aria-label="Inverse Sheet 3D lattice view">
+    <section className="scene-shell inverse-scene" data-view={viewRequest.view} aria-label="Inverse Sheet 3D lattice view">
       <Canvas dpr={[1, 1.8]} gl={{ antialias: true, preserveDrawingBuffer: true }} resize={{ offsetSize: true, polyfill: canvasResizeObserver }} style={{ width: '100%', height: '100%' }}>
         <CanvasSizeGuard />
         <color attach="background" args={['#f7f3ed']} />
@@ -741,8 +741,8 @@ function activeSideProfileBounds(model: LatticeModel): LatticeBounds {
     ? highMaxX + Math.max(profileHeight * 0.08, model.config.spacing * 0.8)
     : activeMaxX + Math.max(profileHeight * 0.08, model.config.spacing * 0.8)
   const desiredSpanX = Math.max(
-    profileHeight * 2.02,
-    model.config.spacing * 12,
+    profileHeight * 1.32,
+    model.config.spacing * 7.5,
   )
   const padZ = Math.max(model.config.spacing * 1.1, profileHeight * 0.13)
   const sideDepth = Math.max(model.config.spacing * 3, desiredSpanX * 0.08)
