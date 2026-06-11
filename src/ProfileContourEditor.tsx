@@ -32,7 +32,7 @@ export default function ProfileContourEditor({
   resetLabel = 'Reset Wave',
   sliceLevel,
   onSliceLevelChange,
-  sliceLevelLabel = 'x y slice',
+  sliceLevelLabel = 'slice height',
 }: ProfileContourEditorProps) {
   const [points, setPoints] = useState<ProfileControlPoint[]>(() => parseProfilePoints(value))
   const [activeIndex, setActiveIndex] = useState<number | null>(null)

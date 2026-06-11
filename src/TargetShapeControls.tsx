@@ -96,16 +96,16 @@ export default function TargetShapeControls({
           resetLabel="Reset Wave"
           sliceLevel={config.xySliceLevel}
           onSliceLevelChange={(xySliceLevel) => update({ profileMode: 'custom', xySliceLevel })}
-          sliceLevelLabel="x y slice"
+          sliceLevelLabel="slice height"
         />
         <ProfileContourEditor
           key={`xy-${config.sectionPoints}`}
           value={config.sectionPoints}
           onApply={(sectionPoints) => update({ profileMode: 'custom', sectionPoints })}
-          label="x y slice"
-          ariaLabel="Editable overhang cross section"
+          label="x y footprint"
+          ariaLabel="Editable x y footprint"
           defaultValue={DEFAULT_CUSTOM_SECTION_POINTS}
-          resetLabel="Reset Section"
+          resetLabel="Reset Footprint"
         />
         <div className="slider-stack">
           <RangeInput label="scale" value={config.profileScale} min={0.35} max={1.55} step={0.01} onChange={(value) => setNumber('profileScale', value)} />

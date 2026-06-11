@@ -523,6 +523,13 @@ export function runInverseSheetSanityChecks(): string[] {
   const resolution72 = buildInverseSheetModel({ rows: 72, columns: MIN_INVERSE_SHEET_COLUMNS, overhangWidth: 32 })
   const flatContributionOff = buildInverseSheetModel({ ...generatedMode, flatContribution: 0 })
   const flatContributionOn = buildInverseSheetModel({ ...generatedMode, flatContribution: 1 })
+  const customFootprintTest = buildInverseSheetModel({
+    profileMode: 'custom',
+    rows: 44,
+    columns: MIN_INVERSE_SHEET_COLUMNS,
+    profileScale: 1,
+    sectionPoints: '0,0.12;0.18,1;0.24,1;1,0.18',
+  })
   const terminalCurl = buildInverseSheetModel({
     ...generatedMode,
     rows: 24,
@@ -539,8 +546,8 @@ export function runInverseSheetSanityChecks(): string[] {
   })
 
   if (!isSummaryNearZero(flat.summary)) failures.push('morph = 0 should produce near-zero metrics')
-  if (!customProfileCarriesAcrossInterior(defaultOverhang)) {
-    failures.push('custom wave profile should carry across the interior sheet without a mid-span side wall')
+  if (!customFootprintMapsAlongProfile(customFootprintTest)) {
+    failures.push('custom x-y footprint should control plan width along profile x while staying centered across y')
   }
   if (customScaleHigh.summary.maxHeight <= customScaleLow.summary.maxHeight + 2) {
     failures.push('custom profile scale should visibly change the wave height')
@@ -626,44 +633,57 @@ export function runInverseSheetSanityChecks(): string[] {
   return failures
 }
 
-function customProfileCarriesAcrossInterior(model: LatticeModel): boolean {
+function customFootprintMapsAlongProfile(model: LatticeModel): boolean {
   if (model.config.profileMode !== 'custom') return true
   if (!boundaryNodesStayFlat(model)) return false
 
-  const nodeByKey = new Map(model.nodes.map((node) => [`${node.row}:${node.col}`, node]))
-  const maxHeight = Math.max(model.summary.maxHeight, 0.000001)
-  const firstCoreRow = Math.min(Math.max(2, Math.ceil((model.config.rows - 1) * 0.16)), model.config.rows - 2)
-  const lastCoreRow = Math.max(Math.min(model.config.rows - 3, Math.floor((model.config.rows - 1) * 0.84)), firstCoreRow)
-  const coreRows: number[] = []
-  for (let row = firstCoreRow; row <= lastCoreRow; row += 1) coreRows.push(row)
+  const shoulder = footprintColumnStats(model, 0.22)
+  const mid = footprintColumnStats(model, 0.55)
+  const late = footprintColumnStats(model, 0.86)
+  const gridSpacingY = DEFAULT_SHEET_SPAN / Math.max(model.config.rows - 1, 1)
+  const widthVariesAlongProfile = shoulder.activeRows >= late.activeRows + 4 &&
+    mid.activeRows >= late.activeRows + 2
+  const centered = Math.max(Math.abs(shoulder.centroidY), Math.abs(mid.centroidY), Math.abs(late.centroidY)) <= gridSpacingY * 0.7
 
-  let activeCoreRows = 0
-  let maxInteriorProfileSpread = 0
+  return widthVariesAlongProfile && centered
+}
 
-  for (let row = 1; row < model.config.rows - 1; row += 1) {
-    const rowMaxHeight = maxValue(
-      model.nodes.filter((node) => node.row === row).map((node) => node.currentPosition[2]),
-      (value) => value,
-      0,
-    )
-    if (rowMaxHeight >= maxHeight * 0.08) activeCoreRows += 1
+function footprintColumnStats(model: LatticeModel, profileU: number): { activeRows: number; centroidY: number } {
+  const targetX = DEFAULT_WAVE_FIELD_MIN_X + clampNumber(profileU, 0, 1) * DEFAULT_WAVE_FIELD_LENGTH
+  const columns = new Map<number, LatticeNode[]>()
+
+  model.nodes.forEach((node) => {
+    const nodes = columns.get(node.col) ?? []
+    nodes.push(node)
+    columns.set(node.col, nodes)
+  })
+
+  let bestColumn = 0
+  let bestDistance = Infinity
+  columns.forEach((nodes, column) => {
+    const meanX = mean(nodes.map((node) => node.restPosition[0]))
+    const distance = Math.abs(meanX - targetX)
+    if (distance < bestDistance) {
+      bestColumn = column
+      bestDistance = distance
+    }
+  })
+
+  const nodes = (columns.get(bestColumn) ?? [])
+    .filter((node) => node.row > 0 && node.row < model.config.rows - 1)
+  const maxDisplacement = maxValue(
+    nodes.map((node) => distanceVec(node.currentPosition, node.restPosition)),
+    (value) => value,
+    0,
+  )
+  const active = nodes.filter((node) => (
+    distanceVec(node.currentPosition, node.restPosition) >= Math.max(maxDisplacement * 0.28, 0.0001)
+  ))
+
+  return {
+    activeRows: active.length,
+    centroidY: active.length > 0 ? mean(active.map((node) => node.restPosition[1])) : Infinity,
   }
-
-  for (let col = 1; col < model.config.columns - 1; col += 1) {
-    const columnCoreNodes = coreRows
-      .map((row) => nodeByKey.get(`${row}:${col}`))
-      .filter((node): node is LatticeNode => Boolean(node))
-    if (columnCoreNodes.length < 2) continue
-
-    const minX = minValue(columnCoreNodes.map((node) => node.currentPosition[0]))
-    const maxX = maxValue(columnCoreNodes.map((node) => node.currentPosition[0]), (value) => value, -Infinity)
-    const minZ = minValue(columnCoreNodes.map((node) => node.currentPosition[2]))
-    const maxZ = maxValue(columnCoreNodes.map((node) => node.currentPosition[2]), (value) => value, -Infinity)
-    maxInteriorProfileSpread = Math.max(maxInteriorProfileSpread, maxX - minX, maxZ - minZ)
-  }
-
-  return activeCoreRows >= Math.max(2, model.config.rows - 4) &&
-    maxInteriorProfileSpread <= model.config.spacing * 0.05
 }
 
 function boundaryNodesStayFlat(model: LatticeModel): boolean {
@@ -1628,7 +1648,7 @@ function customProfileTargetPosition(
   const profileRestLength = DEFAULT_WAVE_FIELD_LENGTH * profileLimits.remainingU
   const scale = clampNumber(config.profileScale, 0.35, 1.55)
   const scaleAmount = (scale - 0.35) / (1.55 - 0.35)
-  const rowMask = customProfileRowMask(sheetY, config)
+  const rowMask = customProfileRowMask(profileU, sheetY, config)
   const longitudinalMask = edgeRamp(profileU, 0, 0.035) * edgeRamp(1 - profileU, 0, 0.025)
   const shapeMask = clampNumber(Math.pow(rowMask, 0.88) * longitudinalMask, 0, 1)
   if (shapeMask <= 0.000001) return rest
@@ -1647,17 +1667,29 @@ function customProfileTargetPosition(
   ]
 }
 
-function customProfileRowMask(sheetY: number, config: InverseSheetConfig): number {
+function customProfileRowMask(profileU: number, sheetY: number, config: InverseSheetConfig): number {
   const distanceToPerimeter = DEFAULT_SHEET_SPAN * 0.5 - Math.abs(sheetY)
   const gridSpacingY = DEFAULT_SHEET_SPAN / Math.max(config.rows - 1, 1)
-  const sectionU = clampNumber((sheetY + DEFAULT_SHEET_SPAN * 0.5) / DEFAULT_SHEET_SPAN, 0, 1)
-  const sectionMask = sampleSectionProfileAtX(config.sectionPoints, sectionU)
+  const footprintAmount = sampleSectionProfileAtX(config.sectionPoints, profileU)
 
   if (distanceToPerimeter <= gridSpacingY * 0.15) return 0
-  if (distanceToPerimeter >= gridSpacingY * 1.15) return sectionMask
+  if (footprintAmount <= 0.000001) return 0
+
+  const maxHalfWidth = DEFAULT_SHEET_SPAN * 0.5 - gridSpacingY * 1.15
+  const halfWidth = clampNumber(maxHalfWidth * footprintAmount, gridSpacingY * 0.35, maxHalfWidth)
+  const edgeFeather = clampNumber(
+    Math.max(gridSpacingY * 2.2, halfWidth * 0.16),
+    gridSpacingY * 0.65,
+    Math.max(halfWidth, gridSpacingY * 0.65),
+  )
+  const coreHalfWidth = Math.max(halfWidth - edgeFeather, 0)
+  const distanceFromCenter = Math.abs(sheetY)
+  const spanMask = 1 - smootherStep((distanceFromCenter - coreHalfWidth) / Math.max(edgeFeather, 0.000001))
+
+  if (distanceToPerimeter >= gridSpacingY * 1.15) return spanMask
 
   const perimeterMask = smootherStep((distanceToPerimeter - gridSpacingY * 0.15) / Math.max(gridSpacingY, 0.000001))
-  return clampNumber(perimeterMask * sectionMask, 0, 1)
+  return clampNumber(perimeterMask * spanMask, 0, 1)
 }
 
 function sampleSectionProfileAtX(value: string, amount: number): number {

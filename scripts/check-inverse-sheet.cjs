@@ -95,6 +95,13 @@ const customProfileCarrier = {
     profileScale: 1,
   })),
 }
+const customFootprintMapping = summarizeCustomFootprintMapping(buildInverseSheetModel({
+  profileMode: 'custom',
+  rows: 44,
+  columns: 112,
+  profileScale: 1,
+  sectionPoints: '0,0.12;0.18,1;0.24,1;1,0.18',
+}))
 const wallSmoothnessExtreme = summarizeExtremeShape(buildInverseSheetModel({
   ...generatedMode,
   height: 14.75,
@@ -375,6 +382,10 @@ if (!Object.values(customProfileCarrier).every(customProfileCarrierPasses)) {
   failures.push('custom profile should keep the tube open by carrying the wave profile across the interior rows')
 }
 
+if (!customFootprintMapping.ok) {
+  failures.push('x-y footprint editor should control plan footprint along profile x while staying centered across y')
+}
+
 if (!Object.values(conicalSpanTaper).every(conicalSpanTaperPasses)) {
   failures.push('max lip dip should read as an inverted-cone taper with a curled tip, not a broad side wall')
 }
@@ -498,6 +509,7 @@ const report = {
   widthInvariant,
   lateralSmoothness,
   customProfileCarrier,
+  customFootprintMapping,
   conicalSpanTaper,
   bowlPocketCheck,
   outerRadiusSmoothness,
@@ -1051,6 +1063,71 @@ function lateralSmoothnessPasses(summary) {
     summary.maxSpanToLongStepRatio <= 1.55
 
   return absoluteSmooth || ratioSmooth
+}
+
+function summarizeCustomFootprintMapping(model) {
+  const stats = {
+    shoulder: summarizeFootprintColumn(model, 0.22),
+    mid: summarizeFootprintColumn(model, 0.55),
+    late: summarizeFootprintColumn(model, 0.86),
+  }
+  const widths = [stats.shoulder.activeRows, stats.mid.activeRows, stats.late.activeRows]
+  const maxCenterOffset = Math.max(
+    Math.abs(stats.shoulder.centroidY),
+    Math.abs(stats.mid.centroidY),
+    Math.abs(stats.late.centroidY),
+  )
+  const gridSpacingY = DEFAULT_SHEET_SPAN / Math.max(model.config.rows - 1, 1)
+  const widthVariesAlongProfile = stats.shoulder.activeRows >= stats.late.activeRows + 4 &&
+    stats.mid.activeRows >= stats.late.activeRows + 2
+  const footprintStaysCentered = maxCenterOffset <= gridSpacingY * 0.7
+
+  return {
+    ...stats,
+    widthRangeRows: Math.max(...widths) - Math.min(...widths),
+    maxCenterOffset: round(maxCenterOffset),
+    widthVariesAlongProfile,
+    footprintStaysCentered,
+    ok: widthVariesAlongProfile && footprintStaysCentered,
+  }
+}
+
+function summarizeFootprintColumn(model, profileU) {
+  const targetX = DEFAULT_WAVE_FIELD_MIN_X + clampNumber(profileU, 0, 1) * DEFAULT_WAVE_FIELD_LENGTH
+  const columns = new Map()
+
+  model.nodes.forEach((node) => {
+    if (!columns.has(node.col)) columns.set(node.col, [])
+    columns.get(node.col).push(node)
+  })
+
+  let bestColumn = null
+  let bestDistance = Infinity
+  columns.forEach((nodes, col) => {
+    const meanX = mean(nodes.map((node) => node.restPosition[0]))
+    const distance = Math.abs(meanX - targetX)
+    if (distance < bestDistance) {
+      bestDistance = distance
+      bestColumn = col
+    }
+  })
+
+  const nodes = (columns.get(bestColumn) ?? [])
+    .filter((node) => node.row > 0 && node.row < model.config.rows - 1)
+  const displacements = nodes.map((node) => distanceVec(node.currentPosition, node.restPosition))
+  const maxDisplacement = maxOf(displacements)
+  const active = nodes.filter((node) => (
+    distanceVec(node.currentPosition, node.restPosition) >= Math.max(maxDisplacement * 0.28, 0.0001)
+  ))
+  const centroidY = active.length ? mean(active.map((node) => node.restPosition[1])) : Infinity
+
+  return {
+    profileU,
+    col: bestColumn,
+    activeRows: active.length,
+    centroidY: round(centroidY),
+    maxDisplacement: round(maxDisplacement),
+  }
 }
 
 function summarizeCustomProfileCarrier(model) {
