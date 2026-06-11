@@ -384,6 +384,107 @@ select:focus-visible {
   color: #fffaf2;
 }
 
+.profile-mode-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.profile-mode-buttons button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fffaf2;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.profile-mode-buttons button.active {
+  background: #25221e;
+  border-color: #25221e;
+  color: #fffaf2;
+}
+
+.profile-editor {
+  display: grid;
+  gap: 9px;
+  margin-top: 14px;
+}
+
+.profile-editor-canvas {
+  width: 100%;
+  aspect-ratio: 360 / 176;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbf7ef;
+  touch-action: none;
+}
+
+.profile-ground-line {
+  stroke: rgba(37, 34, 30, 0.26);
+  stroke-width: 1.2;
+}
+
+.profile-curve {
+  fill: none;
+  stroke: #1d1d1a;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.profile-slice-hit {
+  fill: transparent;
+  cursor: ns-resize;
+}
+
+.profile-slice-line {
+  stroke: #e8462d;
+  stroke-width: 1.6;
+  stroke-dasharray: 8 5;
+  cursor: ns-resize;
+}
+
+.profile-slice.active .profile-slice-line {
+  stroke-width: 2.4;
+}
+
+.profile-slice-label {
+  fill: #e8462d;
+  font-size: 10px;
+  font-weight: 850;
+  paint-order: stroke;
+  stroke: #fbf7ef;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.profile-handle {
+  fill: #25221e;
+  stroke: #fbf7ef;
+  stroke-width: 2;
+  cursor: grab;
+}
+
+.profile-handle.active {
+  fill: #e8462d;
+  cursor: grabbing;
+}
+
+.profile-editor-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.78fr);
+  gap: 8px;
+}
+
+.profile-editor-actions .primary,
+.profile-editor-actions .secondary {
+  min-height: 36px;
+}
+
 .run-row {
   padding-top: 0;
 }

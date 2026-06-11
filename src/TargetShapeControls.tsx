@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { CameraView, InverseSheetConfig } from './inverseSheetTypes'
-import { getInverseSheetUsableRanges } from './latticeGeometry'
+import { DEFAULT_CUSTOM_PROFILE_POINTS, DEFAULT_CUSTOM_SECTION_POINTS, getInverseSheetUsableRanges } from './latticeGeometry'
+import ProfileContourEditor from './ProfileContourEditor'
 
 type TargetShapeControlsProps = {
   config: InverseSheetConfig
@@ -24,6 +25,7 @@ type NumberKey =
   | 'height'
   | 'overhangWidth'
   | 'overhangAngleDeg'
+  | 'profileScale'
   | 'smoothing'
   | 'lipSharpness'
   | 'wallSmoothness'
@@ -41,14 +43,12 @@ export default function TargetShapeControls({
   onExportJson,
   onImportConfigText,
 }: TargetShapeControlsProps) {
-  const ranges = getInverseSheetUsableRanges(config)
-
   const update = (patch: Partial<InverseSheetConfig>) => {
     onConfigChange(clampToUsableRanges({ ...config, ...patch }))
   }
 
   const setNumber = (key: NumberKey, value: number) => {
-    update({ [key]: value } as Partial<InverseSheetConfig>)
+    update({ profileMode: 'custom', [key]: value } as Partial<InverseSheetConfig>)
   }
 
   const setBoolean = (key: BooleanKey, value: boolean) => {
@@ -86,26 +86,32 @@ export default function TargetShapeControls({
           </button>
         </div>
 
+        <ProfileContourEditor
+          key={`xz-${config.profilePoints}`}
+          value={config.profilePoints}
+          onApply={(profilePoints) => update({ profileMode: 'custom', profilePoints })}
+          label="x z profile"
+          ariaLabel="Editable overhang side profile"
+          defaultValue={DEFAULT_CUSTOM_PROFILE_POINTS}
+          resetLabel="Reset Wave"
+          sliceLevel={config.xySliceLevel}
+          onSliceLevelChange={(xySliceLevel) => update({ profileMode: 'custom', xySliceLevel })}
+          sliceLevelLabel="x y slice"
+        />
+        <ProfileContourEditor
+          key={`xy-${config.sectionPoints}`}
+          value={config.sectionPoints}
+          onApply={(sectionPoints) => update({ profileMode: 'custom', sectionPoints })}
+          label="x y slice"
+          ariaLabel="Editable overhang cross section"
+          defaultValue={DEFAULT_CUSTOM_SECTION_POINTS}
+          resetLabel="Reset Section"
+        />
         <div className="slider-stack">
+          <RangeInput label="scale" value={config.profileScale} min={0.35} max={1.55} step={0.01} onChange={(value) => setNumber('profileScale', value)} />
           <RangeInput label="morph" value={config.morph} min={0} max={1} step={0.01} onChange={(value) => setNumber('morph', value)} />
-          <RangeInput label="height" value={config.height} min={0} max={ranges.heightMax} step={0.25} onChange={(value) => setNumber('height', value)} />
-          <RangeInput label="overhang" value={config.horizontalOffset} min={0} max={ranges.horizontalOffsetMax} step={0.25} onChange={(value) => setNumber('horizontalOffset', value)} />
           <RangeInput label="position" value={config.overhangPosition} min={-1} max={1} step={0.01} onChange={(value) => setNumber('overhangPosition', value)} />
           <RangeInput label="steer" value={config.steer} min={-1} max={1} step={0.01} onChange={(value) => setNumber('steer', value)} />
-          <RangeInput
-            label="lip dip"
-            value={config.overhangAngleDeg}
-            min={90}
-            max={120}
-            step={1}
-            formatValue={(value) => `${Math.round(value)} deg`}
-            onChange={(value) => setNumber('overhangAngleDeg', value)}
-          />
-          <RangeInput label="width" value={config.overhangWidth} min={0} max={ranges.overhangWidthMax} step={0.5} onChange={(value) => setNumber('overhangWidth', value)} />
-          <RangeInput label="lip sharpness" value={config.lipSharpness} min={0} max={1} step={0.01} onChange={(value) => setNumber('lipSharpness', value)} />
-          <RangeInput label="ground transition" value={config.smoothing} min={0} max={1} step={0.01} onChange={(value) => setNumber('smoothing', value)} />
-          <RangeInput label="wall smoothness" value={config.wallSmoothness} min={0} max={1} step={0.01} onChange={(value) => setNumber('wallSmoothness', value)} />
-          <RangeInput label="flat contribution" value={config.flatContribution} min={0} max={1} step={0.01} onChange={(value) => setNumber('flatContribution', value)} />
         </div>
 
         <button type="button" className="primary compact-primary" onClick={onRun}>
@@ -181,6 +187,8 @@ function clampToUsableRanges(config: InverseSheetConfig): InverseSheetConfig {
     horizontalOffset: clampNumber(config.horizontalOffset, 0, ranges.horizontalOffsetMax),
     overhangPosition: clampNumber(config.overhangPosition, -1, 1),
     steer: clampNumber(config.steer, -1, 1),
+    profileScale: clampNumber(config.profileScale, 0.35, 1.55),
+    xySliceLevel: clampNumber(config.xySliceLevel, 0.05, 0.95),
     overhangWidth: clampNumber(config.overhangWidth, 0, ranges.overhangWidthMax),
   }
 }

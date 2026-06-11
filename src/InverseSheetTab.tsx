@@ -149,6 +149,13 @@ function readInitialInverseSheetConfig(): InverseSheetConfig {
   readNumberConfigParam(search, config, 'steerYaw', 'steer')
   readNumberConfigParam(search, config, 'lipDip', 'overhangAngleDeg')
   readNumberConfigParam(search, config, 'overhangAngleDeg', 'overhangAngleDeg')
+  readStringConfigParam(search, config, 'profileMode', 'profileMode')
+  readStringConfigParam(search, config, 'profilePoints', 'profilePoints')
+  readStringConfigParam(search, config, 'sectionPoints', 'sectionPoints')
+  readNumberConfigParam(search, config, 'profileScale', 'profileScale')
+  readNumberConfigParam(search, config, 'scale', 'profileScale')
+  readNumberConfigParam(search, config, 'xySliceLevel', 'xySliceLevel')
+  readNumberConfigParam(search, config, 'sectionLevel', 'xySliceLevel')
   readNumberConfigParam(search, config, 'width', 'overhangWidth')
   readNumberConfigParam(search, config, 'overhangWidth', 'overhangWidth')
   readNumberConfigParam(search, config, 'lipSharpness', 'lipSharpness')
@@ -175,6 +182,19 @@ function readNumberConfigParam<Key extends keyof InverseSheetConfig>(
   if (!search.has(param)) return
   const value = Number(search.get(param))
   if (Number.isFinite(value)) {
+    config[key] = value as InverseSheetConfig[Key]
+  }
+}
+
+function readStringConfigParam<Key extends keyof InverseSheetConfig>(
+  search: URLSearchParams,
+  config: Partial<InverseSheetConfig>,
+  param: string,
+  key: Key,
+): void {
+  if (!search.has(param)) return
+  const value = search.get(param)
+  if (value) {
     config[key] = value as InverseSheetConfig[Key]
   }
 }

@@ -18,8 +18,6 @@ export default function CanvasSizeGuard() {
       const height = Math.max(1, Math.round(rect.height))
       if (width <= 1 || height <= 1) return
       const dpr = Math.min(window.devicePixelRatio || 1, 1.8)
-      canvas.style.width = '100%'
-      canvas.style.height = '100%'
       gl.setPixelRatio(dpr)
       gl.setSize(width, height, false)
       setSize(width, height)

@@ -18,24 +18,15 @@ import type {
   Vec3,
 } from './inverseSheetTypes'
 import { colorForQuad, legendForMode } from './metricVisuals'
-import {
-  buildRigidCellMechanism,
-  connectedArmDirectionsForFrame,
-  rigidCellBodyThickness,
-  type CellArmDirection,
-  type RigidCellMechanism,
-} from './rigidCellMechanism'
 import { canvasResizeObserver } from './resizeObserverPolyfill'
 
 const inverseLinkageColor = '#111111'
 const inverseCellBodyColor = '#2f3130'
-const inverseConnectorColor = '#111111'
 const crossSectionRowBand = 1
 
-type MechanismRenderScope = {
-  frames: RigidCellMechanism['frames']
+type NodeEdgeRenderScope = {
+  nodeIds: string[]
   edges: LatticeEdge[]
-  directionsByNodeId: Map<string, CellArmDirection[]>
   sideSlice: boolean
   sideView: boolean
 }
@@ -86,12 +77,11 @@ function LatticeModelGroup({
   const nodeById = useMemo(() => new Map(model.nodes.map((node) => [node.id, node])), [model.nodes])
   const quadMetricById = useMemo(() => new Map(model.quadMetrics.map((metric) => [metric.quadId, metric])), [model.quadMetrics])
   const dihedralByQuad = useMemo(() => buildDihedralByQuad(model.dihedralMetrics), [model.dihedralMetrics])
-  const mechanism = useMemo(() => buildRigidCellMechanism(model), [model])
   const sliceProfileView = view === 'slice'
   const sideMechanismView = view === 'side'
-  const mechanismScope = useMemo(() =>
-    buildMechanismRenderScope(model, mechanism, sliceProfileView, sideMechanismView),
-  [mechanism, model, sideMechanismView, sliceProfileView])
+  const renderScope = useMemo(() =>
+    buildNodeEdgeRenderScope(model, sliceProfileView, sideMechanismView),
+  [model, sideMechanismView, sliceProfileView])
   const restGhostGeometry = useMemo(() => buildRestGhostGeometry(model, nodeById), [model, nodeById])
   const surfaceQuads = useMemo(() => {
     if (sliceProfileView) return buildSideSurfaceQuads(model, crossSectionRowBand)
@@ -102,11 +92,11 @@ function LatticeModelGroup({
   const labelsVisible = model.config.showLabels && model.config.rows <= 15 && model.config.columns <= 15
   const largeGrid = model.config.rows > 30 || model.config.columns > 30
   const edgePickRadius = Math.max(model.config.spacing * (largeGrid ? 0.08 : 0.09), 0.035)
-  const connectorSize = sliceProfileView
-    ? Math.max(model.config.spacing * 0.078, 0.044)
+  const nodeRadius = sliceProfileView
+    ? Math.max(model.config.spacing * 0.052, 0.034)
     : sideMechanismView
-      ? Math.max(model.config.spacing * 0.07, 0.026)
-    : Math.max(model.config.spacing * (largeGrid ? 0.052 : 0.12), 0.026)
+      ? Math.max(model.config.spacing * 0.035, 0.018)
+    : Math.max(model.config.spacing * (largeGrid ? 0.042 : 0.09), 0.026)
   const surfaceOpacity = sliceProfileView ? 0.2 : (largeGrid ? 0.38 : 0.42)
 
   return (
@@ -121,29 +111,27 @@ function LatticeModelGroup({
           <meshStandardMaterial vertexColors side={THREE.DoubleSide} transparent opacity={surfaceOpacity} roughness={0.78} metalness={0.02} depthWrite={!sliceProfileView} />
         </mesh>
       )}
-      {model.config.showNodes && <RigidCellGlyphs model={model} scope={mechanismScope} />}
+      {model.config.showNodes && <NodeInstances nodes={nodeById} nodeIds={renderScope.nodeIds} radius={nodeRadius} sideSlice={sliceProfileView} />}
       {model.config.showEdges && (
         <>
           <EdgeHitTargets
             model={model}
-            mechanism={mechanism}
-            scope={mechanismScope}
+            edges={renderScope.edges}
             nodes={nodeById}
             radius={edgePickRadius}
             onEdgePick={onEdgePick}
           />
-          <ConnectorInstances model={model} mechanism={mechanism} scope={mechanismScope} radius={connectorSize} />
+          <StraightEdgeSegments nodes={nodeById} scope={renderScope} />
         </>
       )}
-      {(sliceProfileView || sideMechanismView) && (
+      {sliceProfileView && (
         <SideProfileSilhouette
           model={model}
           compact={model.config.showNodes || model.config.showEdges}
-          subtle={sideMechanismView}
         />
       )}
       {labelsVisible && <NodeLabels nodes={model.nodes} />}
-      <SelectedHighlight selected={selected} model={model} nodeById={nodeById} mechanism={mechanism} view={view} />
+      <SelectedHighlight selected={selected} model={model} nodeById={nodeById} view={view} />
     </group>
   )
 }
@@ -158,38 +146,24 @@ function buildSideSurfaceQuads(model: LatticeModel, rowBand = 1): LatticeQuad[] 
   return model.quads.filter((quad) => quad.row >= minRow && quad.row <= maxRow)
 }
 
-function buildMechanismRenderScope(
+function buildNodeEdgeRenderScope(
   model: LatticeModel,
-  mechanism: RigidCellMechanism,
   sideSlice: boolean,
   sideView = false,
-): MechanismRenderScope {
+): NodeEdgeRenderScope {
   if (sideView && !sideSlice) {
-    const directionsByNodeId = new Map<string, CellArmDirection[]>()
-
-    mechanism.frames.forEach((frame) => {
-      directionsByNodeId.set(frame.nodeId, connectedArmDirectionsForFrame(frame))
-    })
-
     return {
-      frames: mechanism.frames,
+      nodeIds: model.nodes.map((node) => node.id),
       edges: model.edges,
-      directionsByNodeId,
       sideSlice: false,
       sideView: true,
     }
   }
 
   if (!sideSlice) {
-    const directionsByNodeId = new Map<string, CellArmDirection[]>()
-    mechanism.frames.forEach((frame) => {
-      directionsByNodeId.set(frame.nodeId, connectedArmDirectionsForFrame(frame))
-    })
-
     return {
-      frames: mechanism.frames,
+      nodeIds: model.nodes.map((node) => node.id),
       edges: model.edges,
-      directionsByNodeId,
       sideSlice: false,
       sideView,
     }
@@ -213,15 +187,9 @@ function buildMechanismRenderScope(
     activeNodeIds.add(edge.nodeB)
   })
 
-  const directionsByNodeId = new Map<string, CellArmDirection[]>()
-  activeNodeIds.forEach((nodeIdValue) => {
-    directionsByNodeId.set(nodeIdValue, ['east', 'west'])
-  })
-
   return {
-    frames: mechanism.frames.filter((frame) => activeNodeIds.has(frame.nodeId)),
+    nodeIds: [...activeNodeIds],
     edges,
-    directionsByNodeId,
     sideSlice: true,
     sideView: false,
   }
@@ -290,136 +258,89 @@ function SideProfileSilhouette({
   )
 }
 
-function RigidCellGlyphs({
-  model,
-  scope,
-}: {
-  model: LatticeModel
-  scope: MechanismRenderScope
-}) {
-  const largeGrid = model.config.rows > 30 || model.config.columns > 30
-  const armRef = useRef<THREE.InstancedMesh>(null)
-  const bodyRef = useRef<THREE.InstancedMesh>(null)
-  const bodyGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
-  const armGeometry = useMemo(() => new THREE.CylinderGeometry(1, 1, 1, model.config.rows > 30 || model.config.columns > 30 ? 7 : 10), [model.config.columns, model.config.rows])
-  const rodMaterial = useMemo(() => new THREE.MeshStandardMaterial({
-    color: inverseLinkageColor,
-    transparent: scope.sideSlice,
-    opacity: scope.sideSlice ? 0.88 : 1,
-    roughness: 0.62,
-    metalness: 0.04,
-    depthTest: !scope.sideSlice,
-    depthWrite: !scope.sideSlice,
-  }), [scope.sideSlice])
-  const bodyMaterial = useMemo(() => new THREE.MeshStandardMaterial({
-    color: inverseCellBodyColor,
-    transparent: scope.sideSlice,
-    opacity: scope.sideSlice ? 0.88 : 1,
-    roughness: 0.7,
-    metalness: 0.04,
-    depthTest: !scope.sideSlice,
-    depthWrite: !scope.sideSlice,
-  }), [scope.sideSlice])
-  const armInstanceCount = useMemo(() =>
-    scope.frames.reduce((sum, frame) => sum + (scope.directionsByNodeId.get(frame.nodeId)?.length ?? 0), 0),
-  [scope])
-
-  useLayoutEffect(() => {
-    const armMesh = armRef.current
-    const bodyMesh = bodyRef.current
-    if (!bodyMesh || !armMesh) return
-
-    const rodWidth = Math.max(model.config.spacing * (scope.sideSlice ? 0.034 : scope.sideView ? 0.024 : (largeGrid ? 0.012 : 0.048)), 0.008)
-    const bodySize = model.config.spacing * (scope.sideSlice ? 0.32 : scope.sideView ? 0.25 : (largeGrid ? 0.22 : 0.34))
-    const bodyThickness = rigidCellBodyThickness(model.config.spacing)
-    const sideBodyXAxis = new THREE.Vector3(1, 0, 0)
-    const sideBodyYAxis = new THREE.Vector3(0, 0, 1)
-    const sideBodyZAxis = new THREE.Vector3(0, -1, 0)
-    const matrix = new THREE.Matrix4()
-    const dummy = new THREE.Object3D()
-    let armIndex = 0
-
-    scope.frames.forEach((frame, index) => {
-      const center = toThree(frame.center)
-      const directions = scope.directionsByNodeId.get(frame.nodeId) ?? []
-      const bodyXAxis = scope.sideSlice ? sideBodyXAxis : toThree(frame.xAxis)
-      const bodyYAxis = scope.sideSlice ? sideBodyYAxis : toThree(frame.yAxis)
-      const bodyZAxis = scope.sideSlice ? sideBodyZAxis : toThree(frame.zAxis)
-      const bodyDepth = scope.sideSlice ? Math.max(bodyThickness * 0.74, 0.018) : bodyThickness
-
-      setBoxInstance(matrix, bodyMesh, index, center, bodyXAxis, bodyYAxis, bodyZAxis, bodySize, bodySize, bodyDepth)
-      directions.forEach((direction) => {
-        if (!armMesh) return
-        const connectedEndpoint = frame.armEndpoints[direction]
-        setCylinderInstance(dummy, armMesh, armIndex, center, connectedEndpoint ? toThree(connectedEndpoint) : center, rodWidth)
-        armIndex += 1
-      })
-    })
-
-    if (armMesh) armMesh.instanceMatrix.needsUpdate = true
-    bodyMesh.instanceMatrix.needsUpdate = true
-  }, [largeGrid, model, scope])
-
-  return (
-    <>
-      <instancedMesh ref={armRef} args={[armGeometry, rodMaterial, armInstanceCount]} renderOrder={scope.sideSlice ? 22 : 0} />
-      <instancedMesh ref={bodyRef} args={[bodyGeometry, bodyMaterial, scope.frames.length]} renderOrder={scope.sideSlice ? 23 : 0} />
-    </>
-  )
-}
-
-function ConnectorInstances({
-  model,
-  mechanism,
-  scope,
+function NodeInstances({
+  nodes,
+  nodeIds,
   radius,
+  sideSlice,
 }: {
-  model: LatticeModel
-  mechanism: RigidCellMechanism
-  scope: MechanismRenderScope
+  nodes: Map<string, LatticeNode>
+  nodeIds: string[]
   radius: number
+  sideSlice: boolean
 }) {
   const ref = useRef<THREE.InstancedMesh>(null)
-  const geometry = useMemo(() => new THREE.SphereGeometry(1, model.config.rows > 30 || model.config.columns > 30 ? 8 : 14, 8), [model.config.columns, model.config.rows])
+  const geometry = useMemo(() => new THREE.SphereGeometry(1, 10, 8), [])
   const material = useMemo(() => new THREE.MeshStandardMaterial({
-    color: inverseConnectorColor,
-    emissive: inverseConnectorColor,
+    color: inverseCellBodyColor,
+    emissive: inverseCellBodyColor,
     emissiveIntensity: 0.08,
-    transparent: scope.sideSlice,
-    opacity: scope.sideSlice ? 0.9 : 1,
+    transparent: sideSlice,
+    opacity: sideSlice ? 0.9 : 1,
     roughness: 0.45,
     metalness: 0.03,
-    depthTest: !scope.sideSlice,
-    depthWrite: !scope.sideSlice,
-  }), [scope.sideSlice])
+    depthTest: !sideSlice,
+    depthWrite: !sideSlice,
+  }), [sideSlice])
 
   useLayoutEffect(() => {
     if (!ref.current) return
 
     const dummy = new THREE.Object3D()
-    scope.edges.forEach((edge, index) => {
-      dummy.position.copy(toThree(mechanism.connectorByEdgeId.get(edge.id) ?? [0, 0, 0]))
+    nodeIds.forEach((nodeId, index) => {
+      const node = nodes.get(nodeId)
+      dummy.position.copy(new THREE.Vector3(...(node?.currentPosition ?? ([0, 0, 0] as Vec3))))
       dummy.scale.setScalar(radius)
       dummy.updateMatrix()
       ref.current?.setMatrixAt(index, dummy.matrix)
     })
     ref.current.instanceMatrix.needsUpdate = true
-  }, [mechanism, radius, scope.edges])
+  }, [nodeIds, nodes, radius])
 
-  return <instancedMesh ref={ref} args={[geometry, material, scope.edges.length]} renderOrder={scope.sideSlice ? 24 : 0} />
+  return <instancedMesh ref={ref} args={[geometry, material, nodeIds.length]} renderOrder={sideSlice ? 24 : 0} />
+}
+
+function StraightEdgeSegments({
+  nodes,
+  scope,
+}: {
+  nodes: Map<string, LatticeNode>
+  scope: NodeEdgeRenderScope
+}) {
+  const geometry = useMemo(() => {
+    const positions = new Float32Array(scope.edges.length * 2 * 3)
+    scope.edges.forEach((edge, index) => {
+      writeVec(positions, index * 6, nodes.get(edge.nodeA)?.currentPosition ?? [0, 0, 0])
+      writeVec(positions, index * 6 + 3, nodes.get(edge.nodeB)?.currentPosition ?? [0, 0, 0])
+    })
+
+    const nextGeometry = new THREE.BufferGeometry()
+    nextGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    return nextGeometry
+  }, [nodes, scope.edges])
+
+  return (
+    <lineSegments geometry={geometry} renderOrder={scope.sideSlice ? 23 : 0}>
+      <lineBasicMaterial
+        color={inverseLinkageColor}
+        transparent={scope.sideSlice || scope.sideView}
+        opacity={scope.sideSlice ? 0.94 : scope.sideView ? 0.82 : 0.9}
+        depthTest={!scope.sideSlice}
+        depthWrite={!scope.sideSlice}
+      />
+    </lineSegments>
+  )
 }
 
 function EdgeHitTargets({
   model,
-  mechanism,
-  scope,
+  edges,
   nodes,
   radius,
   onEdgePick,
 }: {
   model: LatticeModel
-  mechanism: RigidCellMechanism
-  scope: MechanismRenderScope
+  edges: LatticeEdge[]
   nodes: Map<string, LatticeNode>
   radius: number
   onEdgePick: (edgeId: string) => void
@@ -433,13 +354,11 @@ function EdgeHitTargets({
 
     const dummy = new THREE.Object3D()
     const yAxis = new THREE.Vector3(0, 1, 0)
-    scope.edges.forEach((edge, index) => {
+    edges.forEach((edge, index) => {
       const nodeA = nodes.get(edge.nodeA)
       const nodeB = nodes.get(edge.nodeB)
-      const frameA = mechanism.frameByNodeId.get(edge.nodeA)
-      const frameB = mechanism.frameByNodeId.get(edge.nodeB)
-      const start = new THREE.Vector3(...(frameA?.center ?? nodeA?.currentPosition ?? ([0, 0, 0] as Vec3)))
-      const end = new THREE.Vector3(...(frameB?.center ?? nodeB?.currentPosition ?? ([0, 0, 0] as Vec3)))
+      const start = new THREE.Vector3(...(nodeA?.currentPosition ?? ([0, 0, 0] as Vec3)))
+      const end = new THREE.Vector3(...(nodeB?.currentPosition ?? ([0, 0, 0] as Vec3)))
       const direction = new THREE.Vector3().subVectors(end, start)
       const length = Math.max(direction.length(), 0.000001)
 
@@ -450,15 +369,15 @@ function EdgeHitTargets({
       ref.current?.setMatrixAt(index, dummy.matrix)
     })
     ref.current.instanceMatrix.needsUpdate = true
-  }, [mechanism, nodes, radius, scope.edges])
+  }, [edges, nodes, radius])
 
   return (
     <instancedMesh
       ref={ref}
-      args={[geometry, material, scope.edges.length]}
+      args={[geometry, material, edges.length]}
       onPointerDown={(event) => {
         if (typeof event.instanceId !== 'number') return
-        const edge = scope.edges[event.instanceId]
+        const edge = edges[event.instanceId]
         if (!edge) return
         event.stopPropagation()
         onEdgePick(edge.id)
@@ -485,13 +404,11 @@ function SelectedHighlight({
   selected,
   model,
   nodeById,
-  mechanism,
   view,
 }: {
   selected: SelectedElement
   model: LatticeModel
   nodeById: Map<string, LatticeNode>
-  mechanism: RigidCellMechanism
   view: CameraViewRequest['view']
 }) {
   if (!selected) return null
@@ -502,16 +419,9 @@ function SelectedHighlight({
     const nodeA = edge ? nodeById.get(edge.nodeA) : undefined
     const nodeB = edge ? nodeById.get(edge.nodeB) : undefined
     if (!edge || !nodeA || !nodeB) return null
-    const frameA = mechanism.frameByNodeId.get(nodeA.id)
-    const frameB = mechanism.frameByNodeId.get(nodeB.id)
-    const endpoints = mechanism.endpointsByEdgeId.get(edge.id)
-    if (!frameA || !frameB || !endpoints) return null
 
     return (
-      <>
-        <TubeSegment start={frameA.center} end={endpoints.endpointA} radius={0.04} color="#f5d84b" />
-        <TubeSegment start={frameB.center} end={endpoints.endpointB} radius={0.04} color="#f5d84b" />
-      </>
+      <TubeSegment start={nodeA.currentPosition} end={nodeB.currentPosition} radius={0.04} color="#f5d84b" />
     )
   }
 
@@ -687,7 +597,7 @@ function positionCamera(
   const bounds = !selected && sideLikeView ? activeSideProfileBounds(model) : model.bounds
   const maxSpan = Math.max(bounds.span[0], bounds.span[1], bounds.span[2], 2)
   const focus = focusForSelected(model, selected ?? null)
-  const fov = focus ? 32 : view === 'side' ? 13 : view === 'slice' ? 14 : 42
+  const fov = focus ? 32 : view === 'side' ? 16 : view === 'slice' ? 14 : 42
   const fitDistance = cameraDistanceForView(bounds, view, fov, camera.aspect)
   const sideProjectionScale = 1
   const distance = focus
@@ -698,7 +608,7 @@ function positionCamera(
     view === 'top'
       ? new THREE.Vector3(target.x, target.y, target.z + distance)
     : view === 'side'
-      ? new THREE.Vector3(target.x + distance * 0.11, target.y - distance, target.z + distance * 0.025)
+      ? new THREE.Vector3(target.x + distance * 0.22, target.y - distance * 0.94, target.z + distance * 0.055)
       : view === 'slice'
         ? new THREE.Vector3(target.x, target.y - distance, target.z)
         : new THREE.Vector3(target.x + distance * 0.96, target.y - distance * 1.08, target.z + distance * 0.34)
@@ -712,7 +622,7 @@ function positionCamera(
   camera.lookAt(target)
 
   camera.fov = fov
-  camera.zoom = view === 'side' ? 0.74 : view === 'slice' ? 0.72 : view === 'isometric' ? 1.36 : 1
+  camera.zoom = view === 'side' ? 0.86 : view === 'slice' ? 0.72 : view === 'isometric' ? 1.36 : 1
   camera.near = 0.01
   camera.far = Math.max(distance * 8, 100)
   camera.updateProjectionMatrix()
@@ -896,55 +806,6 @@ function focusForSelected(
   )
 
   return { center, radius }
-}
-
-function setBoxInstance(
-  matrix: THREE.Matrix4,
-  mesh: THREE.InstancedMesh,
-  index: number,
-  center: THREE.Vector3,
-  xAxis: THREE.Vector3,
-  yAxis: THREE.Vector3,
-  zAxis: THREE.Vector3,
-  width: number,
-  height: number,
-  depth: number,
-): void {
-  matrix.makeBasis(
-    xAxis.clone().multiplyScalar(width),
-    yAxis.clone().multiplyScalar(height),
-    zAxis.clone().multiplyScalar(depth),
-  )
-  matrix.setPosition(center)
-  mesh.setMatrixAt(index, matrix)
-}
-
-function setCylinderInstance(
-  dummy: THREE.Object3D,
-  mesh: THREE.InstancedMesh,
-  index: number,
-  start: THREE.Vector3,
-  end: THREE.Vector3,
-  radius: number,
-): void {
-  const direction = new THREE.Vector3().subVectors(end, start)
-  const length = direction.length()
-
-  if (length <= 0.0001) {
-    dummy.position.copy(start)
-    dummy.scale.setScalar(0.000001)
-  } else {
-    dummy.position.addVectors(start, end).multiplyScalar(0.5)
-    dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize())
-    dummy.scale.set(radius, length, radius)
-  }
-
-  dummy.updateMatrix()
-  mesh.setMatrixAt(index, dummy.matrix)
-}
-
-function toThree(vector: Vec3): THREE.Vector3 {
-  return new THREE.Vector3(...vector)
 }
 
 function buildRestGhostGeometry(model: LatticeModel, nodes: Map<string, LatticeNode>): THREE.BufferGeometry {

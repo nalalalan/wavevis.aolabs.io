@@ -3,6 +3,7 @@ export type Vec3 = [number, number, number]
 export type TargetPreset = 'overhang'
 export type RadiusMode = 'autoPreserveLength' | 'manual'
 export type VerticalDirection = 'up' | 'down'
+export type ProfileMode = 'custom' | 'generated'
 
 export type ColorMode =
   | 'edgeStrain'
@@ -36,6 +37,11 @@ export type TargetParams = {
   overhangAngleDeg: number
   conicRho: number
   curlRadius: number
+  profileMode: ProfileMode
+  profilePoints: string
+  sectionPoints: string
+  profileScale: number
+  xySliceLevel: number
   smoothing: number
   lipSharpness: number
   wallSmoothness: number

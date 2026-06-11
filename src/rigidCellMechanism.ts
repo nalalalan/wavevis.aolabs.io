@@ -124,7 +124,6 @@ export function rigidCellMechanismStats(model: LatticeModel): RigidCellMechanism
   let maxPairLengthSpread = 0
   let maxOppositeColinearErrorDeg = 0
   let maxOrthogonalityErrorDeg = 0
-  let maxConnectorPathBendDeg = 0
   let maxExpectedArmCountResidual = 0
   let minInteriorConnectedArmCount = Infinity
   let maxConnectorEndpointGap = 0
@@ -194,7 +193,7 @@ export function rigidCellMechanismStats(model: LatticeModel): RigidCellMechanism
     maxArmSurfaceLeak = Math.max(maxArmSurfaceLeak, Math.abs(dotVec(subtractVec(connector, midpoint), localNormal)))
   })
 
-  maxConnectorPathBendDeg = measureConnectorPathBend(model, mechanism.connectorByEdgeId)
+  const maxConnectorPathBendDeg = measureConnectorPathBend(model, mechanism.connectorByEdgeId)
 
   return {
     maxLegLengthSpread,

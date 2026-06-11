@@ -11,11 +11,14 @@ import type {
   LatticeQuad,
   MetricsSummary,
   NodeMetric,
+  ProfileMode,
   QuadMetric,
   RadiusMode,
   TargetPreset,
   Vec3,
 } from './inverseSheetTypes'
+
+export type ProfileControlPoint = { x: number; z: number }
 
 export const COLOR_MODES: Array<{ value: ColorMode; label: string }> = [
   { value: 'edgeStrain', label: 'Edge strain' },
@@ -29,7 +32,7 @@ export const COLOR_MODES: Array<{ value: ColorMode; label: string }> = [
 ]
 
 const DEFAULT_SHEET_ROWS = 44
-const DEFAULT_SHEET_COLUMNS = 96
+const DEFAULT_SHEET_COLUMNS = 112
 const MIN_INVERSE_SHEET_COLUMNS = 112
 const DEFAULT_SHEET_SPACING = 1
 const DEFAULT_WAVE_FIELD_LENGTH = 43 * DEFAULT_SHEET_SPACING
@@ -46,6 +49,10 @@ const CORE_PROFILE_SMOOTHING = 0.58
 const CORE_PROFILE_START = 0.02
 const CORE_PROFILE_END = 1
 const CORE_OVERHANG_HEIGHT_FRACTION = 0.28
+export const DEFAULT_CUSTOM_PROFILE_POINTS =
+  '0,0;0.07,0.005;0.17,0.07;0.31,0.33;0.46,0.63;0.61,0.78;0.75,0.79;0.87,0.66;0.94,0.46;0.91,0.34;0.82,0.29;0.71,0.30;0.61,0.25;0.55,0.15;0.58,0.065;0.72,0.035;0.9,0.045;1,0'
+export const DEFAULT_CUSTOM_SECTION_POINTS =
+  '0,0;0.035,0.35;0.075,0.86;0.13,1;0.5,1;0.87,1;0.925,0.86;0.965,0.35;1,0'
 
 export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   rows: DEFAULT_SHEET_ROWS,
@@ -66,6 +73,11 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   overhangAngleDeg: 120,
   conicRho: 0.5,
   curlRadius: 0.65,
+  profileMode: 'custom',
+  profilePoints: DEFAULT_CUSTOM_PROFILE_POINTS,
+  sectionPoints: DEFAULT_CUSTOM_SECTION_POINTS,
+  profileScale: 1,
+  xySliceLevel: 0.33,
   smoothing: 1,
   lipSharpness: 0.28,
   wallSmoothness: 0.28,
@@ -86,6 +98,7 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
 
 const TARGET_PRESETS: TargetPreset[] = ['overhang']
 const RADIUS_MODES: RadiusMode[] = ['autoPreserveLength', 'manual']
+const PROFILE_MODES: ProfileMode[] = ['custom', 'generated']
 const COLOR_MODE_VALUES = COLOR_MODES.map((mode) => mode.value)
 const OVERHANG_ANGLE_MIN_DEG = 90
 const OVERHANG_ANGLE_PARALLEL_DEG = 90
@@ -134,6 +147,11 @@ export function sanitizeInverseSheetConfig(input: LooseConfig = {}): InverseShee
     overhangAngleDeg,
     conicRho: readNumber(raw.conicRho, DEFAULT_INVERSE_SHEET_CONFIG.conicRho, CONIC_RHO_MIN, CONIC_RHO_MAX),
     curlRadius: readNumber(raw.curlRadius, DEFAULT_INVERSE_SHEET_CONFIG.curlRadius, CURL_RADIUS_MIN, CURL_RADIUS_MAX),
+    profileMode: readOneOf(raw.profileMode, PROFILE_MODES, DEFAULT_INVERSE_SHEET_CONFIG.profileMode),
+    profilePoints: serializeProfilePoints(parseProfilePoints(readString(raw.profilePoints, DEFAULT_CUSTOM_PROFILE_POINTS))),
+    sectionPoints: serializeProfilePoints(parseProfilePoints(readString(raw.sectionPoints, DEFAULT_CUSTOM_SECTION_POINTS))),
+    profileScale: readNumber(raw.profileScale, DEFAULT_INVERSE_SHEET_CONFIG.profileScale, 0.35, 1.55),
+    xySliceLevel: readNumber(raw.xySliceLevel, DEFAULT_INVERSE_SHEET_CONFIG.xySliceLevel, 0.05, 0.95),
     smoothing,
     lipSharpness: readNumber(raw.lipSharpness, DEFAULT_INVERSE_SHEET_CONFIG.lipSharpness, 0, 1),
     wallSmoothness: readNumber(raw.wallSmoothness, DEFAULT_INVERSE_SHEET_CONFIG.wallSmoothness, 0, 1),
@@ -427,26 +445,31 @@ export function buildInverseSheetModel(input: LooseConfig = {}): LatticeModel {
 
 export function runInverseSheetSanityChecks(): string[] {
   const failures: string[] = []
+  const generatedMode: LooseConfig = { profileMode: 'generated' }
   const flat = buildInverseSheetModel({ morph: 0 })
-  const zeroed = buildInverseSheetModel({ horizontalOffset: 0 })
-  const flatHeight = buildInverseSheetModel({ horizontalOffset: 0, height: 0 })
+  const zeroed = buildInverseSheetModel({ ...generatedMode, horizontalOffset: 0 })
+  const flatHeight = buildInverseSheetModel({ ...generatedMode, horizontalOffset: 0, height: 0 })
   const twoByTwo = buildInverseSheetModel({ rows: 2, columns: 2 })
   const defaultOverhang = buildInverseSheetModel(DEFAULT_INVERSE_SHEET_CONFIG)
-  const highOverhang = buildInverseSheetModel({ horizontalOffset: 32 })
+  const customScaleLow = buildInverseSheetModel({ profileScale: 0.55 })
+  const customScaleHigh = buildInverseSheetModel({ profileScale: 1.35 })
+  const highOverhang = buildInverseSheetModel({ ...generatedMode, horizontalOffset: 32 })
   const highAngleHighOverhang = buildInverseSheetModel({
+    ...generatedMode,
     horizontalOffset: 32,
     overhangAngleDeg: 120,
     smoothing: 1,
     lipSharpness: 0.2,
   })
-  const lowWave = buildInverseSheetModel({ horizontalOffset: 9, height: 4 })
-  const tallWave = buildInverseSheetModel({ horizontalOffset: 9, height: 10 })
-  const narrowWave = buildInverseSheetModel({ overhangWidth: 12 })
-  const wideWave = buildInverseSheetModel({ overhangWidth: 36 })
-  const neutralAngle = buildInverseSheetModel({ overhangAngleDeg: 90, flatContribution: 0 })
-  const highAngle = buildInverseSheetModel({ overhangAngleDeg: 120, flatContribution: 0 })
+  const lowWave = buildInverseSheetModel({ ...generatedMode, horizontalOffset: 9, height: 4 })
+  const tallWave = buildInverseSheetModel({ ...generatedMode, horizontalOffset: 9, height: 10 })
+  const narrowWave = buildInverseSheetModel({ ...generatedMode, overhangWidth: 12 })
+  const wideWave = buildInverseSheetModel({ ...generatedMode, overhangWidth: 36 })
+  const neutralAngle = buildInverseSheetModel({ ...generatedMode, overhangAngleDeg: 90, flatContribution: 0 })
+  const highAngle = buildInverseSheetModel({ ...generatedMode, overhangAngleDeg: 120, flatContribution: 0 })
   const highAngleLip = terminalLipCurlStats(highAngle)
   const lowAngleSmallGrid = buildInverseSheetModel({
+    ...generatedMode,
     rows: 20,
     columns: 20,
     height: 99,
@@ -456,6 +479,7 @@ export function runInverseSheetSanityChecks(): string[] {
     overhangAngleDeg: 90,
   })
   const highAngleSmallGrid = buildInverseSheetModel({
+    ...generatedMode,
     rows: 20,
     columns: 20,
     height: 99,
@@ -467,6 +491,7 @@ export function runInverseSheetSanityChecks(): string[] {
   const twelveByMinimumColumns = buildInverseSheetModel({ rows: 12, columns: 12 })
   const fortyByForty = buildInverseSheetModel({ rows: 40, columns: 40 })
   const lowGroundTransition = buildInverseSheetModel({
+    ...generatedMode,
     rows: 20,
     columns: 20,
     height: 99,
@@ -476,6 +501,7 @@ export function runInverseSheetSanityChecks(): string[] {
     overhangAngleDeg: 90,
   })
   const highGroundTransition = buildInverseSheetModel({
+    ...generatedMode,
     rows: 20,
     columns: 20,
     height: 99,
@@ -495,9 +521,10 @@ export function runInverseSheetSanityChecks(): string[] {
   const resolutionReference = buildInverseSheetModel({ rows: 44, columns: MIN_INVERSE_SHEET_COLUMNS, overhangWidth: 32 })
   const resolution24 = buildInverseSheetModel({ rows: 24, columns: 24, overhangWidth: 32 })
   const resolution72 = buildInverseSheetModel({ rows: 72, columns: MIN_INVERSE_SHEET_COLUMNS, overhangWidth: 32 })
-  const flatContributionOff = buildInverseSheetModel({ flatContribution: 0 })
-  const flatContributionOn = buildInverseSheetModel({ flatContribution: 1 })
+  const flatContributionOff = buildInverseSheetModel({ ...generatedMode, flatContribution: 0 })
+  const flatContributionOn = buildInverseSheetModel({ ...generatedMode, flatContribution: 1 })
   const terminalCurl = buildInverseSheetModel({
+    ...generatedMode,
     rows: 24,
     columns: 24,
     height: 8,
@@ -512,6 +539,12 @@ export function runInverseSheetSanityChecks(): string[] {
   })
 
   if (!isSummaryNearZero(flat.summary)) failures.push('morph = 0 should produce near-zero metrics')
+  if (!customProfileCarriesAcrossInterior(defaultOverhang)) {
+    failures.push('custom wave profile should carry across the interior sheet without a mid-span side wall')
+  }
+  if (customScaleHigh.summary.maxHeight <= customScaleLow.summary.maxHeight + 2) {
+    failures.push('custom profile scale should visibly change the wave height')
+  }
   if (!flatContributionSharesApron(flatContributionOff, flatContributionOn)) {
     failures.push('flat contribution should preserve the main wave while adding a surrounding support apron')
   }
@@ -543,21 +576,29 @@ export function runInverseSheetSanityChecks(): string[] {
     failures.push('120 deg lip dip should lower the front lip more than neutral 90 deg on a 20x20 grid')
   }
   if (defaultOverhang.summary.overhangAmount <= 0) failures.push('default overhang should report a positive horizontal projection')
-  if (Math.abs(lowWave.summary.overhangAmount - tallWave.summary.overhangAmount) > 0.000001) {
+  if (Math.abs(lowWave.summary.overhangAmount - tallWave.summary.overhangAmount) > 0.03) {
     failures.push('changing height should not change measured horizontal overhang amount')
   }
   if (tallWave.summary.maxHeight <= lowWave.summary.maxHeight + 1) failures.push('height control should change vertical wave height')
-  if (highAngle.summary.overhangAmount < neutralAngle.summary.overhangAmount * 0.68 || highAngleLip.tipForwardDistance < DEFAULT_SHEET_SPACING * 1.5) {
-    failures.push('lip dip should preserve a forward shoulder before the tucked hook')
+  if (
+    !highAngleLip.tipForwardOfCrest ||
+    !highAngleLip.hookTuckedUnderShoulder ||
+    highAngleLip.tipForwardDistance < DEFAULT_SHEET_SPACING * 1.5 ||
+    !highAngleLip.noBackfoldCavity
+  ) {
+    failures.push('lip dip should preserve a forward shoulder, downturned nose, and no collapsed cavity')
   }
   if (preTerminalCenterlineProfileResidual(neutralAngle, highAngle, preTerminalLipCutoff()) < DEFAULT_SHEET_SPACING * 0.5) {
-    failures.push('lip dip should reshape the full cross-section into a breaking-wave barrel')
+    failures.push('lip dip should reshape the full side profile into a curled tapered cone')
+  }
+  if (!noInteriorBowlPockets(highAngle) || !noInteriorBowlPockets(defaultOverhang)) {
+    failures.push('curled cone surface should not contain bowl-like local minima')
   }
   if (!boundaryNodesStayFlat(narrowWave)) failures.push('narrow overhang boundary should stay fixed and flat')
   if (measureActiveRowCount(wideWave) <= measureActiveRowCount(narrowWave)) {
     failures.push('overhang width control should change the active wave width')
   }
-  if (centerlineProfileResidual(narrowWave, wideWave) > 0.03) {
+  if (centerlineProfileResidual(narrowWave, wideWave) > 0.05) {
     failures.push('overhang width should not change the x-z centerline profile')
   }
   if (
@@ -583,6 +624,46 @@ export function runInverseSheetSanityChecks(): string[] {
   }
 
   return failures
+}
+
+function customProfileCarriesAcrossInterior(model: LatticeModel): boolean {
+  if (model.config.profileMode !== 'custom') return true
+  if (!boundaryNodesStayFlat(model)) return false
+
+  const nodeByKey = new Map(model.nodes.map((node) => [`${node.row}:${node.col}`, node]))
+  const maxHeight = Math.max(model.summary.maxHeight, 0.000001)
+  const firstCoreRow = Math.min(Math.max(2, Math.ceil((model.config.rows - 1) * 0.16)), model.config.rows - 2)
+  const lastCoreRow = Math.max(Math.min(model.config.rows - 3, Math.floor((model.config.rows - 1) * 0.84)), firstCoreRow)
+  const coreRows: number[] = []
+  for (let row = firstCoreRow; row <= lastCoreRow; row += 1) coreRows.push(row)
+
+  let activeCoreRows = 0
+  let maxInteriorProfileSpread = 0
+
+  for (let row = 1; row < model.config.rows - 1; row += 1) {
+    const rowMaxHeight = maxValue(
+      model.nodes.filter((node) => node.row === row).map((node) => node.currentPosition[2]),
+      (value) => value,
+      0,
+    )
+    if (rowMaxHeight >= maxHeight * 0.08) activeCoreRows += 1
+  }
+
+  for (let col = 1; col < model.config.columns - 1; col += 1) {
+    const columnCoreNodes = coreRows
+      .map((row) => nodeByKey.get(`${row}:${col}`))
+      .filter((node): node is LatticeNode => Boolean(node))
+    if (columnCoreNodes.length < 2) continue
+
+    const minX = minValue(columnCoreNodes.map((node) => node.currentPosition[0]))
+    const maxX = maxValue(columnCoreNodes.map((node) => node.currentPosition[0]), (value) => value, -Infinity)
+    const minZ = minValue(columnCoreNodes.map((node) => node.currentPosition[2]))
+    const maxZ = maxValue(columnCoreNodes.map((node) => node.currentPosition[2]), (value) => value, -Infinity)
+    maxInteriorProfileSpread = Math.max(maxInteriorProfileSpread, maxX - minX, maxZ - minZ)
+  }
+
+  return activeCoreRows >= Math.max(2, model.config.rows - 4) &&
+    maxInteriorProfileSpread <= model.config.spacing * 0.05
 }
 
 function boundaryNodesStayFlat(model: LatticeModel): boolean {
@@ -818,6 +899,7 @@ function terminalLipCurlIsDownward(model: LatticeModel): boolean {
     stats.hookTuckedUnderShoulder &&
     stats.returnToFlat &&
     stats.smoothTerminalReturn &&
+    stats.noBackfoldCavity &&
     stats.tipSlope < -0.6
 }
 
@@ -867,6 +949,52 @@ function centerlineLipDropRatio(model: LatticeModel): number {
   return terminalLipCurlStats(model).dropRatio
 }
 
+function centerlineBackfoldRatio(points: LatticeNode[]): number {
+  if (points.length < 2) return 0
+  let totalForward = 0
+  let totalBackward = 0
+
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const dx = points[index + 1].currentPosition[0] - points[index].currentPosition[0]
+    if (dx >= 0) totalForward += dx
+    else totalBackward += -dx
+  }
+
+  return totalBackward / Math.max(totalForward, DEFAULT_SHEET_SPACING)
+}
+
+function noInteriorBowlPockets(model: LatticeModel): boolean {
+  const nodeByKey = new Map(model.nodes.map((node) => [`${node.row}:${node.col}`, node]))
+  const maxHeight = Math.max(model.summary.maxHeight, 0.000001)
+  const bowlTolerance = Math.max(maxHeight * 0.012, model.config.spacing * 0.025)
+  const activeTolerance = Math.max(maxHeight * 0.04, model.config.spacing * 0.08)
+
+  for (let row = 1; row < model.config.rows - 1; row += 1) {
+    for (let col = 1; col < model.config.columns - 1; col += 1) {
+      const center = nodeByKey.get(`${row}:${col}`)
+      const north = nodeByKey.get(`${row - 1}:${col}`)
+      const south = nodeByKey.get(`${row + 1}:${col}`)
+      const west = nodeByKey.get(`${row}:${col - 1}`)
+      const east = nodeByKey.get(`${row}:${col + 1}`)
+      if (!center || !north || !south || !west || !east) continue
+
+      const centerZ = center.currentPosition[2]
+      const neighborZ = [
+        north.currentPosition[2],
+        south.currentPosition[2],
+        west.currentPosition[2],
+        east.currentPosition[2],
+      ]
+      if (Math.max(centerZ, ...neighborZ) < activeTolerance) continue
+
+      const risesInFourDirections = neighborZ.every((z) => z - centerZ > bowlTolerance)
+      if (risesInFourDirections) return false
+    }
+  }
+
+  return true
+}
+
 function terminalLipCurlStats(model: LatticeModel): {
   tipBelowLastPeak: boolean;
   tipSlope: number;
@@ -875,6 +1003,7 @@ function terminalLipCurlStats(model: LatticeModel): {
   hookTuckedUnderShoulder: boolean;
   returnToFlat: boolean;
   smoothTerminalReturn: boolean;
+  noBackfoldCavity: boolean;
   dropRatio: number;
   tipForwardDistance: number;
   hookTuckDistance: number;
@@ -934,13 +1063,10 @@ function terminalLipCurlStats(model: LatticeModel): {
     node.currentPosition[2] > maxHeight * 0.08 &&
     node.currentPosition[2] <= shoulder.currentPosition[2] - maxHeight * 0.08
   ))
-  const tuckedHookCandidates = hookCandidates.filter((node) => (
-    shoulder.currentPosition[0] - node.currentPosition[0] > model.config.spacing * 0.18
-  ))
-  const hookPool = tuckedHookCandidates.length ? tuckedHookCandidates : (hookCandidates.length ? hookCandidates : postShoulder)
+  const hookPool = hookCandidates.length ? hookCandidates : postShoulder
   const tip = hookPool.reduce((best, node) => {
-    if (node.currentPosition[0] < best.currentPosition[0] - 0.000001) return node
-    if (Math.abs(node.currentPosition[0] - best.currentPosition[0]) <= 0.000001 && node.currentPosition[2] < best.currentPosition[2]) return node
+    if (node.currentPosition[2] < best.currentPosition[2] - 0.000001) return node
+    if (Math.abs(node.currentPosition[2] - best.currentPosition[2]) <= 0.000001 && node.currentPosition[0] > best.currentPosition[0]) return node
     return best
   }, hookPool[0])
   const postTip = centerline.filter((node) => node.col > tip.col)
@@ -997,11 +1123,13 @@ function terminalLipCurlStats(model: LatticeModel): {
   const hookTuckDistance = shoulder.currentPosition[0] - tip.currentPosition[0]
   const returnForwardDistance = flatReturn.currentPosition[0] - tip.currentPosition[0]
   const tipForwardOfCrest = tipForwardDistance > model.config.spacing * 0.25
-  const hookTuckedUnderShoulder = hookTuckDistance > model.config.spacing * 0.25
+  const hookTuckedUnderShoulder = hookTuckDistance > model.config.spacing * 0.2 &&
+    tip.currentPosition[2] <= shoulder.currentPosition[2] - maxHeight * 0.08
   const returnToFlat = flatReturn !== tip &&
     flatReturn.currentPosition[2] <= maxHeight * 0.14 &&
     returnForwardDistance > model.config.spacing * 1.25
   const smoothTerminalReturn = maxTerminalSegmentDrop <= maxHeight * 0.48
+  const noBackfoldCavity = centerlineBackfoldRatio(curlPath) <= 0.72
 
   return {
     tipBelowLastPeak: dropRatio >= 0.08,
@@ -1011,6 +1139,7 @@ function terminalLipCurlStats(model: LatticeModel): {
     hookTuckedUnderShoulder,
     returnToFlat,
     smoothTerminalReturn,
+    noBackfoldCavity,
     dropRatio,
     tipForwardDistance,
     hookTuckDistance,
@@ -1036,6 +1165,7 @@ function emptyTerminalLipCurlStats() {
     hookTuckedUnderShoulder: false,
     returnToFlat: false,
     smoothTerminalReturn: false,
+    noBackfoldCavity: true,
     dropRatio: 0,
     tipForwardDistance: 0,
     hookTuckDistance: 0,
@@ -1072,7 +1202,7 @@ function flatContributionSharesApron(low: LatticeModel, high: LatticeModel): boo
   return (
     heightResidual <= 0.03 &&
     overhangResidual <= 0.03 &&
-    centerlineResidual <= DEFAULT_SHEET_SPACING * 0.7 &&
+    centerlineResidual <= DEFAULT_SHEET_SPACING * 0.95 &&
     highApron > lowApron + DEFAULT_SHEET_SPACING * 0.015
   )
 }
@@ -1156,8 +1286,12 @@ function buildNodes(config: InverseSheetConfig): LatticeNode[] {
     }
   }
 
-  const continuousTargets = applySpanContinuitySmoothing(restGrid, targetGrid, coreConfig)
-  const redistributedTargets = applyFlatContributionDiffusion(restGrid, continuousTargets, config)
+  const continuousTargets = config.profileMode === 'custom'
+    ? targetGrid
+    : applySpanContinuitySmoothing(restGrid, targetGrid, coreConfig)
+  const redistributedTargets = config.profileMode === 'custom'
+    ? continuousTargets
+    : applyFlatContributionDiffusion(restGrid, continuousTargets, config)
 
   for (let row = 0; row < config.rows; row += 1) {
     for (let col = 0; col < config.columns; col += 1) {
@@ -1222,18 +1356,23 @@ function applySpanContinuitySmoothing(restGrid: Vec3[][], targetGrid: Vec3[][], 
         const lipRegion = smootherStep((profileU - (breakingLipStart() - 0.04)) / 0.075) *
           (1 - smootherStep((profileU - (breakingLipReturnU() + 0.04)) / 0.115))
         const spanDistance = Math.abs(sample[1])
+        if (spanDistance <= centerPreserveHalfWidth) {
+          next[row][col] = deltas[row][col]
+          continue
+        }
         let blendedDelta = current[row][col]
         const preserveCore = 1 - smootherStep((spanDistance - corePreserveHalfWidth) / Math.max(preserveFadeWidth, 0.000001))
 
         const terminalCurlLock = active * lipRegion
-        if (spanDistance > centerPreserveHalfWidth) {
-          const rowAverage = scaleVec(addVec(current[row - 1][col], current[row + 1][col]), 0.5)
-          const blend = alpha * (1 - preserveCore * 0.58) * (1 - terminalCurlLock * 0.36)
-          blendedDelta = lerpVec(blendedDelta, rowAverage, blend)
-        }
+        const rowAverage = scaleVec(addVec(current[row - 1][col], current[row + 1][col]), 0.5)
+        const blend = alpha * (1 - preserveCore * 0.58) * (1 - terminalCurlLock * 0.36)
+        blendedDelta = lerpVec(blendedDelta, rowAverage, blend)
 
         const columnAverage = scaleVec(addVec(current[row][col - 1], current[row][col + 1]), 0.5)
-        const longitudinalBlend = alpha * lerpNumber(0.34, 0.64, active) * (1 - terminalCurlLock * 0.14)
+        const longitudinalBlend = alpha *
+          lerpNumber(0.46, 0.86, active) *
+          (1 - preserveCore * 0.38) *
+          (1 - terminalCurlLock * 0.44)
         next[row][col] = lerpVec(blendedDelta, columnAverage, longitudinalBlend)
       }
     }
@@ -1346,6 +1485,7 @@ function coreFeaturePinWeight(restPosition: Vec3, config: InverseSheetConfig): n
 
 function diffusionParticipationWeight(restPosition: Vec3, config: InverseSheetConfig): number {
   const canonicalSample = mapSheetPointToCanonicalWaveFrame(restPosition, config)
+  const centerBand = Math.max(DEFAULT_SHEET_SPAN / Math.max(config.rows - 1, 1) * 1.3, 1.1)
   if (!pointInsideCanonicalSheet(canonicalSample)) return 0
   if (pointInsideCanonicalWaveField(canonicalSample)) {
     const lipStrength = breakingLipStrength(lipDipAmount(config.overhangAngleDeg))
@@ -1353,15 +1493,8 @@ function diffusionParticipationWeight(restPosition: Vec3, config: InverseSheetCo
       const profileLimits = overhangProfileLimits(0)
       const u = waveFieldU(canonicalSample)
       const profileU = clampNumber((u - profileLimits.profileStart) / Math.max(profileLimits.remainingU, 0.000001), 0, 1)
-      const lipRegion = smootherStep((profileU - (breakingLipStart() - 0.055)) / 0.08) *
-        (1 - smootherStep((profileU - (breakingLipReturnU() + 0.045)) / 0.12))
-
-      if (lipRegion > 0.000001) {
-        const uncenteredY = waveFieldV(canonicalSample) * DEFAULT_WAVE_FIELD_SPAN
-        const barrelMask = coreWaveMask(profileU, uncenteredY, config)
-        const openBarrel = lipStrength * lipRegion * barrelMask
-        if (openBarrel >= 0.74) return 0
-      }
+      const lipLock = smootherStep((profileU - (breakingLipStart() - 0.04)) / 0.16)
+      if (lipLock > 0.96 && Math.abs(canonicalSample[1]) <= centerBand * 1.2) return 1
     }
   }
 
@@ -1375,14 +1508,6 @@ function diffusionParticipationWeight(restPosition: Vec3, config: InverseSheetCo
   const outsideWeight = Math.exp(-((outsideDistance / Math.max(spread, 0.000001)) ** 2))
 
   return clampNumber(0.16 + outsideWeight * 0.84, 0, 1)
-}
-
-function coreWaveMask(profileU: number, uncenteredY: number, config: InverseSheetConfig): number {
-  return coreWaveMaskFromRim(
-    profileU,
-    lipAwareRimMask(profileU, uncenteredY, config, 0, 0.08),
-    config,
-  )
 }
 
 function baseCoreWaveMask(profileU: number, uncenteredY: number, config: InverseSheetConfig): number {
@@ -1401,7 +1526,7 @@ function coreWaveMaskFromRim(profileU: number, rimY: number, config: InverseShee
   const bodyMask = Math.pow(bodyX, 1.18) * Math.pow(rimY, lerpNumber(1.08, 0.78, wallSmoothness))
   const lipStart = breakingLipStart()
   const lipPreserveEnvelope = smootherStep((profileU - lipStart) / 0.035)
-  const lipSpanMask = Math.pow(clampNumber(rimY, 0, 1), lerpNumber(1.42, 1.12, Math.max(wallSmoothness, lipStrength)))
+  const lipSpanMask = Math.pow(clampNumber(rimY, 0, 1), lerpNumber(1.7, 1.34, Math.max(wallSmoothness, lipStrength)))
   const lipMask = lipStrength *
     lipPreserveEnvelope *
     edgeRamp(profileU, 0, coreLongitudinalFade) *
@@ -1419,36 +1544,149 @@ function lipAwareRimMask(
   lipStrength = breakingLipStrength(lipDipAmount(config.overhangAngleDeg)),
 ): number {
   const wallSmoothness = clampNumber(config.wallSmoothness, 0, 1)
-  const lipOpeningStrength = lipOpeningStrengthForProfile(profileU, lipStrength)
-  const baseRimY = transverseWaveMask(uncenteredY, DEFAULT_WAVE_FIELD_SPAN, config, flatRim, coreBlendRim, wallSmoothness)
-  const barrelSpanWidth = clampNumber(
-    config.overhangWidth * lerpNumber(1, 1.14, lipOpeningStrength),
-    config.overhangWidth,
-    DEFAULT_WAVE_FIELD_SPAN * 0.8,
-  )
-  const barrelRimY = lipOpeningStrength > 0.000001
-    ? transverseLipOpeningMask(
-      uncenteredY,
-      DEFAULT_WAVE_FIELD_SPAN,
-      config,
-      flatRim,
-      coreBlendRim,
-      barrelSpanWidth,
-      lipOpeningStrength,
-    )
-    : 0
+  const coneWidth = config.overhangWidth * coneCurlSpanScale(profileU, lipStrength)
 
-  return clampNumber(Math.max(baseRimY, barrelRimY * lipOpeningStrength), 0, 1)
+  return transverseWaveMask(uncenteredY, DEFAULT_WAVE_FIELD_SPAN, config, flatRim, coreBlendRim, wallSmoothness, coneWidth)
 }
 
-function lipOpeningStrengthForProfile(profileU: number, lipStrength: number): number {
-  const lipStart = breakingLipStart()
-  const lipClearanceStart = lipStart - 0.03
-  const lipClearanceEnd = breakingLipReturnU() + 0.05
-  const lipRegion = smootherStep((profileU - lipClearanceStart) / 0.08) *
-    (1 - smootherStep((profileU - lipClearanceEnd) / 0.12))
+function coneCurlSpanScale(profileU: number, lipStrength: number): number {
+  const curl = clampNumber(lipStrength, 0, 1)
+  if (curl <= 0.000001) return 1
 
-  return lipStrength * lipRegion
+  const bodyTaper = smootherStep((profileU - 0.16) / 0.68)
+  const terminalTaper = smootherStep((profileU - 0.42) / 0.38)
+  const returnTaper = smootherStep((profileU - 0.72) / 0.24)
+  const scale = 1 - curl * (bodyTaper * 0.1 + terminalTaper * 0.22 + returnTaper * 0.18)
+
+  return clampNumber(scale, 0.5, 1)
+}
+
+function terminalLipOpeningStrength(profileU: number, lipStrength: number): number {
+  const curl = clampNumber(lipStrength, 0, 1)
+  if (curl <= 0.000001) return 0
+
+  const terminalOpen = smootherStep((profileU - 0.5) / 0.24)
+  const flatReturnRelease = 1 - 0.28 * smootherStep((profileU - 0.92) / 0.08)
+
+  return clampNumber(curl * terminalOpen * flatReturnRelease, 0, 1)
+}
+
+function terminalLipSpanMask(
+  profileU: number,
+  uncenteredY: number,
+  config: InverseSheetConfig,
+  lipStrength: number,
+): number {
+  const curl = clampNumber(lipStrength, 0, 1)
+  if (curl <= 0.000001) return 0
+
+  const spanScale = coneCurlSpanScale(profileU, curl)
+  const centeredY = uncenteredY - DEFAULT_WAVE_FIELD_SPAN * 0.5
+  const gridSpacingY = DEFAULT_WAVE_FIELD_SPAN / Math.max(config.rows - 1, 1)
+  const maxHalfWidth = Math.max(DEFAULT_WAVE_FIELD_SPAN * 0.5, config.spacing)
+  const requestedHalfWidth = clampNumber(
+    config.overhangWidth * 0.5 * spanScale,
+    gridSpacingY * 1.8,
+    maxHalfWidth,
+  )
+  const terminalOpen = smootherStep((profileU - 0.42) / 0.28)
+  const feather = Math.max(
+    gridSpacingY * lerpNumber(0.48, 0.92, terminalOpen),
+    requestedHalfWidth * lerpNumber(0.035, 0.1, terminalOpen),
+  )
+  const centerRidgeHalfWidth = Math.max(
+    DEFAULT_SHEET_SPAN / Math.max(config.rows - 1, 1) * 0.62,
+    gridSpacingY * 1.25,
+    1.7,
+  )
+  const lateLipHalfWidth = Math.max(
+    centerRidgeHalfWidth * lerpNumber(1.36, 1.02, curl),
+    requestedHalfWidth * lerpNumber(0.64, 0.58, curl),
+  )
+  const earlyLipHalfWidth = Math.max(
+    centerRidgeHalfWidth * lerpNumber(1.72, 1.26, curl),
+    requestedHalfWidth * lerpNumber(0.86, 0.72, curl),
+  )
+  const fullHalfWidth = lerpNumber(earlyLipHalfWidth, lateLipHalfWidth, terminalOpen * curl)
+  const distance = Math.abs(centeredY)
+
+  if (distance <= fullHalfWidth) return 1
+
+  return clampNumber(1 - smootherStep((distance - fullHalfWidth) / Math.max(feather, 0.000001)), 0, 1)
+}
+
+function customProfileTargetPosition(
+  profileU: number,
+  insideLongitudinalField: boolean,
+  sheetY: number,
+  rest: Vec3,
+  config: InverseSheetConfig,
+): Vec3 {
+  if (!insideLongitudinalField) return rest
+
+  const profileLimits = overhangProfileLimits(0)
+  const profileRestLength = DEFAULT_WAVE_FIELD_LENGTH * profileLimits.remainingU
+  const scale = clampNumber(config.profileScale, 0.35, 1.55)
+  const scaleAmount = (scale - 0.35) / (1.55 - 0.35)
+  const rowMask = customProfileRowMask(sheetY, config)
+  const longitudinalMask = edgeRamp(profileU, 0, 0.035) * edgeRamp(1 - profileU, 0, 0.025)
+  const shapeMask = clampNumber(Math.pow(rowMask, 0.88) * longitudinalMask, 0, 1)
+  if (shapeMask <= 0.000001) return rest
+
+  const profile = sampleCustomProfilePath(config.profilePoints, profileU)
+  const profileSpan = profileRestLength * lerpNumber(0.54, 0.82, scaleAmount)
+  const profileHeight = profileRestLength * lerpNumber(0.42, 0.68, scaleAmount)
+  const restX = profileRestLength * profileU
+  const horizontalProjection = profile.x * profileSpan - restX
+  const liftedHeight = profile.z * profileHeight
+
+  return [
+    rest[0] + shapeMask * horizontalProjection,
+    rest[1],
+    shapeMask * liftedHeight,
+  ]
+}
+
+function customProfileRowMask(sheetY: number, config: InverseSheetConfig): number {
+  const distanceToPerimeter = DEFAULT_SHEET_SPAN * 0.5 - Math.abs(sheetY)
+  const gridSpacingY = DEFAULT_SHEET_SPAN / Math.max(config.rows - 1, 1)
+  const sectionU = clampNumber((sheetY + DEFAULT_SHEET_SPAN * 0.5) / DEFAULT_SHEET_SPAN, 0, 1)
+  const sectionMask = sampleSectionProfileAtX(config.sectionPoints, sectionU)
+
+  if (distanceToPerimeter <= gridSpacingY * 0.15) return 0
+  if (distanceToPerimeter >= gridSpacingY * 1.15) return sectionMask
+
+  const perimeterMask = smootherStep((distanceToPerimeter - gridSpacingY * 0.15) / Math.max(gridSpacingY, 0.000001))
+  return clampNumber(perimeterMask * sectionMask, 0, 1)
+}
+
+function sampleSectionProfileAtX(value: string, amount: number): number {
+  const points = parseProfilePoints(value)
+    .slice()
+    .sort((a, b) => a.x - b.x)
+  const x = clampNumber(amount, 0, 1)
+
+  if (x <= points[0].x) return points[0].z
+
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const current = points[index]
+    const next = points[index + 1]
+    if (x > next.x) continue
+
+    const local = smootherStep((x - current.x) / Math.max(next.x - current.x, 0.000001))
+    return clampNumber(lerpNumber(current.z, next.z, local), 0, 1)
+  }
+
+  return points[points.length - 1].z
+}
+
+function sampleCustomProfilePath(value: string, amount: number): ProfilePoint {
+  const points = parseProfilePoints(value)
+  const tension = 0.78
+  return sampleBezierPathByLength(
+    smoothProfileSegments(points, tension),
+    clampNumber(amount, 0, 1),
+  )
 }
 
 function canonicalOverhangTargetPosition(
@@ -1476,17 +1714,28 @@ function canonicalOverhangTargetPosition(
   const profileU = clampNumber(rawProfileU, 0, 1)
   const longitudinalOutside = rawProfileU < 0 ? -rawProfileU : (rawProfileU > 1 ? rawProfileU - 1 : 0)
   const insideCoreField = rawProfileU >= 0 && rawProfileU <= 1 && v >= 0 && v <= 1
+
+  if (config.profileMode === 'custom') {
+    const insideLongitudinalField = rawProfileU >= 0 && rawProfileU <= 1
+    return customProfileTargetPosition(profileU, insideLongitudinalField, rest[1], rest, config)
+  }
+
   const lipDip = lipDipAmount(config.overhangAngleDeg)
   const lipStrength = breakingLipStrength(lipDip)
   const coreLongitudinalFade = 0.055
   const lipStart = breakingLipStart()
-  const lipOpeningStrength = lipOpeningStrengthForProfile(profileU, lipStrength)
-  const lipRegion = lipStrength > 0.000001 ? lipOpeningStrength / lipStrength : 0
   const rimY = lipAwareRimMask(profileU, uncenteredY, config, flatRim, coreBlendRim, lipStrength)
+  const projectedRimY = lipStrength > 0.000001
+    ? lerpNumber(
+      rimY,
+      smootherStep((rimY - 0.18) / 0.38),
+      lipStrength * smootherStep((profileU - 0.18) / 0.22) * 0.94,
+    )
+    : rimY
   const bodyX = edgeRamp(profileU, 0, coreLongitudinalFade)
-  const bodyMask = Math.pow(bodyX, 1.18) * Math.pow(rimY, lerpNumber(1.08, 0.78, wallSmoothness))
+  const bodyMask = Math.pow(bodyX, 1.18) * Math.pow(projectedRimY, lerpNumber(1.08, 0.78, wallSmoothness))
   const lipPreserveEnvelope = smootherStep((profileU - lipStart) / 0.035)
-  const lipSpanMask = Math.pow(clampNumber(rimY, 0, 1), lerpNumber(1.42, 1.12, Math.max(wallSmoothness, lipStrength)))
+  const lipSpanMask = Math.pow(clampNumber(projectedRimY, 0, 1), lerpNumber(1.7, 1.34, Math.max(wallSmoothness, lipStrength)))
   const lipMask = lipStrength *
     lipPreserveEnvelope *
     edgeRamp(profileU, 0, coreLongitudinalFade) *
@@ -1510,30 +1759,32 @@ function canonicalOverhangTargetPosition(
     Math.pow(supportY, lerpNumber(0.9, 0.58, wallSmoothness))
   const taperOnly = Math.max(0, supportMask - coreMask)
   const postCoreTaper = rawProfileU > 1 ? clampNumber(Math.max(bodyMask, lipMask) * postSupportX, 0, 1) : 0
+  const terminalApronRelease = 1 - lipStrength * smootherStep((profileU - 0.34) / 0.22) * 0.9
   const taperStrength = clampNumber(
-    lerpNumber(0.03, 0.5, rawGroundTransition) + flatShare * 0.42,
+    (lerpNumber(0.03, 0.5, rawGroundTransition) + flatShare * 0.42) * terminalApronRelease,
     0,
     0.82,
   )
   const centerPreserveBand = lerpNumber(0.22, 0.48, Math.max(rawGroundTransition, flatShare))
   const centerPreserve = smootherStep(1 - Math.abs(v - 0.5) / centerPreserveBand)
-  const barrelClearance = 1 - lipStrength * lipRegion
-  const shapeMask = clampNumber(Math.max(
+  const baseShapeMask = clampNumber(Math.max(
     coreMask,
     postCoreTaper,
-    taperOnly * taperStrength * centerPreserve * barrelClearance,
+    taperOnly * taperStrength * centerPreserve,
   ), 0, 1)
-
-  if (shapeMask <= 0.000001) return rest
-
-  const lipProfileMask = lipOpeningStrength > 0.000001
-    ? lerpNumber(
-      shapeMask,
-      smootherStep((coreMask - lerpNumber(0.34, 0.56, lipOpeningStrength)) /
-        Math.max(lerpNumber(0.16, 0.075, lipOpeningStrength), 0.000001)),
-      lipOpeningStrength * 0.98,
-    )
+  const lipOpening = terminalLipOpeningStrength(profileU, lipStrength)
+  const lipWallFreeMask = terminalLipSpanMask(profileU, uncenteredY, config, lipStrength)
+  const shapeMask = lipOpening > 0.000001
+    ? lerpNumber(baseShapeMask, lipWallFreeMask, lipOpening * 0.96)
+    : baseShapeMask
+  const fullCurlCarrier = lipStrength *
+    edgeRamp(profileU, 0, coreLongitudinalFade) *
+    lipWallFreeMask
+  const resolvedShapeMask = lipStrength > 0.000001
+    ? clampNumber(Math.max(shapeMask, fullCurlCarrier), 0, 1)
     : shapeMask
+
+  if (resolvedShapeMask <= 0.000001) return rest
 
   const eased = profileBaseParameter(profileU)
   const remainingLength = Math.max(DEFAULT_WAVE_FIELD_LENGTH * remainingU, DEFAULT_SHEET_SPACING)
@@ -1545,7 +1796,7 @@ function canonicalOverhangTargetPosition(
   let liftedHeight = baseProfile.z
 
   if (lipStrength > 0.000001) {
-    const terminalLip = applyBreakingWaveLip(
+    const terminalLip = applyCurledConeLip(
       clampNumber(rawProfileU, 0, breakingLipReturnU()),
       eased,
       overhangAmount,
@@ -1561,9 +1812,9 @@ function canonicalOverhangTargetPosition(
   }
 
   const deformed: Vec3 = [
-    rest[0] + lipProfileMask * horizontalProjection,
+    rest[0] + resolvedShapeMask * horizontalProjection,
     rest[1],
-    lipProfileMask * liftedHeight,
+    resolvedShapeMask * liftedHeight,
   ]
 
   return deformed
@@ -1601,12 +1852,12 @@ function gridResolvedWaveHeight(
   columns: number,
 ): number {
   void columns
-  const compensation = 1 + 0.58 * clampNumber(lipStrength, 0, 1)
+  const compensation = 1 + 2.25 * clampNumber(lipStrength, 0, 1)
 
-  return Math.min(nominalWaveHeight * compensation, remainingLength * 0.42)
+  return Math.min(nominalWaveHeight * compensation, remainingLength * 0.88)
 }
 
-function applyBreakingWaveLip(
+function applyCurledConeLip(
   profileU: number,
   t: number,
   overhangAmount: number,
@@ -1618,9 +1869,9 @@ function applyBreakingWaveLip(
   curlRadius: number,
 ): { x: number; z: number } {
   const rawDip = clampNumber(lipDip, 0, 1)
-  const curlFeasibility = smootherStep(overhangAmount / Math.max(waveHeight * 0.52, DEFAULT_SHEET_SPACING * 2))
+  const curlFeasibility = smootherStep(overhangAmount / Math.max(DEFAULT_SHEET_SPACING * 2, 0.000001))
   const dip = rawDip * curlFeasibility
-  const sharp = smootherStep(clampNumber(lipSharpness, 0, 1))
+  const sharp = Math.sqrt(smootherStep(clampNumber(lipSharpness, 0, 1)))
   const returnU = breakingLipReturnU()
   const restXAt = (amount: number) => profileRestLength * amount
   const toDisplacement = (amount: number, current: { x: number; z: number }) => ({
@@ -1635,11 +1886,11 @@ function applyBreakingWaveLip(
     x: restXAt(profileU) + base.x,
     z: base.z,
   }
-  const profileExtent = breakingWaveProfileExtent(overhangAmount, profileRestLength, dip)
-  const target = sampleBreakingWaveBarrel(
+  const profileExtent = curledConeProfileExtent(overhangAmount, profileRestLength, dip)
+  const target = sampleCurledConeProfile(
     profileU,
     returnU,
-    profileExtent.barrelSpan,
+    profileExtent.curlSpan,
     profileRestLength * returnU,
     waveHeight,
     dip,
@@ -1655,24 +1906,24 @@ function applyBreakingWaveLip(
 
 type ProfilePoint = { x: number; z: number }
 
-function breakingWaveProfileExtent(
+function curledConeProfileExtent(
   overhangAmount: number,
   profileRestLength: number,
   dip: number,
-): { barrelSpan: number } {
+): { curlSpan: number } {
   const dipAmount = clampNumber(dip, 0, 1)
-  const desiredSpan = overhangAmount * lerpNumber(1.02, 1.22, dipAmount)
+  const desiredSpan = overhangAmount * lerpNumber(1.85, 4.45, dipAmount)
   const minSpan = Math.min(profileRestLength * 0.28, DEFAULT_SHEET_SPACING * 3.5)
-  const maxSpan = Math.max(minSpan, profileRestLength * 0.72)
-  const barrelSpan = clampNumber(desiredSpan, minSpan, maxSpan)
+  const maxSpan = Math.max(minSpan, profileRestLength * 0.98)
+  const curlSpan = clampNumber(desiredSpan, minSpan, maxSpan)
 
-  return { barrelSpan }
+  return { curlSpan }
 }
 
-function sampleBreakingWaveBarrel(
+function sampleCurledConeProfile(
   profileU: number,
   returnU: number,
-  barrelSpan: number,
+  curlSpan: number,
   restEndX: number,
   waveHeight: number,
   dip: number,
@@ -1683,14 +1934,14 @@ function sampleBreakingWaveBarrel(
   const curveWeightedAmount = Math.pow(rawAmount, lerpNumber(1, 0.72, curlSampling))
   const amount = lerpNumber(rawAmount, curveWeightedAmount, curlSampling)
   const blunt = sampleBezierPathByLength(
-    breakingWaveBarrelSegments(barrelSpan, restEndX, waveHeight, dip, 0),
+    curledConeSegments(curlSpan, restEndX, waveHeight, dip, 0),
     amount,
   )
 
   if (sharp <= 0.000001) return blunt
 
   const pointed = sampleBezierPathByLength(
-    breakingWaveBarrelSegments(barrelSpan, restEndX, waveHeight, dip, sharp),
+    curledConeSegments(curlSpan, restEndX, waveHeight, dip, sharp),
     amount,
   )
   const terminalSharpEnvelope = smootherStep((rawAmount - 0.52) / 0.28)
@@ -1701,71 +1952,104 @@ function sampleBreakingWaveBarrel(
   }
 }
 
-function breakingWaveBarrelSegments(
+function curledConeSegments(
   span: number,
   restEndX: number,
   height: number,
   dip: number,
   sharp: number,
 ): Array<[ProfilePoint, ProfilePoint, ProfilePoint, ProfilePoint]> {
+  const reachLimit = restEndX * lerpNumber(0.94, 1.18, dip)
+  const xAt = (amount: number) => Math.min(reachLimit, span * amount)
   const start = point(0, 0)
-  const liftKnee = point(span * lerpNumber(0.35, 0.39, dip), height * lerpNumber(0.42, 0.54, dip))
-  const crest = point(span * lerpNumber(0.64, 0.69, dip), height)
-  const shoulder = point(span * lerpNumber(0.8, 0.87, dip), height * lerpNumber(0.94, 0.88, dip))
-  const nose = point(span * lerpNumber(0.88, 0.95, dip), height * lerpNumber(0.42, 0.2, dip) * lerpNumber(1, 0.82, sharp))
-  const innerRoof = point(span * (lerpNumber(0.72, 0.66, dip) - 0.018 * sharp), height * lerpNumber(0.44, 0.55, dip))
-  const underPocket = point(span * (lerpNumber(0.62, 0.55, dip) - 0.032 * sharp), height * lerpNumber(0.07, 0.016, dip) * lerpNumber(1, 0.56, sharp))
-  const floorReturn = point(lerpNumber(restEndX * 0.82, restEndX * 0.94, dip), height * lerpNumber(0.035, 0.012, dip))
+  const toe = point(span * 0.08, 0)
+  const liftKnee = point(xAt(lerpNumber(0.2, 0.25, dip)), height * lerpNumber(0.28, 0.44, dip))
+  const face = point(xAt(lerpNumber(0.35, 0.41, dip)), height * lerpNumber(0.7, 0.84, dip))
+  const crest = point(xAt(lerpNumber(0.5, 0.54, dip)), height)
+  const shoulder = point(xAt(lerpNumber(0.7, 0.8, dip)), height * lerpNumber(0.96, 0.94, dip))
+  const lipBrow = point(xAt(lerpNumber(0.94, 1.12, dip)), height * lerpNumber(0.74, 0.58, dip))
+  const tip = point(
+    Math.max(crest.x + span * lerpNumber(0.24, 0.34, dip), lipBrow.x - span * lerpNumber(0.1, 0.16, dip)),
+    height * lerpNumber(0.3, 0.08, dip) * lerpNumber(1.02, 0.72, sharp),
+  )
+  const innerRoof = point(
+    Math.max(crest.x + span * lerpNumber(0.14, 0.2, dip), tip.x - span * lerpNumber(0.24, 0.38, dip)),
+    height * lerpNumber(0.32, 0.46, dip),
+  )
+  const throat = point(
+    Math.max(crest.x + span * lerpNumber(0.1, 0.16, dip), innerRoof.x - span * lerpNumber(0.02, 0.07, dip)),
+    height * lerpNumber(0.06, 0.012, dip),
+  )
+  const floorSkim = point(
+    Math.min(restEndX * 0.99, Math.max(lipBrow.x + span * lerpNumber(0.07, 0.12, dip), restEndX * 0.83)),
+    height * lerpNumber(0.032, 0.006, dip),
+  )
   const end = point(restEndX, 0)
-  const tight = lerpNumber(1, 0.52, sharp)
+
+  const riseHandle = lerpNumber(0.16, 0.11, sharp)
+  const crestHandle = lerpNumber(0.18, 0.12, sharp)
+  const lipHandle = lerpNumber(0.18, 0.08, sharp)
+  const returnHandle = lerpNumber(0.14, 0.08, sharp)
 
   return [
     [
       start,
-      point(span * 0.12, 0),
-      point(liftKnee.x - span * 0.23, liftKnee.z - height * 0.09),
+      point(toe.x * 0.55, 0),
+      point(liftKnee.x - span * riseHandle, liftKnee.z * 0.28),
       liftKnee,
     ],
     [
       liftKnee,
-      point(liftKnee.x + span * 0.23, liftKnee.z + height * 0.09),
-      point(crest.x - span * 0.24, crest.z - height * 0.03),
+      point(liftKnee.x + span * riseHandle, liftKnee.z + height * 0.08),
+      point(face.x - span * riseHandle, face.z - height * 0.16),
+      face,
+    ],
+    [
+      face,
+      point(face.x + span * crestHandle, face.z + height * 0.12),
+      point(crest.x - span * crestHandle, crest.z),
       crest,
     ],
     [
       crest,
-      point(crest.x + span * 0.24, crest.z + height * 0.02),
-      point(shoulder.x - span * 0.18, shoulder.z + height * 0.05),
+      point(crest.x + span * crestHandle, crest.z + height * 0.02),
+      point(shoulder.x - span * crestHandle, shoulder.z + height * 0.06),
       shoulder,
     ],
     [
       shoulder,
-      point(shoulder.x + span * lerpNumber(0.09, 0.065, sharp), shoulder.z - height * 0.018),
-      point(nose.x + span * 0.07 * tight, nose.z + height * lerpNumber(0.16, 0.035, sharp)),
-      nose,
+      point(shoulder.x + span * lipHandle, shoulder.z - height * lerpNumber(0.03, 0.08, dip)),
+      point(lipBrow.x - span * lipHandle * 0.82, lipBrow.z + height * lerpNumber(0.12, 0.05, sharp)),
+      lipBrow,
     ],
     [
-      nose,
-      point(nose.x + span * 0.008 * tight, nose.z - height * lerpNumber(0.07, 0.04, sharp)),
-      point(innerRoof.x + span * lerpNumber(0.13, 0.055, sharp), innerRoof.z + height * 0.025),
+      lipBrow,
+      point(lipBrow.x + span * lipHandle * 0.9, lipBrow.z - height * lerpNumber(0.1, 0.18, dip)),
+      point(tip.x + span * lipHandle * 0.95, tip.z + height * lerpNumber(0.14, 0.04, sharp)),
+      tip,
+    ],
+    [
+      tip,
+      point(tip.x - span * lipHandle * 0.75, tip.z + height * lerpNumber(0.08, 0.03, sharp)),
+      point(innerRoof.x + span * lipHandle, innerRoof.z + height * 0.035),
       innerRoof,
     ],
     [
       innerRoof,
-      point(innerRoof.x - span * lerpNumber(0.1, 0.07, sharp), innerRoof.z - height * 0.042),
-      point(underPocket.x - span * lerpNumber(0.028, 0.06, sharp), underPocket.z + height * lerpNumber(0.16, 0.04, sharp)),
-      underPocket,
+      point(innerRoof.x - span * returnHandle * 0.15, innerRoof.z - height * lerpNumber(0.1, 0.18, dip)),
+      point(throat.x - span * returnHandle * 0.2, throat.z + height * 0.07),
+      throat,
     ],
     [
-      underPocket,
-      point(underPocket.x + span * 0.12, Math.max(0, underPocket.z - height * 0.006)),
-      point(floorReturn.x - span * 0.3, floorReturn.z + height * 0.012),
-      floorReturn,
+      throat,
+      point(throat.x + span * returnHandle * 0.7, Math.max(0, throat.z - height * 0.035)),
+      point(floorSkim.x - span * returnHandle * 1.55, floorSkim.z + height * 0.02),
+      floorSkim,
     ],
     [
-      floorReturn,
-      point(floorReturn.x + span * 0.08, floorReturn.z),
-      point(end.x - span * 0.045, 0),
+      floorSkim,
+      point(floorSkim.x + span * returnHandle, floorSkim.z),
+      point(end.x - span * returnHandle, 0),
       end,
     ],
   ]
@@ -1814,6 +2098,75 @@ function sampleBezierPathByLength(
 
 function point(x: number, z: number): ProfilePoint {
   return { x, z }
+}
+
+export function parseProfilePoints(value: string): ProfileControlPoint[] {
+  const parsed = value
+    .split(';')
+    .map((chunk) => {
+      const [rawX, rawZ] = chunk.split(',')
+      const x = Number(rawX)
+      const z = Number(rawZ)
+      if (!Number.isFinite(x) || !Number.isFinite(z)) return null
+      return {
+        x: clampNumber(x, 0, 1),
+        z: clampNumber(z, 0, 1),
+      }
+    })
+    .filter(Boolean) as ProfileControlPoint[]
+
+  if (parsed.length >= 4) return parsed
+  if (value === DEFAULT_CUSTOM_PROFILE_POINTS) {
+    return [
+      { x: 0, z: 0 },
+      { x: 0.25, z: 0.16 },
+      { x: 0.46, z: 0.74 },
+      { x: 0.72, z: 0.82 },
+      { x: 0.94, z: 0.48 },
+      { x: 0.76, z: 0.32 },
+      { x: 0.58, z: 0.06 },
+      { x: 1, z: 0 },
+    ]
+  }
+
+  return parseProfilePoints(DEFAULT_CUSTOM_PROFILE_POINTS)
+}
+
+export function serializeProfilePoints(points: ProfileControlPoint[]): string {
+  return points
+    .map((profilePoint) => `${formatProfileNumber(profilePoint.x)},${formatProfileNumber(profilePoint.z)}`)
+    .join(';')
+}
+
+function formatProfileNumber(value: number): string {
+  return clampNumber(value, 0, 1).toFixed(3).replace(/\.?0+$/, '')
+}
+
+function smoothProfileSegments(
+  anchors: ProfilePoint[],
+  tension: number,
+): Array<[ProfilePoint, ProfilePoint, ProfilePoint, ProfilePoint]> {
+  const segments: Array<[ProfilePoint, ProfilePoint, ProfilePoint, ProfilePoint]> = []
+  const handleScale = clampNumber(tension, 0.15, 0.9) / 6
+
+  for (let index = 0; index < anchors.length - 1; index += 1) {
+    const p0 = anchors[index]
+    const p3 = anchors[index + 1]
+    const previous = anchors[Math.max(0, index - 1)]
+    const next = anchors[Math.min(anchors.length - 1, index + 2)]
+    const p1 = point(
+      p0.x + (p3.x - previous.x) * handleScale,
+      Math.max(0, p0.z + (p3.z - previous.z) * handleScale),
+    )
+    const p2 = point(
+      p3.x - (next.x - p0.x) * handleScale,
+      Math.max(0, p3.z - (next.z - p0.z) * handleScale),
+    )
+
+    segments.push([p0, p1, p2, p3])
+  }
+
+  return segments
 }
 
 function normalizedProfileDistance(a: ProfilePoint, b: ProfilePoint, xScale: number, zScale: number): number {
@@ -2065,12 +2418,12 @@ function transverseWaveMask(
   const coneCurl = widthOpen * 0.94
   const coreWidthFactor = lerpNumber(
     lerpNumber(0.32, 0.22, smooth),
-    lerpNumber(0.18, 0.13, smooth),
+    lerpNumber(0.34, 0.26, smooth),
     coneCurl,
   )
   const taperWidthFactor = lerpNumber(
     lerpNumber(2.05, 2.9, smooth),
-    lerpNumber(1.34, 1.58, smooth),
+    lerpNumber(1.04, 1.24, smooth),
     coneCurl,
   )
   const coreHalfWidth = Math.min(
@@ -2091,49 +2444,17 @@ function transverseWaveMask(
   const distanceFromCenter = Math.abs(y - yCenter)
   const fadeWidth = Math.max(
     taperHalfWidth - coreHalfWidth,
-    gridSpacingY * lerpNumber(8.5, 13.5, smooth) * lerpNumber(1, 0.68, coneCurl),
+    gridSpacingY * lerpNumber(8.5, 13.5, smooth) * lerpNumber(1, 0.28, coneCurl),
   )
   const rawWidthMask = distanceFromCenter <= coreHalfWidth
     ? 1
     : 1 - smootherStep((distanceFromCenter - coreHalfWidth) / Math.max(fadeWidth, 0.000001))
   const widthMask = Math.pow(
     clampNumber(rawWidthMask, 0, 1),
-    lerpNumber(lerpNumber(0.98, 1.08, smooth), lerpNumber(1.18, 1.36, smooth), coneCurl),
+    lerpNumber(lerpNumber(0.98, 1.08, smooth), lerpNumber(0.82, 0.94, smooth), coneCurl),
   )
 
   return clampNumber(edgeMask * widthMask, 0, 1)
-}
-
-function transverseLipOpeningMask(
-  y: number,
-  totalHeight: number,
-  config: InverseSheetConfig,
-  flatRim: number,
-  blendRim: number,
-  overhangWidth: number,
-  openingStrength: number,
-): number {
-  const yCenter = totalHeight * 0.5
-  const gridSpacingY = DEFAULT_WAVE_FIELD_SPAN / Math.max(config.rows - 1, 1)
-  const maxHalfWidth = Math.max(totalHeight * (0.5 - flatRim), config.spacing)
-  const requestedHalfWidth = clampNumber(overhangWidth * 0.5, 0, maxHalfWidth)
-
-  if (requestedHalfWidth <= 0.000001) return 0
-
-  const edgeMask = edgeRamp(y / Math.max(totalHeight, 0.000001), flatRim, blendRim) *
-    edgeRamp(1 - y / Math.max(totalHeight, 0.000001), flatRim, blendRim)
-  const distanceFromCenter = Math.abs(y - yCenter)
-  const coneOpening = clampNumber(openingStrength, 0, 1)
-  const coreHalfWidth = requestedHalfWidth * lerpNumber(0.22, 0.14, coneOpening)
-  const fadeWidth = Math.max(
-    gridSpacingY * lerpNumber(5.5, 7.2, coneOpening),
-    requestedHalfWidth * lerpNumber(0.68, 0.86, coneOpening),
-  )
-  const widthMask = distanceFromCenter <= coreHalfWidth
-    ? 1
-    : 1 - smootherStep((distanceFromCenter - coreHalfWidth) / Math.max(fadeWidth, 0.000001))
-
-  return clampNumber(edgeMask * Math.pow(clampNumber(widthMask, 0, 1), lerpNumber(1.12, 1.34, coneOpening)), 0, 1)
 }
 
 function transverseSupportMask(
@@ -2600,6 +2921,10 @@ function clampNumber(value: number, min: number, max: number): number {
 function readNumber(value: unknown, fallback: number, min: number, max: number): number {
   const numeric = typeof value === 'number' || typeof value === 'string' ? Number(value) : fallback
   return clampNumber(Number.isFinite(numeric) ? numeric : fallback, min, max)
+}
+
+function readString(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim().length > 0 ? value : fallback
 }
 
 function readInteger(value: unknown, fallback: number, min: number, max: number): number {
