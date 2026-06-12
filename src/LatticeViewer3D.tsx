@@ -308,6 +308,7 @@ function StraightEdgeSegments({
   scope: NodeEdgeRenderScope
 }) {
   const splitSideEdges = scope.sideView && !scope.sideSlice
+  const splitFullGridEdges = !scope.sideSlice
   const geometries = useMemo(() => {
     const buildGeometry = (edges: LatticeEdge[]) => {
       const positions = new Float32Array(edges.length * 2 * 3)
@@ -321,29 +322,95 @@ function StraightEdgeSegments({
       return nextGeometry
     }
 
-    if (!splitSideEdges) {
+    if (!splitFullGridEdges) {
       return {
         all: buildGeometry(scope.edges),
         profile: null,
         span: null,
+        profileActive: null,
+        profileFlat: null,
+        spanActive: null,
+        spanFlat: null,
       }
+    }
+
+    const nodeValues = [...nodes.values()]
+    const profileEdges = scope.edges.filter((edge) => edge.orientation === 'horizontal')
+    const spanEdges = scope.edges.filter((edge) => edge.orientation === 'vertical')
+
+    if (!splitSideEdges) {
+      return {
+        all: null,
+        profile: buildGeometry(profileEdges),
+        span: buildGeometry(spanEdges),
+        profileActive: null,
+        profileFlat: null,
+        spanActive: null,
+        spanFlat: null,
+      }
+    }
+
+    const maxHeight = Math.max(...nodeValues.map((node) => node.currentPosition[2]), 0.000001)
+    const activeThreshold = Math.max(maxHeight * 0.035, 0.045)
+    const displacementThreshold = Math.max(maxHeight * 0.018, 0.035)
+    const centerRow = (Math.max(...nodeValues.map((node) => node.row), 0)) * 0.5
+    const focusHalfRows = Math.max(1.5, Math.min(3.5, nodeValues.length > 0 ? Math.sqrt(nodeValues.length) * 0.026 : 1.5))
+    const sideEdgeActive = (edge: LatticeEdge) => {
+      const a = nodes.get(edge.nodeA)
+      const b = nodes.get(edge.nodeB)
+      if (!a || !b) return false
+      const maxZ = Math.max(a.currentPosition[2], b.currentPosition[2])
+      const maxDisplacement = Math.max(
+        distanceVec(a.currentPosition, a.restPosition),
+        distanceVec(b.currentPosition, b.restPosition),
+      )
+      return maxZ >= activeThreshold || maxDisplacement >= displacementThreshold
+    }
+    const sideProfileFocus = (edge: LatticeEdge) => {
+      const a = nodes.get(edge.nodeA)
+      const b = nodes.get(edge.nodeB)
+      if (!a || !b) return false
+      return Math.abs((a.row + b.row) * 0.5 - centerRow) <= focusHalfRows
     }
 
     return {
       all: null,
-      profile: buildGeometry(scope.edges.filter((edge) => edge.orientation === 'horizontal')),
-      span: buildGeometry(scope.edges.filter((edge) => edge.orientation === 'vertical')),
+      profile: null,
+      span: null,
+      profileActive: buildGeometry(profileEdges.filter((edge) => sideEdgeActive(edge) && sideProfileFocus(edge))),
+      profileFlat: buildGeometry(profileEdges.filter((edge) => !(sideEdgeActive(edge) && sideProfileFocus(edge)))),
+      spanActive: buildGeometry(spanEdges.filter(sideEdgeActive)),
+      spanFlat: buildGeometry(spanEdges.filter((edge) => !sideEdgeActive(edge))),
     }
-  }, [nodes, scope.edges, splitSideEdges])
+  }, [nodes, scope.edges, splitFullGridEdges, splitSideEdges])
 
-  if (splitSideEdges && geometries.profile && geometries.span) {
+  if (splitSideEdges && geometries.profileActive && geometries.profileFlat && geometries.spanActive && geometries.spanFlat) {
+    return (
+      <>
+        <lineSegments geometry={geometries.spanFlat} renderOrder={0}>
+          <lineBasicMaterial color="#2f332f" transparent opacity={0.018} depthTest depthWrite={false} />
+        </lineSegments>
+        <lineSegments geometry={geometries.profileFlat} renderOrder={1}>
+          <lineBasicMaterial color="#171a17" transparent opacity={0.07} depthTest depthWrite={false} />
+        </lineSegments>
+        <lineSegments geometry={geometries.spanActive} renderOrder={2}>
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.055} depthTest depthWrite={false} />
+        </lineSegments>
+        <lineSegments geometry={geometries.profileActive} renderOrder={3}>
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.9} depthTest depthWrite={false} />
+        </lineSegments>
+      </>
+    )
+  }
+
+  if (!scope.sideSlice && geometries.profile && geometries.span) {
     return (
       <>
         <lineSegments geometry={geometries.span} renderOrder={0}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.36} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#252824" transparent opacity={scope.sideView ? 0.055 : 0.24} depthTest={!scope.sideView} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profile} renderOrder={1}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.9} depthTest depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={scope.sideView ? 0.88 : 0.82} depthTest={!scope.sideView} depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -641,7 +708,7 @@ function positionCamera(
     view === 'top'
       ? new THREE.Vector3(target.x, target.y, target.z + distance)
     : view === 'side'
-      ? new THREE.Vector3(target.x, target.y - distance, target.z)
+      ? new THREE.Vector3(target.x + distance * 0.14, target.y - distance, target.z + distance * 0.025)
       : view === 'slice'
         ? new THREE.Vector3(target.x, target.y - distance, target.z)
         : new THREE.Vector3(target.x + distance * 0.96, target.y - distance * 1.08, target.z + distance * 0.34)
@@ -655,7 +722,7 @@ function positionCamera(
   camera.lookAt(target)
 
   camera.fov = fov
-  camera.zoom = view === 'side' ? 1.18 : view === 'slice' ? 0.92 : view === 'isometric' ? 1.36 : 1
+  camera.zoom = view === 'side' ? 1.34 : view === 'slice' ? 0.92 : view === 'isometric' ? 1.36 : 1
   camera.near = 0.01
   camera.far = Math.max(distance * 8, 100)
   camera.updateProjectionMatrix()
@@ -747,7 +814,7 @@ function cameraDistanceForView(
   const tanHalfFov = Math.tan(fov / 2)
 
   if (view === 'side' || view === 'slice') {
-    return fitPerspectiveDistance(bounds.span[0], bounds.span[2], tanHalfFov, safeAspect, view === 'side' ? 1.42 : 1.34)
+    return fitPerspectiveDistance(bounds.span[0], bounds.span[2], tanHalfFov, safeAspect, view === 'side' ? 1.18 : 1.34)
   }
 
   if (view === 'top') {
@@ -899,6 +966,10 @@ function writeVec(array: Float32Array, offset: number, vector: Vec3): void {
   array[offset] = vector[0]
   array[offset + 1] = vector[1]
   array[offset + 2] = vector[2]
+}
+
+function distanceVec(a: Vec3, b: Vec3): number {
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
 }
 
 function writeColor(array: Float32Array, offset: number, color: THREE.Color): void {

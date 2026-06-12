@@ -50,9 +50,9 @@ const CORE_PROFILE_START = 0.02
 const CORE_PROFILE_END = 1
 const CORE_OVERHANG_HEIGHT_FRACTION = 0.28
 export const DEFAULT_CUSTOM_PROFILE_POINTS =
-  '0,0;0.06,0;0.14,0.045;0.25,0.27;0.38,0.57;0.52,0.78;0.66,0.88;0.78,0.84;0.88,0.72;0.955,0.56;1,0.4;0.965,0.28;0.88,0.24;0.78,0.3;0.68,0.39;0.59,0.38;0.525,0.27;0.49,0.15;0.515,0.065;0.62,0.04;0.8,0.045;0.94,0.045;1,0'
+  '0,0;0.08,0;0.17,0.025;0.3,0.3;0.44,0.62;0.61,0.84;0.77,0.87;0.89,0.75;0.97,0.55;0.99,0.4;0.955,0.27;0.88,0.24;0.77,0.37;0.66,0.37;0.55,0.24;0.51,0.09;0.58,0.035;0.78,0.02;1,0'
 export const DEFAULT_CUSTOM_SECTION_POINTS =
-  '0,0.04;0.08,0.34;0.18,0.78;0.34,1;0.54,0.96;0.72,0.82;0.88,0.56;1,0.32'
+  '0,0.025;0.08,0.22;0.22,0.78;0.39,1;0.57,0.82;0.72,0.42;0.86,0.18;1,0.035'
 
 export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   rows: DEFAULT_SHEET_ROWS,
@@ -76,7 +76,7 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   profileMode: 'custom',
   profilePoints: DEFAULT_CUSTOM_PROFILE_POINTS,
   sectionPoints: DEFAULT_CUSTOM_SECTION_POINTS,
-  profileScale: 1,
+  profileScale: 1.08,
   xySliceLevel: 0.33,
   smoothing: 1,
   lipSharpness: 0.28,
@@ -1662,18 +1662,22 @@ function customProfileTargetPosition(
   const curlCenterGate = customProfileCurlCenterGate(sheetY, config)
   const curlInterior = customProfileInteriorCurlWeight(profileU, curlProfile.x, curlProfile.z)
   const lipAmount = customProfileLipCurlAmount(config)
-  const loopWeight = curlInterior * Math.pow(curlCenterGate, 0.95) * lipAmount
+  const profileBlend = clampNumber(
+    Math.pow(lipAmount, 0.62) * lerpNumber(0.18, 1, Math.pow(curlCenterGate, 0.86)),
+    0,
+    1,
+  )
   const profile = {
-    x: lerpNumber(bodyProfile.x, curlProfile.x, loopWeight),
-    z: lerpNumber(bodyProfile.z, curlProfile.z, loopWeight),
+    x: lerpNumber(bodyProfile.x, curlProfile.x, profileBlend),
+    z: lerpNumber(bodyProfile.z, curlProfile.z, profileBlend),
   }
-  const rowMask = customProfileRowMask(profileU, profile.x, profile.z, sheetY, config, curlInterior * Math.pow(curlCenterGate, 0.85) * lipAmount)
+  const rowMask = customProfileRowMask(profileU, profile.x, profile.z, sheetY, config, curlInterior * curlCenterGate)
   const longitudinalMask = edgeRamp(profileU, 0, 0.035) * edgeRamp(1 - profileU, 0, 0.025)
   const shapeMask = clampNumber(rowMask * longitudinalMask, 0, 1)
   if (shapeMask <= 0.000001) return rest
 
-  const profileSpan = profileRestLength * lerpNumber(0.54, 0.82, scaleAmount)
-  const profileHeight = profileRestLength * lerpNumber(0.42, 0.68, scaleAmount)
+  const profileSpan = profileRestLength * lerpNumber(0.66, 0.952, scaleAmount)
+  const profileHeight = profileRestLength * lerpNumber(0.5, 0.82, scaleAmount)
   const restX = profileRestLength * profileU
   const horizontalProjection = profile.x * profileSpan - restX
   const liftedHeight = Math.max(0, profile.z) * profileHeight
@@ -1696,45 +1700,53 @@ function customProfileRowMask(
   const distanceToPerimeter = DEFAULT_SHEET_SPAN * 0.5 - Math.abs(sheetY)
   const gridSpacingY = DEFAULT_SHEET_SPAN / Math.max(config.rows - 1, 1)
   const envelopeAmount = sampleSectionProfileAtX(config.sectionPoints, profileX)
-  const lowReturnBranch = smootherStep((profileU - 0.92) / 0.032) *
-    (1 - smootherStep((profileU - 0.992) / 0.022)) *
-    Math.pow(customProfileCurlCenterGate(sheetY, config), 0.85) *
-    customProfileLipCurlAmount(config)
-  const curlInterior = Math.max(profileCurlInterior, lowReturnBranch)
+  const lipAmount = customProfileLipCurlAmount(config)
+  const curlInterior = profileCurlInterior * lipAmount
   const curlCenterGate = customProfileCurlCenterGate(sheetY, config)
-  const effectiveEnvelope = Math.max(envelopeAmount, curlInterior * 0.32)
+  const effectiveEnvelope = Math.max(envelopeAmount, curlInterior * 0.42)
 
   if (distanceToPerimeter <= gridSpacingY * 0.18) return 0
 
-  const profileActivity = Math.max(smootherStep(Math.max(0, profileZ) / 0.08), curlInterior * 0.52) *
+  const profileActivity = Math.max(smootherStep(Math.max(0, profileZ) / 0.055), curlInterior * 0.9) *
     edgeRamp(profileU, 0, 0.04) *
     edgeRamp(1 - profileU, 0, 0.035)
   if (profileActivity <= 0.000001 || effectiveEnvelope <= 0.000001) return 0
 
   const maxHalfWidth = DEFAULT_SHEET_SPAN * 0.5 - gridSpacingY * 1.15
+  const broadBack = smootherStep((profileU - 0.13) / 0.17) * (1 - smootherStep((profileU - 0.7) / 0.22))
+  const terminalCurl = curlInterior * smootherStep((profileU - 0.56) / 0.2)
+  const returnTail = smootherStep((profileU - 0.84) / 0.13)
+  const heightTaper = lerpNumber(1.08, 0.66, smootherStep(Math.max(0, profileZ) / 0.82))
+  const bodyTaper = lerpNumber(0.92, 1.7, broadBack * (1 - terminalCurl * 0.72))
+  const curlTaper = lerpNumber(1, 0.44, terminalCurl)
+  const returnTailTaper = lerpNumber(1, 0.5, returnTail * lipAmount)
   const bodyHalfWidth = clampNumber(
     config.overhangWidth *
-      lerpNumber(0.18, 0.68, effectiveEnvelope) *
-      lerpNumber(0.72, 0.96, profileActivity) *
-      lerpNumber(1, 0.52, curlInterior),
-    gridSpacingY * 1.35,
+      lerpNumber(0.14, 0.58, effectiveEnvelope) *
+      lerpNumber(0.82, 1, profileActivity) *
+      heightTaper *
+      bodyTaper,
+    gridSpacingY * 2.2,
     maxHalfWidth,
-  )
+  ) * curlTaper * returnTailTaper
   const normalizedDistance = Math.abs(sheetY) / Math.max(bodyHalfWidth, 0.000001)
   const bodyRadial = Math.exp(-Math.pow(
     normalizedDistance,
-    lerpNumber(2.45, 3.75, clampNumber(config.wallSmoothness, 0, 1)),
+    lerpNumber(1.72, 3.15, clampNumber(config.wallSmoothness, 0, 1)),
   ))
-  const sheetFalloff = 1 - smootherStep((normalizedDistance - 0.96) / 0.52)
+  const sheetFalloff = 1 - smootherStep((normalizedDistance - 0.92) / 0.5)
   const rimFade = edgeRamp(
     distanceToPerimeter,
     0,
     gridSpacingY * lerpNumber(3.2, 6.8, clampNumber(config.smoothing, 0, 1)),
   )
-  const bodyMask = bodyRadial * sheetFalloff * lerpNumber(1, 0.62, curlInterior)
-  const curlMask = Math.pow(curlCenterGate, 1.25) * curlInterior
+  const bodyMask = bodyRadial * sheetFalloff * profileActivity
+  const curlMask = Math.pow(curlCenterGate, 1.35) * curlInterior * profileActivity
+  const centerlineGuarantee = 1 - smootherStep(
+    (Math.abs(sheetY) - gridSpacingY * 0.65) / Math.max(gridSpacingY * 0.9, 0.000001),
+  )
 
-  return clampNumber(Math.max(bodyMask, curlMask) * rimFade, 0, 1)
+  return clampNumber(Math.max(bodyMask, curlMask, centerlineGuarantee * profileActivity) * rimFade, 0, 1)
 }
 
 function sampleLocalizedMoanaBodyProfile(profileU: number): ProfilePoint {
@@ -1744,12 +1756,11 @@ function sampleLocalizedMoanaBodyProfile(profileU: number): ProfilePoint {
 function localizedMoanaBodySegments(): Array<[ProfilePoint, ProfilePoint, ProfilePoint, ProfilePoint]> {
   const start = point(0, 0)
   const toe = point(0.08, 0)
-  const rampFoot = point(0.2, 0.07)
-  const face = point(0.38, 0.56)
-  const crest = point(0.62, 0.9)
-  const shoulder = point(0.8, 0.82)
-  const nose = point(0.99, 0.42)
-  const tuckedLip = point(0.94, 0.23)
+  const rampFoot = point(0.21, 0.055)
+  const face = point(0.38, 0.4)
+  const crest = point(0.6, 0.68)
+  const shoulder = point(0.79, 0.52)
+  const nose = point(0.89, 0.13)
   const returnFlat = point(1, 0)
 
   return [
@@ -1767,38 +1778,32 @@ function localizedMoanaBodySegments(): Array<[ProfilePoint, ProfilePoint, Profil
     ],
     [
       rampFoot,
-      point(rampFoot.x + 0.1, rampFoot.z + 0.18),
-      point(face.x - 0.1, face.z - 0.17),
+      point(rampFoot.x + 0.1, rampFoot.z + 0.11),
+      point(face.x - 0.1, face.z - 0.13),
       face,
     ],
     [
       face,
-      point(face.x + 0.13, face.z + 0.18),
+      point(face.x + 0.13, face.z + 0.14),
       point(crest.x - 0.17, crest.z + 0.01),
       crest,
     ],
     [
       crest,
-      point(crest.x + 0.15, crest.z + 0.02),
-      point(shoulder.x - 0.12, shoulder.z + 0.06),
+      point(crest.x + 0.15, crest.z + 0.015),
+      point(shoulder.x - 0.12, shoulder.z + 0.035),
       shoulder,
     ],
     [
       shoulder,
-      point(shoulder.x + 0.12, shoulder.z - 0.04),
-      point(nose.x - 0.08, nose.z + 0.18),
+      point(shoulder.x + 0.11, shoulder.z - 0.045),
+      point(nose.x + 0.04, nose.z + 0.08),
       nose,
     ],
     [
       nose,
-      point(nose.x + 0.02, nose.z - 0.12),
-      point(tuckedLip.x + 0.06, tuckedLip.z + 0.06),
-      tuckedLip,
-    ],
-    [
-      tuckedLip,
-      point(tuckedLip.x - 0.02, tuckedLip.z - 0.16),
-      point(returnFlat.x - 0.08, 0.045),
+      point(nose.x - 0.025, nose.z - 0.055),
+      point(returnFlat.x - 0.12, 0.02),
       returnFlat,
     ],
   ]
@@ -1820,15 +1825,15 @@ function customProfileLipCurlAmount(config: InverseSheetConfig): number {
 
 function customProfileCurlCenterGate(sheetY: number, config: InverseSheetConfig): number {
   const gridSpacingY = DEFAULT_SHEET_SPAN / Math.max(config.rows - 1, 1)
-  const coreHalfWidth = Math.max(gridSpacingY * 1.05, config.overhangWidth * 0.07)
-  const featherWidth = Math.max(gridSpacingY * 3, config.overhangWidth * 0.13)
+  const coreHalfWidth = Math.max(gridSpacingY * 1.2, config.overhangWidth * 0.075)
+  const featherWidth = Math.max(gridSpacingY * 3.85, config.overhangWidth * 0.16)
   const distance = Math.abs(sheetY)
 
   if (distance <= coreHalfWidth) return 1
 
   return Math.pow(
     clampNumber(1 - smootherStep((distance - coreHalfWidth) / Math.max(featherWidth, 0.000001)), 0, 1),
-    1.45,
+    1.12,
   )
 }
 
@@ -2291,12 +2296,12 @@ export function parseProfilePoints(value: string): ProfileControlPoint[] {
   if (value === DEFAULT_CUSTOM_PROFILE_POINTS) {
     return [
       { x: 0, z: 0 },
-      { x: 0.25, z: 0.16 },
-      { x: 0.46, z: 0.74 },
-      { x: 0.72, z: 0.82 },
-      { x: 0.94, z: 0.48 },
-      { x: 0.76, z: 0.32 },
-      { x: 0.58, z: 0.06 },
+      { x: 0.17, z: 0.025 },
+      { x: 0.44, z: 0.62 },
+      { x: 0.77, z: 0.87 },
+      { x: 0.99, z: 0.4 },
+      { x: 0.88, z: 0.24 },
+      { x: 0.55, z: 0.24 },
       { x: 1, z: 0 },
     ]
   }
