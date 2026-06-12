@@ -55,7 +55,7 @@ export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequ
           <LatticeModelGroup model={model} selected={selected} view={viewRequest.view} onEdgePick={onEdgePick} />
         </Suspense>
         <SceneGrid bounds={model.bounds} />
-        <AxisLabels bounds={model.bounds} />
+        {viewRequest.view !== 'side' && viewRequest.view !== 'slice' && <AxisLabels bounds={model.bounds} />}
         <CameraRig model={model} viewRequest={viewRequest} focusRequest={focusRequest} />
       </Canvas>
       {model.config.showHeatmap && <SceneColorBar model={model} />}
@@ -101,7 +101,7 @@ function LatticeModelGroup({
 
   return (
     <group>
-      {model.config.showRestGhost && (
+      {model.config.showRestGhost && view !== 'side' && view !== 'slice' && (
         <lineSegments geometry={restGhostGeometry}>
           <lineBasicMaterial color="#9e968c" transparent opacity={0.28} />
         </lineSegments>
@@ -154,7 +154,7 @@ function buildNodeEdgeRenderScope(
   if (sideView && !sideSlice) {
     return {
       nodeIds: model.nodes.map((node) => node.id),
-      edges: model.edges,
+      edges: model.edges.filter((edge) => edge.orientation === 'horizontal'),
       sideSlice: false,
       sideView: true,
     }
@@ -307,20 +307,50 @@ function StraightEdgeSegments({
   nodes: Map<string, LatticeNode>
   scope: NodeEdgeRenderScope
 }) {
-  const geometry = useMemo(() => {
-    const positions = new Float32Array(scope.edges.length * 2 * 3)
-    scope.edges.forEach((edge, index) => {
-      writeVec(positions, index * 6, nodes.get(edge.nodeA)?.currentPosition ?? [0, 0, 0])
-      writeVec(positions, index * 6 + 3, nodes.get(edge.nodeB)?.currentPosition ?? [0, 0, 0])
-    })
+  const splitSideEdges = scope.sideView && !scope.sideSlice
+  const geometries = useMemo(() => {
+    const buildGeometry = (edges: LatticeEdge[]) => {
+      const positions = new Float32Array(edges.length * 2 * 3)
+      edges.forEach((edge, index) => {
+        writeVec(positions, index * 6, nodes.get(edge.nodeA)?.currentPosition ?? [0, 0, 0])
+        writeVec(positions, index * 6 + 3, nodes.get(edge.nodeB)?.currentPosition ?? [0, 0, 0])
+      })
 
-    const nextGeometry = new THREE.BufferGeometry()
-    nextGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    return nextGeometry
-  }, [nodes, scope.edges])
+      const nextGeometry = new THREE.BufferGeometry()
+      nextGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+      return nextGeometry
+    }
+
+    if (!splitSideEdges) {
+      return {
+        all: buildGeometry(scope.edges),
+        profile: null,
+        span: null,
+      }
+    }
+
+    return {
+      all: null,
+      profile: buildGeometry(scope.edges.filter((edge) => edge.orientation === 'horizontal')),
+      span: buildGeometry(scope.edges.filter((edge) => edge.orientation === 'vertical')),
+    }
+  }, [nodes, scope.edges, splitSideEdges])
+
+  if (splitSideEdges && geometries.profile && geometries.span) {
+    return (
+      <>
+        <lineSegments geometry={geometries.span} renderOrder={0}>
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.16} depthTest depthWrite={false} />
+        </lineSegments>
+        <lineSegments geometry={geometries.profile} renderOrder={1}>
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.9} depthTest depthWrite={false} />
+        </lineSegments>
+      </>
+    )
+  }
 
   return (
-    <lineSegments geometry={geometry} renderOrder={scope.sideSlice ? 23 : 0}>
+    <lineSegments geometry={geometries.all ?? undefined} renderOrder={scope.sideSlice ? 23 : 0}>
       <lineBasicMaterial
         color={inverseLinkageColor}
         transparent={scope.sideSlice || scope.sideView}
@@ -412,10 +442,11 @@ function SelectedHighlight({
   view: CameraViewRequest['view']
 }) {
   if (!selected) return null
+  const sideLikeView = view === 'side' || view === 'slice'
 
   if (selected.kind === 'edge') {
     const edge = model.edges.find((candidate) => candidate.id === selected.id)
-    if (view === 'slice' && edge?.orientation !== 'horizontal') return null
+    if (sideLikeView && edge?.orientation !== 'horizontal') return null
     const nodeA = edge ? nodeById.get(edge.nodeA) : undefined
     const nodeB = edge ? nodeById.get(edge.nodeB) : undefined
     if (!edge || !nodeA || !nodeB) return null
@@ -437,11 +468,13 @@ function SelectedHighlight({
   }
 
   if (selected.kind === 'quad') {
+    if (sideLikeView) return null
     const quad = model.quads.find((candidate) => candidate.id === selected.id)
     if (!quad) return null
     return <SelectedQuad quad={quad} nodeById={nodeById} />
   }
 
+  if (sideLikeView) return null
   const pair = model.dihedralPairs.find((candidate) => candidate.id === selected.id)
   const metric = model.dihedralMetrics.find((candidate) => candidate.pairId === selected.id)
   if (!pair || !metric) return null
@@ -608,7 +641,7 @@ function positionCamera(
     view === 'top'
       ? new THREE.Vector3(target.x, target.y, target.z + distance)
     : view === 'side'
-      ? new THREE.Vector3(target.x + distance * 0.22, target.y - distance * 0.94, target.z + distance * 0.055)
+      ? new THREE.Vector3(target.x, target.y - distance, target.z)
       : view === 'slice'
         ? new THREE.Vector3(target.x, target.y - distance, target.z)
         : new THREE.Vector3(target.x + distance * 0.96, target.y - distance * 1.08, target.z + distance * 0.34)
@@ -622,7 +655,7 @@ function positionCamera(
   camera.lookAt(target)
 
   camera.fov = fov
-  camera.zoom = view === 'side' ? 0.86 : view === 'slice' ? 0.72 : view === 'isometric' ? 1.36 : 1
+  camera.zoom = view === 'side' ? 1.18 : view === 'slice' ? 0.92 : view === 'isometric' ? 1.36 : 1
   camera.near = 0.01
   camera.far = Math.max(distance * 8, 100)
   camera.updateProjectionMatrix()

@@ -102,10 +102,10 @@ export default function TargetShapeControls({
           key={`xy-${config.sectionPoints}`}
           value={config.sectionPoints}
           onApply={(sectionPoints) => update({ profileMode: 'custom', sectionPoints })}
-          label="x y footprint"
-          ariaLabel="Editable x y footprint"
+          label="x y slice"
+          ariaLabel="Editable x y slice"
           defaultValue={DEFAULT_CUSTOM_SECTION_POINTS}
-          resetLabel="Reset Footprint"
+          resetLabel="Reset Slice"
         />
         <div className="slider-stack">
           <RangeInput label="scale" value={config.profileScale} min={0.35} max={1.55} step={0.01} onChange={(value) => setNumber('profileScale', value)} />

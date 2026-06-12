@@ -82,11 +82,11 @@ const sharpLip = summarizeBreakingLip(sharpLipModel)
 const lipSharpnessPair = summarizeLipSharpnessPair(bluntLipModel, sharpLipModel)
 const sharpWalls = summarizeWallSmoothness(buildInverseSheetModel({ ...generatedMode, smoothing: 1, wallSmoothness: 0, flatContribution: 0 }))
 const roundWalls = summarizeWallSmoothness(buildInverseSheetModel({ ...generatedMode, smoothing: 1, wallSmoothness: 1, flatContribution: 0 }))
-const mechanism = rigidCellMechanismStats(buildInverseSheetModel())
+const mechanism = rigidCellMechanismStats(buildInverseSheetModel({ ...generatedMode }))
 const sideRenderDirectLines = summarizeSideRenderDirectLines(buildInverseSheetModel())
-const customProfileCarrier = {
-  default: summarizeCustomProfileCarrier(buildInverseSheetModel()),
-  compactUser: summarizeCustomProfileCarrier(buildInverseSheetModel({
+const localizedCustomSheet = {
+  default: summarizeLocalizedCustomSheet(buildInverseSheetModel()),
+  compactUser: summarizeLocalizedCustomSheet(buildInverseSheetModel({
     rows: 24,
     columns: 24,
     overhangPosition: -0.15,
@@ -95,12 +95,13 @@ const customProfileCarrier = {
     profileScale: 1,
   })),
 }
-const customFootprintMapping = summarizeCustomFootprintMapping(buildInverseSheetModel({
+const customSliceMapping = summarizeCustomSliceMapping(buildInverseSheetModel({
   profileMode: 'custom',
   rows: 44,
   columns: 112,
   profileScale: 1,
-  sectionPoints: '0,0.12;0.18,1;0.24,1;1,0.18',
+  xySliceLevel: 0.33,
+  sectionPoints: '0,0.08;0.16,0.96;0.5,1;0.82,0.96;1,0.08',
 }))
 const wallSmoothnessExtreme = summarizeExtremeShape(buildInverseSheetModel({
   ...generatedMode,
@@ -378,12 +379,12 @@ if (!Object.values(lateralSmoothness).every(lateralSmoothnessPasses)) {
   failures.push('span taper should stay smooth without side walls, divots, or lateral zigzags')
 }
 
-if (!Object.values(customProfileCarrier).every(customProfileCarrierPasses)) {
-  failures.push('custom profile should keep the tube open by carrying the wave profile across the interior rows')
+if (!Object.values(localizedCustomSheet).every(localizedCustomSheetPasses)) {
+  failures.push('custom profile should remain a full rectangular sheet with a localized center wave, not a swept shell or clipped tunnel')
 }
 
-if (!customFootprintMapping.ok) {
-  failures.push('x-y footprint editor should control plan footprint along profile x while staying centered across y')
+if (!customSliceMapping.ok) {
+  failures.push('x-y slice editor should shape a smooth localized span falloff, not the ground footprint or a hard side wall')
 }
 
 if (!Object.values(conicalSpanTaper).every(conicalSpanTaperPasses)) {
@@ -432,12 +433,14 @@ if (mechanism.maxExpectedArmCountResidual !== 0 || mechanism.minInteriorConnecte
 }
 
 if (
-  sideRenderDirectLines.maxRenderedNodeDegreeResidual !== 0 ||
-  sideRenderDirectLines.minRenderedInteriorNodeDegree !== 4 ||
-  sideRenderDirectLines.renderedEdgeCount !== sideRenderDirectLines.expectedEdgeCount ||
-  sideRenderDirectLines.renderedNodeCount !== sideRenderDirectLines.expectedNodeCount
+  sideRenderDirectLines.renderedDepthEdgeCount !== 0 ||
+  sideRenderDirectLines.renderedEdgeCount <= 0 ||
+  sideRenderDirectLines.renderedNodeCount !== sideRenderDirectLines.expectedNodeCount ||
+  sideRenderDirectLines.renderedEdgeCount !== sideRenderDirectLines.expectedFullRectEdgeCount ||
+  sideRenderDirectLines.maxRenderedHorizontalDegreeResidual !== 0 ||
+  sideRenderDirectLines.minRenderedInteriorProfileDegree < 2
 ) {
-  failures.push('side view should render the full direct node-to-node grid, not only row-wise legs')
+  failures.push('side view should show the full node array with direct profile-direction linkages, not a sliced cross-section or collapsed depth bridges')
 }
 
 if (mechanism.maxPairLengthSpread > 0.005) {
@@ -508,8 +511,8 @@ const report = {
   steer: steerField,
   widthInvariant,
   lateralSmoothness,
-  customProfileCarrier,
-  customFootprintMapping,
+  localizedCustomSheet,
+  customSliceMapping,
   conicalSpanTaper,
   bowlPocketCheck,
   outerRadiusSmoothness,
@@ -1065,30 +1068,34 @@ function lateralSmoothnessPasses(summary) {
   return absoluteSmooth || ratioSmooth
 }
 
-function summarizeCustomFootprintMapping(model) {
+function summarizeCustomSliceMapping(model) {
   const stats = {
-    shoulder: summarizeFootprintColumn(model, 0.22),
-    mid: summarizeFootprintColumn(model, 0.55),
-    late: summarizeFootprintColumn(model, 0.86),
+    leadTaper: summarizeFootprintColumn(model, 0.04),
+    frontShoulder: summarizeFootprintColumn(model, 0.2),
+    body: summarizeFootprintColumn(model, 0.55),
+    tailTaper: summarizeFootprintColumn(model, 0.96),
   }
-  const widths = [stats.shoulder.activeRows, stats.mid.activeRows, stats.late.activeRows]
+  const widths = [stats.leadTaper.activeRows, stats.frontShoulder.activeRows, stats.body.activeRows, stats.tailTaper.activeRows]
   const maxCenterOffset = Math.max(
-    Math.abs(stats.shoulder.centroidY),
-    Math.abs(stats.mid.centroidY),
-    Math.abs(stats.late.centroidY),
+    Math.abs(stats.leadTaper.centroidY),
+    Math.abs(stats.frontShoulder.centroidY),
+    Math.abs(stats.body.centroidY),
+    Math.abs(stats.tailTaper.centroidY),
   )
   const gridSpacingY = DEFAULT_SHEET_SPAN / Math.max(model.config.rows - 1, 1)
-  const widthVariesAlongProfile = stats.shoulder.activeRows >= stats.late.activeRows + 4 &&
-    stats.mid.activeRows >= stats.late.activeRows + 2
-  const footprintStaysCentered = maxCenterOffset <= gridSpacingY * 0.7
+  const localizedSpanFalloff = stats.frontShoulder.activeRows >= stats.leadTaper.activeRows + 4 &&
+    stats.frontShoulder.activeRows >= stats.tailTaper.activeRows + 4 &&
+    stats.body.activeRows >= stats.tailTaper.activeRows + 4 &&
+    Math.max(...widths) < model.config.rows - 2
+  const sliceStaysCentered = maxCenterOffset <= gridSpacingY * 0.7
 
   return {
     ...stats,
     widthRangeRows: Math.max(...widths) - Math.min(...widths),
     maxCenterOffset: round(maxCenterOffset),
-    widthVariesAlongProfile,
-    footprintStaysCentered,
-    ok: widthVariesAlongProfile && footprintStaysCentered,
+    localizedSpanFalloff,
+    sliceStaysCentered,
+    ok: localizedSpanFalloff && sliceStaysCentered,
   }
 }
 
@@ -1130,59 +1137,64 @@ function summarizeFootprintColumn(model, profileU) {
   }
 }
 
-function summarizeCustomProfileCarrier(model) {
-  const nodeByKey = new Map(model.nodes.map((node) => [`${node.row}:${node.col}`, node]))
-  const maxHeight = Math.max(model.summary.maxHeight, 0.000001)
-  const firstCoreRow = Math.min(Math.max(2, Math.ceil((model.config.rows - 1) * 0.16)), model.config.rows - 2)
-  const lastCoreRow = Math.max(Math.min(model.config.rows - 3, Math.floor((model.config.rows - 1) * 0.84)), firstCoreRow)
-  const coreRows = []
-  let activeInteriorRows = 0
-  let maxInteriorProfileSpread = 0
-  let maxCoreSpanStep = 0
+function summarizeLocalizedCustomSheet(model) {
+  const rowMaxHeights = []
+  const centerRow = Math.round((model.config.rows - 1) * 0.5)
 
-  for (let row = firstCoreRow; row <= lastCoreRow; row += 1) coreRows.push(row)
-
-  for (let row = 1; row < model.config.rows - 1; row += 1) {
+  for (let row = 0; row < model.config.rows; row += 1) {
     const rowNodes = model.nodes.filter((node) => node.row === row)
-    const rowMaxHeight = maxOf(rowNodes.map((node) => node.currentPosition[2]))
-    if (rowMaxHeight >= maxHeight * 0.08) activeInteriorRows += 1
+    rowMaxHeights.push(maxOf(rowNodes.map((node) => node.currentPosition[2])))
   }
 
-  for (let col = 1; col < model.config.columns - 1; col += 1) {
-    const columnCoreNodes = coreRows
-      .map((row) => nodeByKey.get(`n-${row}-${col}`))
-      .filter(Boolean)
-    if (columnCoreNodes.length < 2) continue
+  const centerMaxHeight = rowMaxHeights[centerRow] ?? 0
+  const activeRows = rowMaxHeights.filter((height) => height >= centerMaxHeight * 0.04).length
+  const topRows = rowMaxHeights.filter((height) => height >= centerMaxHeight * 0.82).length
+  const flatRows = rowMaxHeights.filter((height) => height <= centerMaxHeight * 0.02).length
+  const intermediateRows = rowMaxHeights.filter((height) => (
+    height > centerMaxHeight * 0.08 && height < centerMaxHeight * 0.82
+  )).length
+  let maxAdjacentHeightJumpRatio = 0
 
-    const xs = columnCoreNodes.map((node) => node.currentPosition[0])
-    const zs = columnCoreNodes.map((node) => node.currentPosition[2])
-    maxInteriorProfileSpread = Math.max(
-      maxInteriorProfileSpread,
-      Math.max(...xs) - Math.min(...xs),
-      Math.max(...zs) - Math.min(...zs),
+  for (let row = 1; row < rowMaxHeights.length; row += 1) {
+    maxAdjacentHeightJumpRatio = Math.max(
+      maxAdjacentHeightJumpRatio,
+      Math.abs(rowMaxHeights[row] - rowMaxHeights[row - 1]) / Math.max(centerMaxHeight, 0.000001),
     )
-
-    for (let index = 0; index < columnCoreNodes.length - 1; index += 1) {
-      const a = columnCoreNodes[index].currentPosition
-      const b = columnCoreNodes[index + 1].currentPosition
-      maxCoreSpanStep = Math.max(maxCoreSpanStep, Math.hypot(b[0] - a[0], b[2] - a[2]))
-    }
   }
 
   return {
     boundaryFlat: boundaryNodesStayFlat(model),
-    activeInteriorRows,
-    expectedInteriorRows: Math.max(2, model.config.rows - 4),
-    maxInteriorProfileSpread: round(maxInteriorProfileSpread),
-    maxCoreSpanStep: round(maxCoreSpanStep),
+    centerMaxHeight: round(centerMaxHeight),
+    activeRows,
+    topRows,
+    flatRows,
+    intermediateRows,
+    topBandFraction: round(topRows / Math.max(activeRows, 1)),
+    maxAdjacentHeightJumpRatio: round(maxAdjacentHeightJumpRatio),
+    horizontalEdges: model.edges.filter((edge) => edge.orientation === 'horizontal').length,
+    expectedHorizontalEdges: model.config.rows * Math.max(model.config.columns - 1, 0),
+    verticalEdges: model.edges.filter((edge) => edge.orientation === 'vertical').length,
+    expectedVerticalEdges: Math.max(model.config.rows - 1, 0) * model.config.columns,
+    quads: model.quads.length,
+    expectedQuads: Math.max(model.config.rows - 1, 0) * Math.max(model.config.columns - 1, 0),
   }
 }
 
-function customProfileCarrierPasses(summary) {
+function localizedCustomSheetPasses(summary) {
   return summary.boundaryFlat &&
-    summary.activeInteriorRows >= summary.expectedInteriorRows &&
-    summary.maxInteriorProfileSpread <= DEFAULT_SHEET_SPACING * 0.06 &&
-    summary.maxCoreSpanStep <= DEFAULT_SHEET_SPACING * 0.06
+    summary.centerMaxHeight > 0 &&
+    summary.activeRows >= 4 &&
+    summary.flatRows >= 2 &&
+    summary.intermediateRows >= 2 &&
+    summary.topBandFraction <= 0.7 &&
+    summary.maxAdjacentHeightJumpRatio <= 0.48 &&
+    summary.horizontalEdges === summary.expectedHorizontalEdges &&
+    summary.verticalEdges === summary.expectedVerticalEdges &&
+    summary.quads === summary.expectedQuads
+}
+
+function uniqueNumbers(values) {
+  return [...new Set(values)]
 }
 
 function summarizeConicalSpanTaper(model) {
@@ -1705,39 +1717,48 @@ function summarizeExtremeShape(model) {
 }
 
 function summarizeSideRenderDirectLines(model) {
+  const renderedEdges = model.edges.filter((edge) => edge.orientation === 'horizontal')
   const degreeByNodeId = new Map(model.nodes.map((node) => [node.id, 0]))
 
-  model.edges.forEach((edge) => {
+  renderedEdges.forEach((edge) => {
     degreeByNodeId.set(edge.nodeA, (degreeByNodeId.get(edge.nodeA) ?? 0) + 1)
     degreeByNodeId.set(edge.nodeB, (degreeByNodeId.get(edge.nodeB) ?? 0) + 1)
   })
 
-  let expectedDegreeSum = 0
   let renderedDegreeSum = 0
-  let maxRenderedNodeDegreeResidual = 0
-  let minRenderedInteriorNodeDegree = Infinity
+  let expectedHorizontalDegreeSum = 0
+  let maxRenderedHorizontalDegreeResidual = 0
+  let minRenderedInteriorProfileDegree = Infinity
 
   model.nodes.forEach((node) => {
     const renderedDegree = degreeByNodeId.get(node.id) ?? 0
-    const expectedDegree = expectedNeighborCount(node, model)
-    expectedDegreeSum += expectedDegree
+    const expectedDegree = expectedHorizontalNeighborCount(node, model)
+    expectedHorizontalDegreeSum += expectedDegree
     renderedDegreeSum += renderedDegree
-    maxRenderedNodeDegreeResidual = Math.max(maxRenderedNodeDegreeResidual, Math.abs(renderedDegree - expectedDegree))
-    if (expectedDegree === 4) {
-      minRenderedInteriorNodeDegree = Math.min(minRenderedInteriorNodeDegree, renderedDegree)
+    maxRenderedHorizontalDegreeResidual = Math.max(maxRenderedHorizontalDegreeResidual, Math.abs(renderedDegree - expectedDegree))
+    if (node.col > 0 && node.col < model.config.columns - 1) {
+      minRenderedInteriorProfileDegree = Math.min(minRenderedInteriorProfileDegree, renderedDegree)
     }
   })
 
   return {
     renderedNodeCount: model.nodes.length,
     expectedNodeCount: model.config.rows * model.config.columns,
-    renderedEdgeCount: model.edges.length,
-    expectedEdgeCount: expectedDegreeSum / 2,
+    renderedEdgeCount: renderedEdges.length,
+    expectedFullRectEdgeCount: model.config.rows * Math.max(model.config.columns - 1, 0),
+    renderedDepthEdgeCount: model.edges.filter((edge) => edge.orientation === 'vertical' && renderedEdges.includes(edge)).length,
     renderedDegreeSum,
-    expectedDegreeSum,
-    maxRenderedNodeDegreeResidual,
-    minRenderedInteriorNodeDegree: Number.isFinite(minRenderedInteriorNodeDegree) ? minRenderedInteriorNodeDegree : 0,
+    expectedHorizontalDegreeSum,
+    maxRenderedHorizontalDegreeResidual,
+    minRenderedInteriorProfileDegree: Number.isFinite(minRenderedInteriorProfileDegree) ? minRenderedInteriorProfileDegree : 0,
   }
+}
+
+function expectedHorizontalNeighborCount(node, model) {
+  let count = 0
+  if (node.col > 0) count += 1
+  if (node.col < model.config.columns - 1) count += 1
+  return count
 }
 
 function expectedNeighborCount(node, model) {

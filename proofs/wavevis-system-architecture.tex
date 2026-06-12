@@ -1,0 +1,449 @@
+\pdfminorversion=7
+\documentclass[12pt,letterpaper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[american]{babel}
+\usepackage{csquotes}
+
+\usepackage[
+    style=science,
+    backend=biber,
+    sorting=none,
+    articletitle=true,
+    url=false,
+    doi=false,
+    eprint=false,
+    isbn=false
+]{biblatex}
+\addbibresource{references.bib}
+\AtEveryBibitem{\clearlist{language}}
+
+\usepackage{newtxtext,newtxmath}
+\usepackage{microtype}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[margin=0.92in,top=0.82in,bottom=0.95in,headsep=18pt,footskip=24pt]{geometry}
+\usepackage[font=small,labelfont=bf,labelsep=period]{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{afterpage}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{setspace}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{needspace}
+\usepackage{etoolbox}
+\usepackage[section]{placeins}
+\usepackage{flafter}
+\usepackage[table]{xcolor}
+
+\definecolor{ClayLine}{HTML}{EEDBDD}
+\definecolor{SumiInk}{HTML}{2D2426}
+\definecolor{DustyTaupe}{HTML}{866A6D}
+
+\usepackage[hidelinks]{hyperref}
+\usepackage[switch]{lineno}
+
+\color{SumiInk}
+\setstretch{1.45}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.42em}
+\setlength{\textfloatsep}{8pt plus 1pt minus 1pt}
+\setlength{\floatsep}{7pt plus 1pt minus 1pt}
+\setlength{\intextsep}{7pt plus 1pt minus 1pt}
+\setlength{\abovecaptionskip}{5pt}
+\setlength{\belowcaptionskip}{2pt}
+\setlength{\tabcolsep}{9pt}
+\renewcommand{\arraystretch}{1.14}
+\captionsetup{justification=raggedright,singlelinecheck=false}
+\setlist[itemize]{leftmargin=1.3em,itemsep=0.18em,topsep=0.25em}
+\setcounter{topnumber}{3}
+\setcounter{bottomnumber}{2}
+\setcounter{totalnumber}{4}
+\renewcommand{\topfraction}{0.92}
+\renewcommand{\bottomfraction}{0.85}
+\renewcommand{\textfraction}{0.08}
+\renewcommand{\floatpagefraction}{0.8}
+\setlength{\headheight}{24pt}
+\emergencystretch=2em
+\raggedbottom
+
+\titleformat{\section}
+  {\Large\sffamily\bfseries\color{SumiInk}}
+  {\thesection}
+  {0.6em}
+  {}
+  [\vspace{0.25em}\color{ClayLine}\titlerule]
+\titleformat{\subsection}
+  {\large\sffamily\bfseries\color{SumiInk}}
+  {\thesubsection}
+  {0.55em}
+  {}
+\titleformat{\subsubsection}
+  {\normalsize\sffamily\bfseries\color{SumiInk}}
+  {}
+  {0em}
+  {}
+\titlespacing*{\section}{0pt}{1.3ex plus 0.4ex minus 0.2ex}{0.7ex}
+\titlespacing*{\subsection}{0pt}{1.15ex plus 0.2ex minus 0.2ex}{0.45ex}
+\titlespacing*{\subsubsection}{0pt}{0.9ex plus 0.15ex minus 0.1ex}{0.25ex}
+
+\pretocmd{\subsubsection}{\needspace{4\baselineskip}}{}{}
+\pretocmd{\subsection}{\needspace{5\baselineskip}}{}{}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\footnotesize\sffamily\color{SumiInk} WaveVis System Architecture}
+\fancyhead[R]{\footnotesize\sffamily\color{DustyTaupe}\nouppercase{\leftmark}}
+\fancyfoot[C]{\footnotesize\sffamily\thepage}
+\renewcommand{\headrulewidth}{0.35pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{ClayLine}\leaders\hrule height \headrulewidth\hfill}}
+\renewcommand{\sectionmark}[1]{\markboth{#1}{}}
+
+\makeatletter
+\def\fps@figure{tbp}
+\def\fps@table{tbp}
+\makeatother
+
+\graphicspath{{figures/}}
+\newcolumntype{Y}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\R}{\mathbb{R}}
+
+\begin{document}
+\linenumbers
+\thispagestyle{empty}
+
+\begin{center}
+    \vspace*{-0.6em}
+
+    {\fontsize{20}{22}\selectfont\bfseries\color{SumiInk}
+    WaveVis inverse-sheet architecture for localized breaking-wave linkage arrays\par}
+
+    \vspace{0.95em}
+
+    {\normalsize\color{SumiInk}
+    Alan N. Pham\par}
+
+    \vspace{0.38em}
+
+    {\small\color{DustyTaupe}
+    AO Labs, WaveVis simulator, inverse deformation sheet record\par}
+\end{center}
+
+\vspace{0.35em}
+\noindent\textbf{WaveVis is an inverse simulator for a mostly flat rectangular linkage sheet with one localized plunging-wave deformation rising out of the sheet. The intended artifact is not an extruded tunnel, ribbon, half-pipe, swept cross-section, roof, or bridge. It is a full array of linkage cells over a fixed flat perimeter: the center region ramps upward, forms a rounded crest, projects a lip forward and downward, and fades smoothly back into the surrounding sheet in all directions. This paper replaces the earlier narrow constraint-proof PDF as the visible system record. It defines the goal geometry, coordinate systems, profile editors, slider semantics, topology invariants, rendering views, failure modes, and verification gates required before WaveVis work can be called correct.}
+
+\newpage
+\pagestyle{fancy}
+
+\section{Introduction}
+
+WaveVis exists to explore whether a cellular Sarrus-style linkage array can approximate visually meaningful three-dimensional sheet deformations while preserving mechanical readability. The simulator therefore has two simultaneous jobs. First, it must generate a target shape that resembles a localized ocean-wave overhang rather than a generic height field. Second, it must keep the linkage graph legible: cells, nodes, connector pairs, and edges must remain visible and connected rather than being hidden under cosmetic surfaces or erased when the shape becomes difficult.
+
+The current design problem is stricter than drawing a pretty profile. A side silhouette can look acceptable while the actual three-dimensional sheet has a wall across the tube, a cavity where the lip should be open, an extruded-barrel cross-section, or zig-zagging linkage legs that no longer read as a mechanism. Conversely, a mesh can satisfy a local numerical check while failing the human outcome: a full rectangular sheet with a localized plunging wave. WaveVis must therefore treat the visible artifact, the mechanism topology, the parameter semantics, and the regression checks as one architecture.
+
+The central correction captured here is that a breaking wave is not made by sweeping one two-dimensional profile sideways. A swept profile creates a tunnel, canopy, or half-pipe. The required object is a localized deformation field on a flat sheet:
+\[
+  \Phi : (x,y) \mapsto \bigl(x + \Delta_x(x,y),\ y + \Delta_y(x,y),\ \Delta_z(x,y)\bigr),
+\]
+where the displacement is concentrated near the middle span, gradually fades toward the lateral sides, and is exactly zero on the perimeter. The curl must be strongest near the centerline and weaker toward the sides. This spatial falloff is part of the target shape, not a rendering trick.
+
+\section{Target outcome}
+
+\subsection{Human-facing shape}
+
+The accepted target is a ``flat sheet plus localized plunging wave'':
+\begin{itemize}
+  \item the outer perimeter of the rectangular sheet remains flat and fixed;
+  \item the wave emerges through a broad, smooth ramp rather than a vertical wall;
+  \item the crest is rounded, with no top dent;
+  \item the lip projects forward and curls downward;
+  \item the underside or tube is visible from side view, not covered by a side wall;
+  \item the shape fades back to flat in every direction;
+  \item the array remains a full linkage field with nodes and legs, not a hidden or clipped shell.
+\end{itemize}
+
+Figure~\ref{fig:outcome-map} gives the practical acceptance boundary. The shape must read as a local wave in a sheet, not as an extrusion. A single cross-section can guide the profile, but the generated three-dimensional field must vary across span.
+
+\begin{figure}[H]
+\centering
+\setlength{\unitlength}{0.0125\linewidth}
+\begin{picture}(72,34)
+  \put(0,4){\line(1,0){72}}
+  \thicklines
+  \qbezier(3,4)(8,3.6)(13,4)
+  \qbezier(13,4)(20,6)(27,15)
+  \qbezier(27,15)(35,26)(48,28)
+  \qbezier(48,28)(61,30)(66,20)
+  \qbezier(66,20)(70,14)(65,12)
+  \qbezier(65,12)(59,13)(54,18)
+  \qbezier(54,18)(47,20)(43,13)
+  \qbezier(43,13)(38,5)(50,4)
+  \qbezier(50,4)(60,3.7)(70,4)
+  \thinlines
+  \put(5,29){\makebox(0,0)[l]{flat perimeter}}
+  \put(38,31){\makebox(0,0)[c]{rounded crest}}
+  \put(66,23){\makebox(0,0)[l]{downward lip}}
+  \put(39,11){\makebox(0,0)[r]{open tube}}
+\end{picture}
+\caption{Desired side silhouette as an outcome object. The drawing is not a literal mesh recipe. It is the visible side-view contract: smooth back ramp, larger outer radius, smaller inner radius, curled lip, and flat return. The three-dimensional solver must then localize this silhouette in the middle of a full sheet rather than sweep it as a constant tunnel.}
+\label{fig:outcome-map}
+\end{figure}
+
+\subsection{Hard constraints}
+
+The WaveVis generator and renderer must preserve the following hard constraints:
+\begin{enumerate}
+  \item \textbf{Flat perimeter.} Boundary nodes must remain on the rest sheet. No side, front, or rear perimeter should be pulled into the wave.
+  \item \textbf{Full array visibility.} The rendered artifact must show the actual linkage grid. Hiding or ghosting broken cells does not count as a fix.
+  \item \textbf{Connector closure.} A cell connector is an actual shared graph location. Lines should meet at nodes; apparent detached legs are a failure.
+  \item \textbf{No erratic legs.} Long arms, spikes, zig-zags, random backtracking, and visible overlaps indicate a broken geometry or render path.
+  \item \textbf{Smooth strain sharing.} Adjacent rows and columns should change gradually enough that the mesh reads as a continuous mechanism field.
+  \item \textbf{Localized wave.} The curl must be strongest near the center and fade laterally. A constant side-to-side tunnel is not the target.
+  \item \textbf{Side/cross-section separation.} Side view shows the side view of the full three-dimensional render. Cross-section view is the only mode that intentionally slices or projects the center profile.
+  \item \textbf{No filler geometry.} Cosmetic walls, caps, planks, bridges, hidden couplers, or masks must not be used to conceal a bad mechanism.
+\end{enumerate}
+
+\section{Coordinate model}
+
+The simulator starts from a rectangular rest lattice. A node with row \(i\) and column \(j\) has rest position
+\[
+  p_{ij}^{0} = (x_j, y_i, 0).
+\]
+The target is a displacement field
+\[
+  p_{ij}^{*} = p_{ij}^{0} + m\,D(x_j,y_i;\theta),
+\]
+where \(m\in[0,1]\) is the morph amount and \(\theta\) represents all shape parameters except rigid placement. The morph parameter only interpolates between rest and the finalized target. It must not change the target shape definition, remesh the lattice, or introduce a different topology.
+
+The longitudinal coordinate \(u\in[0,1]\) measures progress through the wave region from rear/root to front/lip. The span coordinate \(v\in[-1,1]\) measures lateral distance from the centerline. A good WaveVis target uses both:
+\[
+  D(x,y) = A(u,v)\,P(u) + B(u,v)\,Q(u),
+\]
+where \(P(u)\) is the side-profile contribution, \(Q(u)\) can include forward curl or secondary displacement terms, and \(A,B\) are smooth two-dimensional envelopes that go to zero at the sheet perimeter.
+
+The key architectural rule is that \(A(u,v)\) is not constant in \(v\). A constant span envelope turns any attractive profile into a tunnel. A localized plunging wave requires \(A(u,0)\) large near the centerline and \(A(u,\pm1)\approx0\) near the sides, with a monotone or smoothly unimodal falloff rather than a hard wall.
+
+\section{Generation pipeline}
+
+The target-building pipeline is:
+\begin{enumerate}
+  \item sanitize rows, columns, profile mode, sliders, display flags, and URL parameters;
+  \item build the full rectangular node grid;
+  \item compute the canonical wave displacement from the selected profile mode;
+  \item apply the span envelope that localizes the wave in \(y\);
+  \item preserve the boundary by forcing perimeter displacement to zero;
+  \item apply morph interpolation from rest to target;
+  \item apply rigid steer and position transforms after the shape is finalized;
+  \item build full rectangular edge and quad topology;
+  \item compute strain, bend, shear, dihedral, and display metrics;
+  \item render the full array, side view, or cross-section without substituting fake surfaces.
+\end{enumerate}
+
+The distinction between shape parameters and rigid placement parameters is essential. Height, scale, and the profile editor change the canonical target. Steer rotates the finished target around the anchor. Position translates the finished target horizontally. Neither steer nor position may feed back into profile curvature, curl, width, strain generation, or cell topology.
+
+\begin{table}[H]
+\centering
+{\small
+\begin{tabular}{Y{0.22\linewidth}Y{0.37\linewidth}Y{0.30\linewidth}}
+\toprule
+Stage & Contract & Failure caught \\
+\midrule
+Target profile & Defines the desired side silhouette. & Blob, neck/head, hill without lip, top dent. \\
+Span envelope & Localizes the wave in the sheet. & Swept barrel, side wall, U-shaped tube blocker. \\
+Boundary clamp & Keeps the perimeter flat. & Pulled sheet edges, non-flat perimeter. \\
+Morph & Interpolates rest to target only. & Half-morph mangling, topology change while sliding. \\
+Topology & Keeps full node/edge/quad graph. & Missing grid, hidden cells, detached legs. \\
+Renderer & Shows the actual mechanism. & Fake shell, hidden wall, side view as cross-section. \\
+\bottomrule
+\end{tabular}
+}
+\caption{Pipeline stages and the failure modes each stage must prevent.}
+\end{table}
+
+\section{Profile and slice editors}
+
+The custom \(xz\) editor is a side-profile reference. Its points are not cell locations. They are control points for a smooth reference curve that the surface generator samples. The final cell grid is still determined by the row and column count.
+
+The custom \(xy\) slice editor is a span-envelope reference at a selected height or profile level. It should not define the ground footprint. Its purpose is to describe how wide the wave is at a slice through the deformation, particularly near the underside of the curl where unwanted walls can otherwise cover the tube. The slice marker on the \(xz\) editor identifies the height/profile level that the \(xy\) editor is editing.
+
+Mathematically, the \(xz\) editor contributes a curve
+\[
+  P(u)=(x_p(u), z_p(u)),
+\]
+and the \(xy\) editor contributes an envelope sample
+\[
+  W(u,v) \in [0,1].
+\]
+The actual target displacement is produced by multiplying these sources by a smooth support field. The editor curves should never be treated as a hard polygon whose boundary is stitched directly to the ground, because that creates walls, cavities, and straight connector chutes.
+
+\section{Slider semantics}
+
+\begin{table}[H]
+\centering
+{\small
+\begin{tabular}{Y{0.24\linewidth}Y{0.32\linewidth}Y{0.33\linewidth}}
+\toprule
+Control & Intended effect & Must not do \\
+\midrule
+\code{morph} & Blend rest sheet into the completed target. & Remesh, flip cells, create zig-zags, change profile identity. \\
+\code{scale} & Uniformly enlarge or reduce the profile reference. & Change steer, position, or topology. \\
+\code{height} & Vertical size of generated-mode wave. & Create top dents or side walls. \\
+\code{overhang} & Forward reach of generated-mode wave. & Pull the lip into a straight vertical chute. \\
+\code{lipDip} & Increase forward-and-down curl near the center. & Lower a terminal endpoint only, make a global hill, or form a swept tunnel. \\
+\code{lipSharpness} & Tighten the terminal lip radius. & Explode spikes or change the broad wave body. \\
+\code{width} & Scale the lateral active span. & Change centerline profile or create row popping. \\
+\code{groundTransition} & Broaden the smooth ramp into the flat sheet. & Break the perimeter or erase the lip. \\
+\code{wallSmoothness} & Round lateral side transitions. & Produce side walls covering the curl. \\
+\code{flatContribution} & Share deformation with the surrounding apron. & Flatten the main wave. \\
+\code{steer} & Rigid yaw rotation of the finished wave. & Bend, stretch, or reshape the wave. \\
+\code{position} & Rigid horizontal translation of the finished wave. & Change silhouette, strain field, or curl. \\
+\bottomrule
+\end{tabular}
+}
+\caption{Control contract. Each slider has a narrow semantic role; cross-coupling that changes another slider's job is a bug unless the interaction is explicitly documented and verified.}
+\end{table}
+
+\section{Breaking-wave geometry}
+
+The desired generated-mode profile is closer to a localized plunging wave than to a cone, cylinder, or arch. The useful approximation is a tapered, asymmetric surface whose highest crest sits behind the curl, whose outer radius is larger than the inner radius, and whose underside remains open. Along the centerline, a breaking wave profile can be represented as three joined curve families:
+\[
+  P(u)=
+  \begin{cases}
+    P_{\mathrm{ramp}}(u), & 0 \le u < u_c,\\
+    P_{\mathrm{crest}}(u), & u_c \le u < u_l,\\
+    P_{\mathrm{lip}}(u), & u_l \le u \le 1.
+  \end{cases}
+\]
+The ramp rises from the sheet. The crest rounds over. The lip turns forward and downward. The derivative at the terminal lip should point downward when \(\code{lipDip}>90^\circ\):
+\[
+  \frac{dz}{dx}\bigg|_{\mathrm{tip}} < 0.
+\]
+The final point is allowed to sit behind the farthest horizontal reach. In a real breaking wave, the maximum reach can occur at the shoulder while the lower tip tucks under the crest. Treating the farthest-right point as the tip is the mistake that produces a straight falling chute.
+
+The three-dimensional field must multiply this centerline motion by a span falloff:
+\[
+  E(v;u)=\exp\left[-\left(\frac{|v|}{w(u)}\right)^{\alpha}\right],
+\]
+with \(w(u)\) varying through the wave. The curl should have a smaller active width than the broad back ramp, so the lip is localized and the tube remains visible from the side.
+
+\section{Mechanism topology}
+
+WaveVis uses a rectangular graph of nodes, horizontal profile edges, vertical span edges, and quads. Each interior node participates in the lattice; each cell is bordered by edges; and each connector must visually close. The graph is not allowed to become a set of isolated rows.
+
+The mechanism evidence from the earlier proof remains relevant. The all-four-equal X-cell branch was rejected because the finite connector assignment does not close cleanly under the current overhang contract. The accepted branch is pairwise: east-west legs form one equal collinear pair, north-south legs form another equal collinear pair, and the angle between the pairs is allowed to vary. This pairwise rule preserves a readable linkage without forcing impossible equal-arm closure~\cite{wavevis_constraint_2026}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.93\linewidth]{constraint-contract-summary.png}
+\caption{Mechanism contract inherited from the constraint proof. WaveVis should preserve exact shared contact and pairwise equal, collinear opposite arms rather than hiding infeasible all-four-equal geometry behind filler surfaces.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.93\linewidth]{simulator-evidence-plate.png}
+\caption{Simulator evidence for the linkage direction. The current architecture must keep this mechanism truth visible while the inverse target shape is improved.}
+\end{figure}
+
+\section{Rendering modes}
+
+WaveVis has at least three distinct views:
+\begin{itemize}
+  \item \textbf{3D/isometric view} shows the full rectangular array in perspective.
+  \item \textbf{Side view} is a camera view of the full three-dimensional render from the side. It is not a cross-section and must not slice away rows.
+  \item \textbf{Cross-section view} intentionally shows a selected slice or profile. This is the only mode that may look like a profile projection.
+\end{itemize}
+
+The view contract matters because a side view can hide the curl if lateral geometry forms a wall over the tube. In that case the correct fix is to reshape the three-dimensional surface so the lateral envelope follows the wave contour and fades out, not to switch the side view into a cross-section or hide the wall.
+
+\section{Verification gates}
+
+The generator should be checked with both numeric and visual gates. Numeric checks are not sufficient, but they catch repeated hard failures before visual review.
+
+\begin{table}[H]
+\centering
+{\small
+\begin{tabular}{Y{0.26\linewidth}Y{0.28\linewidth}Y{0.34\linewidth}}
+\toprule
+Gate & Measurement & Acceptance intent \\
+\midrule
+Perimeter flatness & \(\max_{\partial\Omega}\|p^*-p^0\|\). & Boundary displacement is zero or visually negligible. \\
+Topology completeness & Expected node, edge, and quad counts. & Full rectangular sheet graph remains visible. \\
+Connector closure & Edge endpoints meet their node coordinates. & No detached legs or fake bridges. \\
+Lip curl & Crest height minus lip-tip height; terminal slope. & The lip curls down rather than ending as a hill. \\
+Span localization & Row-wise height profile across \(y\). & Center strong, sides faded; no swept tunnel. \\
+Morph continuity & Residual between adjacent morph samples. & No sudden jumps or topology flips. \\
+Slider isolation & Aligned geometries across position/steer/width changes. & Rigid controls stay rigid; width stays span-only. \\
+Visual side check & Browser side view screenshot or direct render inspection. & Curl visible without cross-section mode. \\
+\bottomrule
+\end{tabular}
+}
+\caption{Verification gates. A build passing TypeScript is not enough; WaveVis must pass the rendered outcome Alan actually uses.}
+\end{table}
+
+\section{Failure modes}
+
+The most important failure classes are now explicit:
+\begin{enumerate}
+  \item \textbf{Swept barrel.} One side profile is dragged sideways at constant cross-section. The result reads as a tunnel, roof, half-pipe, or bridge.
+  \item \textbf{Side-wall cover.} The lip may exist in a cross-section, but full side view shows a wall covering the tube.
+  \item \textbf{Straight chute.} The crest drops nearly vertically to a flat shelf instead of curling forward and under.
+  \item \textbf{Blob or lump.} Excess smoothing or broad support creates a mound with no wave identity.
+  \item \textbf{Top dent.} The outer crest has a kink or concave dent where a smooth radius is required.
+  \item \textbf{Cavity or bowl.} The surface creates an enclosed hollow or bowl-like depression rather than a plunging sheet.
+  \item \textbf{Zig-zag linkage.} Neighboring legs alternate direction or length erratically.
+  \item \textbf{Hidden mechanism.} Broken topology is ghosted, clipped, or replaced by a cosmetic surface.
+\end{enumerate}
+
+The solution direction is to simplify the target field while strengthening the gates: localized smooth wave first, full array second, mechanism-clean render third. Complexity should be added only if it improves one of those outcomes without breaking the others.
+
+\section{Materials and Methods}
+
+The implementation source is the WaveVis React and TypeScript app~\cite{wavevis_source_2026}. The main geometry source is \code{src/latticeGeometry.ts}. The primary render source is \code{src/LatticeViewer3D.tsx}. Controls are declared in \code{src/TargetShapeControls.tsx}. Regression checks are run through \code{scripts/check-inverse-sheet.cjs}.
+
+The public app serves a static build. The architecture PDF is placed in the public proofs directory as \code{wavevis-system-architecture.pdf} and linked from the WaveVis control headers. The old connector proof remains a source artifact for the mechanism decision, but the visible paper action now points to this architecture record because the current work is broader than connector assignment.
+
+\section{Discussion}
+
+The main design lesson is that WaveVis cannot be corrected by tuning only the side profile. The user-facing failure was three-dimensional: side walls, swept tubes, missing full-array linkages, broken side/cross-section semantics, and zig-zag legs. The architecture therefore needs a two-level contract. The profile editor controls the desired silhouette. The sheet generator converts that silhouette into a localized displacement field with lateral fade, boundary preservation, and topology completeness.
+
+This distinction also clarifies future work. If the simulator produces a good cross-section but a bad side view, the cross-section is only evidence that the profile exists somewhere. The real artifact still fails if the full three-dimensional render hides the curl or reads as an extrusion. Similarly, if the mesh is clean but the wave looks like a low mound, the mechanism is not enough. Both the shape and the linkage must be correct.
+
+\section{Acknowledgements}
+
+This record was written to reduce repeated handoff burden during WaveVis development. The repeated complaints about side walls, missing cells, zig-zag legs, cross-section confusion, and swept-barrel geometry are treated as acceptance criteria rather than optional polish notes.
+
+\section{Funding}
+
+No external funding is claimed in this system architecture record.
+
+\section{Author contributions}
+
+Alan N. Pham defined the target artifact, accepted and rejected visual states, and the mechanism constraints. Codex generated this architecture record from the current WaveVis source and the active development contract.
+
+\section{Competing interests}
+
+The author declares no competing interests for this internal architecture record.
+
+\section{Data availability}
+
+The source data for this record is the WaveVis source tree, the local proof figures, and the current simulator behavior. The public PDF is served with the WaveVis static app.
+
+\section{Code availability}
+
+The relevant implementation files are \code{src/latticeGeometry.ts}, \code{src/LatticeViewer3D.tsx}, \code{src/TargetShapeControls.tsx}, and \code{scripts/check-inverse-sheet.cjs} in the WaveVis app repository.
+
+\section{Additional information}
+
+This document supersedes the old header link to the narrow connector-contact constraint proof as the primary public WaveVis PDF. The connector proof remains an implementation reference for mechanism feasibility, but the current public artifact needs the broader system architecture and outcome-verification contract.
+
+\section{References}
+
+\printbibliography[heading=none]
+
+\end{document}

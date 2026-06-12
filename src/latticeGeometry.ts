@@ -52,7 +52,7 @@ const CORE_OVERHANG_HEIGHT_FRACTION = 0.28
 export const DEFAULT_CUSTOM_PROFILE_POINTS =
   '0,0;0.07,0.005;0.17,0.07;0.31,0.33;0.46,0.63;0.61,0.78;0.75,0.79;0.87,0.66;0.94,0.46;0.91,0.34;0.82,0.29;0.71,0.30;0.61,0.25;0.55,0.15;0.58,0.065;0.72,0.035;0.9,0.045;1,0'
 export const DEFAULT_CUSTOM_SECTION_POINTS =
-  '0,0;0.035,0.35;0.075,0.86;0.13,1;0.5,1;0.87,1;0.925,0.86;0.965,0.35;1,0'
+  '0,0;0.04,0.18;0.1,0.58;0.2,0.9;0.38,1;0.58,0.88;0.72,0.55;0.86,0.24;0.95,0.08;1,0'
 
 export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   rows: DEFAULT_SHEET_ROWS,
@@ -407,7 +407,7 @@ export function buildInverseSheetModel(input: LooseConfig = {}): LatticeModel {
   const nodeById = new Map(nodes.map((node) => [node.id, node]))
   const edges = buildEdges(config.rows, config.columns)
   const quads = buildQuads(config.rows, config.columns)
-  const dihedralPairs = buildDihedralPairs(config.rows, config.columns)
+  const dihedralPairs = buildDihedralPairs(config.rows, config.columns, new Set(quads.map((quad) => quad.id)))
   const edgeMetricsRaw = edges.map((edge) => measureEdge(edge, nodeById))
   const quadMetricsRaw = quads.map((quad) => measureQuad(quad, nodeById))
   const quadNormals = buildQuadCurrentNormals(quads, nodeById)
@@ -449,7 +449,7 @@ export function runInverseSheetSanityChecks(): string[] {
   const flat = buildInverseSheetModel({ morph: 0 })
   const zeroed = buildInverseSheetModel({ ...generatedMode, horizontalOffset: 0 })
   const flatHeight = buildInverseSheetModel({ ...generatedMode, horizontalOffset: 0, height: 0 })
-  const twoByTwo = buildInverseSheetModel({ rows: 2, columns: 2 })
+  const twoByTwo = buildInverseSheetModel({ ...generatedMode, rows: 2, columns: 2 })
   const defaultOverhang = buildInverseSheetModel(DEFAULT_INVERSE_SHEET_CONFIG)
   const customScaleLow = buildInverseSheetModel({ profileScale: 0.55 })
   const customScaleHigh = buildInverseSheetModel({ profileScale: 1.35 })
@@ -488,7 +488,7 @@ export function runInverseSheetSanityChecks(): string[] {
     smoothing: 0,
     overhangAngleDeg: 120,
   })
-  const twelveByMinimumColumns = buildInverseSheetModel({ rows: 12, columns: 12 })
+  const twelveByMinimumColumns = buildInverseSheetModel({ ...generatedMode, rows: 12, columns: 12 })
   const fortyByForty = buildInverseSheetModel({ rows: 40, columns: 40 })
   const lowGroundTransition = buildInverseSheetModel({
     ...generatedMode,
@@ -523,12 +523,13 @@ export function runInverseSheetSanityChecks(): string[] {
   const resolution72 = buildInverseSheetModel({ rows: 72, columns: MIN_INVERSE_SHEET_COLUMNS, overhangWidth: 32 })
   const flatContributionOff = buildInverseSheetModel({ ...generatedMode, flatContribution: 0 })
   const flatContributionOn = buildInverseSheetModel({ ...generatedMode, flatContribution: 1 })
-  const customFootprintTest = buildInverseSheetModel({
+  const customSliceTest = buildInverseSheetModel({
     profileMode: 'custom',
     rows: 44,
     columns: MIN_INVERSE_SHEET_COLUMNS,
     profileScale: 1,
-    sectionPoints: '0,0.12;0.18,1;0.24,1;1,0.18',
+    xySliceLevel: 0.33,
+    sectionPoints: '0,0.08;0.16,0.96;0.5,1;0.82,0.96;1,0.08',
   })
   const terminalCurl = buildInverseSheetModel({
     ...generatedMode,
@@ -546,8 +547,8 @@ export function runInverseSheetSanityChecks(): string[] {
   })
 
   if (!isSummaryNearZero(flat.summary)) failures.push('morph = 0 should produce near-zero metrics')
-  if (!customFootprintMapsAlongProfile(customFootprintTest)) {
-    failures.push('custom x-y footprint should control plan width along profile x while staying centered across y')
+  if (!customSliceCreatesLocalizedSpanFalloff(customSliceTest)) {
+    failures.push('custom x-y slice should localize a smooth 3D wave in a full flat rectangular sheet')
   }
   if (customScaleHigh.summary.maxHeight <= customScaleLow.summary.maxHeight + 2) {
     failures.push('custom profile scale should visibly change the wave height')
@@ -633,19 +634,27 @@ export function runInverseSheetSanityChecks(): string[] {
   return failures
 }
 
-function customFootprintMapsAlongProfile(model: LatticeModel): boolean {
+function customSliceCreatesLocalizedSpanFalloff(model: LatticeModel): boolean {
   if (model.config.profileMode !== 'custom') return true
   if (!boundaryNodesStayFlat(model)) return false
 
-  const shoulder = footprintColumnStats(model, 0.22)
-  const mid = footprintColumnStats(model, 0.55)
-  const late = footprintColumnStats(model, 0.86)
+  const leadTaper = footprintColumnStats(model, 0.04)
+  const frontShoulder = footprintColumnStats(model, 0.2)
+  const body = footprintColumnStats(model, 0.55)
+  const tailTaper = footprintColumnStats(model, 0.96)
   const gridSpacingY = DEFAULT_SHEET_SPAN / Math.max(model.config.rows - 1, 1)
-  const widthVariesAlongProfile = shoulder.activeRows >= late.activeRows + 4 &&
-    mid.activeRows >= late.activeRows + 2
-  const centered = Math.max(Math.abs(shoulder.centroidY), Math.abs(mid.centroidY), Math.abs(late.centroidY)) <= gridSpacingY * 0.7
+  const projectsLocalizedBody = frontShoulder.activeRows >= leadTaper.activeRows + 4 &&
+    frontShoulder.activeRows >= tailTaper.activeRows + 4 &&
+    body.activeRows >= tailTaper.activeRows + 4 &&
+    frontShoulder.activeRows < model.config.rows - 2
+  const centered = Math.max(
+    Math.abs(leadTaper.centroidY),
+    Math.abs(frontShoulder.centroidY),
+    Math.abs(body.centroidY),
+    Math.abs(tailTaper.centroidY),
+  ) <= gridSpacingY * 0.7
 
-  return widthVariesAlongProfile && centered
+  return projectsLocalizedBody && centered
 }
 
 function footprintColumnStats(model: LatticeModel, profileU: number): { activeRows: number; centroidY: number } {
@@ -1648,12 +1657,12 @@ function customProfileTargetPosition(
   const profileRestLength = DEFAULT_WAVE_FIELD_LENGTH * profileLimits.remainingU
   const scale = clampNumber(config.profileScale, 0.35, 1.55)
   const scaleAmount = (scale - 0.35) / (1.55 - 0.35)
-  const rowMask = customProfileRowMask(profileU, sheetY, config)
+  const profile = sampleCustomProfilePath(config.profilePoints, profileU)
+  const rowMask = customProfileRowMask(profileU, profile.x, profile.z, sheetY, config)
   const longitudinalMask = edgeRamp(profileU, 0, 0.035) * edgeRamp(1 - profileU, 0, 0.025)
-  const shapeMask = clampNumber(Math.pow(rowMask, 0.88) * longitudinalMask, 0, 1)
+  const shapeMask = clampNumber(rowMask * longitudinalMask, 0, 1)
   if (shapeMask <= 0.000001) return rest
 
-  const profile = sampleCustomProfilePath(config.profilePoints, profileU)
   const profileSpan = profileRestLength * lerpNumber(0.54, 0.82, scaleAmount)
   const profileHeight = profileRestLength * lerpNumber(0.42, 0.68, scaleAmount)
   const restX = profileRestLength * profileU
@@ -1667,29 +1676,43 @@ function customProfileTargetPosition(
   ]
 }
 
-function customProfileRowMask(profileU: number, sheetY: number, config: InverseSheetConfig): number {
+function customProfileRowMask(
+  profileU: number,
+  profileX: number,
+  profileZ: number,
+  sheetY: number,
+  config: InverseSheetConfig,
+): number {
   const distanceToPerimeter = DEFAULT_SHEET_SPAN * 0.5 - Math.abs(sheetY)
   const gridSpacingY = DEFAULT_SHEET_SPAN / Math.max(config.rows - 1, 1)
-  const footprintAmount = sampleSectionProfileAtX(config.sectionPoints, profileU)
+  const envelopeAmount = sampleSectionProfileAtX(config.sectionPoints, profileX)
 
-  if (distanceToPerimeter <= gridSpacingY * 0.15) return 0
-  if (footprintAmount <= 0.000001) return 0
+  if (distanceToPerimeter <= gridSpacingY * 0.18) return 0
+
+  const profileActivity = smootherStep(profileZ / 0.08) *
+    edgeRamp(profileU, 0, 0.04) *
+    edgeRamp(1 - profileU, 0, 0.035)
+  if (profileActivity <= 0.000001 || envelopeAmount <= 0.000001) return 0
 
   const maxHalfWidth = DEFAULT_SHEET_SPAN * 0.5 - gridSpacingY * 1.15
-  const halfWidth = clampNumber(maxHalfWidth * footprintAmount, gridSpacingY * 0.35, maxHalfWidth)
-  const edgeFeather = clampNumber(
-    Math.max(gridSpacingY * 2.2, halfWidth * 0.16),
-    gridSpacingY * 0.65,
-    Math.max(halfWidth, gridSpacingY * 0.65),
+  const requestedHalfWidth = clampNumber(
+    config.overhangWidth * lerpNumber(0.22, 0.78, envelopeAmount) * lerpNumber(0.72, 1.05, profileActivity),
+    gridSpacingY * 2.4,
+    maxHalfWidth,
   )
-  const coreHalfWidth = Math.max(halfWidth - edgeFeather, 0)
-  const distanceFromCenter = Math.abs(sheetY)
-  const spanMask = 1 - smootherStep((distanceFromCenter - coreHalfWidth) / Math.max(edgeFeather, 0.000001))
+  const normalizedDistance = Math.abs(sheetY) / Math.max(requestedHalfWidth, 0.000001)
+  const softRadial = Math.exp(-Math.pow(
+    normalizedDistance,
+    lerpNumber(2.35, 3.4, clampNumber(config.wallSmoothness, 0, 1)),
+  ))
+  const sheetFalloff = 1 - smootherStep((normalizedDistance - 0.76) / 0.34)
+  const rimFade = edgeRamp(
+    distanceToPerimeter,
+    0,
+    gridSpacingY * lerpNumber(3.2, 6.8, clampNumber(config.smoothing, 0, 1)),
+  )
 
-  if (distanceToPerimeter >= gridSpacingY * 1.15) return spanMask
-
-  const perimeterMask = smootherStep((distanceToPerimeter - gridSpacingY * 0.15) / Math.max(gridSpacingY, 0.000001))
-  return clampNumber(perimeterMask * spanMask, 0, 1)
+  return clampNumber(softRadial * sheetFalloff * rimFade, 0, 1)
 }
 
 function sampleSectionProfileAtX(value: string, amount: number): number {
@@ -2563,11 +2586,12 @@ function buildQuads(rows: number, columns: number): LatticeQuad[] {
   return quads
 }
 
-function buildDihedralPairs(rows: number, columns: number): DihedralPair[] {
+function buildDihedralPairs(rows: number, columns: number, quadIds: Set<string>): DihedralPair[] {
   const pairs: DihedralPair[] = []
 
   for (let row = 0; row < rows - 1; row += 1) {
     for (let col = 0; col < columns - 2; col += 1) {
+      if (!quadIds.has(quadId(row, col)) || !quadIds.has(quadId(row, col + 1))) continue
       pairs.push({
         id: `d-v-${row}-${col}`,
         quadA: quadId(row, col),
@@ -2579,6 +2603,7 @@ function buildDihedralPairs(rows: number, columns: number): DihedralPair[] {
 
   for (let row = 0; row < rows - 2; row += 1) {
     for (let col = 0; col < columns - 1; col += 1) {
+      if (!quadIds.has(quadId(row, col)) || !quadIds.has(quadId(row + 1, col))) continue
       pairs.push({
         id: `d-h-${row}-${col}`,
         quadA: quadId(row, col),

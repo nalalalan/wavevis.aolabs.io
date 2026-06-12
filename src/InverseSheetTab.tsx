@@ -88,13 +88,18 @@ export default function InverseSheetTab({ activeTab, onTabChange, resizeHandle }
             <span className="ao-dot" aria-hidden="true">
               ao
             </span>
-            <img className="app-mark" src="./favicon.svg" alt="" aria-hidden="true" />
+            <img className="app-mark" src="./favicon.svg?v=20260611-transparent-mark" alt="" aria-hidden="true" />
             <h1>wavevis.aolabs.io</h1>
           </div>
           <p>inverse deformation sheet</p>
-          <a className="proof-link" href="./proofs/connector-contact-constraint-proof.pdf" target="_blank" rel="noreferrer">
-            constraint proof PDF
-          </a>
+          <div className="header-actions">
+            <a className="proof-link" href="https://aolabs.io/">
+              aolabs.io
+            </a>
+            <a className="proof-link" href="./proofs/wavevis-system-architecture.pdf" target="_blank" rel="noreferrer">
+              system architecture PDF
+            </a>
+          </div>
         </header>
 
         <SimulatorTabs activeTab={activeTab} onTabChange={onTabChange} />
