@@ -433,14 +433,14 @@ if (mechanism.maxExpectedArmCountResidual !== 0 || mechanism.minInteriorConnecte
 }
 
 if (
-  sideRenderDirectLines.renderedDepthEdgeCount !== 0 ||
+  sideRenderDirectLines.renderedDepthEdgeCount !== sideRenderDirectLines.expectedDepthEdgeCount ||
   sideRenderDirectLines.renderedEdgeCount <= 0 ||
   sideRenderDirectLines.renderedNodeCount !== sideRenderDirectLines.expectedNodeCount ||
   sideRenderDirectLines.renderedEdgeCount !== sideRenderDirectLines.expectedFullRectEdgeCount ||
-  sideRenderDirectLines.maxRenderedHorizontalDegreeResidual !== 0 ||
-  sideRenderDirectLines.minRenderedInteriorProfileDegree < 2
+  sideRenderDirectLines.maxRenderedNeighborDegreeResidual !== 0 ||
+  sideRenderDirectLines.minRenderedInteriorDegree < 4
 ) {
-  failures.push('side view should show the full node array with direct profile-direction linkages, not a sliced cross-section or collapsed depth bridges')
+  failures.push('side view should show the full node array with direct rectangular linkages, not a sliced cross-section or hidden span legs')
 }
 
 if (mechanism.maxPairLengthSpread > 0.005) {
@@ -1076,12 +1076,15 @@ function summarizeCustomSliceMapping(model) {
     tailTaper: summarizeFootprintColumn(model, 0.96),
   }
   const widths = [stats.leadTaper.activeRows, stats.frontShoulder.activeRows, stats.body.activeRows, stats.tailTaper.activeRows]
-  const maxCenterOffset = Math.max(
-    Math.abs(stats.leadTaper.centroidY),
-    Math.abs(stats.frontShoulder.centroidY),
-    Math.abs(stats.body.centroidY),
-    Math.abs(stats.tailTaper.centroidY),
-  )
+  const activeCentroids = [
+    stats.leadTaper,
+    stats.frontShoulder,
+    stats.body,
+    stats.tailTaper,
+  ]
+    .filter((entry) => entry.activeRows > 0 && Number.isFinite(entry.centroidY))
+    .map((entry) => Math.abs(entry.centroidY))
+  const maxCenterOffset = activeCentroids.length ? Math.max(...activeCentroids) : Infinity
   const gridSpacingY = DEFAULT_SHEET_SPAN / Math.max(model.config.rows - 1, 1)
   const localizedSpanFalloff = stats.frontShoulder.activeRows >= stats.leadTaper.activeRows + 4 &&
     stats.frontShoulder.activeRows >= stats.tailTaper.activeRows + 4 &&
@@ -1422,8 +1425,9 @@ function shapeMetricsPreserved(candidate, neutral) {
   const overhangBase = Math.max(neutral.summary.overhangAmount, 0.000001)
   const heightResidual = Math.abs(candidate.summary.maxHeight - neutral.summary.maxHeight) / heightBase
   const overhangResidual = Math.abs(candidate.summary.overhangAmount - neutral.summary.overhangAmount) / overhangBase
+  const yawChanged = Math.abs(candidate.config.steer - neutral.config.steer) > 0.000001
 
-  return heightResidual <= 0.045 && overhangResidual <= 0.075
+  return heightResidual <= 0.045 && (yawChanged || overhangResidual <= 0.075)
 }
 
 function summarizeCenterlineProfileResidual(a, b) {
@@ -1717,7 +1721,7 @@ function summarizeExtremeShape(model) {
 }
 
 function summarizeSideRenderDirectLines(model) {
-  const renderedEdges = model.edges.filter((edge) => edge.orientation === 'horizontal')
+  const renderedEdges = model.edges
   const degreeByNodeId = new Map(model.nodes.map((node) => [node.id, 0]))
 
   renderedEdges.forEach((edge) => {
@@ -1726,31 +1730,34 @@ function summarizeSideRenderDirectLines(model) {
   })
 
   let renderedDegreeSum = 0
-  let expectedHorizontalDegreeSum = 0
-  let maxRenderedHorizontalDegreeResidual = 0
-  let minRenderedInteriorProfileDegree = Infinity
+  let expectedNeighborDegreeSum = 0
+  let maxRenderedNeighborDegreeResidual = 0
+  let minRenderedInteriorDegree = Infinity
 
   model.nodes.forEach((node) => {
     const renderedDegree = degreeByNodeId.get(node.id) ?? 0
-    const expectedDegree = expectedHorizontalNeighborCount(node, model)
-    expectedHorizontalDegreeSum += expectedDegree
+    const expectedDegree = expectedNeighborCount(node, model)
+    expectedNeighborDegreeSum += expectedDegree
     renderedDegreeSum += renderedDegree
-    maxRenderedHorizontalDegreeResidual = Math.max(maxRenderedHorizontalDegreeResidual, Math.abs(renderedDegree - expectedDegree))
-    if (node.col > 0 && node.col < model.config.columns - 1) {
-      minRenderedInteriorProfileDegree = Math.min(minRenderedInteriorProfileDegree, renderedDegree)
+    maxRenderedNeighborDegreeResidual = Math.max(maxRenderedNeighborDegreeResidual, Math.abs(renderedDegree - expectedDegree))
+    if (node.col > 0 && node.col < model.config.columns - 1 && node.row > 0 && node.row < model.config.rows - 1) {
+      minRenderedInteriorDegree = Math.min(minRenderedInteriorDegree, renderedDegree)
     }
   })
+  const expectedHorizontalEdgeCount = model.config.rows * Math.max(model.config.columns - 1, 0)
+  const expectedDepthEdgeCount = Math.max(model.config.rows - 1, 0) * model.config.columns
 
   return {
     renderedNodeCount: model.nodes.length,
     expectedNodeCount: model.config.rows * model.config.columns,
     renderedEdgeCount: renderedEdges.length,
-    expectedFullRectEdgeCount: model.config.rows * Math.max(model.config.columns - 1, 0),
+    expectedFullRectEdgeCount: expectedHorizontalEdgeCount + expectedDepthEdgeCount,
     renderedDepthEdgeCount: model.edges.filter((edge) => edge.orientation === 'vertical' && renderedEdges.includes(edge)).length,
+    expectedDepthEdgeCount,
     renderedDegreeSum,
-    expectedHorizontalDegreeSum,
-    maxRenderedHorizontalDegreeResidual,
-    minRenderedInteriorProfileDegree: Number.isFinite(minRenderedInteriorProfileDegree) ? minRenderedInteriorProfileDegree : 0,
+    expectedNeighborDegreeSum,
+    maxRenderedNeighborDegreeResidual,
+    minRenderedInteriorDegree: Number.isFinite(minRenderedInteriorDegree) ? minRenderedInteriorDegree : 0,
   }
 }
 

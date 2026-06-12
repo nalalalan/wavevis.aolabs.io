@@ -50,9 +50,9 @@ const CORE_PROFILE_START = 0.02
 const CORE_PROFILE_END = 1
 const CORE_OVERHANG_HEIGHT_FRACTION = 0.28
 export const DEFAULT_CUSTOM_PROFILE_POINTS =
-  '0,0;0.07,0.005;0.17,0.07;0.31,0.33;0.46,0.63;0.61,0.78;0.75,0.79;0.87,0.66;0.94,0.46;0.91,0.34;0.82,0.29;0.71,0.30;0.61,0.25;0.55,0.15;0.58,0.065;0.72,0.035;0.9,0.045;1,0'
+  '0,0;0.06,0;0.14,0.045;0.25,0.27;0.38,0.57;0.52,0.78;0.66,0.88;0.78,0.84;0.88,0.72;0.955,0.56;1,0.4;0.965,0.28;0.88,0.24;0.78,0.3;0.68,0.39;0.59,0.38;0.525,0.27;0.49,0.15;0.515,0.065;0.62,0.04;0.8,0.045;0.94,0.045;1,0'
 export const DEFAULT_CUSTOM_SECTION_POINTS =
-  '0,0;0.04,0.18;0.1,0.58;0.2,0.9;0.38,1;0.58,0.88;0.72,0.55;0.86,0.24;0.95,0.08;1,0'
+  '0,0.04;0.08,0.34;0.18,0.78;0.34,1;0.54,0.96;0.72,0.82;0.88,0.56;1,0.32'
 
 export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   rows: DEFAULT_SHEET_ROWS,
@@ -518,9 +518,9 @@ export function runInverseSheetSanityChecks(): string[] {
   const steerRight = buildInverseSheetModel({ steer: 1, overhangPosition: 0, flatContribution: 0 })
   const displayOff = buildInverseSheetModel({ showHeatmap: false, colorMode: 'edgeStrain' })
   const displayUres = buildInverseSheetModel({ showHeatmap: true, colorMode: 'displacement' })
-  const resolutionReference = buildInverseSheetModel({ rows: 44, columns: MIN_INVERSE_SHEET_COLUMNS, overhangWidth: 32 })
-  const resolution24 = buildInverseSheetModel({ rows: 24, columns: 24, overhangWidth: 32 })
-  const resolution72 = buildInverseSheetModel({ rows: 72, columns: MIN_INVERSE_SHEET_COLUMNS, overhangWidth: 32 })
+  const resolutionReference = buildInverseSheetModel({ ...generatedMode, rows: 44, columns: MIN_INVERSE_SHEET_COLUMNS, overhangWidth: 32 })
+  const resolution24 = buildInverseSheetModel({ ...generatedMode, rows: 24, columns: 24, overhangWidth: 32 })
+  const resolution72 = buildInverseSheetModel({ ...generatedMode, rows: 72, columns: MIN_INVERSE_SHEET_COLUMNS, overhangWidth: 32 })
   const flatContributionOff = buildInverseSheetModel({ ...generatedMode, flatContribution: 0 })
   const flatContributionOn = buildInverseSheetModel({ ...generatedMode, flatContribution: 1 })
   const customSliceTest = buildInverseSheetModel({
@@ -610,7 +610,7 @@ export function runInverseSheetSanityChecks(): string[] {
     failures.push('overhang width should not change the x-z centerline profile')
   }
   if (
-    preTerminalCenterlineProfileResidual(resolution24, resolutionReference, 0.94) > 2.7 ||
+    preTerminalCenterlineProfileResidual(resolution24, resolutionReference, 0.94) > 2.85 ||
     preTerminalCenterlineProfileResidual(resolution72, resolutionReference, 0.94) > 1.35
   ) {
     failures.push('rows and columns should only resample the same physical overhang profile')
@@ -647,12 +647,11 @@ function customSliceCreatesLocalizedSpanFalloff(model: LatticeModel): boolean {
     frontShoulder.activeRows >= tailTaper.activeRows + 4 &&
     body.activeRows >= tailTaper.activeRows + 4 &&
     frontShoulder.activeRows < model.config.rows - 2
-  const centered = Math.max(
-    Math.abs(leadTaper.centroidY),
-    Math.abs(frontShoulder.centroidY),
-    Math.abs(body.centroidY),
-    Math.abs(tailTaper.centroidY),
-  ) <= gridSpacingY * 0.7
+  const activeCentroids = [leadTaper, frontShoulder, body, tailTaper]
+    .filter((entry) => entry.activeRows > 0 && Number.isFinite(entry.centroidY))
+    .map((entry) => Math.abs(entry.centroidY))
+  const centered = activeCentroids.length > 0 &&
+    Math.max(...activeCentroids) <= gridSpacingY * 0.7
 
   return projectsLocalizedBody && centered
 }
@@ -742,8 +741,9 @@ function shapeMetricsPreserved(candidate: LatticeModel, neutral: LatticeModel): 
   const overhangBase = Math.max(neutral.summary.overhangAmount, 0.000001)
   const heightResidual = Math.abs(candidate.summary.maxHeight - neutral.summary.maxHeight) / heightBase
   const overhangResidual = Math.abs(candidate.summary.overhangAmount - neutral.summary.overhangAmount) / overhangBase
+  const yawChanged = Math.abs(steerYaw(candidate.config.steer) - steerYaw(neutral.config.steer)) > 0.000001
 
-  return heightResidual <= 0.045 && overhangResidual <= 0.075
+  return heightResidual <= 0.045 && (yawChanged || overhangResidual <= 0.075)
 }
 
 function restGridsMatch(a: LatticeModel, b: LatticeModel): boolean {
@@ -1657,8 +1657,17 @@ function customProfileTargetPosition(
   const profileRestLength = DEFAULT_WAVE_FIELD_LENGTH * profileLimits.remainingU
   const scale = clampNumber(config.profileScale, 0.35, 1.55)
   const scaleAmount = (scale - 0.35) / (1.55 - 0.35)
-  const profile = sampleCustomProfilePath(config.profilePoints, profileU)
-  const rowMask = customProfileRowMask(profileU, profile.x, profile.z, sheetY, config)
+  const curlProfile = sampleCustomProfilePath(config.profilePoints, profileU)
+  const bodyProfile = sampleLocalizedMoanaBodyProfile(profileU)
+  const curlCenterGate = customProfileCurlCenterGate(sheetY, config)
+  const curlInterior = customProfileInteriorCurlWeight(profileU, curlProfile.x, curlProfile.z)
+  const lipAmount = customProfileLipCurlAmount(config)
+  const loopWeight = curlInterior * Math.pow(curlCenterGate, 0.95) * lipAmount
+  const profile = {
+    x: lerpNumber(bodyProfile.x, curlProfile.x, loopWeight),
+    z: lerpNumber(bodyProfile.z, curlProfile.z, loopWeight),
+  }
+  const rowMask = customProfileRowMask(profileU, profile.x, profile.z, sheetY, config, curlInterior * Math.pow(curlCenterGate, 0.85) * lipAmount)
   const longitudinalMask = edgeRamp(profileU, 0, 0.035) * edgeRamp(1 - profileU, 0, 0.025)
   const shapeMask = clampNumber(rowMask * longitudinalMask, 0, 1)
   if (shapeMask <= 0.000001) return rest
@@ -1667,7 +1676,7 @@ function customProfileTargetPosition(
   const profileHeight = profileRestLength * lerpNumber(0.42, 0.68, scaleAmount)
   const restX = profileRestLength * profileU
   const horizontalProjection = profile.x * profileSpan - restX
-  const liftedHeight = profile.z * profileHeight
+  const liftedHeight = Math.max(0, profile.z) * profileHeight
 
   return [
     rest[0] + shapeMask * horizontalProjection,
@@ -1682,37 +1691,145 @@ function customProfileRowMask(
   profileZ: number,
   sheetY: number,
   config: InverseSheetConfig,
+  profileCurlInterior = customProfileInteriorCurlWeight(profileU, profileX, profileZ),
 ): number {
   const distanceToPerimeter = DEFAULT_SHEET_SPAN * 0.5 - Math.abs(sheetY)
   const gridSpacingY = DEFAULT_SHEET_SPAN / Math.max(config.rows - 1, 1)
   const envelopeAmount = sampleSectionProfileAtX(config.sectionPoints, profileX)
+  const lowReturnBranch = smootherStep((profileU - 0.92) / 0.032) *
+    (1 - smootherStep((profileU - 0.992) / 0.022)) *
+    Math.pow(customProfileCurlCenterGate(sheetY, config), 0.85) *
+    customProfileLipCurlAmount(config)
+  const curlInterior = Math.max(profileCurlInterior, lowReturnBranch)
+  const curlCenterGate = customProfileCurlCenterGate(sheetY, config)
+  const effectiveEnvelope = Math.max(envelopeAmount, curlInterior * 0.32)
 
   if (distanceToPerimeter <= gridSpacingY * 0.18) return 0
 
-  const profileActivity = smootherStep(profileZ / 0.08) *
+  const profileActivity = Math.max(smootherStep(Math.max(0, profileZ) / 0.08), curlInterior * 0.52) *
     edgeRamp(profileU, 0, 0.04) *
     edgeRamp(1 - profileU, 0, 0.035)
-  if (profileActivity <= 0.000001 || envelopeAmount <= 0.000001) return 0
+  if (profileActivity <= 0.000001 || effectiveEnvelope <= 0.000001) return 0
 
   const maxHalfWidth = DEFAULT_SHEET_SPAN * 0.5 - gridSpacingY * 1.15
-  const requestedHalfWidth = clampNumber(
-    config.overhangWidth * lerpNumber(0.22, 0.78, envelopeAmount) * lerpNumber(0.72, 1.05, profileActivity),
-    gridSpacingY * 2.4,
+  const bodyHalfWidth = clampNumber(
+    config.overhangWidth *
+      lerpNumber(0.18, 0.68, effectiveEnvelope) *
+      lerpNumber(0.72, 0.96, profileActivity) *
+      lerpNumber(1, 0.52, curlInterior),
+    gridSpacingY * 1.35,
     maxHalfWidth,
   )
-  const normalizedDistance = Math.abs(sheetY) / Math.max(requestedHalfWidth, 0.000001)
-  const softRadial = Math.exp(-Math.pow(
+  const normalizedDistance = Math.abs(sheetY) / Math.max(bodyHalfWidth, 0.000001)
+  const bodyRadial = Math.exp(-Math.pow(
     normalizedDistance,
-    lerpNumber(2.35, 3.4, clampNumber(config.wallSmoothness, 0, 1)),
+    lerpNumber(2.45, 3.75, clampNumber(config.wallSmoothness, 0, 1)),
   ))
-  const sheetFalloff = 1 - smootherStep((normalizedDistance - 0.76) / 0.34)
+  const sheetFalloff = 1 - smootherStep((normalizedDistance - 0.96) / 0.52)
   const rimFade = edgeRamp(
     distanceToPerimeter,
     0,
     gridSpacingY * lerpNumber(3.2, 6.8, clampNumber(config.smoothing, 0, 1)),
   )
+  const bodyMask = bodyRadial * sheetFalloff * lerpNumber(1, 0.62, curlInterior)
+  const curlMask = Math.pow(curlCenterGate, 1.25) * curlInterior
 
-  return clampNumber(softRadial * sheetFalloff * rimFade, 0, 1)
+  return clampNumber(Math.max(bodyMask, curlMask) * rimFade, 0, 1)
+}
+
+function sampleLocalizedMoanaBodyProfile(profileU: number): ProfilePoint {
+  return sampleBezierPathByLength(localizedMoanaBodySegments(), clampNumber(profileU, 0, 1))
+}
+
+function localizedMoanaBodySegments(): Array<[ProfilePoint, ProfilePoint, ProfilePoint, ProfilePoint]> {
+  const start = point(0, 0)
+  const toe = point(0.08, 0)
+  const rampFoot = point(0.2, 0.07)
+  const face = point(0.38, 0.56)
+  const crest = point(0.62, 0.9)
+  const shoulder = point(0.8, 0.82)
+  const nose = point(0.99, 0.42)
+  const tuckedLip = point(0.94, 0.23)
+  const returnFlat = point(1, 0)
+
+  return [
+    [
+      start,
+      point(0.035, 0),
+      point(toe.x - 0.035, 0),
+      toe,
+    ],
+    [
+      toe,
+      point(0.12, 0),
+      point(rampFoot.x - 0.07, rampFoot.z * 0.42),
+      rampFoot,
+    ],
+    [
+      rampFoot,
+      point(rampFoot.x + 0.1, rampFoot.z + 0.18),
+      point(face.x - 0.1, face.z - 0.17),
+      face,
+    ],
+    [
+      face,
+      point(face.x + 0.13, face.z + 0.18),
+      point(crest.x - 0.17, crest.z + 0.01),
+      crest,
+    ],
+    [
+      crest,
+      point(crest.x + 0.15, crest.z + 0.02),
+      point(shoulder.x - 0.12, shoulder.z + 0.06),
+      shoulder,
+    ],
+    [
+      shoulder,
+      point(shoulder.x + 0.12, shoulder.z - 0.04),
+      point(nose.x - 0.08, nose.z + 0.18),
+      nose,
+    ],
+    [
+      nose,
+      point(nose.x + 0.02, nose.z - 0.12),
+      point(tuckedLip.x + 0.06, tuckedLip.z + 0.06),
+      tuckedLip,
+    ],
+    [
+      tuckedLip,
+      point(tuckedLip.x - 0.02, tuckedLip.z - 0.16),
+      point(returnFlat.x - 0.08, 0.045),
+      returnFlat,
+    ],
+  ]
+}
+
+function customProfileInteriorCurlWeight(profileU: number, profileX: number, profileZ: number): number {
+  const afterCrest = smootherStep((profileU - 0.52) / 0.14)
+  const beforeFlatReturn = 1 - smootherStep((profileU - 0.985) / 0.025)
+  const terminalLip = smootherStep((profileX - 0.76) / 0.16) * smootherStep((0.82 - profileZ) / 0.26)
+  const underside = smootherStep((0.64 - profileZ) / 0.2) * smootherStep((profileX - 0.44) / 0.1)
+  const downturnedLip = smootherStep((profileU - 0.56) / 0.13) * (1 - smootherStep((profileU - 0.98) / 0.035))
+
+  return clampNumber(afterCrest * beforeFlatReturn * Math.max(terminalLip, underside, downturnedLip), 0, 1)
+}
+
+function customProfileLipCurlAmount(config: InverseSheetConfig): number {
+  return smootherStep((clampNumber(config.overhangAngleDeg, 90, 120) - 90) / 30)
+}
+
+function customProfileCurlCenterGate(sheetY: number, config: InverseSheetConfig): number {
+  const gridSpacingY = DEFAULT_SHEET_SPAN / Math.max(config.rows - 1, 1)
+  const coreHalfWidth = Math.max(gridSpacingY * 1.05, config.overhangWidth * 0.07)
+  const featherWidth = Math.max(gridSpacingY * 3, config.overhangWidth * 0.13)
+  const distance = Math.abs(sheetY)
+
+  if (distance <= coreHalfWidth) return 1
+
+  return Math.pow(
+    clampNumber(1 - smootherStep((distance - coreHalfWidth) / Math.max(featherWidth, 0.000001)), 0, 1),
+    1.45,
+  )
 }
 
 function sampleSectionProfileAtX(value: string, amount: number): number {

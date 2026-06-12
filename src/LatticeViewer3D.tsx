@@ -154,7 +154,7 @@ function buildNodeEdgeRenderScope(
   if (sideView && !sideSlice) {
     return {
       nodeIds: model.nodes.map((node) => node.id),
-      edges: model.edges.filter((edge) => edge.orientation === 'horizontal'),
+      edges: model.edges,
       sideSlice: false,
       sideView: true,
     }
@@ -340,7 +340,7 @@ function StraightEdgeSegments({
     return (
       <>
         <lineSegments geometry={geometries.span} renderOrder={0}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.16} depthTest depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.36} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profile} renderOrder={1}>
           <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.9} depthTest depthWrite={false} />
