@@ -57,17 +57,14 @@ export default function ControlPanel({
     <aside className="control-panel">
       <header className="panel-header">
         <div className="brand-row">
-          <span className="ao-dot" aria-hidden="true">
-            ao
-          </span>
+          <a className="ao-home-mark" href="https://aolabs.io/" aria-label="aolabs.io">
+            <img src="https://aolabs.io/marks/ao-ink.svg?v=20260516-suite-bloom" alt="" />
+          </a>
           <img className="app-mark" src="./favicon.svg?v=20260611-transparent-mark" alt="" aria-hidden="true" />
           <h1>wavevis.aolabs.io</h1>
         </div>
         <p>double-layer Sarrus cell array</p>
         <div className="header-actions">
-          <a className="proof-link" href="https://aolabs.io/">
-            aolabs.io
-          </a>
           <a className="proof-link" href="./proofs/wavevis-system-architecture.pdf" target="_blank" rel="noreferrer">
             system architecture PDF
           </a>

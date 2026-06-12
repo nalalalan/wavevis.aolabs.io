@@ -122,7 +122,7 @@
     \vspace*{-0.6em}
 
     {\fontsize{20}{22}\selectfont\bfseries\color{SumiInk}
-    WaveVis inverse-sheet architecture for localized breaking-wave linkage arrays\par}
+    WaveVis inverse-sheet architecture for Moana-ocean breaking-wave linkage arrays\par}
 
     \vspace{0.95em}
 
@@ -136,14 +136,14 @@
 \end{center}
 
 \vspace{0.35em}
-\noindent\textbf{WaveVis is an inverse simulator for a mostly flat rectangular linkage sheet with one localized plunging-wave deformation rising out of the sheet. The intended artifact is not an extruded tunnel, ribbon, half-pipe, swept cross-section, roof, or bridge. It is a full array of linkage cells over a fixed flat perimeter: the center region ramps upward, forms a rounded crest, projects a lip forward and downward, and fades smoothly back into the surrounding sheet in all directions. This paper replaces the earlier narrow constraint-proof PDF as the visible system record. It defines the goal geometry, coordinate systems, profile editors, slider semantics, topology invariants, rendering views, failure modes, and verification gates required before WaveVis work can be called correct.}
+\noindent\textbf{WaveVis is an inverse simulator for a mostly flat rectangular linkage sheet with one localized plunging-wave deformation rising out of the sheet. The primary visual target is the Moana ocean reference geometry supplied for this project: a translucent, water-like sheet rising from a flat surface, swelling into a rounded crest, curling forward and downward, and returning to flat without walls, cavities, or extruded tunnel behavior. The intended artifact is not an extruded ribbon, half-pipe, swept cross-section, roof, bridge, or hollow shell. It is a full array of linkage cells over a fixed flat perimeter: the center region ramps upward, forms a rounded crest, projects a lip forward and downward, and fades smoothly back into the surrounding sheet in all directions. This paper replaces the earlier narrow constraint-proof PDF as the visible system record. It defines the reference geometry, coordinate systems, profile editors, slider semantics, topology invariants, rendering views, failure modes, and verification gates required before WaveVis work can be called correct.}
 
 \newpage
 \pagestyle{fancy}
 
 \section{Introduction}
 
-WaveVis exists to explore whether a cellular Sarrus-style linkage array can approximate visually meaningful three-dimensional sheet deformations while preserving mechanical readability. The simulator therefore has two simultaneous jobs. First, it must generate a target shape that resembles a localized ocean-wave overhang rather than a generic height field. Second, it must keep the linkage graph legible: cells, nodes, connector pairs, and edges must remain visible and connected rather than being hidden under cosmetic surfaces or erased when the shape becomes difficult.
+WaveVis exists to explore whether a cellular Sarrus-style linkage array can approximate visually meaningful three-dimensional sheet deformations while preserving mechanical readability. The simulator therefore has two simultaneous jobs. First, it must generate a target shape that resembles the supplied Moana ocean references rather than a generic height field. Second, it must keep the linkage graph legible: cells, nodes, connector pairs, and edges must remain visible and connected rather than being hidden under cosmetic surfaces or erased when the shape becomes difficult.
 
 The current design problem is stricter than drawing a pretty profile. A side silhouette can look acceptable while the actual three-dimensional sheet has a wall across the tube, a cavity where the lip should be open, an extruded-barrel cross-section, or zig-zagging linkage legs that no longer read as a mechanism. Conversely, a mesh can satisfy a local numerical check while failing the human outcome: a full rectangular sheet with a localized plunging wave. WaveVis must therefore treat the visible artifact, the mechanism topology, the parameter semantics, and the regression checks as one architecture.
 
@@ -152,6 +152,46 @@ The central correction captured here is that a breaking wave is not made by swee
   \Phi : (x,y) \mapsto \bigl(x + \Delta_x(x,y),\ y + \Delta_y(x,y),\ \Delta_z(x,y)\bigr),
 \]
 where the displacement is concentrated near the middle span, gradually fades toward the lateral sides, and is exactly zero on the perimeter. The curl must be strongest near the centerline and weaker toward the sides. This spatial falloff is part of the target shape, not a rendering trick.
+
+\subsection{Reference geometry}
+
+The design reference is the Moana ocean: a smooth, localized volume of water that rises out of a larger flat body, grows into a broad rounded crest, and curls into a downward lip while leaving an open underside. These reference frames are not decorative. They are the visual contract for the simulator's target geometry. A successful WaveVis state should read as a simplified linkage approximation of this water form: the outer radius is large and smooth, the inner curl radius is smaller, the lip projects forward before curling down, and the side field fades away instead of forming a constant barrel.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\linewidth]{reference-moana-wide-curl.jpg}
+\caption{Primary supplied reference geometry. The target form is a localized plunging water sheet with a rounded crest, open underside, and forward/downward lip. The WaveVis sheet must approximate this geometry while preserving flat perimeter boundary nodes and visible linkage cells.}
+\label{fig:moana-primary-reference}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[t]{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{reference-moana-barrel-water.jpg}
+  \caption{Open tube and suspended lip.}
+\end{subfigure}\hfill
+\begin{subfigure}[t]{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{reference-moana-touch-curl.jpg}
+  \caption{Forward/downward curl at the water edge.}
+\end{subfigure}
+
+\vspace{0.8em}
+
+\begin{subfigure}[t]{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{reference-moana-water-mound.png}
+  \caption{Localized mound emerging from flat water.}
+\end{subfigure}\hfill
+\begin{subfigure}[t]{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{reference-moana-night-column.jpg}
+  \caption{Rounded column without a hard perimeter wall.}
+\end{subfigure}
+\caption{Additional supplied reference frames. Together they define the acceptance target: water-like surface continuity, strong center curl, smooth lateral fade, no side wall covering the underside, and no swept tunnel extrusion.}
+\label{fig:moana-reference-set}
+\end{figure}
 
 \section{Target outcome}
 
@@ -432,7 +472,7 @@ The author declares no competing interests for this internal architecture record
 
 \section{Data availability}
 
-The source data for this record is the WaveVis source tree, the local proof figures, and the current simulator behavior. The public PDF is served with the WaveVis static app.
+The source data for this record is the WaveVis source tree, the Alan-supplied Moana ocean reference images copied into the proof figure set, the local proof diagrams, and the current simulator behavior. The public PDF is served with the WaveVis static app.
 
 \section{Code availability}
 

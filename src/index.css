@@ -113,19 +113,21 @@ button {
   gap: 10px;
 }
 
-.ao-dot {
+.ao-home-mark {
   width: 34px;
   height: 34px;
-  display: grid;
-  place-items: center;
+  display: block;
   border-radius: 50%;
   background: #f4efe7;
-  color: #514941;
-  font-size: 11px;
-  font-weight: 820;
-  letter-spacing: 0;
-  text-transform: lowercase;
-  box-shadow: inset 0 0 0 1px rgba(55, 46, 38, 0.12);
+  box-shadow: 0 8px 20px rgba(45, 36, 38, 0.11);
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.ao-home-mark img {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .app-mark {

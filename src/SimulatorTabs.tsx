@@ -10,17 +10,17 @@ export default function SimulatorTabs({ activeTab, onTabChange }: SimulatorTabsP
     <nav className="sim-tabs" aria-label="WaveVis simulator tabs">
       <button
         type="button"
-        className={activeTab === 'sarrus' ? 'active' : ''}
-        onClick={() => onTabChange('sarrus')}
-      >
-        Double-Layer Sarrus
-      </button>
-      <button
-        type="button"
         className={activeTab === 'inverse' ? 'active' : ''}
         onClick={() => onTabChange('inverse')}
       >
         Inverse Sheet
+      </button>
+      <button
+        type="button"
+        className={activeTab === 'sarrus' ? 'active' : ''}
+        onClick={() => onTabChange('sarrus')}
+      >
+        Double-Layer Sarrus
       </button>
     </nav>
   )
