@@ -1,13 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="double-layer Sarrus cell">
-  <rect width="128" height="128" rx="28" fill="#25221e"/>
-  <g fill="none" stroke="#d98ca4" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+  <g fill="none" stroke="#25221e" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
     <path d="M35 31 21 48 35 65"/>
     <path d="M93 31 107 48 93 65"/>
     <path d="M35 63 21 80 35 97"/>
     <path d="M93 63 107 80 93 97"/>
     <path d="M35 31h58M35 65h58M35 97h58"/>
   </g>
-  <g fill="#ee9bb2">
+  <g fill="#ee9bb2" stroke="#25221e" stroke-width="3" stroke-linejoin="round">
     <path d="M36 22h56l8 9-8 9H36l-8-9z"/>
     <path d="M31 54h66l8 9-8 9H31l-8-9z"/>
     <path d="M36 86h56l8 9-8 9H36l-8-9z"/>
