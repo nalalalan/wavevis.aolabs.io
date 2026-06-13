@@ -36,6 +36,7 @@ execFileSync(
 
 const { buildInverseSheetModel, getInverseSheetUsableRanges, runInverseSheetSanityChecks } = require(path.join(outDir, 'latticeGeometry.js'))
 const { rigidCellMechanismStats } = require(path.join(outDir, 'rigidCellMechanism.js'))
+const inverseSheetTabSource = fs.readFileSync(path.join(root, 'src', 'InverseSheetTab.tsx'), 'utf8')
 
 const DEFAULT_SHEET_ROWS = 44
 const DEFAULT_SHEET_COLUMNS = 96
@@ -53,6 +54,7 @@ const CORE_PROFILE_START = 0.02
 const CORE_PROFILE_END = 1
 
 const failures = [...runInverseSheetSanityChecks()]
+const startupUrlParamCoverage = summarizeStartupUrlParamCoverage()
 const generatedMode = { profileMode: 'generated' }
 const breakingLipConfig = {
   ...generatedMode,
@@ -391,6 +393,10 @@ if (!lowLipDipStability.ok) {
   failures.push('low lip dip values should stay neutral/stable without partial-curl mangling')
 }
 
+if (!startupUrlParamCoverage.ok) {
+  failures.push(`startup URL state should cover every public inverse-sheet slider alias: missing ${startupUrlParamCoverage.missing.join(', ')}`)
+}
+
 if (mechanism.maxConnectorEndpointGap > 0.0001) {
   failures.push('inverse-sheet arms should terminate directly at shared connector points')
 }
@@ -427,6 +433,7 @@ if (mechanism.maxCenterShift > 2.25) {
 }
 
 const report = {
+  startupUrlParamCoverage,
   flat0,
   flat1,
   flatContributionPair,
@@ -874,6 +881,42 @@ function emptyBreakingLipSummary() {
     returnX: 0,
     returnZ: 0,
     returnForwardDistance: 0,
+  }
+}
+
+function summarizeStartupUrlParamCoverage() {
+  const requiredAliases = [
+    'rows',
+    'cols',
+    'columns',
+    'morph',
+    'position',
+    'overhangPosition',
+    'steer',
+    'steerYaw',
+    'profileScale',
+    'scale',
+    'height',
+    'horizontalOffset',
+    'overhang',
+    'width',
+    'overhangWidth',
+    'lipDip',
+    'overhangAngleDeg',
+    'lipSharpness',
+    'groundTransition',
+    'smoothing',
+    'wallSmoothness',
+    'flatContribution',
+    'conicRho',
+    'curlRadius',
+  ]
+  const missing = requiredAliases.filter((alias) => !inverseSheetTabSource.includes(`'${alias}'`))
+
+  return {
+    ok: missing.length === 0,
+    checked: requiredAliases.length,
+    missing,
   }
 }
 

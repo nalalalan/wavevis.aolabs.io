@@ -136,7 +136,7 @@
 \end{center}
 
 \vspace{0.35em}
-\noindent\textbf{WaveVis is an inverse simulator for a mostly flat rectangular linkage sheet with one localized plunging-wave deformation rising out of the sheet. The primary visual target is the Moana ocean reference geometry supplied for this project: a translucent, water-like sheet rising from a flat surface, swelling into a rounded crest, curling forward and downward, and returning to flat without walls, cavities, or extruded tunnel behavior. The intended artifact is not an extruded ribbon, half-pipe, swept cross-section, roof, bridge, or hollow shell. It is a full array of linkage cells over a fixed flat perimeter: the center region ramps upward, forms a rounded crest, projects a lip forward and downward, and fades smoothly back into the surrounding sheet in all directions. The reference geometry is an acceptance target, not a success claim. A generated state is still open if the human-facing render reads as a tunnel, wall-covered cavity, angular blob, missing curl, or broken linkage even when code checks pass. This paper replaces the earlier narrow constraint-proof PDF as the visible system record. It defines the reference geometry, coordinate systems, generated Moana-ocean target, visible slider semantics, topology invariants, rendering views, failure modes, and verification gates required before WaveVis work can be called correct.}
+\noindent\textbf{WaveVis is an inverse simulator for a mostly flat rectangular linkage sheet with one localized plunging-wave deformation rising out of the sheet. The primary visual target is the Moana ocean reference geometry supplied for this project: a translucent, water-like sheet rising from a flat surface, swelling into a rounded crest, curling forward and downward, and returning to flat without walls, cavities, or extruded tunnel behavior. The intended artifact is not an extruded ribbon, half-pipe, swept cross-section, roof, bridge, or hollow shell. It is a full array of linkage cells over a fixed flat perimeter: the center region ramps upward, forms a rounded crest, projects a lip forward and downward, and fades smoothly back into the surrounding sheet in all directions. The reference geometry is an acceptance target, not a success claim. A generated state is still open if the human-facing render reads as a tunnel, wall-covered cavity, angular blob, missing curl, or broken linkage even when code checks pass. A verification URL is also part of the artifact: if the page ignores URL slider parameters, the screenshot is not evidence for the state Alan requested. This paper replaces the earlier narrow constraint-proof PDF as the visible system record. It defines the reference geometry, coordinate systems, generated Moana-ocean target, visible slider semantics, topology invariants, rendering views, failure modes, and verification gates required before WaveVis work can be called correct.}
 
 \newpage
 \pagestyle{fancy}
@@ -275,7 +275,7 @@ The key architectural rule is that \(A(u,v)\) is not constant in \(v\). A consta
 
 The target-building pipeline is:
 \begin{enumerate}
-  \item sanitize rows, columns, visible sliders, display flags, and URL parameters;
+  \item sanitize rows, columns, visible sliders, hidden legacy shape parameters, display flags, and URL parameters;
   \item build the full rectangular node grid;
   \item compute the canonical Moana-ocean wave displacement from the generated target;
   \item apply the span envelope that localizes the wave in \(y\);
@@ -407,6 +407,7 @@ Slider isolation & Aligned geometries across position/steer/width changes. & Rig
 Visual side check & Browser side view screenshot or direct render inspection. & Curl visible without cross-section mode. \\
 Defect repair loop & Confirmed visible defects re-enter source repair. & Acknowledging dimples, pockets, walls, or missing curl is not a stopping state. \\
 \code{noVisibleDimplePocket} & Lip tuck and return ratios in the centerline curl. & The tip may curl under, but it must not form a tight pucker, pocket, or enclosed bowl. \\
+\code{startupUrlParamCoverage} & Startup parser covers all public and legacy slider aliases. & A shared verification URL cannot silently load a different height, overhang, lip dip, width, or smoothing state. \\
 \bottomrule
 \end{tabular}
 }
@@ -423,6 +424,7 @@ The most important failure classes are now explicit:
   \item \textbf{Blob or lump.} Excess smoothing or broad support creates a mound with no wave identity.
   \item \textbf{Top dent.} The outer crest has a kink or concave dent where a smooth radius is required.
   \item \textbf{Dimple, cavity, or bowl.} The surface creates a pocket, pucker, enclosed hollow, or bowl-like depression rather than a plunging sheet.
+  \item \textbf{Stale URL state.} A browser URL contains height, overhang, width, lipDip, or smoothing values, but startup ignores them and renders a different state.
   \item \textbf{Zig-zag linkage.} Neighboring legs alternate direction or length erratically.
   \item \textbf{Hidden mechanism.} Broken topology is ghosted, clipped, or replaced by a cosmetic surface.
   \item \textbf{Passive defect acknowledgement.} A visible problem is named in chat or recorded in this paper, but the generator and rendered artifact are not repaired and rechecked.
@@ -442,7 +444,7 @@ The main design lesson is that WaveVis cannot be corrected by tuning only the si
 
 This distinction also clarifies future work. If the simulator produces a good cross-section but a bad side view, the cross-section is only evidence that the profile exists somewhere. The real artifact still fails if the full three-dimensional render hides the curl or reads as an extrusion. Similarly, if the mesh is clean but the wave looks like a low mound, the mechanism is not enough. Both the shape and the linkage must be correct.
 
-A newer lesson is that defect naming is not progress by itself. If a rendered state shows dimples, pockets, side walls, or a missing curl, the correct workflow is source repair, geometry-check update, rendered screenshot verification, and public-bundle verification. The current check names this directly as \code{noVisibleDimplePocket}: the lip can tuck under the shoulder, but the tuck ratio must stay bounded and the return branch must keep advancing to the flat sheet instead of folding into a pucker. The architecture record is useful only if it changes the generator and the acceptance loop; it cannot substitute for a corrected human-facing WaveVis render.
+A newer lesson is that defect naming is not progress by itself. If a rendered state shows dimples, pockets, side walls, or a missing curl, the correct workflow is source repair, geometry-check update, rendered screenshot verification, and public-bundle verification. The current check names this directly as \code{noVisibleDimplePocket}: the lip can tuck under the shoulder, but the tuck ratio must stay bounded and the return branch must keep advancing to the flat sheet instead of folding into a pucker. The same source-of-truth rule applies to URL state. Several correction screenshots used URLs that carried explicit height, overhang, width, lipDip, and smoothing values; ignoring those parameters caused the page to render a different geometry than the requested test state. The startup parser is now part of validation through \code{startupUrlParamCoverage}. The architecture record is useful only if it changes the generator, state loader, and acceptance loop; it cannot substitute for a corrected human-facing WaveVis render.
 
 \section{Acknowledgements}
 
