@@ -405,6 +405,8 @@ Span localization & Row-wise height profile across \(y\). & Center strong, sides
 Morph continuity & Residual between adjacent morph samples. & No sudden jumps or topology flips. \\
 Slider isolation & Aligned geometries across position/steer/width changes. & Rigid controls stay rigid; width stays span-only. \\
 Visual side check & Browser side view screenshot or direct render inspection. & Curl visible without cross-section mode. \\
+Defect repair loop & Confirmed visible defects re-enter source repair. & Acknowledging dimples, pockets, walls, or missing curl is not a stopping state. \\
+\code{noVisibleDimplePocket} & Lip tuck and return ratios in the centerline curl. & The tip may curl under, but it must not form a tight pucker, pocket, or enclosed bowl. \\
 \bottomrule
 \end{tabular}
 }
@@ -420,9 +422,10 @@ The most important failure classes are now explicit:
   \item \textbf{Straight chute.} The crest drops nearly vertically to a flat shelf instead of curling forward and under.
   \item \textbf{Blob or lump.} Excess smoothing or broad support creates a mound with no wave identity.
   \item \textbf{Top dent.} The outer crest has a kink or concave dent where a smooth radius is required.
-  \item \textbf{Cavity or bowl.} The surface creates an enclosed hollow or bowl-like depression rather than a plunging sheet.
+  \item \textbf{Dimple, cavity, or bowl.} The surface creates a pocket, pucker, enclosed hollow, or bowl-like depression rather than a plunging sheet.
   \item \textbf{Zig-zag linkage.} Neighboring legs alternate direction or length erratically.
   \item \textbf{Hidden mechanism.} Broken topology is ghosted, clipped, or replaced by a cosmetic surface.
+  \item \textbf{Passive defect acknowledgement.} A visible problem is named in chat or recorded in this paper, but the generator and rendered artifact are not repaired and rechecked.
 \end{enumerate}
 
 The solution direction is to simplify the target field while strengthening the gates: localized smooth wave first, full array second, mechanism-clean render third. Complexity should be added only if it improves one of those outcomes without breaking the others.
@@ -438,6 +441,8 @@ The public app serves a static build. The architecture PDF is placed in the publ
 The main design lesson is that WaveVis cannot be corrected by tuning only the side profile. The user-facing failure was three-dimensional: side walls, swept tubes, missing full-array linkages, broken side/cross-section semantics, and zig-zag legs. The architecture therefore now uses a single generated target contract rather than a manual editor contract. The sheet generator is responsible for creating a localized Moana-like displacement field with lateral fade, boundary preservation, topology completeness, and a visible curled lip.
 
 This distinction also clarifies future work. If the simulator produces a good cross-section but a bad side view, the cross-section is only evidence that the profile exists somewhere. The real artifact still fails if the full three-dimensional render hides the curl or reads as an extrusion. Similarly, if the mesh is clean but the wave looks like a low mound, the mechanism is not enough. Both the shape and the linkage must be correct.
+
+A newer lesson is that defect naming is not progress by itself. If a rendered state shows dimples, pockets, side walls, or a missing curl, the correct workflow is source repair, geometry-check update, rendered screenshot verification, and public-bundle verification. The current check names this directly as \code{noVisibleDimplePocket}: the lip can tuck under the shoulder, but the tuck ratio must stay bounded and the return branch must keep advancing to the flat sheet instead of folding into a pucker. The architecture record is useful only if it changes the generator and the acceptance loop; it cannot substitute for a corrected human-facing WaveVis render.
 
 \section{Acknowledgements}
 

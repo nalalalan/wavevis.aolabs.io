@@ -1321,14 +1321,14 @@ function applySpanContinuitySmoothing(restGrid: Vec3[][], targetGrid: Vec3[][], 
 
         const terminalCurlLock = active * lipRegion
         const rowAverage = scaleVec(addVec(current[row - 1][col], current[row + 1][col]), 0.5)
-        const blend = alpha * (1 - preserveCore * 0.58) * (1 - terminalCurlLock * 0.36)
+        const blend = alpha * (1 - preserveCore * 0.58) * (1 - terminalCurlLock * 0.18)
         blendedDelta = lerpVec(blendedDelta, rowAverage, blend)
 
         const columnAverage = scaleVec(addVec(current[row][col - 1], current[row][col + 1]), 0.5)
         const longitudinalBlend = alpha *
           lerpNumber(0.46, 0.86, active) *
           (1 - preserveCore * 0.38) *
-          (1 - terminalCurlLock * 0.44)
+          (1 - terminalCurlLock * 0.26)
         next[row][col] = lerpVec(blendedDelta, columnAverage, longitudinalBlend)
       }
     }
@@ -1479,10 +1479,10 @@ function coreWaveMaskFromRim(profileU: number, rimY: number, config: InverseShee
   const lipStrength = breakingLipStrength(lipDip)
   const coreLongitudinalFade = 0.055
   const bodyX = edgeRamp(profileU, 0, coreLongitudinalFade)
-  const bodyMask = Math.pow(bodyX, 1.18) * Math.pow(rimY, lerpNumber(2.45, 1.62, wallSmoothness))
+  const bodyMask = Math.pow(bodyX, 1.18) * Math.pow(rimY, lerpNumber(2.6, 1.82, wallSmoothness))
   const lipStart = breakingLipStart()
   const lipPreserveEnvelope = smootherStep((profileU - lipStart) / 0.035)
-  const lipSpanMask = Math.pow(clampNumber(rimY, 0, 1), lerpNumber(2.7, 1.72, Math.max(wallSmoothness, lipStrength)))
+  const lipSpanMask = Math.pow(clampNumber(rimY, 0, 1), lerpNumber(2.9, 1.94, Math.max(wallSmoothness, lipStrength)))
   const lipMask = lipStrength *
     lipPreserveEnvelope *
     edgeRamp(profileU, 0, coreLongitudinalFade) *
@@ -1512,9 +1512,9 @@ function coneCurlSpanScale(profileU: number, lipStrength: number): number {
   const bodyTaper = smootherStep((profileU - 0.16) / 0.68)
   const terminalTaper = smootherStep((profileU - 0.42) / 0.38)
   const returnTaper = smootherStep((profileU - 0.72) / 0.24)
-  const scale = 1 - curl * (bodyTaper * 0.1 + terminalTaper * 0.22 + returnTaper * 0.18)
+  const scale = 1 - curl * (bodyTaper * 0.16 + terminalTaper * 0.3 + returnTaper * 0.2)
 
-  return clampNumber(scale, 0.5, 1)
+  return clampNumber(scale, 0.42, 1)
 }
 
 function terminalLipOpeningStrength(profileU: number, lipStrength: number): number {
@@ -1547,8 +1547,8 @@ function terminalLipSpanMask(
   )
   const terminalOpen = smootherStep((profileU - 0.42) / 0.28)
   const feather = Math.max(
-    gridSpacingY * lerpNumber(0.48, 0.92, terminalOpen),
-    requestedHalfWidth * lerpNumber(0.035, 0.1, terminalOpen),
+    gridSpacingY * lerpNumber(0.7, 1.42, terminalOpen),
+    requestedHalfWidth * lerpNumber(0.06, 0.18, terminalOpen),
   )
   const centerRidgeHalfWidth = Math.max(
     DEFAULT_SHEET_SPAN / Math.max(config.rows - 1, 1) * 0.62,
@@ -1556,12 +1556,12 @@ function terminalLipSpanMask(
     1.7,
   )
   const lateLipHalfWidth = Math.max(
-    centerRidgeHalfWidth * lerpNumber(1.36, 1.02, curl),
-    requestedHalfWidth * lerpNumber(0.64, 0.58, curl),
+    centerRidgeHalfWidth * lerpNumber(1.24, 0.94, curl),
+    requestedHalfWidth * lerpNumber(0.58, 0.48, curl),
   )
   const earlyLipHalfWidth = Math.max(
-    centerRidgeHalfWidth * lerpNumber(1.72, 1.26, curl),
-    requestedHalfWidth * lerpNumber(0.86, 0.72, curl),
+    centerRidgeHalfWidth * lerpNumber(1.58, 1.14, curl),
+    requestedHalfWidth * lerpNumber(0.78, 0.62, curl),
   )
   const fullHalfWidth = lerpNumber(earlyLipHalfWidth, lateLipHalfWidth, terminalOpen * curl)
   const distance = Math.abs(centeredY)
@@ -1842,9 +1842,9 @@ function canonicalOverhangTargetPosition(
     )
     : rimY
   const bodyX = edgeRamp(profileU, 0, coreLongitudinalFade)
-  const bodyMask = Math.pow(bodyX, 1.18) * Math.pow(projectedRimY, lerpNumber(2.45, 1.62, wallSmoothness))
+  const bodyMask = Math.pow(bodyX, 1.18) * Math.pow(projectedRimY, lerpNumber(2.6, 1.82, wallSmoothness))
   const lipPreserveEnvelope = smootherStep((profileU - lipStart) / 0.035)
-  const lipSpanMask = Math.pow(clampNumber(projectedRimY, 0, 1), lerpNumber(2.7, 1.72, Math.max(wallSmoothness, lipStrength)))
+  const lipSpanMask = Math.pow(clampNumber(projectedRimY, 0, 1), lerpNumber(2.9, 1.94, Math.max(wallSmoothness, lipStrength)))
   const lipMask = lipStrength *
     lipPreserveEnvelope *
     edgeRamp(profileU, 0, coreLongitudinalFade) *
@@ -2077,10 +2077,12 @@ function curledConeSegments(
 ): Array<[ProfilePoint, ProfilePoint, ProfilePoint, ProfilePoint]> {
   const reachLimit = restEndX * lerpNumber(0.94, 1.18, dip)
   const xAt = (amount: number) => Math.min(reachLimit, span * amount)
-  const tipRadius = lerpNumber(0.22, 0.025, sharp)
-  const lipDrop = lerpNumber(0.34, 0.48, dip)
-  const tuck = lerpNumber(0.06, 0.18, dip) + sharp * 0.045
-  const undersideHeight = Math.max(0.14, lipDrop - lerpNumber(0.16, 0.33, sharp))
+  const noseX = xAt(lerpNumber(0.9, 1.02, dip))
+  const tipRadius = lerpNumber(0.24, 0.09, sharp)
+  const lipDrop = lerpNumber(0.34, 0.46, dip)
+  const curlTuck = lerpNumber(0.05, 0.12, dip) + sharp * 0.018
+  const undersideLift = lerpNumber(0.2, 0.3, dip) - sharp * 0.035
+  const returnLift = lerpNumber(0.055, 0.035, dip)
   const anchors: ProfilePoint[] = [
     point(0, 0),
     point(xAt(0.07), 0),
@@ -2089,16 +2091,15 @@ function curledConeSegments(
     point(xAt(lerpNumber(0.5, 0.55, dip)), height * lerpNumber(0.82, 0.91, dip)),
     point(xAt(lerpNumber(0.64, 0.7, dip)), height),
     point(xAt(lerpNumber(0.78, 0.9, dip)), height * lerpNumber(0.94, 0.88, dip)),
-    point(xAt(lerpNumber(0.9, 1.03, dip)), height * lerpNumber(0.72, 0.5, dip)),
-    point(xAt(lerpNumber(0.9, 1.03, dip)) - span * tipRadius, height * lerpNumber(0.48, 0.25, dip)),
-    point(xAt(lerpNumber(0.9, 1.03, dip)) - span * tuck, height * undersideHeight),
-    point(xAt(lerpNumber(0.66, 0.76, dip)), height * lerpNumber(0.24, 0.36, dip)),
-    point(xAt(lerpNumber(0.54, 0.6, dip)), height * lerpNumber(0.1, 0.13, dip)),
-    point(Math.min(restEndX * 0.97, Math.max(xAt(0.78), xAt(0.62) + span * 0.34)), height * lerpNumber(0.018, 0.004, dip)),
+    point(noseX, height * lerpNumber(0.7, 0.54, dip)),
+    point(noseX - span * tipRadius, height * lerpNumber(0.48, 0.3, dip)),
+    point(noseX - span * curlTuck, height * Math.max(0.17, lipDrop - undersideLift)),
+    point(noseX - span * lerpNumber(0.08, 0.16, dip), height * returnLift),
+    point(Math.min(restEndX * 0.98, noseX + span * lerpNumber(0.01, 0.04, dip)), height * lerpNumber(0.018, 0.006, dip)),
     point(restEndX, 0),
   ]
 
-  return smoothProfileSegments(anchors, lerpNumber(0.54, 0.82, 1 - sharp * 0.35))
+  return smoothProfileSegments(anchors, lerpNumber(0.62, 0.84, 1 - sharp * 0.42))
 }
 
 function sampleBezierPathByLength(

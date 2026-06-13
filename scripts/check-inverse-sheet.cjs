@@ -313,20 +313,22 @@ if (!(lipDipSweep[118].dropRatio >= 0.28 &&
   lipDipSweep[118].returnToFlat &&
   lipDipSweep[118].smoothTerminalReturn &&
   lipDipSweep[118].noBackfoldCavity &&
+  lipDipSweep[118].noVisibleDimplePocket &&
+  lipDipSweep[120].noVisibleDimplePocket &&
   lipDipSweep[118].tipForwardDistance >= breakingLipConfig.horizontalOffset * 0.055 &&
   lipDipSweep[118].hookTuckDistance >= breakingLipConfig.horizontalOffset * 0.025 &&
   lipDipSweep[118].tipDrop >= breakingLipConfig.height * 0.22 &&
   lipDipSweep[118].finalTangentAngleDeg <= -35 &&
   lipDipSweep[120].tipDrop >= lipDipSweep[105].tipDrop + breakingLipConfig.height * 0.12)) {
-  failures.push('lip dip should create a forward shoulder, downturned clean nose, smooth return, and no bowl pocket/collapsed cavity')
+  failures.push('lip dip should create a forward shoulder, downturned clean nose, smooth return, and no visible dimple/bowl pocket/collapsed cavity')
 }
 
 if (lipDipPreTerminalResidual < 0.5) {
   failures.push('lip dip should visibly reshape the full side profile into a curled tapered cone')
 }
 
-if (!(userLipDipCase.tipBelowLastPeak && userLipDipCase.finalTangentAngleDeg <= -40)) {
-  failures.push('lip dip above 90 deg should make the terminal free tip point downward')
+if (!(userLipDipCase.tipBelowLastPeak && userLipDipCase.finalTangentAngleDeg <= -40 && userLipDipCase.noVisibleDimplePocket)) {
+  failures.push('lip dip above 90 deg should make the terminal free tip point downward without a visible dimple pocket')
 }
 
 if (!(positionField.back.restGridFixed && positionField.front.restGridFixed &&
@@ -806,6 +808,12 @@ function summarizeBreakingLip(model) {
   const hookTuckDistance = shoulder.x - tip.x
   const returnForwardDistance = flatReturn.x - tip.x
   const noBackfoldCavity = centerlineBackfoldRatio(curlPath) <= 0.72
+  const tuckRatio = hookTuckDistance / Math.max(tipForwardDistance, model.config.spacing)
+  const returnRatio = returnForwardDistance / Math.max(tipForwardDistance, model.config.spacing)
+  const noVisibleDimplePocket = tuckRatio <= 0.55 &&
+    returnRatio >= 0.45 &&
+    tip.x >= crest.x + model.config.spacing * 0.15 &&
+    flatReturn.x >= tip.x + model.config.spacing * 1.2
 
   return {
     tipBelowLastPeak: dropRatio >= 0.08,
@@ -817,12 +825,15 @@ function summarizeBreakingLip(model) {
       returnForwardDistance > model.config.spacing * 1.25,
     smoothTerminalReturn: maxTerminalSegmentDrop <= maxZ * 0.48,
     noBackfoldCavity,
+    noVisibleDimplePocket,
     tipDx: round(tipDx),
     tipSlope: round(tipSlope),
     dropRatio: round(dropRatio),
     tipDrop: round(tipDrop),
     tipForwardDistance: round(tipForwardDistance),
     hookTuckDistance: round(hookTuckDistance),
+    tuckRatio: round(tuckRatio),
+    returnRatio: round(returnRatio),
     finalTangentAngleDeg: round(finalTangentAngleDeg),
     crestX: round(crest.x),
     crestZ: round(crest.z),
@@ -844,12 +855,15 @@ function emptyBreakingLipSummary() {
     returnToFlat: false,
     smoothTerminalReturn: false,
     noBackfoldCavity: true,
+    noVisibleDimplePocket: true,
     tipDx: 0,
     tipSlope: 0,
     dropRatio: 0,
     tipDrop: 0,
     tipForwardDistance: 0,
     hookTuckDistance: 0,
+    tuckRatio: 0,
+    returnRatio: 0,
     finalTangentAngleDeg: 0,
     crestX: 0,
     crestZ: 0,
