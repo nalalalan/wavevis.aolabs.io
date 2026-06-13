@@ -698,7 +698,12 @@ function positionCamera(
   selected?: SelectedElement,
 ): void {
   const sideLikeView = view === 'side' || view === 'slice'
-  const bounds = !selected && sideLikeView ? activeSideProfileBounds(model) : model.bounds
+  const overviewView = view === 'top' || view === 'isometric'
+  const bounds = !selected && sideLikeView
+    ? activeSideProfileBounds(model)
+    : !selected && overviewView
+      ? activeOverviewBounds(model)
+      : model.bounds
   const maxSpan = Math.max(bounds.span[0], bounds.span[1], bounds.span[2], 2)
   const focus = focusForSelected(model, selected ?? null)
   const fov = focus ? 32 : view === 'side' || view === 'isometric' ? 16 : view === 'slice' ? 14 : 42
@@ -739,6 +744,42 @@ function positionCamera(
 
 function clampIndex(value: number, length: number): number {
   return Math.max(0, Math.min(Math.max(length - 1, 0), Math.round(value)))
+}
+
+function activeOverviewBounds(model: LatticeModel): LatticeBounds {
+  const columnRange = activeSideColumnRange(model, 'focus')
+  const columnSpan = Math.max(columnRange.maxCol - columnRange.minCol + 1, 1)
+  const columnPad = Math.max(10, Math.ceil(columnSpan * 0.2))
+  const minCol = Math.max(0, columnRange.minCol - columnPad)
+  const maxCol = Math.min(model.config.columns - 1, columnRange.maxCol + columnPad)
+  const section = model.nodes.filter((node) => node.col >= minCol && node.col <= maxCol)
+
+  if (section.length < 2 || maxCol <= minCol) return model.bounds
+
+  const minX = Math.min(...section.map((node) => node.currentPosition[0]))
+  const maxX = Math.max(...section.map((node) => node.currentPosition[0]))
+  const minY = Math.min(...section.map((node) => node.currentPosition[1]))
+  const maxY = Math.max(...section.map((node) => node.currentPosition[1]))
+  const minZ = Math.min(...section.map((node) => node.currentPosition[2]), 0)
+  const maxZ = Math.max(...section.map((node) => node.currentPosition[2]))
+  const height = Math.max(maxZ - minZ, model.config.spacing * 4)
+  const padX = Math.max(model.config.spacing * 6, height * 0.62)
+  const padY = Math.max(model.config.spacing * 2, (maxY - minY) * 0.08)
+  const padZ = Math.max(model.config.spacing * 1.5, height * 0.18)
+  const min: Vec3 = [minX - padX, minY - padY, Math.min(0, minZ - padZ * 0.18)]
+  const max: Vec3 = [maxX + padX, maxY + padY, maxZ + padZ]
+  const center: Vec3 = [
+    (min[0] + max[0]) * 0.5,
+    (min[1] + max[1]) * 0.5,
+    (min[2] + max[2]) * 0.5,
+  ]
+
+  return {
+    min,
+    max,
+    center,
+    span: [max[0] - min[0], max[1] - min[1], max[2] - min[2]],
+  }
 }
 
 function activeSideProfileBounds(model: LatticeModel): LatticeBounds {
