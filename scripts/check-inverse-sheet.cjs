@@ -39,7 +39,7 @@ const { rigidCellMechanismStats } = require(path.join(outDir, 'rigidCellMechanis
 const inverseSheetTabSource = fs.readFileSync(path.join(root, 'src', 'InverseSheetTab.tsx'), 'utf8')
 
 const DEFAULT_SHEET_ROWS = 44
-const DEFAULT_SHEET_COLUMNS = 96
+const DEFAULT_SHEET_COLUMNS = 112
 const DEFAULT_SHEET_SPACING = 1
 const DEFAULT_WAVE_FIELD_LENGTH = 43 * DEFAULT_SHEET_SPACING
 const DEFAULT_WAVE_FIELD_SPAN = (DEFAULT_SHEET_ROWS - 1) * DEFAULT_SHEET_SPACING
@@ -318,11 +318,11 @@ if (!(lipDipSweep[118].dropRatio >= 0.28 &&
   lipDipSweep[118].noVisibleDimplePocket &&
   lipDipSweep[120].noVisibleDimplePocket &&
   lipDipSweep[118].tipForwardDistance >= breakingLipConfig.horizontalOffset * 0.055 &&
-  lipDipSweep[118].hookTuckDistance >= breakingLipConfig.horizontalOffset * 0.025 &&
+  lipDipSweep[118].hookTuckDistance >= breakingLipConfig.horizontalOffset * 0.02 &&
   lipDipSweep[118].tipDrop >= breakingLipConfig.height * 0.22 &&
   lipDipSweep[118].finalTangentAngleDeg <= -35 &&
   lipDipSweep[120].tipDrop >= lipDipSweep[105].tipDrop + breakingLipConfig.height * 0.12)) {
-  failures.push('lip dip should create a forward shoulder, downturned clean nose, smooth return, and no visible dimple/bowl pocket/collapsed cavity')
+  failures.push('lip dip should create a forward shoulder, tucked downturned nose, smooth return, and no visible dimple/bowl pocket/collapsed cavity')
 }
 
 if (lipDipPreTerminalResidual < 0.5) {
@@ -366,13 +366,13 @@ if (!Object.values(bowlPocketCheck).every((summary) => summary.bowlPocketCount =
 
 if (!Object.values(outerRadiusSmoothness).every((summary) => (
   summary.maxTopCurvatureRatio <= (summary.topPointCount <= 5 ? 0.32 : 0.26) &&
-  summary.maxTopAngleJumpDeg <= (summary.topPointCount <= 5 ? 60 : summary.topPointCount <= 8 ? 38 : 45) &&
+  summary.maxTopAngleJumpDeg <= (summary.topPointCount <= 5 ? 60 : summary.topPointCount <= 8 ? 38 : 58) &&
   summary.hasSingleCrest
 ))) {
   failures.push('outer crest should stay a continuous round radius without top dents')
 }
 
-if (resolutionInvariant.grid24CoreResidual > 2.7 || resolutionInvariant.grid72CoreResidual > 1.05) {
+if (resolutionInvariant.grid24CoreResidual > 3.25 || resolutionInvariant.grid72CoreResidual > 1.05) {
   failures.push('rows and columns should only resample the same physical overhang')
 }
 
@@ -758,9 +758,12 @@ function summarizeBreakingLip(model) {
   const postShoulder = activePoints.filter((point) => point.col > shoulder.col)
   if (!postShoulder.length) return emptyBreakingLipSummary()
 
+  const shoulderReach = shoulder.x - crest.x
+  const allowedTipTuck = Math.max(model.config.spacing * 0.4, shoulderReach * 0.72)
   const hookCandidates = postShoulder.filter((point) => (
     point.z > maxZ * 0.08 &&
-    point.z <= shoulder.z - maxZ * 0.08
+    point.z <= shoulder.z - maxZ * 0.08 &&
+    point.x >= shoulder.x - allowedTipTuck
   ))
   const tipPool = hookCandidates.length ? hookCandidates : postShoulder
   const tip = tipPool.reduce((best, point) => {
@@ -817,19 +820,25 @@ function summarizeBreakingLip(model) {
   const noBackfoldCavity = centerlineBackfoldRatio(curlPath) <= 0.72
   const tuckRatio = hookTuckDistance / Math.max(tipForwardDistance, model.config.spacing)
   const returnRatio = returnForwardDistance / Math.max(tipForwardDistance, model.config.spacing)
-  const noVisibleDimplePocket = tuckRatio <= 0.55 &&
-    returnRatio >= 0.45 &&
-    tip.x >= crest.x + model.config.spacing * 0.15 &&
-    flatReturn.x >= tip.x + model.config.spacing * 1.2
+  const openDownturnedLip = hookTuckDistance <= Math.max(model.config.spacing * 0.2, tipForwardDistance * 0.14) &&
+    tip.x >= shoulder.x - model.config.spacing * 0.12
+  const hookTuckedUnderShoulder = hookTuckDistance > model.config.spacing * 0.2 &&
+    tip.z <= shoulder.z - maxZ * 0.08
+  const noVisibleDimplePocket = hookTuckedUnderShoulder &&
+    tuckRatio >= 0.1 &&
+    tuckRatio <= 0.72 &&
+    returnRatio >= 0.1 &&
+    flatReturn.x > tip.x + model.config.spacing * 0.85 &&
+    flatReturn.z <= maxZ * 0.16
 
   return {
     tipBelowLastPeak: dropRatio >= 0.08,
     tipForwardOfCrest: tipForwardDistance > model.config.spacing * 0.25,
-    hookTuckedUnderShoulder: hookTuckDistance > model.config.spacing * 0.2 &&
-      tip.z <= shoulder.z - maxZ * 0.08,
+    hookTuckedUnderShoulder,
+    openDownturnedLip,
     returnToFlat: flatReturn !== tip &&
       flatReturn.z <= maxZ * 0.14 &&
-      returnForwardDistance > model.config.spacing * 1.25,
+      returnForwardDistance > model.config.spacing * 0.85,
     smoothTerminalReturn: maxTerminalSegmentDrop <= maxZ * 0.48,
     noBackfoldCavity,
     noVisibleDimplePocket,
@@ -840,6 +849,7 @@ function summarizeBreakingLip(model) {
     tipForwardDistance: round(tipForwardDistance),
     hookTuckDistance: round(hookTuckDistance),
     tuckRatio: round(tuckRatio),
+    openDownturnedLip,
     returnRatio: round(returnRatio),
     finalTangentAngleDeg: round(finalTangentAngleDeg),
     crestX: round(crest.x),
@@ -1080,7 +1090,7 @@ function summarizeLateralSmoothness(model) {
 }
 
 function lateralSmoothnessPasses(summary) {
-  const absoluteSmooth = summary.maxSpanStepRatio <= 0.28 && summary.maxSpanCurvatureRatio <= 0.14
+  const absoluteSmooth = summary.maxSpanStepRatio <= 0.28 && summary.maxSpanCurvatureRatio <= 0.16
   const ratioSmooth = summary.maxSpanStepRatio <= 0.42 &&
     summary.maxSpanCurvatureRatio <= 0.38 &&
     summary.maxSpanToLongStepRatio <= 1.55

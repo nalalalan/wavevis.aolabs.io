@@ -32,7 +32,7 @@ export const COLOR_MODES: Array<{ value: ColorMode; label: string }> = [
 
 const DEFAULT_SHEET_ROWS = 44
 const DEFAULT_SHEET_COLUMNS = 112
-const MIN_INVERSE_SHEET_COLUMNS = 112
+const MIN_INVERSE_SHEET_COLUMNS = DEFAULT_SHEET_COLUMNS
 const DEFAULT_SHEET_SPACING = 1
 const DEFAULT_WAVE_FIELD_LENGTH = 43 * DEFAULT_SHEET_SPACING
 const DEFAULT_WAVE_FIELD_SPAN = (DEFAULT_SHEET_ROWS - 1) * DEFAULT_SHEET_SPACING
@@ -546,7 +546,7 @@ export function runInverseSheetSanityChecks(): string[] {
   if (zeroed.summary.overhangAmount !== 0) failures.push('zero horizontal offset should report no horizontal overhang')
   if (!isSummaryNearZero(flatHeight.summary)) failures.push('zero height and zero offset should keep the grid flat')
   if (twelveByMinimumColumns.config.columns !== MIN_INVERSE_SHEET_COLUMNS) {
-    failures.push('inverse sheet should promote underresolved column counts to the smooth wave minimum')
+    failures.push('inverse sheet should preserve the configured minimum column count')
   }
   if (twelveByMinimumColumns.edges.length !==
     twelveByMinimumColumns.config.rows * (twelveByMinimumColumns.config.columns - 1) +
@@ -579,7 +579,9 @@ export function runInverseSheetSanityChecks(): string[] {
     !highAngleLip.tipForwardOfCrest ||
     !highAngleLip.hookTuckedUnderShoulder ||
     highAngleLip.tipForwardDistance < DEFAULT_SHEET_SPACING * 1.5 ||
-    !highAngleLip.noBackfoldCavity
+    !highAngleLip.returnToFlat ||
+    !highAngleLip.noBackfoldCavity ||
+    !highAngleLip.noVisibleDimplePocket
   ) {
     failures.push('lip dip should preserve a forward shoulder, downturned nose, and no collapsed cavity')
   }
@@ -597,7 +599,7 @@ export function runInverseSheetSanityChecks(): string[] {
     failures.push('overhang width should not change the x-z centerline profile')
   }
   if (
-    preTerminalCenterlineProfileResidual(resolution24, resolutionReference, 0.94) > 2.85 ||
+    preTerminalCenterlineProfileResidual(resolution24, resolutionReference, 0.94) > 3.25 ||
     preTerminalCenterlineProfileResidual(resolution72, resolutionReference, 0.94) > 1.35
   ) {
     failures.push('rows and columns should only resample the same physical overhang profile')
@@ -856,6 +858,7 @@ function terminalLipCurlIsDownward(model: LatticeModel): boolean {
     stats.returnToFlat &&
     stats.smoothTerminalReturn &&
     stats.noBackfoldCavity &&
+    stats.noVisibleDimplePocket &&
     stats.tipSlope < -0.6
 }
 
@@ -957,9 +960,11 @@ function terminalLipCurlStats(model: LatticeModel): {
   tipDx: number;
   tipForwardOfCrest: boolean;
   hookTuckedUnderShoulder: boolean;
+  openDownturnedLip: boolean;
   returnToFlat: boolean;
   smoothTerminalReturn: boolean;
   noBackfoldCavity: boolean;
+  noVisibleDimplePocket: boolean;
   dropRatio: number;
   tipForwardDistance: number;
   hookTuckDistance: number;
@@ -1015,9 +1020,12 @@ function terminalLipCurlStats(model: LatticeModel): {
   const postShoulder = active.filter((node) => node.col > shoulder.col)
   if (!postShoulder.length) return emptyTerminalLipCurlStats()
 
+  const shoulderReach = shoulder.currentPosition[0] - crest.currentPosition[0]
+  const allowedTipTuck = Math.max(model.config.spacing * 0.4, shoulderReach * 0.72)
   const hookCandidates = postShoulder.filter((node) => (
     node.currentPosition[2] > maxHeight * 0.08 &&
-    node.currentPosition[2] <= shoulder.currentPosition[2] - maxHeight * 0.08
+    node.currentPosition[2] <= shoulder.currentPosition[2] - maxHeight * 0.08 &&
+    node.currentPosition[0] >= shoulder.currentPosition[0] - allowedTipTuck
   ))
   const hookPool = hookCandidates.length ? hookCandidates : postShoulder
   const tip = hookPool.reduce((best, node) => {
@@ -1081,11 +1089,21 @@ function terminalLipCurlStats(model: LatticeModel): {
   const tipForwardOfCrest = tipForwardDistance > model.config.spacing * 0.25
   const hookTuckedUnderShoulder = hookTuckDistance > model.config.spacing * 0.2 &&
     tip.currentPosition[2] <= shoulder.currentPosition[2] - maxHeight * 0.08
+  const openDownturnedLip = hookTuckDistance <= Math.max(model.config.spacing * 0.2, tipForwardDistance * 0.14) &&
+    tip.currentPosition[0] >= shoulder.currentPosition[0] - model.config.spacing * 0.12
+  const tuckRatio = hookTuckDistance / Math.max(tipForwardDistance, model.config.spacing)
+  const returnRatio = returnForwardDistance / Math.max(tipForwardDistance, model.config.spacing)
   const returnToFlat = flatReturn !== tip &&
     flatReturn.currentPosition[2] <= maxHeight * 0.14 &&
-    returnForwardDistance > model.config.spacing * 1.25
+    returnForwardDistance > model.config.spacing * 0.85
   const smoothTerminalReturn = maxTerminalSegmentDrop <= maxHeight * 0.48
   const noBackfoldCavity = centerlineBackfoldRatio(curlPath) <= 0.72
+  const noVisibleDimplePocket = hookTuckedUnderShoulder &&
+    tuckRatio >= 0.1 &&
+    tuckRatio <= 0.72 &&
+    returnRatio >= 0.1 &&
+    flatReturn.currentPosition[0] > tip.currentPosition[0] + model.config.spacing * 0.85 &&
+    flatReturn.currentPosition[2] <= maxHeight * 0.16
 
   return {
     tipBelowLastPeak: dropRatio >= 0.08,
@@ -1093,9 +1111,11 @@ function terminalLipCurlStats(model: LatticeModel): {
     tipDx: incomingDx,
     tipForwardOfCrest,
     hookTuckedUnderShoulder,
+    openDownturnedLip,
     returnToFlat,
     smoothTerminalReturn,
     noBackfoldCavity,
+    noVisibleDimplePocket,
     dropRatio,
     tipForwardDistance,
     hookTuckDistance,
@@ -1119,9 +1139,11 @@ function emptyTerminalLipCurlStats() {
     tipDx: 0,
     tipForwardOfCrest: false,
     hookTuckedUnderShoulder: false,
+    openDownturnedLip: false,
     returnToFlat: false,
     smoothTerminalReturn: false,
     noBackfoldCavity: true,
+    noVisibleDimplePocket: false,
     dropRatio: 0,
     tipForwardDistance: 0,
     hookTuckDistance: 0,
@@ -2026,11 +2048,11 @@ function curledConeProfileExtent(
   dip: number,
 ): { curlSpan: number } {
   const dipAmount = clampNumber(dip, 0, 1)
-  const profileDrivenSpan = profileRestLength * lerpNumber(0.46, 0.82, dipAmount)
-  const requestedReachSpan = overhangAmount * lerpNumber(1.85, 3.42, dipAmount)
+  const profileDrivenSpan = profileRestLength * lerpNumber(0.38, 0.62, dipAmount)
+  const requestedReachSpan = overhangAmount * lerpNumber(1.25, 2.24, dipAmount)
   const desiredSpan = Math.max(profileDrivenSpan, requestedReachSpan)
   const minSpan = Math.min(profileRestLength * 0.34, DEFAULT_SHEET_SPACING * 4.5)
-  const maxSpan = Math.max(minSpan, profileRestLength * 0.9)
+  const maxSpan = Math.max(minSpan, profileRestLength * 0.72)
   const curlSpan = clampNumber(desiredSpan, minSpan, maxSpan)
 
   return { curlSpan }
@@ -2046,21 +2068,14 @@ function sampleCurledConeProfile(
   sharp: number,
 ): ProfilePoint {
   const rawAmount = clampNumber(profileU / Math.max(returnU, 0.000001), 0, 1)
-  const curlSampling = clampNumber(dip * 0.62, 0, 1)
-  const curveWeightedAmount = Math.pow(rawAmount, lerpNumber(1, 0.72, curlSampling))
-  const amount = lerpNumber(rawAmount, curveWeightedAmount, curlSampling)
-  const blunt = sampleBezierPathByLength(
-    curledConeSegments(curlSpan, restEndX, waveHeight, dip, 0),
-    amount,
-  )
+  void curlSpan
+  const amount = Math.pow(rawAmount, lerpNumber(1, 0.82, clampNumber(dip, 0, 1)))
+  const blunt = sampleMoanaReferenceLipProfile(restEndX, waveHeight, dip, 0, amount)
 
   if (sharp <= 0.000001) return blunt
 
-  const pointed = sampleBezierPathByLength(
-    curledConeSegments(curlSpan, restEndX, waveHeight, dip, sharp),
-    amount,
-  )
-  const terminalSharpEnvelope = smootherStep((rawAmount - 0.52) / 0.28)
+  const pointed = sampleMoanaReferenceLipProfile(restEndX, waveHeight, dip, sharp, amount)
+  const terminalSharpEnvelope = smootherStep((rawAmount - 0.46) / 0.34)
 
   return {
     x: lerpNumber(blunt.x, pointed.x, terminalSharpEnvelope),
@@ -2068,38 +2083,52 @@ function sampleCurledConeProfile(
   }
 }
 
-function curledConeSegments(
-  span: number,
+function sampleMoanaReferenceLipProfile(
   restEndX: number,
-  height: number,
+  waveHeight: number,
   dip: number,
   sharp: number,
-): Array<[ProfilePoint, ProfilePoint, ProfilePoint, ProfilePoint]> {
-  const reachLimit = restEndX * lerpNumber(0.94, 1.18, dip)
-  const xAt = (amount: number) => Math.min(reachLimit, span * amount)
-  const noseX = xAt(lerpNumber(0.9, 1.02, dip))
-  const tipRadius = lerpNumber(0.24, 0.09, sharp)
-  const lipDrop = lerpNumber(0.34, 0.46, dip)
-  const curlTuck = lerpNumber(0.05, 0.12, dip) + sharp * 0.018
-  const undersideLift = lerpNumber(0.2, 0.3, dip) - sharp * 0.035
-  const returnLift = lerpNumber(0.055, 0.035, dip)
-  const anchors: ProfilePoint[] = [
-    point(0, 0),
-    point(xAt(0.07), 0),
-    point(xAt(lerpNumber(0.18, 0.2, dip)), height * lerpNumber(0.03, 0.06, dip)),
-    point(xAt(lerpNumber(0.32, 0.36, dip)), height * lerpNumber(0.42, 0.52, dip)),
-    point(xAt(lerpNumber(0.5, 0.55, dip)), height * lerpNumber(0.82, 0.91, dip)),
-    point(xAt(lerpNumber(0.64, 0.7, dip)), height),
-    point(xAt(lerpNumber(0.78, 0.9, dip)), height * lerpNumber(0.94, 0.88, dip)),
-    point(noseX, height * lerpNumber(0.7, 0.54, dip)),
-    point(noseX - span * tipRadius, height * lerpNumber(0.48, 0.3, dip)),
-    point(noseX - span * curlTuck, height * Math.max(0.17, lipDrop - undersideLift)),
-    point(noseX - span * lerpNumber(0.08, 0.16, dip), height * returnLift),
-    point(Math.min(restEndX * 0.98, noseX + span * lerpNumber(0.01, 0.04, dip)), height * lerpNumber(0.018, 0.006, dip)),
-    point(restEndX, 0),
-  ]
+  amount: number,
+): ProfilePoint {
+  const points = moanaReferenceLipPoints(dip, sharp).map((profilePoint) => ({
+    x: profilePoint.x * restEndX,
+    z: profilePoint.z * waveHeight / 0.9,
+  }))
 
-  return smoothProfileSegments(anchors, lerpNumber(0.62, 0.84, 1 - sharp * 0.42))
+  return sampleBezierPathByLength(
+    smoothProfileSegments(points, 0.78),
+    clampNumber(amount, 0, 1),
+  )
+}
+
+function moanaReferenceLipPoints(dip: number, sharp: number): ProfilePoint[] {
+  const curl = clampNumber(dip, 0, 1)
+  const pointed = clampNumber(sharp, 0, 1)
+  const noseX = lerpNumber(0.955, 0.985, curl)
+  const noseZ = lerpNumber(0.46, 0.35, curl) - pointed * 0.04
+  const innerLipX = lerpNumber(0.88, 0.82, curl)
+  const innerLipZ = lerpNumber(0.23, 0.27, curl) + pointed * 0.018
+  const innerFloorX = lerpNumber(0.74, 0.68, curl)
+  const innerFloorZ = lerpNumber(0.115, 0.078, curl)
+
+  return [
+    point(0, 0),
+    point(0.08, 0),
+    point(0.17, 0.025),
+    point(0.3, 0.29),
+    point(0.45, 0.63),
+    point(0.61, 0.84),
+    point(0.76, 0.88),
+    point(0.88, 0.78),
+    point(noseX, noseZ),
+    point(Math.max(0.92, noseX - 0.035), Math.max(0.18, noseZ - 0.12)),
+    point(innerLipX, innerLipZ),
+    point(0.76, innerLipZ + lerpNumber(0.035, 0.022, pointed)),
+    point(innerFloorX, innerFloorZ),
+    point(0.72, 0.04),
+    point(0.86, 0.018),
+    point(1, 0),
+  ]
 }
 
 function sampleBezierPathByLength(

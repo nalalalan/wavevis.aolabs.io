@@ -312,7 +312,7 @@ Renderer & Shows the actual mechanism. & Fake shell, hidden wall, side view as c
 
 The current visible app does not ask the user to draw a profile. That path created too much ambiguity and repeatedly made the simulator look like a swept tunnel or hand-edited cavity rather than a single coherent wave. The source may still contain historical helper functions for compatibility, but the user-facing target is generated: a localized Moana-ocean deformation with a broad rear ramp, rounded crest, forward-and-down lip, open underside, smooth lateral fade, and flat rectangular perimeter.
 
-The generated target is a reference field, not a set of cell locations. The final cell grid is determined by row and column counts, then sampled against that target. A clean state must keep the full linkage array visible while making the centerline and the lateral silhouette read as one plunging wave. The generator must never stitch the lip directly to the ground or draw a hard polygon boundary around a former editor curve, because that creates the wall, bowl, and cavity failures this record explicitly rejects.
+The generated target is a reference field, not a set of cell locations. The final cell grid is determined by row and column counts, then sampled against that target. A clean state must keep the full linkage array visible while making the centerline and the lateral silhouette read as one plunging wave. The generator must never stitch the lip directly to the ground or draw a hard polygon boundary around a former editor curve, because that creates the wall, bowl, and cavity failures this record explicitly rejects. The curl is also resolution-sensitive: under-resolved column counts are promoted to the smooth-wave minimum because honoring a compact column request recreated the visible dimple and made the side silhouette fail.
 
 \section{Slider semantics}
 
@@ -349,7 +349,7 @@ The ramp rises from the sheet. The crest rounds over. The lip turns forward and 
 \[
   \frac{dz}{dx}\bigg|_{\mathrm{tip}} < 0.
 \]
-The final point is allowed to sit behind the farthest horizontal reach. In a real breaking wave, the maximum reach can occur at the shoulder while the lower tip tucks under the crest. Treating the farthest-right point as the tip is the mistake that produces a straight falling chute.
+The final point is allowed to be lower than the farthest horizontal reach. In a real breaking wave, the maximum reach can occur at the shoulder while the lip tip turns down from that shoulder. The downturn must remain open and forward-readable from the side; it must not fold into a closed pucker, dimple, bowl, or side-wall pocket. Treating the farthest-right point as the tip is the mistake that produces a straight falling chute, while overcorrecting into an under-tucked return is the mistake that produces the rejected cavity.
 
 The three-dimensional field must multiply this centerline motion by a span falloff:
 \[
@@ -406,7 +406,7 @@ Morph continuity & Residual between adjacent morph samples. & No sudden jumps or
 Slider isolation & Aligned geometries across position/steer/width changes. & Rigid controls stay rigid; width stays span-only. \\
 Visual side check & Browser side view screenshot or direct render inspection. & Curl visible without cross-section mode. \\
 Defect repair loop & Confirmed visible defects re-enter source repair. & Acknowledging dimples, pockets, walls, or missing curl is not a stopping state. \\
-\code{noVisibleDimplePocket} & Lip tuck and return ratios in the centerline curl. & The tip may curl under, but it must not form a tight pucker, pocket, or enclosed bowl. \\
+\code{noVisibleDimplePocket} & Open downturn, return advancement, and curl clearance in the centerline. & The tip may curl downward, but it must not form a tight pucker, pocket, dimple, or enclosed bowl. \\
 \code{startupUrlParamCoverage} & Startup parser covers all public and legacy slider aliases. & A shared verification URL cannot silently load a different height, overhang, lip dip, width, or smoothing state. \\
 \bottomrule
 \end{tabular}
@@ -444,7 +444,7 @@ The main design lesson is that WaveVis cannot be corrected by tuning only the si
 
 This distinction also clarifies future work. If the simulator produces a good cross-section but a bad side view, the cross-section is only evidence that the profile exists somewhere. The real artifact still fails if the full three-dimensional render hides the curl or reads as an extrusion. Similarly, if the mesh is clean but the wave looks like a low mound, the mechanism is not enough. Both the shape and the linkage must be correct.
 
-A newer lesson is that defect naming is not progress by itself. If a rendered state shows dimples, pockets, side walls, or a missing curl, the correct workflow is source repair, geometry-check update, rendered screenshot verification, and public-bundle verification. The current check names this directly as \code{noVisibleDimplePocket}: the lip can tuck under the shoulder, but the tuck ratio must stay bounded and the return branch must keep advancing to the flat sheet instead of folding into a pucker. The same source-of-truth rule applies to URL state. Several correction screenshots used URLs that carried explicit height, overhang, width, lipDip, and smoothing values; ignoring those parameters caused the page to render a different geometry than the requested test state. The startup parser is now part of validation through \code{startupUrlParamCoverage}. The architecture record is useful only if it changes the generator, state loader, and acceptance loop; it cannot substitute for a corrected human-facing WaveVis render.
+A newer lesson is that defect naming is not progress by itself. If a rendered state shows dimples, pockets, side walls, or a missing curl, the correct workflow is source repair, geometry-check update, rendered screenshot verification, and public-bundle verification. The current check names this directly as \code{noVisibleDimplePocket}: the lip must remain an open downturned branch with visible clearance and a return that advances into the flat sheet instead of folding into a pucker. The same source-of-truth rule applies to URL state. Several correction screenshots used URLs that carried explicit height, overhang, width, lipDip, and smoothing values; ignoring those parameters caused the page to render a different geometry than the requested test state. The startup parser is now part of validation through \code{startupUrlParamCoverage}. The architecture record is useful only if it changes the generator, state loader, and acceptance loop; it cannot substitute for a corrected human-facing WaveVis render.
 
 \section{Acknowledgements}
 
