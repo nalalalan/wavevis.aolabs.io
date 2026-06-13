@@ -136,7 +136,7 @@
 \end{center}
 
 \vspace{0.35em}
-\noindent\textbf{WaveVis is an inverse simulator for a mostly flat rectangular linkage sheet with one localized plunging-wave deformation rising out of the sheet. The primary visual target is the Moana ocean reference geometry supplied for this project: a translucent, water-like sheet rising from a flat surface, swelling into a rounded crest, curling forward and downward, and returning to flat without walls, cavities, or extruded tunnel behavior. The intended artifact is not an extruded ribbon, half-pipe, swept cross-section, roof, bridge, or hollow shell. It is a full array of linkage cells over a fixed flat perimeter: the center region ramps upward, forms a rounded crest, projects a lip forward and downward, and fades smoothly back into the surrounding sheet in all directions. The reference geometry is an acceptance target, not a success claim. A generated state is still open if the human-facing render reads as a tunnel, wall-covered cavity, angular blob, missing curl, or broken linkage even when code checks pass. This paper replaces the earlier narrow constraint-proof PDF as the visible system record. It defines the reference geometry, coordinate systems, profile editors, slider semantics, topology invariants, rendering views, failure modes, and verification gates required before WaveVis work can be called correct.}
+\noindent\textbf{WaveVis is an inverse simulator for a mostly flat rectangular linkage sheet with one localized plunging-wave deformation rising out of the sheet. The primary visual target is the Moana ocean reference geometry supplied for this project: a translucent, water-like sheet rising from a flat surface, swelling into a rounded crest, curling forward and downward, and returning to flat without walls, cavities, or extruded tunnel behavior. The intended artifact is not an extruded ribbon, half-pipe, swept cross-section, roof, bridge, or hollow shell. It is a full array of linkage cells over a fixed flat perimeter: the center region ramps upward, forms a rounded crest, projects a lip forward and downward, and fades smoothly back into the surrounding sheet in all directions. The reference geometry is an acceptance target, not a success claim. A generated state is still open if the human-facing render reads as a tunnel, wall-covered cavity, angular blob, missing curl, or broken linkage even when code checks pass. This paper replaces the earlier narrow constraint-proof PDF as the visible system record. It defines the reference geometry, coordinate systems, generated Moana-ocean target, visible slider semantics, topology invariants, rendering views, failure modes, and verification gates required before WaveVis work can be called correct.}
 
 \newpage
 \pagestyle{fancy}
@@ -275,9 +275,9 @@ The key architectural rule is that \(A(u,v)\) is not constant in \(v\). A consta
 
 The target-building pipeline is:
 \begin{enumerate}
-  \item sanitize rows, columns, profile mode, sliders, display flags, and URL parameters;
+  \item sanitize rows, columns, visible sliders, display flags, and URL parameters;
   \item build the full rectangular node grid;
-  \item compute the canonical wave displacement from the selected profile mode;
+  \item compute the canonical Moana-ocean wave displacement from the generated target;
   \item apply the span envelope that localizes the wave in \(y\);
   \item preserve the boundary by forcing perimeter displacement to zero;
   \item apply morph interpolation from rest to target;
@@ -287,7 +287,7 @@ The target-building pipeline is:
   \item render the full array, side view, or cross-section without substituting fake surfaces.
 \end{enumerate}
 
-The distinction between shape parameters and rigid placement parameters is essential. Height, scale, and the profile editor change the canonical target. Steer rotates the finished target around the anchor. Position translates the finished target horizontally. Neither steer nor position may feed back into profile curvature, curl, width, strain generation, or cell topology.
+The distinction between the generated target and rigid placement parameters is essential. The visible app no longer exposes manual \(xz\) or \(xy\) profile editors. The generator owns the Moana-ocean target. The user-facing sliders are intentionally narrow: scale uniformly resizes that target, morph blends from rest to the completed target, steer rotates the finished target around the anchor, and position translates the finished target horizontally. Neither steer nor position may feed back into profile curvature, curl, width, strain generation, or cell topology.
 
 \begin{table}[H]
 \centering
@@ -308,21 +308,11 @@ Renderer & Shows the actual mechanism. & Fake shell, hidden wall, side view as c
 \caption{Pipeline stages and the failure modes each stage must prevent.}
 \end{table}
 
-\section{Profile and slice editors}
+\section{Generated Moana target}
 
-The custom \(xz\) editor is a side-profile reference. Its points are not cell locations. They are control points for a smooth reference curve that the surface generator samples. The final cell grid is still determined by the row and column count.
+The current visible app does not ask the user to draw a profile. That path created too much ambiguity and repeatedly made the simulator look like a swept tunnel or hand-edited cavity rather than a single coherent wave. The source may still contain historical helper functions for compatibility, but the user-facing target is generated: a localized Moana-ocean deformation with a broad rear ramp, rounded crest, forward-and-down lip, open underside, smooth lateral fade, and flat rectangular perimeter.
 
-The custom \(xy\) slice editor is a span-envelope reference at a selected height or profile level. It should not define the ground footprint. Its purpose is to describe how wide the wave is at a slice through the deformation, particularly near the underside of the curl where unwanted walls can otherwise cover the tube. The slice marker on the \(xz\) editor identifies the height/profile level that the \(xy\) editor is editing.
-
-Mathematically, the \(xz\) editor contributes a curve
-\[
-  P(u)=(x_p(u), z_p(u)),
-\]
-and the \(xy\) editor contributes an envelope sample
-\[
-  W(u,v) \in [0,1].
-\]
-The actual target displacement is produced by multiplying these sources by a smooth support field. The editor curves should never be treated as a hard polygon whose boundary is stitched directly to the ground, because that creates walls, cavities, and straight connector chutes.
+The generated target is a reference field, not a set of cell locations. The final cell grid is determined by row and column counts, then sampled against that target. A clean state must keep the full linkage array visible while making the centerline and the lateral silhouette read as one plunging wave. The generator must never stitch the lip directly to the ground or draw a hard polygon boundary around a former editor curve, because that creates the wall, bowl, and cavity failures this record explicitly rejects.
 
 \section{Slider semantics}
 
@@ -334,21 +324,14 @@ The actual target displacement is produced by multiplying these sources by a smo
 Control & Intended effect & Must not do \\
 \midrule
 \code{morph} & Blend rest sheet into the completed target. & Remesh, flip cells, create zig-zags, change profile identity. \\
-\code{scale} & Uniformly enlarge or reduce the profile reference. & Change steer, position, or topology. \\
-\code{height} & Vertical size of generated-mode wave. & Create top dents or side walls. \\
-\code{overhang} & Forward reach of generated-mode wave. & Pull the lip into a straight vertical chute. \\
-\code{lipDip} & Increase forward-and-down curl near the center. & Lower a terminal endpoint only, make a global hill, or form a swept tunnel. \\
-\code{lipSharpness} & Tighten the terminal lip radius. & Explode spikes or change the broad wave body. \\
-\code{width} & Scale the lateral active span. & Change centerline profile or create row popping. \\
-\code{groundTransition} & Broaden the smooth ramp into the flat sheet. & Break the perimeter or erase the lip. \\
-\code{wallSmoothness} & Round lateral side transitions. & Produce side walls covering the curl. \\
-\code{flatContribution} & Share deformation with the surrounding apron. & Flatten the main wave. \\
+\code{scale} & Uniformly enlarge or reduce the generated Moana-ocean target. & Change steer, position, topology, or the target's wave identity. \\
 \code{steer} & Rigid yaw rotation of the finished wave. & Bend, stretch, or reshape the wave. \\
 \code{position} & Rigid horizontal translation of the finished wave. & Change silhouette, strain field, or curl. \\
+display toggles & Surface, flat grid, cells, and connectors are display layers only. & Hide broken geometry or substitute a fake repair path. \\
 \bottomrule
 \end{tabular}
 }
-\caption{Control contract. Each slider has a narrow semantic role; cross-coupling that changes another slider's job is a bug unless the interaction is explicitly documented and verified.}
+\caption{Visible control contract after removing manual profile editors and hidden shape sliders. The generated Moana-ocean target is the default shape; visible controls must preserve that shape unless their narrow role explicitly changes scale, morph, steer, position, or display layers.}
 \end{table}
 
 \section{Breaking-wave geometry}
@@ -452,7 +435,7 @@ The public app serves a static build. The architecture PDF is placed in the publ
 
 \section{Discussion}
 
-The main design lesson is that WaveVis cannot be corrected by tuning only the side profile. The user-facing failure was three-dimensional: side walls, swept tubes, missing full-array linkages, broken side/cross-section semantics, and zig-zag legs. The architecture therefore needs a two-level contract. The profile editor controls the desired silhouette. The sheet generator converts that silhouette into a localized displacement field with lateral fade, boundary preservation, and topology completeness.
+The main design lesson is that WaveVis cannot be corrected by tuning only the side profile. The user-facing failure was three-dimensional: side walls, swept tubes, missing full-array linkages, broken side/cross-section semantics, and zig-zag legs. The architecture therefore now uses a single generated target contract rather than a manual editor contract. The sheet generator is responsible for creating a localized Moana-like displacement field with lateral fade, boundary preservation, topology completeness, and a visible curled lip.
 
 This distinction also clarifies future work. If the simulator produces a good cross-section but a bad side view, the cross-section is only evidence that the profile exists somewhere. The real artifact still fails if the full three-dimensional render hides the curl or reads as an extrusion. Similarly, if the mesh is clean but the wave looks like a low mound, the mechanism is not enough. Both the shape and the linkage must be correct.
 

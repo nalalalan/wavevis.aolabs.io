@@ -55,7 +55,11 @@ export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequ
           <LatticeModelGroup model={model} selected={selected} view={viewRequest.view} onEdgePick={onEdgePick} />
         </Suspense>
         <SceneGrid bounds={model.bounds} />
-        {viewRequest.view !== 'side' && viewRequest.view !== 'slice' && <AxisLabels bounds={model.bounds} />}
+        {viewRequest.view !== 'side' && viewRequest.view !== 'slice' && (
+          <Suspense fallback={null}>
+            <AxisLabels bounds={model.bounds} />
+          </Suspense>
+        )}
         <CameraRig model={model} viewRequest={viewRequest} focusRequest={focusRequest} />
       </Canvas>
       {model.config.showHeatmap && <SceneColorBar model={model} />}
@@ -78,7 +82,7 @@ function LatticeModelGroup({
   const quadMetricById = useMemo(() => new Map(model.quadMetrics.map((metric) => [metric.quadId, metric])), [model.quadMetrics])
   const dihedralByQuad = useMemo(() => buildDihedralByQuad(model.dihedralMetrics), [model.dihedralMetrics])
   const sliceProfileView = view === 'slice'
-  const sideMechanismView = view === 'side'
+  const sideMechanismView = view === 'side' || view === 'isometric'
   const renderScope = useMemo(() =>
     buildNodeEdgeRenderScope(model, sliceProfileView, sideMechanismView),
   [model, sideMechanismView, sliceProfileView])
@@ -509,7 +513,7 @@ function SelectedHighlight({
   view: CameraViewRequest['view']
 }) {
   if (!selected) return null
-  const sideLikeView = view === 'side' || view === 'slice'
+  const sideLikeView = view === 'side' || view === 'slice' || view === 'isometric'
 
   if (selected.kind === 'edge') {
     const edge = model.edges.find((candidate) => candidate.id === selected.id)
@@ -697,7 +701,7 @@ function positionCamera(
   const bounds = !selected && sideLikeView ? activeSideProfileBounds(model) : model.bounds
   const maxSpan = Math.max(bounds.span[0], bounds.span[1], bounds.span[2], 2)
   const focus = focusForSelected(model, selected ?? null)
-  const fov = focus ? 32 : view === 'side' ? 16 : view === 'slice' ? 14 : 42
+  const fov = focus ? 32 : view === 'side' || view === 'isometric' ? 16 : view === 'slice' ? 14 : 42
   const fitDistance = cameraDistanceForView(bounds, view, fov, camera.aspect)
   const sideProjectionScale = 1
   const distance = focus
@@ -709,9 +713,11 @@ function positionCamera(
       ? new THREE.Vector3(target.x, target.y, target.z + distance)
     : view === 'side'
       ? new THREE.Vector3(target.x + distance * 0.14, target.y - distance, target.z + distance * 0.025)
+      : view === 'isometric'
+        ? new THREE.Vector3(target.x + distance * 0.34, target.y - distance * 0.98, target.z + distance * 0.2)
       : view === 'slice'
         ? new THREE.Vector3(target.x, target.y - distance, target.z)
-        : new THREE.Vector3(target.x + distance * 0.96, target.y - distance * 1.08, target.z + distance * 0.34)
+        : new THREE.Vector3(target.x + distance * 0.82, target.y - distance * 0.92, target.z + distance * 0.78)
 
   camera.position.copy(position)
   if (view === 'top') {
@@ -722,7 +728,7 @@ function positionCamera(
   camera.lookAt(target)
 
   camera.fov = fov
-  camera.zoom = view === 'side' ? 1.34 : view === 'slice' ? 0.92 : view === 'isometric' ? 1.36 : 1
+  camera.zoom = view === 'side' ? 1.34 : view === 'slice' ? 0.92 : view === 'isometric' ? 1.02 : 1
   camera.near = 0.01
   camera.far = Math.max(distance * 8, 100)
   camera.updateProjectionMatrix()
@@ -821,7 +827,12 @@ function cameraDistanceForView(
     return fitPerspectiveDistance(bounds.span[0], bounds.span[1], tanHalfFov, safeAspect, 1.18)
   }
 
-  return Math.max(bounds.span[0], bounds.span[1], bounds.span[2], 2) * 1.12
+  const horizontalSpan = Math.max(
+    Math.hypot(bounds.span[0], bounds.span[1]),
+    bounds.span[0],
+    bounds.span[1],
+  )
+  return fitPerspectiveDistance(horizontalSpan, bounds.span[2] + horizontalSpan * 0.18, tanHalfFov, safeAspect, 1.32)
 }
 
 function fitPerspectiveDistance(

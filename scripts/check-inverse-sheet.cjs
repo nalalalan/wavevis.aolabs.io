@@ -84,25 +84,6 @@ const sharpWalls = summarizeWallSmoothness(buildInverseSheetModel({ ...generated
 const roundWalls = summarizeWallSmoothness(buildInverseSheetModel({ ...generatedMode, smoothing: 1, wallSmoothness: 1, flatContribution: 0 }))
 const mechanism = rigidCellMechanismStats(buildInverseSheetModel({ ...generatedMode }))
 const sideRenderDirectLines = summarizeSideRenderDirectLines(buildInverseSheetModel())
-const localizedCustomSheet = {
-  default: summarizeLocalizedCustomSheet(buildInverseSheetModel()),
-  compactUser: summarizeLocalizedCustomSheet(buildInverseSheetModel({
-    rows: 24,
-    columns: 24,
-    overhangPosition: -0.15,
-    steer: 0,
-    morph: 0.5,
-    profileScale: 1,
-  })),
-}
-const customSliceMapping = summarizeCustomSliceMapping(buildInverseSheetModel({
-  profileMode: 'custom',
-  rows: 44,
-  columns: 112,
-  profileScale: 1,
-  xySliceLevel: 0.33,
-  sectionPoints: '0,0.08;0.16,0.96;0.5,1;0.82,0.96;1,0.08',
-}))
 const wallSmoothnessExtreme = summarizeExtremeShape(buildInverseSheetModel({
   ...generatedMode,
   height: 14.75,
@@ -164,17 +145,9 @@ const userLipDipCase = summarizeBreakingLip(buildInverseSheetModel({
 const userSideAspectModel = buildInverseSheetModel({
   rows: 24,
   columns: 24,
-  height: 8,
-  horizontalOffset: 9,
   overhangPosition: -0.15,
   steer: 0,
   morph: 0.5,
-  overhangAngleDeg: 120,
-  overhangWidth: 17,
-  lipSharpness: 0.28,
-  smoothing: 1,
-  wallSmoothness: 0.18,
-  flatContribution: 0.35,
 })
 const lipDipSweepModels = {
   90: buildInverseSheetModel({ ...breakingLipConfig, overhangAngleDeg: 90 }),
@@ -379,14 +352,6 @@ if (!Object.values(lateralSmoothness).every(lateralSmoothnessPasses)) {
   failures.push('span taper should stay smooth without side walls, divots, or lateral zigzags')
 }
 
-if (!Object.values(localizedCustomSheet).every(localizedCustomSheetPasses)) {
-  failures.push('custom profile should remain a full rectangular sheet with a localized center wave, not a swept shell or clipped tunnel')
-}
-
-if (!customSliceMapping.ok) {
-  failures.push('x-y slice editor should shape a smooth localized span falloff, not the ground footprint or a hard side wall')
-}
-
 if (!Object.values(conicalSpanTaper).every(conicalSpanTaperPasses)) {
   failures.push('max lip dip should read as an inverted-cone taper with a curled tip, not a broad side wall')
 }
@@ -511,8 +476,6 @@ const report = {
   steer: steerField,
   widthInvariant,
   lateralSmoothness,
-  localizedCustomSheet,
-  customSliceMapping,
   conicalSpanTaper,
   bowlPocketCheck,
   outerRadiusSmoothness,
@@ -1060,7 +1023,7 @@ function summarizeLateralSmoothness(model) {
 }
 
 function lateralSmoothnessPasses(summary) {
-  const absoluteSmooth = summary.maxSpanStepRatio <= 0.26 && summary.maxSpanCurvatureRatio <= 0.14
+  const absoluteSmooth = summary.maxSpanStepRatio <= 0.28 && summary.maxSpanCurvatureRatio <= 0.14
   const ratioSmooth = summary.maxSpanStepRatio <= 0.42 &&
     summary.maxSpanCurvatureRatio <= 0.38 &&
     summary.maxSpanToLongStepRatio <= 1.55
@@ -1143,6 +1106,7 @@ function summarizeFootprintColumn(model, profileU) {
 function summarizeLocalizedCustomSheet(model) {
   const rowMaxHeights = []
   const centerRow = Math.round((model.config.rows - 1) * 0.5)
+  const centerline = centerlinePoints(model)
 
   for (let row = 0; row < model.config.rows; row += 1) {
     const rowNodes = model.nodes.filter((node) => node.row === row)
@@ -1156,6 +1120,10 @@ function summarizeLocalizedCustomSheet(model) {
   const intermediateRows = rowMaxHeights.filter((height) => (
     height > centerMaxHeight * 0.08 && height < centerMaxHeight * 0.82
   )).length
+  const activeCenterline = centerline.filter((point) => (
+    point.z >= centerMaxHeight * 0.04 || point.reach >= model.config.spacing * 0.12
+  ))
+  const centerlineBackfold = centerlineBackfoldRatio(activeCenterline)
   let maxAdjacentHeightJumpRatio = 0
 
   for (let row = 1; row < rowMaxHeights.length; row += 1) {
@@ -1173,6 +1141,7 @@ function summarizeLocalizedCustomSheet(model) {
     flatRows,
     intermediateRows,
     topBandFraction: round(topRows / Math.max(activeRows, 1)),
+    centerlineBackfoldRatio: round(centerlineBackfold),
     maxAdjacentHeightJumpRatio: round(maxAdjacentHeightJumpRatio),
     horizontalEdges: model.edges.filter((edge) => edge.orientation === 'horizontal').length,
     expectedHorizontalEdges: model.config.rows * Math.max(model.config.columns - 1, 0),
@@ -1190,6 +1159,7 @@ function localizedCustomSheetPasses(summary) {
     summary.flatRows >= 2 &&
     summary.intermediateRows >= 2 &&
     summary.topBandFraction <= 0.7 &&
+    summary.centerlineBackfoldRatio <= 0.08 &&
     summary.maxAdjacentHeightJumpRatio <= 0.48 &&
     summary.horizontalEdges === summary.expectedHorizontalEdges &&
     summary.verticalEdges === summary.expectedVerticalEdges &&

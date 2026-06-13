@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import type { CameraView, InverseSheetConfig } from './inverseSheetTypes'
-import { DEFAULT_CUSTOM_PROFILE_POINTS, DEFAULT_CUSTOM_SECTION_POINTS, getInverseSheetUsableRanges } from './latticeGeometry'
-import ProfileContourEditor from './ProfileContourEditor'
+import { getInverseSheetUsableRanges } from './latticeGeometry'
 
 type TargetShapeControlsProps = {
   config: InverseSheetConfig
@@ -48,7 +47,7 @@ export default function TargetShapeControls({
   }
 
   const setNumber = (key: NumberKey, value: number) => {
-    update({ profileMode: 'custom', [key]: value } as Partial<InverseSheetConfig>)
+    update({ [key]: value } as Partial<InverseSheetConfig>)
   }
 
   const setBoolean = (key: BooleanKey, value: boolean) => {
@@ -86,27 +85,6 @@ export default function TargetShapeControls({
           </button>
         </div>
 
-        <ProfileContourEditor
-          key={`xz-${config.profilePoints}`}
-          value={config.profilePoints}
-          onApply={(profilePoints) => update({ profileMode: 'custom', profilePoints })}
-          label="x z profile"
-          ariaLabel="Editable overhang side profile"
-          defaultValue={DEFAULT_CUSTOM_PROFILE_POINTS}
-          resetLabel="Reset Wave"
-          sliceLevel={config.xySliceLevel}
-          onSliceLevelChange={(xySliceLevel) => update({ profileMode: 'custom', xySliceLevel })}
-          sliceLevelLabel="slice height"
-        />
-        <ProfileContourEditor
-          key={`xy-${config.sectionPoints}`}
-          value={config.sectionPoints}
-          onApply={(sectionPoints) => update({ profileMode: 'custom', sectionPoints })}
-          label="x y slice"
-          ariaLabel="Editable x y slice"
-          defaultValue={DEFAULT_CUSTOM_SECTION_POINTS}
-          resetLabel="Reset Slice"
-        />
         <div className="slider-stack">
           <RangeInput label="scale" value={config.profileScale} min={0.35} max={1.55} step={0.01} onChange={(value) => setNumber('profileScale', value)} />
           <RangeInput label="morph" value={config.morph} min={0} max={1} step={0.01} onChange={(value) => setNumber('morph', value)} />
