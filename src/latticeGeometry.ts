@@ -2104,14 +2104,14 @@ function sampleMoanaReferenceLipProfile(
 function moanaReferenceLipPoints(dip: number, sharp: number): ProfilePoint[] {
   const curl = clampNumber(dip, 0, 1)
   const pointed = Math.pow(clampNumber(sharp, 0, 1), 1.35)
-  const noseX = lerpNumber(0.958, 0.99, curl) + pointed * 0.018
-  const noseZ = lerpNumber(0.44, 0.31, curl) - pointed * 0.08
-  const undersideX = lerpNumber(0.94, 0.925, curl) - pointed * 0.028
-  const undersideZ = lerpNumber(0.25, 0.225, curl) - pointed * 0.024
-  const innerLipX = lerpNumber(0.89, 0.87, curl) - pointed * 0.02
-  const innerLipZ = lerpNumber(0.17, 0.14, curl) - pointed * 0.015
-  const innerFloorX = lerpNumber(0.825, 0.79, curl) - pointed * 0.012
-  const innerFloorZ = lerpNumber(0.085, 0.048, curl) - pointed * 0.006
+  const noseX = lerpNumber(0.956, 0.988, curl) + pointed * 0.016
+  const noseZ = lerpNumber(0.43, 0.3, curl) - pointed * 0.078
+  const undersideX = lerpNumber(0.94, 0.918, curl) - pointed * 0.026
+  const undersideZ = lerpNumber(0.252, 0.218, curl) - pointed * 0.022
+  const innerLipX = lerpNumber(0.89, 0.862, curl) - pointed * 0.018
+  const innerLipZ = lerpNumber(0.17, 0.138, curl) - pointed * 0.014
+  const innerFloorX = lerpNumber(0.805, 0.745, curl) - pointed * 0.008
+  const innerFloorZ = lerpNumber(0.082, 0.046, curl) - pointed * 0.005
 
   return [
     point(0, 0),
@@ -2126,7 +2126,7 @@ function moanaReferenceLipPoints(dip: number, sharp: number): ProfilePoint[] {
     point(undersideX, undersideZ),
     point(innerLipX, innerLipZ),
     point(innerFloorX, innerFloorZ),
-    point(0.88, 0.026),
+    point(0.86, 0.024),
     point(1, 0),
   ]
 }
