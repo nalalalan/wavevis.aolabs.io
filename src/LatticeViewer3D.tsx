@@ -82,7 +82,7 @@ function LatticeModelGroup({
   const quadMetricById = useMemo(() => new Map(model.quadMetrics.map((metric) => [metric.quadId, metric])), [model.quadMetrics])
   const dihedralByQuad = useMemo(() => buildDihedralByQuad(model.dihedralMetrics), [model.dihedralMetrics])
   const sliceProfileView = view === 'slice'
-  const sideMechanismView = view === 'side' || view === 'isometric'
+  const sideMechanismView = view === 'side'
   const renderScope = useMemo(() =>
     buildNodeEdgeRenderScope(model, sliceProfileView, sideMechanismView),
   [model, sideMechanismView, sliceProfileView])
@@ -733,7 +733,7 @@ function positionCamera(
   camera.lookAt(target)
 
   camera.fov = fov
-  camera.zoom = view === 'side' ? 1.34 : view === 'slice' ? 0.92 : view === 'isometric' ? 1.02 : 1
+  camera.zoom = view === 'side' ? 1.08 : view === 'slice' ? 0.92 : view === 'isometric' ? 1.02 : 1
   camera.near = 0.01
   camera.far = Math.max(distance * 8, 100)
   camera.updateProjectionMatrix()
