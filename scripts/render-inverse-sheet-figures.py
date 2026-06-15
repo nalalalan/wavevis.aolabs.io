@@ -20,7 +20,26 @@ MUTED = (118, 109, 97)
 GRID = (197, 188, 174)
 CENTER = (42, 40, 36)
 LIP = (168, 66, 54)
+REFERENCE = (11, 136, 151)
 FILL = (237, 231, 221)
+
+REFERENCE_TRACE = [
+    (0.0, 0.0),
+    (0.08, 0.0),
+    (0.17, 0.03),
+    (0.31, 0.26),
+    (0.47, 0.6),
+    (0.62, 0.85),
+    (0.77, 0.98),
+    (0.98, 1.0),
+    (0.94, 0.81),
+    (0.76, 0.67),
+    (0.6, 0.52),
+    (0.56, 0.36),
+    (0.68, 0.21),
+    (0.86, 0.07),
+    (1.0, 0.0),
+]
 
 
 def font(size: int, bold: bool = False) -> ImageFont.ImageFont:
@@ -120,7 +139,7 @@ def current(node: dict) -> tuple[float, float, float]:
 
 def side_project(point: tuple[float, float, float]) -> tuple[float, float]:
     x, y, z = point
-    return x + y * 0.045, z - y * 0.018
+    return x + y * 0.006, z - y * 0.0025
 
 
 def iso_project(point: tuple[float, float, float]) -> tuple[float, float]:
@@ -228,6 +247,68 @@ def render_lattice(model: dict, filename: str, title: str, subtitle: str, projec
     img.save(VERIFY / filename.replace(".png", "-verification.png"))
 
 
+def centerline_side_points(model: dict) -> list[tuple[float, float]]:
+    center_row = model["config"]["rows"] // 2
+    center_nodes = sorted((node for node in model["nodes"] if node["row"] == center_row), key=lambda node: node["col"])
+    return [(current(node)[0], current(node)[2]) for node in center_nodes]
+
+
+def normalize_wave_profile(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    max_z = max((point[1] for point in points), default=1)
+    active = [index for index, point in enumerate(points) if point[1] > max_z * 0.018]
+    if not active:
+        return []
+    start = max(0, active[0] - 2)
+    end = min(len(points) - 1, active[-1] + 1)
+    section = points[start:end + 1]
+    min_x = min(point[0] for point in section)
+    max_x = max(point[0] for point in section)
+    span_x = max(max_x - min_x, 0.000001)
+    span_z = max(max_z, 0.000001)
+    return [((point[0] - min_x) / span_x, max(0, point[1]) / span_z) for point in section]
+
+
+def draw_polyline(draw: ImageDraw.ImageDraw, points: list[tuple[float, float]], to_canvas: Callable[[tuple[float, float]], tuple[float, float]], color: tuple[int, int, int], width: int) -> None:
+    if len(points) < 2:
+        return
+    canvas_points = [to_canvas(point) for point in points]
+    draw.line(canvas_points, fill=(*color, 235), width=width, joint="curve")
+
+
+def render_reference_overlay(model: dict) -> None:
+    size = (1500, 980)
+    img = Image.new("RGB", size, PAPER)
+    draw = ImageDraw.Draw(img, "RGBA")
+    current_profile = normalize_wave_profile(centerline_side_points(model))
+    all_points = current_profile + REFERENCE_TRACE
+    to_canvas = make_mapper(all_points, size, margin=150)
+
+    draw_header(
+        draw,
+        "Reference trace against current side silhouette",
+        "Teal is the broad open-curl target; red/black is the generated centerline extracted from the full linkage.",
+        summarize(model),
+    )
+    draw.rounded_rectangle((54, 154, size[0] - 54, size[1] - 72), radius=18, fill=(255, 253, 248, 255), outline=(224, 216, 204, 255), width=2)
+
+    ground_left = to_canvas((0, 0))
+    ground_right = to_canvas((1, 0))
+    draw.line((*ground_left, *ground_right), fill=(*MUTED, 95), width=2)
+    draw_polyline(draw, REFERENCE_TRACE, to_canvas, REFERENCE, 7)
+    draw_polyline(draw, current_profile, to_canvas, CENTER, 5)
+    lip_start = max(0, int(len(current_profile) * 0.56))
+    draw_polyline(draw, current_profile[lip_start:], to_canvas, LIP, 6)
+
+    draw.text((84, size[1] - 116), "target trace", fill=REFERENCE, font=SMALL)
+    draw.line((206, size[1] - 105, 282, size[1] - 105), fill=(*REFERENCE, 235), width=7)
+    draw.text((322, size[1] - 116), "current centerline", fill=CENTER, font=SMALL)
+    draw.line((506, size[1] - 105, 582, size[1] - 105), fill=(*CENTER, 235), width=5)
+
+    filename = "current-live-reference-overlay.png"
+    img.save(FIGURES / filename)
+    img.save(VERIFY / filename.replace(".png", "-verification.png"))
+
+
 def main() -> None:
     FIGURES.mkdir(parents=True, exist_ok=True)
     VERIFY.mkdir(parents=True, exist_ok=True)
@@ -257,6 +338,7 @@ def main() -> None:
         cross_project,
         center_only=True,
     )
+    render_reference_overlay(model)
 
 
 if __name__ == "__main__":

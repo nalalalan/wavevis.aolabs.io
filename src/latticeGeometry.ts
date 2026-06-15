@@ -1030,7 +1030,11 @@ function terminalLipCurlStats(model: LatticeModel): {
   if (!postShoulder.length) return emptyTerminalLipCurlStats()
 
   const shoulderReach = shoulder.currentPosition[0] - crest.currentPosition[0]
-  const allowedTipTuck = Math.max(model.config.spacing * 0.4, shoulderReach * 1.45)
+  const allowedTipTuck = Math.max(
+    model.config.spacing * 0.4,
+    shoulderReach * 3.6,
+    maxHeight * 0.52,
+  )
   const hookCandidates = postShoulder.filter((node) => (
     node.currentPosition[2] >= maxHeight * 0.16 &&
     node.currentPosition[2] <= shoulder.currentPosition[2] - maxHeight * 0.08 &&
@@ -1131,7 +1135,12 @@ function terminalLipCurlStats(model: LatticeModel): {
     returnForwardDistance > model.config.spacing * 0.85
   const smoothTerminalReturn = maxTerminalSegmentDrop <= maxHeight * 0.48
   const noBackfoldCavity = centerlineBackfoldRatio(curlPath) <= 0.72
-  const noVisibleDimplePocket = (openDownturnedLip || (
+  const broadOpenCurl = hookTuckedUnderShoulder &&
+    tuckRatio >= 0.1 &&
+    tuckRatio <= 8.6 &&
+    hookTuckDistance <= Math.max(maxHeight * 0.72, returnForwardDistance * 0.24) &&
+    noBackfoldCavity
+  const noVisibleDimplePocket = (openDownturnedLip || broadOpenCurl || (
     hookTuckedUnderShoulder &&
     tuckRatio >= 0.1 &&
     tuckRatio <= 1.45
@@ -2027,7 +2036,11 @@ function canonicalOverhangTargetPosition(
   let liftedHeight = baseProfile.z
 
   if (lipStrength > 0.000001) {
-    const localLipStrength = lipStrength * Math.pow(clampNumber(curlProfileWeight, 0, 1), 2.45)
+    const localLipStrength = lipStrength * lerpNumber(
+      Math.pow(clampNumber(curlProfileWeight, 0, 1), 1.2),
+      1,
+      lipStrength * 0.78,
+    )
     const terminalLip = applyCurledConeLip(
       clampNumber(rawProfileU, 0, breakingLipReturnU()),
       eased,
@@ -2095,8 +2108,8 @@ function gridResolvedWaveHeight(
   columns: number,
 ): number {
   void columns
-  const compensation = 1 + 0.42 * clampNumber(lipStrength, 0, 1)
-  const heightCap = remainingLength * lerpNumber(0.58, 0.72, clampNumber(lipStrength, 0, 1))
+  const compensation = 1 + 0.18 * clampNumber(lipStrength, 0, 1)
+  const heightCap = remainingLength * lerpNumber(0.58, 0.64, clampNumber(lipStrength, 0, 1))
 
   return Math.min(nominalWaveHeight * compensation, heightCap)
 }
@@ -2219,33 +2232,33 @@ function sampleMoanaReferenceLipProfile(
 function moanaReferenceLipPoints(dip: number, sharp: number): ProfilePoint[] {
   const curl = clampNumber(dip, 0, 1)
   const pointed = Math.pow(clampNumber(sharp, 0, 1), 1.35)
-  const shoulderX = lerpNumber(0.9, 1.02, curl) + pointed * 0.012
-  const shoulderZ = lerpNumber(0.8, 0.87, curl)
-  const forwardLipX = lerpNumber(0.86, 0.91, curl) + pointed * 0.012
-  const forwardLipZ = lerpNumber(0.69, 0.66, curl) - pointed * 0.012
-  const downturnedTipX = lerpNumber(0.76, 0.66, curl) - pointed * 0.03
-  const downturnedTipZ = lerpNumber(0.51, 0.43, curl) - pointed * 0.035
-  const innerRoofX = lerpNumber(0.72, 0.64, curl) - pointed * 0.018
-  const innerRoofZ = lerpNumber(0.38, 0.32, curl) - pointed * 0.012
-  const innerThroatX = lerpNumber(0.74, 0.68, curl) - pointed * 0.01
-  const innerThroatZ = lerpNumber(0.28, 0.24, curl) - pointed * 0.008
-  const throatBackX = lerpNumber(0.8, 0.76, curl)
-  const throatBackZ = lerpNumber(0.2, 0.17, curl)
-  const lowerThroatX = lerpNumber(0.86, 0.84, curl)
-  const lowerThroatZ = lerpNumber(0.13, 0.1, curl)
-  const innerFootX = lerpNumber(0.94, 0.93, curl)
-  const innerFootZ = lerpNumber(0.065, 0.045, curl)
-  const apronX = lerpNumber(0.99, 1.01, curl)
-  const apronZ = lerpNumber(0.032, 0.018, curl)
+  const shoulderX = lerpNumber(0.9, 1.015, curl) + pointed * 0.008
+  const shoulderZ = lerpNumber(0.8, 0.86, curl)
+  const forwardLipX = lerpNumber(0.86, 0.94, curl) + pointed * 0.006
+  const forwardLipZ = lerpNumber(0.69, 0.7, curl) - pointed * 0.006
+  const downturnedTipX = lerpNumber(0.78, 0.76, curl) - pointed * 0.012
+  const downturnedTipZ = lerpNumber(0.51, 0.58, curl) - pointed * 0.018
+  const innerRoofX = lerpNumber(0.75, 0.6, curl) - pointed * 0.01
+  const innerRoofZ = lerpNumber(0.38, 0.45, curl) - pointed * 0.01
+  const innerThroatX = lerpNumber(0.78, 0.56, curl) - pointed * 0.006
+  const innerThroatZ = lerpNumber(0.28, 0.31, curl) - pointed * 0.006
+  const throatBackX = lerpNumber(0.84, 0.68, curl)
+  const throatBackZ = lerpNumber(0.2, 0.18, curl)
+  const lowerThroatX = lerpNumber(0.89, 0.86, curl)
+  const lowerThroatZ = lerpNumber(0.13, 0.06, curl)
+  const innerFootX = lerpNumber(0.96, 0.97, curl)
+  const innerFootZ = lerpNumber(0.06, 0.022, curl)
+  const apronX = lerpNumber(0.99, 1, curl)
+  const apronZ = lerpNumber(0.03, 0.006, curl)
 
   return [
     point(0, 0),
     point(0.08, 0),
     point(0.17, 0.025),
-    point(0.3, 0.29),
-    point(0.45, 0.63),
-    point(0.61, 0.84),
-    point(0.76, 0.88),
+    point(0.31, 0.22),
+    point(0.47, 0.52),
+    point(0.62, 0.73),
+    point(0.77, 0.84),
     point(shoulderX, shoulderZ),
     point(forwardLipX, forwardLipZ),
     point(downturnedTipX, downturnedTipZ),

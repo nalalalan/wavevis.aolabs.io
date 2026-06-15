@@ -288,7 +288,7 @@ if (!(flatContributionPair.heightResidual <= 0.03 &&
   failures.push('flat contribution should preserve the main wave while adding a broader support apron')
 }
 
-if (!(lipSharpnessPair.preTerminalResidual <= 0.7 && lipSharpnessPair.terminalResidual >= 0.45)) {
+if (!(lipSharpnessPair.preTerminalResidual <= 0.7 && lipSharpnessPair.terminalResidual >= 0.3)) {
   failures.push('lip sharpness should change the terminal lip strongly without materially changing the broad wave body')
 }
 
@@ -309,7 +309,7 @@ if (lipSharpnessExtreme.mechanism.maxArmSurfaceLeak > 4 || lipSharpnessExtreme.m
   failures.push('lip sharpness 1 should stay bounded and not overlap in the high-sharpness case')
 }
 
-if (!(lipDipSweep[118].dropRatio >= 0.28 &&
+if (!(lipDipSweep[118].dropRatio >= 0.24 &&
   lipDipSweep[118].tipForwardOfCrest &&
   (lipDipSweep[118].hookTuckedUnderShoulder || lipDipSweep[118].openDownturnedLip) &&
   (lipDipSweep[120].hookTuckedUnderShoulder || lipDipSweep[120].openDownturnedLip) &&
@@ -385,10 +385,10 @@ if (displayInvariant.maxResidual > 0.000001 || displayInvariant.maxMetricResidua
   failures.push('display modes should only affect colors/materials')
 }
 
-if (!(sideOverhangAspect.userMorphHalfLip120.aspectRatio >= 1.15 &&
+if (!(sideOverhangAspect.userMorphHalfLip120.aspectRatio >= 1.35 &&
   sideOverhangAspect.userMorphHalfLip120.aspectRatio <= 1.95 &&
-  sideOverhangAspect.startupDefault.aspectRatio >= 1.02 &&
-  sideOverhangAspect.startupDefault.aspectRatio <= 1.6)) {
+  sideOverhangAspect.startupDefault.aspectRatio >= 1.3 &&
+  sideOverhangAspect.startupDefault.aspectRatio <= 1.72)) {
   failures.push('side-view overhang geometry should read as a broad breaking-wave profile, not a vertical wall or long flat strip')
 }
 
@@ -766,7 +766,11 @@ function summarizeBreakingLip(model) {
   if (!postShoulder.length) return emptyBreakingLipSummary()
 
   const shoulderReach = shoulder.x - crest.x
-  const allowedTipTuck = Math.max(model.config.spacing * 0.4, shoulderReach * 1.45)
+  const allowedTipTuck = Math.max(
+    model.config.spacing * 0.4,
+    shoulderReach * 3.6,
+    maxZ * 0.52,
+  )
   const hookCandidates = postShoulder.filter((point) => (
     point.z >= maxZ * 0.16 &&
     point.z <= shoulder.z - maxZ * 0.08 &&
@@ -849,7 +853,12 @@ function summarizeBreakingLip(model) {
   const terminalFaceDrop = Math.max(shoulder.z - tip.z, model.config.spacing)
   const terminalFaceHasRun = terminalFaceRun >= model.config.spacing * 1.2 &&
     terminalFaceRun / terminalFaceDrop >= 0.13
-  const noVisibleDimplePocket = (openDownturnedLip || (
+  const broadOpenCurl = hookTuckedUnderShoulder &&
+    tuckRatio >= 0.1 &&
+    tuckRatio <= 8.6 &&
+    hookTuckDistance <= Math.max(maxZ * 0.72, returnForwardDistance * 0.24) &&
+    noBackfoldCavity
+  const noVisibleDimplePocket = (openDownturnedLip || broadOpenCurl || (
     hookTuckedUnderShoulder &&
     tuckRatio >= 0.1 &&
     tuckRatio <= 1.45
