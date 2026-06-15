@@ -177,11 +177,11 @@ If this PDF is the only WaveVis context available, start with this section and t
 \begin{itemize}
   \item \textbf{Verified public route:} \code{https://aolabs.io/wavevis/}. This route serves the fallback bundle that Alan actually uses.
   \item \textbf{Preferred but blocked route:} \code{https://wavevis.aolabs.io/}. At the time of this record, HTTPS validation can fail because the custom-domain certificate is not valid for that hostname. Do not treat the custom subdomain as the verified route until a fresh certificate check passes.
-  \item \textbf{Visible PDF action:} the WaveVis header links to \code{/proofs/wavevis-system-architecture.pdf}. That PDF is this document. The old connector proof remains a source artifact, not the primary user-facing paper action.
-  \item \textbf{Current source root:} \code{C:/Users/phama/Documents/gpt shit/\_apps/wavevis.aolabs.io/}.
-  \item \textbf{Public fallback mirror:} \code{C:/Users/phama/Documents/gpt shit/\_apps/aolabs-site/wavevis/}. A WaveVis deploy to its own \code{gh-pages} branch does not automatically update the \code{aolabs.io/wavevis/} fallback unless the built files are mirrored there and the hub site is pushed.
+  \item \textbf{Visible PDF action:} the WaveVis header links to the paper file under \code{/proofs/}. File: \code{wavevis-system-architecture.pdf}. The old connector proof remains a source artifact, not the primary user-facing paper action.
+  \item \textbf{Current source root:} workspace path \code{\_apps/wavevis.aolabs.io/}.
+  \item \textbf{Public fallback mirror:} workspace path \code{\_apps/aolabs-site/wavevis/}. A WaveVis deploy to its own \code{gh-pages} branch does not automatically update the \code{aolabs.io/wavevis/} fallback unless the built files are mirrored there and the hub site is pushed.
   \item \textbf{Current architectural direction:} generated Moana-like localized wave. Manual \(xz\) and \(xy\) profile editors are not the active path.
-  \item \textbf{Known open target:} keep improving the human-facing match to the supplied Moana references. Do not claim exact reference match until the rendered full linkage sheet visibly matches the reference family.
+  \item \textbf{Known open target:} keep improving the human-facing match to the supplied Moana references. The June 15, 2026 repair removes the closed under-lip pocket and bounds the vertical-chute failure, but it is still not a proven exact reference match.
 \end{itemize}
 
 \subsection{What the next agent must not repeat}
@@ -200,26 +200,26 @@ The repeated failures that this document is meant to prevent are:
 
 \subsection{Current live-state evidence}
 
-Figures~\ref{fig:current-live-side}--\ref{fig:current-live-slice} are not the final visual target. They record the current public state that a fresh chat should inspect before changing anything: side view is the full three-dimensional render, cross-section is separate, and the full linkage array is present in 3D. The remaining design work is to improve the Moana-like water geometry without regressing those preserved mechanics.
+Figures~\ref{fig:current-live-side}--\ref{fig:current-live-slice} are not the final visual target. They record the current source-rendered linkage state from the same geometry model that builds the public bundle: side view is the full three-dimensional sheet, cross-section is separate, and the full linkage array is present in 3D. The June 15, 2026 state removes the earlier closed under-lip pocket, adds a terminal-run gate so a near-vertical chute cannot pass as a curl, and keeps exact Moana-reference matching open.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.98\linewidth]{current-live-side.png}
-\caption{Current verified public side view for the user preset \(\code{rows}=24\), \(\code{columns}=24\) requested through URL parameters. The UI sanitizes columns to the current smooth-wave minimum while preserving the full side camera view. This is not a cross-section. The curl is visible from the side, cells/connectors are shown, and the old side-wall-covering failure is not visible in this inspected state.}
+\caption{Current source-rendered side linkage for the default inverse-sheet state. This is not a cross-section. The full linkage sheet remains visible, the previous closed under-lip pocket is removed, and the terminal lip now has a bounded downturned run. The figure is evidence of improvement, not proof of exact Moana-reference match.}
 \label{fig:current-live-side}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.98\linewidth]{current-live-isometric.png}
-\caption{Current verified public 3D/isometric view for the same preset. The full rectangular array remains visible; the renderer must not scope this view down to a side slice. This figure is evidence for public full-array visibility, not proof of exact Moana-reference match.}
+\caption{Current source-rendered 3D/isometric linkage for the same default state. The full rectangular array remains visible; the renderer must not scope this view down to a side slice. This figure is evidence for full-array visibility and no hidden filler, not proof of exact Moana-reference match.}
 \label{fig:current-live-isometric}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.98\linewidth]{current-live-cross-section.png}
-\caption{Current verified public cross-section view for the same preset. This mode intentionally isolates a profile/slice. It is useful for debugging the curl, but it is not allowed to substitute for the full 3D side view or 3D view.}
+\caption{Current source-rendered cross-section for the same default state. This mode intentionally isolates central rows. It is useful for debugging the curl, but it is not allowed to substitute for the full 3D side view or 3D view.}
 \label{fig:current-live-slice}
 \end{figure}
 
@@ -239,7 +239,7 @@ File or route & Ownership \\
 \code{scripts/check-inverse-sheet.cjs} & Main inverse-sheet regression checker. It compiles the TypeScript geometry and checks parameter semantics, lip curl, flatContribution, side-render scope, low-lip stability, lateral smoothness, no bowl pockets, and startup URL coverage. \\
 \code{scripts/check-geometry-invariants.cjs} & Mechanism-level invariant checker for rigid-cell/linkage behavior. \\
 \code{proofs/wavevis-system-architecture.tex} & Source for this PDF. Update it when the public simulator contract, current state, or known failure modes change. \\
-\code{proofs/figures/} & Moana reference images, mechanism proof figures, and current rendered-state screenshots used by this paper. \\
+\code{proofs/figures/} & Moana reference images, mechanism proof figures, and current source-rendered state figures used by this paper. \\
 \code{dist/} & Built WaveVis static app after \code{npm run build}. Do not edit by hand. \\
 \code{aolabs-site/wavevis/} & Public fallback mirror for \code{https://aolabs.io/wavevis/}. Copy the built \code{dist} contents here when the public fallback must update. \\
 \bottomrule
@@ -602,7 +602,7 @@ Gate & Measurement & Acceptance intent \\
 Perimeter flatness & \(\max_{\partial\Omega}\|p^*-p^0\|\). & Boundary displacement is zero or visually negligible. \\
 Topology completeness & Expected node, edge, and quad counts. & Full rectangular sheet graph remains visible. \\
 Connector closure & Edge endpoints meet their node coordinates. & No detached legs or fake bridges. \\
-Lip curl & Crest height minus lip-tip height; terminal slope. & The lip curls down rather than ending as a hill. \\
+Lip curl & Crest height minus lip-tip height; terminal slope; \code{terminalFaceHasRun}. & The lip curls down rather than ending as a hill or near-vertical chute. \\
 Span localization & Row-wise height profile across \(y\). & Center strong, sides faded; no swept tunnel. \\
 Morph continuity & Residual between adjacent morph samples. & No sudden jumps or topology flips. \\
 Slider isolation & Aligned geometries across position/steer/width changes. & Rigid controls stay rigid; width stays span-only. \\
@@ -667,7 +667,7 @@ Screenshots are evidence only when they show the actual rendered canvas and the 
 
 Use the WaveVis app root:
 \[
-  \code{C:/Users/phama/Documents/gpt shit/\_apps/wavevis.aolabs.io/}.
+  \code{\_apps/wavevis.aolabs.io/}.
 \]
 Typical local commands are:
 \begin{itemize}
@@ -683,7 +683,7 @@ Do not manually edit \code{dist}. Build it from source.
 The route Alan can reliably use is \code{https://aolabs.io/wavevis/}. That route is served from the AO Labs hub/fallback repository, not directly from the WaveVis app repository. Therefore a public WaveVis update requires two publication steps when the fallback route is the user-facing route:
 \begin{enumerate}
   \item build and publish the WaveVis app;
-  \item copy the built \code{dist} contents into \code{C:/Users/phama/Documents/gpt shit/\_apps/aolabs-site/wavevis/};
+  \item copy the built \code{dist} contents into \code{\_apps/aolabs-site/wavevis/};
   \item commit and push the AO Labs site mirror;
   \item verify that \code{https://aolabs.io/wavevis/} serves the new bundle hash and the rendered artifact.
 \end{enumerate}
@@ -711,19 +711,20 @@ Progress does not automatically ingest every active Codex chat. If a future Wave
 
 This section is intentionally blunt so a future chat does not have to infer whether the system is finished.
 
-\textbf{Verified current state on June 14, 2026:}
+\textbf{Verified current state on June 15, 2026:}
 \begin{itemize}
   \item The reliable public route is \code{https://aolabs.io/wavevis/}.
   \item The public WaveVis page includes a clickable AO Labs home mark, an app identity mark, the \code{wavevis.aolabs.io} title, and a \code{System Architecture PDF} action.
   \item The Inverse Sheet tab is the first/default option; Double-Layer Sarrus is secondary.
-  \item The current PDF route is \code{https://aolabs.io/wavevis/proofs/wavevis-system-architecture.pdf}.
+  \item The current PDF route is the WaveVis fallback paper route: \code{/wavevis/proofs/}, file \code{wavevis-system-architecture.pdf}.
   \item Side, Cross Section, and 3D are separate view modes. Side is the full three-dimensional sheet seen from the side; Cross Section is the slice/debug view.
-  \item The current generator and renderer are checked by \code{npm run check:geometry}, but that command is a gate, not a substitute for rendered inspection.
+  \item The current generator and renderer are checked by \code{npm run check:geometry}; the June 15 check includes bounded terminal-lip run, no visible dimple pocket, no bowl pockets, side-render full-array scope, slider robustness, and rigid-cell connector invariants.
+  \item Source-rendered side, isometric, and cross-section figures were regenerated from the passing geometry model because browser screenshot capture can time out on the WebGL canvas.
 \end{itemize}
 
 \textbf{Open state that must not be overstated:}
 \begin{itemize}
-  \item Exact Moana-reference matching is still a visual design target, not a proven completed result. The correct claim is that the generator is being driven toward the Moana-like localized plunging wave family.
+  \item Exact Moana-reference matching is still a visual design target, not a proven completed result. The correct claim is that the generator is being driven toward the Moana-like localized plunging wave family and that the latest repair removes the closed under-lip pocket without regressing full-array linkage.
   \item \code{https://wavevis.aolabs.io/} is still treated as blocked/stale unless a fresh certificate and body check passes.
   \item This is a simulator and architecture record. It is not evidence that a physical lattice prototype has been fabricated or experimentally validated.
   \item If Alan reports a visible dimple, cavity, side wall, bowl, missing curl, zig-zag, disconnected cell, or cross-section/side confusion after this PDF ships, the live rendered artifact overrides this paper. Repair the source and update the validation gate.

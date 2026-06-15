@@ -311,14 +311,16 @@ if (lipSharpnessExtreme.mechanism.maxArmSurfaceLeak > 4 || lipSharpnessExtreme.m
 
 if (!(lipDipSweep[118].dropRatio >= 0.28 &&
   lipDipSweep[118].tipForwardOfCrest &&
-  lipDipSweep[118].hookTuckedUnderShoulder &&
+  (lipDipSweep[118].hookTuckedUnderShoulder || lipDipSweep[118].openDownturnedLip) &&
+  (lipDipSweep[120].hookTuckedUnderShoulder || lipDipSweep[120].openDownturnedLip) &&
+  lipDipSweep[118].terminalFaceHasRun &&
+  lipDipSweep[120].terminalFaceHasRun &&
   lipDipSweep[118].returnToFlat &&
   lipDipSweep[118].smoothTerminalReturn &&
   lipDipSweep[118].noBackfoldCavity &&
   lipDipSweep[118].noVisibleDimplePocket &&
   lipDipSweep[120].noVisibleDimplePocket &&
   lipDipSweep[118].tipForwardDistance >= breakingLipConfig.horizontalOffset * 0.055 &&
-  lipDipSweep[118].hookTuckDistance >= breakingLipConfig.horizontalOffset * 0.02 &&
   lipDipSweep[118].tipDrop >= breakingLipConfig.height * 0.22 &&
   lipDipSweep[118].finalTangentAngleDeg <= -35 &&
   lipDipSweep[120].tipDrop >= lipDipSweep[105].tipDrop + breakingLipConfig.height * 0.12)) {
@@ -329,7 +331,7 @@ if (lipDipPreTerminalResidual < 0.5) {
   failures.push('lip dip should visibly reshape the full side profile into a curled tapered cone')
 }
 
-if (!(userLipDipCase.tipBelowLastPeak && userLipDipCase.finalTangentAngleDeg <= -40 && userLipDipCase.noVisibleDimplePocket)) {
+if (!(userLipDipCase.tipBelowLastPeak && userLipDipCase.openDownturnedLip && userLipDipCase.terminalFaceHasRun && userLipDipCase.finalTangentAngleDeg <= -40 && userLipDipCase.noVisibleDimplePocket)) {
   failures.push('lip dip above 90 deg should make the terminal free tip point downward without a visible dimple pocket')
 }
 
@@ -773,7 +775,12 @@ function summarizeBreakingLip(model) {
   }, tipPool[0])
   const postTip = points.filter((point) => point.col > tip.col)
   const activePostTip = postTip.filter((point) => point.reach >= maxReach * 0.02 || point.z > maxZ * 0.005)
-  const flatReturnCandidates = activePostTip.filter((point) => point.z <= maxZ * 0.12)
+  const forwardFlatReturnCandidates = postTip.filter((point) =>
+    point.z <= maxZ * 0.12 &&
+    point.x > tip.x + model.config.spacing * 0.85)
+  const flatReturnCandidates = forwardFlatReturnCandidates.length
+    ? forwardFlatReturnCandidates
+    : activePostTip.filter((point) => point.z <= maxZ * 0.12)
   const flatReturn = (flatReturnCandidates.length ? flatReturnCandidates : activePostTip).reduce((best, point) => {
     if (!best) return point
     if (point.x > best.x + 0.000001) return point
@@ -820,13 +827,18 @@ function summarizeBreakingLip(model) {
   const noBackfoldCavity = centerlineBackfoldRatio(curlPath) <= 0.72
   const tuckRatio = hookTuckDistance / Math.max(tipForwardDistance, model.config.spacing)
   const returnRatio = returnForwardDistance / Math.max(tipForwardDistance, model.config.spacing)
-  const openDownturnedLip = hookTuckDistance <= Math.max(model.config.spacing * 0.2, tipForwardDistance * 0.14) &&
-    tip.x >= shoulder.x - model.config.spacing * 0.12
+  const openDownturnedLip = hookTuckDistance <= Math.max(model.config.spacing * 1.8, tipForwardDistance * 0.14)
   const hookTuckedUnderShoulder = hookTuckDistance > model.config.spacing * 0.2 &&
     tip.z <= shoulder.z - maxZ * 0.08
-  const noVisibleDimplePocket = hookTuckedUnderShoulder &&
+  const terminalFaceRun = Math.abs(tip.x - shoulder.x)
+  const terminalFaceDrop = Math.max(shoulder.z - tip.z, model.config.spacing)
+  const terminalFaceHasRun = terminalFaceRun >= model.config.spacing * 1.2 &&
+    terminalFaceRun / terminalFaceDrop >= 0.13
+  const noVisibleDimplePocket = (openDownturnedLip || (
+    hookTuckedUnderShoulder &&
     tuckRatio >= 0.1 &&
-    tuckRatio <= 0.72 &&
+    tuckRatio <= 0.72
+  )) &&
     returnRatio >= 0.1 &&
     flatReturn.x > tip.x + model.config.spacing * 0.85 &&
     flatReturn.z <= maxZ * 0.16
@@ -836,6 +848,7 @@ function summarizeBreakingLip(model) {
     tipForwardOfCrest: tipForwardDistance > model.config.spacing * 0.25,
     hookTuckedUnderShoulder,
     openDownturnedLip,
+    terminalFaceHasRun,
     returnToFlat: flatReturn !== tip &&
       flatReturn.z <= maxZ * 0.14 &&
       returnForwardDistance > model.config.spacing * 0.85,
@@ -848,8 +861,8 @@ function summarizeBreakingLip(model) {
     tipDrop: round(tipDrop),
     tipForwardDistance: round(tipForwardDistance),
     hookTuckDistance: round(hookTuckDistance),
+    terminalFaceRun: round(terminalFaceRun),
     tuckRatio: round(tuckRatio),
-    openDownturnedLip,
     returnRatio: round(returnRatio),
     finalTangentAngleDeg: round(finalTangentAngleDeg),
     crestX: round(crest.x),
@@ -869,6 +882,8 @@ function emptyBreakingLipSummary() {
     tipBelowLastPeak: false,
     tipForwardOfCrest: false,
     hookTuckedUnderShoulder: false,
+    openDownturnedLip: false,
+    terminalFaceHasRun: false,
     returnToFlat: false,
     smoothTerminalReturn: false,
     noBackfoldCavity: true,
@@ -879,6 +894,7 @@ function emptyBreakingLipSummary() {
     tipDrop: 0,
     tipForwardDistance: 0,
     hookTuckDistance: 0,
+    terminalFaceRun: 0,
     tuckRatio: 0,
     returnRatio: 0,
     finalTangentAngleDeg: 0,
