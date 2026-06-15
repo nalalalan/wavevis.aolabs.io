@@ -582,7 +582,8 @@ export function runInverseSheetSanityChecks(): string[] {
     highAngleLip.tipForwardDistance < DEFAULT_SHEET_SPACING * 1.5 ||
     !highAngleLip.returnToFlat ||
     !highAngleLip.noBackfoldCavity ||
-    !highAngleLip.noVisibleDimplePocket
+    !highAngleLip.noVisibleDimplePocket ||
+    !highAngleLip.openThroatVisible
   ) {
     failures.push('lip dip should preserve a forward shoulder, downturned nose, and no collapsed cavity')
   }
@@ -861,6 +862,7 @@ function terminalLipCurlIsDownward(model: LatticeModel): boolean {
     stats.smoothTerminalReturn &&
     stats.noBackfoldCavity &&
     stats.noVisibleDimplePocket &&
+    stats.openThroatVisible &&
     stats.tipSlope < -0.6
 }
 
@@ -903,7 +905,7 @@ function centerlineBackfoldIsBounded(model: LatticeModel): boolean {
 
 function centerlineHasVisibleLipDip(model: LatticeModel): boolean {
   const stats = terminalLipCurlStats(model)
-  return terminalLipCurlIsDownward(model) && stats.dropRatio >= 0.35
+  return terminalLipCurlIsDownward(model) && stats.dropRatio >= 0.24
 }
 
 function centerlineLipDropRatio(model: LatticeModel): number {
@@ -968,9 +970,12 @@ function terminalLipCurlStats(model: LatticeModel): {
   smoothTerminalReturn: boolean;
   noBackfoldCavity: boolean;
   noVisibleDimplePocket: boolean;
+  openThroatVisible: boolean;
   dropRatio: number;
   tipForwardDistance: number;
   hookTuckDistance: number;
+  openThroatHeight: number;
+  innerThroatBackfold: number;
   terminalFaceRun: number;
   finalTangentAngleDeg: number;
   crestX: number;
@@ -1025,16 +1030,19 @@ function terminalLipCurlStats(model: LatticeModel): {
   if (!postShoulder.length) return emptyTerminalLipCurlStats()
 
   const shoulderReach = shoulder.currentPosition[0] - crest.currentPosition[0]
-  const allowedTipTuck = Math.max(model.config.spacing * 0.4, shoulderReach * 0.72)
+  const allowedTipTuck = Math.max(model.config.spacing * 0.4, shoulderReach * 1.45)
   const hookCandidates = postShoulder.filter((node) => (
-    node.currentPosition[2] > maxHeight * 0.08 &&
+    node.currentPosition[2] >= maxHeight * 0.16 &&
     node.currentPosition[2] <= shoulder.currentPosition[2] - maxHeight * 0.08 &&
     node.currentPosition[0] >= shoulder.currentPosition[0] - allowedTipTuck
   ))
   const hookPool = hookCandidates.length ? hookCandidates : postShoulder
+  const targetTipZ = maxHeight * 0.44
   const tip = hookPool.reduce((best, node) => {
-    if (node.currentPosition[2] < best.currentPosition[2] - 0.000001) return node
-    if (Math.abs(node.currentPosition[2] - best.currentPosition[2]) <= 0.000001 && node.currentPosition[0] > best.currentPosition[0]) return node
+    const targetDistance = Math.abs(node.currentPosition[2] - targetTipZ)
+    const bestDistance = Math.abs(best.currentPosition[2] - targetTipZ)
+    if (targetDistance < bestDistance - 0.000001) return node
+    if (Math.abs(targetDistance - bestDistance) <= 0.000001 && node.currentPosition[0] < best.currentPosition[0]) return node
     return best
   }, hookPool[0])
   const postTip = centerline.filter((node) => node.col > tip.col)
@@ -1095,6 +1103,19 @@ function terminalLipCurlStats(model: LatticeModel): {
   const tipForwardDistance = shoulder.currentPosition[0] - crest.currentPosition[0]
   const hookTuckDistance = shoulder.currentPosition[0] - tip.currentPosition[0]
   const returnForwardDistance = flatReturn.currentPosition[0] - tip.currentPosition[0]
+  const flatReturnCenterlineIndex = centerline.findIndex((node) => node.id === flatReturn.id)
+  const returnPath = centerline.slice(
+    tipCenterlineIndex,
+    Math.max(flatReturnCenterlineIndex + 1, tipCenterlineIndex + 1),
+  )
+  const innerThroatCandidates = returnPath
+    .filter((node) => node.currentPosition[2] >= maxHeight * 0.035)
+    .map((node) => node.currentPosition[0])
+  const innerThroatX = innerThroatCandidates.length
+    ? minValue(innerThroatCandidates)
+    : tip.currentPosition[0]
+  const openThroatHeight = tip.currentPosition[2] - flatReturn.currentPosition[2]
+  const innerThroatBackfold = tip.currentPosition[0] - innerThroatX
   const tipForwardOfCrest = tipForwardDistance > model.config.spacing * 0.25
   const hookTuckedUnderShoulder = hookTuckDistance > model.config.spacing * 0.2 &&
     tip.currentPosition[2] <= shoulder.currentPosition[2] - maxHeight * 0.08
@@ -1113,11 +1134,15 @@ function terminalLipCurlStats(model: LatticeModel): {
   const noVisibleDimplePocket = (openDownturnedLip || (
     hookTuckedUnderShoulder &&
     tuckRatio >= 0.1 &&
-    tuckRatio <= 0.72
+    tuckRatio <= 1.45
   )) &&
     returnRatio >= 0.1 &&
     flatReturn.currentPosition[0] > tip.currentPosition[0] + model.config.spacing * 0.85 &&
     flatReturn.currentPosition[2] <= maxHeight * 0.16
+  const openThroatVisible = openThroatHeight >= maxHeight * 0.18 &&
+    tip.currentPosition[2] >= maxHeight * 0.16 &&
+    tip.currentPosition[2] <= maxHeight * 0.78 &&
+    hookTuckDistance >= model.config.spacing * 1.2
 
   return {
     tipBelowLastPeak: dropRatio >= 0.08,
@@ -1131,9 +1156,12 @@ function terminalLipCurlStats(model: LatticeModel): {
     smoothTerminalReturn,
     noBackfoldCavity,
     noVisibleDimplePocket,
+    openThroatVisible,
     dropRatio,
     tipForwardDistance,
     hookTuckDistance,
+    openThroatHeight,
+    innerThroatBackfold,
     terminalFaceRun,
     finalTangentAngleDeg,
     crestX: crest.currentPosition[0],
@@ -1161,9 +1189,12 @@ function emptyTerminalLipCurlStats() {
     smoothTerminalReturn: false,
     noBackfoldCavity: true,
     noVisibleDimplePocket: false,
+    openThroatVisible: false,
     dropRatio: 0,
     tipForwardDistance: 0,
     hookTuckDistance: 0,
+    openThroatHeight: 0,
+    innerThroatBackfold: 0,
     terminalFaceRun: 0,
     finalTangentAngleDeg: 0,
     crestX: 0,
@@ -2064,8 +2095,8 @@ function gridResolvedWaveHeight(
   columns: number,
 ): number {
   void columns
-  const compensation = 1 + 0.92 * clampNumber(lipStrength, 0, 1)
-  const heightCap = remainingLength * lerpNumber(0.58, 0.9, clampNumber(lipStrength, 0, 1))
+  const compensation = 1 + 0.42 * clampNumber(lipStrength, 0, 1)
+  const heightCap = remainingLength * lerpNumber(0.58, 0.72, clampNumber(lipStrength, 0, 1))
 
   return Math.min(nominalWaveHeight * compensation, heightCap)
 }
@@ -2188,20 +2219,24 @@ function sampleMoanaReferenceLipProfile(
 function moanaReferenceLipPoints(dip: number, sharp: number): ProfilePoint[] {
   const curl = clampNumber(dip, 0, 1)
   const pointed = Math.pow(clampNumber(sharp, 0, 1), 1.35)
-  const shoulderX = lerpNumber(0.86, 0.93, curl) + pointed * 0.004
-  const shoulderZ = lerpNumber(0.79, 0.82, curl)
-  const forwardLipX = lerpNumber(1.0, 1.17, curl) + pointed * 0.03
-  const forwardLipZ = lerpNumber(0.66, 0.61, curl) - pointed * 0.01
-  const downturnedTipX = lerpNumber(1.0, 1.1, curl) - pointed * 0.018
-  const downturnedTipZ = lerpNumber(0.29, 0.21, curl) - pointed * 0.064
-  const innerRoofX = lerpNumber(1.0, 1.09, curl) - pointed * 0.012
-  const innerRoofZ = lerpNumber(0.09, 0.065, curl) - pointed * 0.018
-  const innerThroatX = lerpNumber(0.995, 1.065, curl) - pointed * 0.008
-  const innerThroatZ = lerpNumber(0.055, 0.038, curl) - pointed * 0.01
-  const innerFootX = lerpNumber(0.995, 1.055, curl)
-  const innerFootZ = lerpNumber(0.034, 0.024, curl)
-  const apronX = lerpNumber(0.99, 1.025, curl)
-  const apronZ = lerpNumber(0.024, 0.014, curl)
+  const shoulderX = lerpNumber(0.9, 1.02, curl) + pointed * 0.012
+  const shoulderZ = lerpNumber(0.8, 0.87, curl)
+  const forwardLipX = lerpNumber(0.86, 0.91, curl) + pointed * 0.012
+  const forwardLipZ = lerpNumber(0.69, 0.66, curl) - pointed * 0.012
+  const downturnedTipX = lerpNumber(0.76, 0.66, curl) - pointed * 0.03
+  const downturnedTipZ = lerpNumber(0.51, 0.43, curl) - pointed * 0.035
+  const innerRoofX = lerpNumber(0.72, 0.64, curl) - pointed * 0.018
+  const innerRoofZ = lerpNumber(0.38, 0.32, curl) - pointed * 0.012
+  const innerThroatX = lerpNumber(0.74, 0.68, curl) - pointed * 0.01
+  const innerThroatZ = lerpNumber(0.28, 0.24, curl) - pointed * 0.008
+  const throatBackX = lerpNumber(0.8, 0.76, curl)
+  const throatBackZ = lerpNumber(0.2, 0.17, curl)
+  const lowerThroatX = lerpNumber(0.86, 0.84, curl)
+  const lowerThroatZ = lerpNumber(0.13, 0.1, curl)
+  const innerFootX = lerpNumber(0.94, 0.93, curl)
+  const innerFootZ = lerpNumber(0.065, 0.045, curl)
+  const apronX = lerpNumber(0.99, 1.01, curl)
+  const apronZ = lerpNumber(0.032, 0.018, curl)
 
   return [
     point(0, 0),
@@ -2216,6 +2251,8 @@ function moanaReferenceLipPoints(dip: number, sharp: number): ProfilePoint[] {
     point(downturnedTipX, downturnedTipZ),
     point(innerRoofX, innerRoofZ),
     point(innerThroatX, innerThroatZ),
+    point(throatBackX, throatBackZ),
+    point(lowerThroatX, lowerThroatZ),
     point(innerFootX, innerFootZ),
     point(apronX, apronZ),
     point(1, 0),

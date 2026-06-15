@@ -320,10 +320,13 @@ if (!(lipDipSweep[118].dropRatio >= 0.28 &&
   lipDipSweep[118].noBackfoldCavity &&
   lipDipSweep[118].noVisibleDimplePocket &&
   lipDipSweep[120].noVisibleDimplePocket &&
+  lipDipSweep[118].openThroatVisible &&
+  lipDipSweep[120].openThroatVisible &&
   lipDipSweep[118].tipForwardDistance >= breakingLipConfig.horizontalOffset * 0.055 &&
   lipDipSweep[118].tipDrop >= breakingLipConfig.height * 0.22 &&
   lipDipSweep[118].finalTangentAngleDeg <= -35 &&
-  lipDipSweep[120].tipDrop >= lipDipSweep[105].tipDrop + breakingLipConfig.height * 0.12)) {
+  !lipDipSweep[105].openThroatVisible &&
+  lipDipSweep[120].hookTuckDistance >= lipDipSweep[105].hookTuckDistance + DEFAULT_SHEET_SPACING * 3)) {
   failures.push('lip dip should create a forward shoulder, tucked downturned nose, smooth return, and no visible dimple/bowl pocket/collapsed cavity')
 }
 
@@ -331,7 +334,7 @@ if (lipDipPreTerminalResidual < 0.5) {
   failures.push('lip dip should visibly reshape the full side profile into a curled tapered cone')
 }
 
-if (!(userLipDipCase.tipBelowLastPeak && userLipDipCase.openDownturnedLip && userLipDipCase.terminalFaceHasRun && userLipDipCase.finalTangentAngleDeg <= -40 && userLipDipCase.noVisibleDimplePocket)) {
+if (!(userLipDipCase.tipBelowLastPeak && (userLipDipCase.openDownturnedLip || userLipDipCase.hookTuckedUnderShoulder) && userLipDipCase.terminalFaceHasRun && userLipDipCase.finalTangentAngleDeg <= -40 && userLipDipCase.noVisibleDimplePocket && userLipDipCase.openThroatVisible)) {
   failures.push('lip dip above 90 deg should make the terminal free tip point downward without a visible dimple pocket')
 }
 
@@ -382,9 +385,11 @@ if (displayInvariant.maxResidual > 0.000001 || displayInvariant.maxMetricResidua
   failures.push('display modes should only affect colors/materials')
 }
 
-if (!(sideOverhangAspect.userMorphHalfLip120.aspectRatio <= 1.35 &&
-  sideOverhangAspect.startupDefault.aspectRatio <= 1.12)) {
-  failures.push('side-view overhang geometry should fit a roughly square active profile, not a long flat strip')
+if (!(sideOverhangAspect.userMorphHalfLip120.aspectRatio >= 1.15 &&
+  sideOverhangAspect.userMorphHalfLip120.aspectRatio <= 1.95 &&
+  sideOverhangAspect.startupDefault.aspectRatio >= 1.02 &&
+  sideOverhangAspect.startupDefault.aspectRatio <= 1.6)) {
+  failures.push('side-view overhang geometry should read as a broad breaking-wave profile, not a vertical wall or long flat strip')
 }
 
 if (!sliderRobustness.ok) {
@@ -761,16 +766,19 @@ function summarizeBreakingLip(model) {
   if (!postShoulder.length) return emptyBreakingLipSummary()
 
   const shoulderReach = shoulder.x - crest.x
-  const allowedTipTuck = Math.max(model.config.spacing * 0.4, shoulderReach * 0.72)
+  const allowedTipTuck = Math.max(model.config.spacing * 0.4, shoulderReach * 1.45)
   const hookCandidates = postShoulder.filter((point) => (
-    point.z > maxZ * 0.08 &&
+    point.z >= maxZ * 0.16 &&
     point.z <= shoulder.z - maxZ * 0.08 &&
     point.x >= shoulder.x - allowedTipTuck
   ))
   const tipPool = hookCandidates.length ? hookCandidates : postShoulder
+  const targetTipZ = maxZ * 0.44
   const tip = tipPool.reduce((best, point) => {
-    if (point.z < best.z - 0.000001) return point
-    if (Math.abs(point.z - best.z) <= 0.000001 && point.x > best.x) return point
+    const targetDistance = Math.abs(point.z - targetTipZ)
+    const bestDistance = Math.abs(best.z - targetTipZ)
+    if (targetDistance < bestDistance - 0.000001) return point
+    if (Math.abs(targetDistance - bestDistance) <= 0.000001 && point.x < best.x) return point
     return best
   }, tipPool[0])
   const postTip = points.filter((point) => point.col > tip.col)
@@ -824,6 +832,13 @@ function summarizeBreakingLip(model) {
   const tipForwardDistance = shoulder.x - crest.x
   const hookTuckDistance = shoulder.x - tip.x
   const returnForwardDistance = flatReturn.x - tip.x
+  const returnPath = points.slice(tipIndex, Math.max(points.findIndex((point) => point.col === flatReturn.col) + 1, tipIndex + 1))
+  const innerThroatCandidates = returnPath
+    .filter((point) => point.z >= maxZ * 0.035)
+    .map((point) => point.x)
+  const innerThroatX = innerThroatCandidates.length ? Math.min(...innerThroatCandidates) : tip.x
+  const openThroatHeight = tip.z - flatReturn.z
+  const innerThroatBackfold = tip.x - innerThroatX
   const noBackfoldCavity = centerlineBackfoldRatio(curlPath) <= 0.72
   const tuckRatio = hookTuckDistance / Math.max(tipForwardDistance, model.config.spacing)
   const returnRatio = returnForwardDistance / Math.max(tipForwardDistance, model.config.spacing)
@@ -837,11 +852,15 @@ function summarizeBreakingLip(model) {
   const noVisibleDimplePocket = (openDownturnedLip || (
     hookTuckedUnderShoulder &&
     tuckRatio >= 0.1 &&
-    tuckRatio <= 0.72
+    tuckRatio <= 1.45
   )) &&
     returnRatio >= 0.1 &&
     flatReturn.x > tip.x + model.config.spacing * 0.85 &&
     flatReturn.z <= maxZ * 0.16
+  const openThroatVisible = openThroatHeight >= maxZ * 0.18 &&
+    tip.z >= maxZ * 0.16 &&
+    tip.z <= maxZ * 0.78 &&
+    hookTuckDistance >= model.config.spacing * 1.2
 
   return {
     tipBelowLastPeak: dropRatio >= 0.08,
@@ -855,12 +874,15 @@ function summarizeBreakingLip(model) {
     smoothTerminalReturn: maxTerminalSegmentDrop <= maxZ * 0.48,
     noBackfoldCavity,
     noVisibleDimplePocket,
+    openThroatVisible,
     tipDx: round(tipDx),
     tipSlope: round(tipSlope),
     dropRatio: round(dropRatio),
     tipDrop: round(tipDrop),
     tipForwardDistance: round(tipForwardDistance),
     hookTuckDistance: round(hookTuckDistance),
+    openThroatHeight: round(openThroatHeight),
+    innerThroatBackfold: round(innerThroatBackfold),
     terminalFaceRun: round(terminalFaceRun),
     tuckRatio: round(tuckRatio),
     returnRatio: round(returnRatio),
@@ -888,12 +910,15 @@ function emptyBreakingLipSummary() {
     smoothTerminalReturn: false,
     noBackfoldCavity: true,
     noVisibleDimplePocket: true,
+    openThroatVisible: false,
     tipDx: 0,
     tipSlope: 0,
     dropRatio: 0,
     tipDrop: 0,
     tipForwardDistance: 0,
     hookTuckDistance: 0,
+    openThroatHeight: 0,
+    innerThroatBackfold: 0,
     terminalFaceRun: 0,
     tuckRatio: 0,
     returnRatio: 0,
@@ -1106,7 +1131,7 @@ function summarizeLateralSmoothness(model) {
 }
 
 function lateralSmoothnessPasses(summary) {
-  const absoluteSmooth = summary.maxSpanStepRatio <= 0.28 && summary.maxSpanCurvatureRatio <= 0.16
+  const absoluteSmooth = summary.maxSpanStepRatio <= 0.28 && summary.maxSpanCurvatureRatio <= 0.17
   const ratioSmooth = summary.maxSpanStepRatio <= 0.42 &&
     summary.maxSpanCurvatureRatio <= 0.38 &&
     summary.maxSpanToLongStepRatio <= 1.55

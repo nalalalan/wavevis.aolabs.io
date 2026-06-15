@@ -181,7 +181,7 @@ If this PDF is the only WaveVis context available, start with this section and t
   \item \textbf{Current source root:} workspace path \code{\_apps/wavevis.aolabs.io/}.
   \item \textbf{Public fallback mirror:} workspace path \code{\_apps/aolabs-site/wavevis/}. A WaveVis deploy to its own \code{gh-pages} branch does not automatically update the \code{aolabs.io/wavevis/} fallback unless the built files are mirrored there and the hub site is pushed.
   \item \textbf{Current architectural direction:} generated Moana-like localized wave. Manual \(xz\) and \(xy\) profile editors are not the active path.
-  \item \textbf{Known open target:} keep improving the human-facing match to the supplied Moana references. The June 15, 2026 repair removes the closed under-lip pocket and bounds the vertical-chute failure, but it is still not a proven exact reference match.
+  \item \textbf{Known open target:} keep improving the human-facing match to the supplied Moana references. The June 15, 2026 repair removes the closed under-lip pocket, rejects the vertical-chute proxy, lowers the over-inflated curl-height compensation, and retunes the generator toward a broader left-tucked open-throat lip, but it is still not a proven exact reference match.
 \end{itemize}
 
 \subsection{What the next agent must not repeat}
@@ -200,12 +200,12 @@ The repeated failures that this document is meant to prevent are:
 
 \subsection{Current live-state evidence}
 
-Figures~\ref{fig:current-live-side}--\ref{fig:current-live-slice} are not the final visual target. They record the current source-rendered linkage state from the same geometry model that builds the public bundle: side view is the full three-dimensional sheet, cross-section is separate, and the full linkage array is present in 3D. The June 15, 2026 state removes the earlier closed under-lip pocket, adds a terminal-run gate so a near-vertical chute cannot pass as a curl, and keeps exact Moana-reference matching open.
+Figures~\ref{fig:current-live-side}--\ref{fig:current-live-slice} are not the final visual target. They record the current source-rendered linkage state from the same geometry model that builds the public bundle: side view is the full three-dimensional sheet, cross-section is separate, and the full linkage array is present in 3D. The June 15, 2026 state removes the earlier closed under-lip pocket, replaces the near-vertical chute proxy with a mid-height lip-nose, open-throat gate, and broad side-aspect gate, and keeps exact Moana-reference matching open.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.98\linewidth]{current-live-side.png}
-\caption{Current source-rendered side linkage for the default inverse-sheet state. This is not a cross-section. The full linkage sheet remains visible, the previous closed under-lip pocket is removed, and the terminal lip now has a bounded downturned run. The figure is evidence of improvement, not proof of exact Moana-reference match.}
+\caption{Current source-rendered side linkage for the default inverse-sheet state. This is not a cross-section. The full linkage sheet remains visible, the previous closed under-lip pocket is removed, and the terminal lip now tucks leftward from the shoulder while leaving an open throat before the flat return. The figure is evidence of improvement, not proof of exact Moana-reference match.}
 \label{fig:current-live-side}
 \end{figure}
 
@@ -347,11 +347,11 @@ The old behavior \(\code{target}=\mathrm{lerp}(\code{deformed},\code{rest},\code
 
 \code{lipDip} maps to \code{overhangAngleDeg}. Neutral is \(90^\circ\). High curl is \(120^\circ\). The accepted behavior is not endpoint lowering. The wave should rise, crest, reach forward, curl downward, then return smoothly to the flat sheet without closing into a bowl. The current validation checks:
 \begin{itemize}
-  \item the terminal tip is below the last peak;
+  \item the selected lip nose is a mid-height visible point below the last peak, not the near-floor return;
   \item the terminal slope is negative;
   \item the tip is forward of the crest and tucked under the shoulder by a bounded amount;
   \item the return advances toward the flat front instead of folding backward;
-  \item \code{noBackfoldCavity} and \code{noVisibleDimplePocket} remain true.
+  \item \code{openThroatVisible}, \code{noBackfoldCavity}, and \code{noVisibleDimplePocket} remain true.
 \end{itemize}
 These checks are guards, not substitutes for the human-facing screenshot. A visible dimple, pocket, side wall, or missing curl still means open work.
 
@@ -602,7 +602,7 @@ Gate & Measurement & Acceptance intent \\
 Perimeter flatness & \(\max_{\partial\Omega}\|p^*-p^0\|\). & Boundary displacement is zero or visually negligible. \\
 Topology completeness & Expected node, edge, and quad counts. & Full rectangular sheet graph remains visible. \\
 Connector closure & Edge endpoints meet their node coordinates. & No detached legs or fake bridges. \\
-Lip curl & Crest height minus lip-tip height; terminal slope; \code{terminalFaceHasRun}. & The lip curls down rather than ending as a hill or near-vertical chute. \\
+Lip curl & Crest height minus lip-nose height; terminal slope; \code{terminalFaceHasRun}; \code{openThroatVisible}. & The lip curls down and leaves an open throat rather than ending as a hill or near-vertical chute. \\
 Span localization & Row-wise height profile across \(y\). & Center strong, sides faded; no swept tunnel. \\
 Morph continuity & Residual between adjacent morph samples. & No sudden jumps or topology flips. \\
 Slider isolation & Aligned geometries across position/steer/width changes. & Rigid controls stay rigid; width stays span-only. \\
@@ -639,7 +639,7 @@ The current acceptance evidence expected from \code{scripts/check-inverse-sheet.
   \item maximum connector endpoint gap is zero;
   \item maximum arm surface leak is zero;
   \item no bowl-pocket count is reported for default, compact-user, and breaking-wide presets;
-  \item side-overhang aspect stays near square for startup and user half-morph cases;
+  \item side-overhang aspect stays broad enough to avoid the vertical-wall failure while still rejecting long flat strips;
   \item slider robustness reports no bad cases.
 \end{itemize}
 
@@ -718,13 +718,13 @@ This section is intentionally blunt so a future chat does not have to infer whet
   \item The Inverse Sheet tab is the first/default option; Double-Layer Sarrus is secondary.
   \item The current PDF route is the WaveVis fallback paper route: \code{/wavevis/proofs/}, file \code{wavevis-system-architecture.pdf}.
   \item Side, Cross Section, and 3D are separate view modes. Side is the full three-dimensional sheet seen from the side; Cross Section is the slice/debug view.
-  \item The current generator and renderer are checked by \code{npm run check:geometry}; the June 15 check includes bounded terminal-lip run, no visible dimple pocket, no bowl pockets, side-render full-array scope, slider robustness, and rigid-cell connector invariants.
+  \item The current generator and renderer are checked by \code{npm run check:geometry}; the June 15 check includes mid-height lip-nose selection, \code{openThroatVisible}, bounded terminal-lip run, no visible dimple pocket, no bowl pockets, side-render full-array scope, slider robustness, and rigid-cell connector invariants.
   \item Source-rendered side, isometric, and cross-section figures were regenerated from the passing geometry model because browser screenshot capture can time out on the WebGL canvas.
 \end{itemize}
 
 \textbf{Open state that must not be overstated:}
 \begin{itemize}
-  \item Exact Moana-reference matching is still a visual design target, not a proven completed result. The correct claim is that the generator is being driven toward the Moana-like localized plunging wave family and that the latest repair removes the closed under-lip pocket without regressing full-array linkage.
+  \item Exact Moana-reference matching is still a visual design target, not a proven completed result. The correct claim is that the generator is being driven toward the Moana-like localized plunging wave family and that the latest repair moves from a vertical-chute/barrel failure toward a broader left-tucked open-throat lip without regressing full-array linkage.
   \item \code{https://wavevis.aolabs.io/} is still treated as blocked/stale unless a fresh certificate and body check passes.
   \item This is a simulator and architecture record. It is not evidence that a physical lattice prototype has been fabricated or experimentally validated.
   \item If Alan reports a visible dimple, cavity, side wall, bowl, missing curl, zig-zag, disconnected cell, or cross-section/side confusion after this PDF ships, the live rendered artifact overrides this paper. Repair the source and update the validation gate.
