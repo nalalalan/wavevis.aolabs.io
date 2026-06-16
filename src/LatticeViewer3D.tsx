@@ -101,7 +101,7 @@ function LatticeModelGroup({
     : sideMechanismView
       ? Math.max(model.config.spacing * 0.035, 0.018)
     : Math.max(model.config.spacing * (largeGrid ? 0.042 : 0.09), 0.026)
-  const surfaceOpacity = sideMechanismView ? 0.22 : sliceProfileView ? 0.2 : (largeGrid ? 0.3 : 0.36)
+  const surfaceOpacity = sideMechanismView ? 0.28 : sliceProfileView ? 0.2 : (largeGrid ? 0.3 : 0.36)
 
   return (
     <group>
@@ -269,10 +269,10 @@ function SideProfileSilhouette({
   return (
     <group>
       <mesh geometry={profile.halo} renderOrder={29}>
-        <meshBasicMaterial color="#fff8ee" transparent opacity={subtle ? 0.26 : compact ? 0.68 : 0.62} depthTest={false} depthWrite={false} />
+        <meshBasicMaterial color="#fff8ee" transparent opacity={subtle ? 0.26 : compact ? 0.54 : 0.56} depthTest={false} depthWrite={false} />
       </mesh>
       <mesh geometry={profile.core} renderOrder={30}>
-        <meshBasicMaterial color="#141713" transparent opacity={subtle ? 0.68 : compact ? 0.94 : 1} depthTest={false} depthWrite={false} />
+        <meshBasicMaterial color="#141713" transparent opacity={subtle ? 0.68 : compact ? 0.76 : 0.86} depthTest={false} depthWrite={false} />
       </mesh>
     </group>
   )
@@ -439,7 +439,7 @@ function StraightEdgeSegments({
           <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.055} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileActive} renderOrder={3}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.34} depthTest depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.2} depthTest depthWrite={false} />
         </lineSegments>
       </>
     )
