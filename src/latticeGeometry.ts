@@ -1593,7 +1593,7 @@ function coneCurlSpanScale(profileU: number, lipStrength: number): number {
   const bodyTaper = smootherStep((profileU - 0.16) / 0.68)
   const terminalTaper = smootherStep((profileU - 0.42) / 0.38)
   const returnTaper = smootherStep((profileU - 0.72) / 0.24)
-  const scale = 1 - curl * (bodyTaper * 0.11 + terminalTaper * 0.2 + returnTaper * 0.14)
+  const scale = 1 - curl * (bodyTaper * 0.06 + terminalTaper * 0.08 + returnTaper * 0.06)
 
   return clampNumber(scale, 0.58, 1)
 }
@@ -1634,11 +1634,11 @@ function terminalLipSpanMask(
   )
   const lateLipHalfWidth = Math.max(
     centerRidgeHalfWidth * lerpNumber(1.44, 1.1, curl),
-    requestedHalfWidth * lerpNumber(0.64, 0.48, curl),
+    requestedHalfWidth * lerpNumber(0.78, 0.68, curl),
   )
   const earlyLipHalfWidth = Math.max(
     centerRidgeHalfWidth * lerpNumber(1.74, 1.4, curl),
-    requestedHalfWidth * lerpNumber(0.82, 0.66, curl),
+    requestedHalfWidth * lerpNumber(1.02, 0.92, curl),
   )
   const fullHalfWidth = lerpNumber(earlyLipHalfWidth, lateLipHalfWidth, terminalOpen * curl)
   const distance = Math.abs(centeredY)
@@ -1952,7 +1952,7 @@ function canonicalOverhangTargetPosition(
   const lipStrength = breakingLipStrength(lipDip)
   const curlRowWeight = generatedCurlRowWeight(profileU, uncenteredY, config, lipStrength)
   const curlProfileWeight = localCurlProfileWeight(profileU, uncenteredY, config, lipStrength)
-  const terminalSideNarrow = lipStrength * smootherStep((profileU - 0.38) / 0.44) * 0.54
+  const terminalSideNarrow = lipStrength * smootherStep((profileU - 0.38) / 0.44) * 0.18
   const terminalSideGate = lerpNumber(1, curlProfileWeight, terminalSideNarrow)
   const coreLongitudinalFade = 0.055
   const lipStart = breakingLipStart()
@@ -2027,7 +2027,7 @@ function canonicalOverhangTargetPosition(
   const scale = clampNumber(config.profileScale, 0.35, 1.55)
   const normalizedScale = (scale - 0.35) / (1.55 - 0.35)
   const horizontalScale = lerpNumber(0.78, 1.14, normalizedScale)
-  const verticalScale = lerpNumber(0.88, 1.34, normalizedScale)
+  const verticalScale = lerpNumber(0.78, 1.12, normalizedScale)
   const overhangAmount = Math.min(config.horizontalOffset * horizontalScale, remainingLength * 0.86)
   const nominalWaveHeight = Math.min(config.height * verticalScale, remainingLength * 0.54)
   const waveHeight = gridResolvedWaveHeight(nominalWaveHeight, remainingLength, lipStrength, config.columns)
@@ -2108,8 +2108,8 @@ function gridResolvedWaveHeight(
   columns: number,
 ): number {
   void columns
-  const compensation = 1 + 0.18 * clampNumber(lipStrength, 0, 1)
-  const heightCap = remainingLength * lerpNumber(0.58, 0.64, clampNumber(lipStrength, 0, 1))
+  const compensation = 1 + 0.08 * clampNumber(lipStrength, 0, 1)
+  const heightCap = remainingLength * lerpNumber(0.5, 0.56, clampNumber(lipStrength, 0, 1))
 
   return Math.min(nominalWaveHeight * compensation, heightCap)
 }
@@ -2224,7 +2224,7 @@ function sampleMoanaReferenceLipProfile(
   }))
 
   return sampleBezierPathByLength(
-    smoothProfileSegments(points, 0.78),
+    smoothProfileSegments(points, 0.46),
     clampNumber(amount, 0, 1),
   )
 }
@@ -2232,34 +2232,38 @@ function sampleMoanaReferenceLipProfile(
 function moanaReferenceLipPoints(dip: number, sharp: number): ProfilePoint[] {
   const curl = clampNumber(dip, 0, 1)
   const pointed = Math.pow(clampNumber(sharp, 0, 1), 1.35)
-  const shoulderX = lerpNumber(0.9, 1.015, curl) + pointed * 0.008
-  const shoulderZ = lerpNumber(0.8, 0.86, curl)
-  const forwardLipX = lerpNumber(0.86, 0.94, curl) + pointed * 0.006
-  const forwardLipZ = lerpNumber(0.69, 0.7, curl) - pointed * 0.006
-  const downturnedTipX = lerpNumber(0.78, 0.76, curl) - pointed * 0.012
-  const downturnedTipZ = lerpNumber(0.51, 0.58, curl) - pointed * 0.018
-  const innerRoofX = lerpNumber(0.75, 0.6, curl) - pointed * 0.01
-  const innerRoofZ = lerpNumber(0.38, 0.45, curl) - pointed * 0.01
-  const innerThroatX = lerpNumber(0.78, 0.56, curl) - pointed * 0.006
-  const innerThroatZ = lerpNumber(0.28, 0.31, curl) - pointed * 0.006
-  const throatBackX = lerpNumber(0.84, 0.68, curl)
-  const throatBackZ = lerpNumber(0.2, 0.18, curl)
-  const lowerThroatX = lerpNumber(0.89, 0.86, curl)
-  const lowerThroatZ = lerpNumber(0.13, 0.06, curl)
-  const innerFootX = lerpNumber(0.96, 0.97, curl)
-  const innerFootZ = lerpNumber(0.06, 0.022, curl)
-  const apronX = lerpNumber(0.99, 1, curl)
-  const apronZ = lerpNumber(0.03, 0.006, curl)
+  const shoulderX = lerpNumber(0.58, 0.74, curl) + pointed * 0.01
+  const shoulderZ = lerpNumber(0.78, 0.9, curl) - pointed * 0.006
+  const roundedCrestX = lerpNumber(0.72, 0.86, curl) + pointed * 0.012
+  const roundedCrestZ = lerpNumber(0.86, 0.94, curl) + pointed * 0.004
+  const crestCapX = lerpNumber(0.84, 0.96, curl) + pointed * 0.02
+  const crestCapZ = lerpNumber(0.76, 0.86, curl) - pointed * 0.018
+  const forwardLipX = lerpNumber(0.86, 0.96, curl) + pointed * 0.058
+  const forwardLipZ = lerpNumber(0.62, 0.76, curl) - pointed * 0.046
+  const downturnedTipX = lerpNumber(0.78, 0.88, curl) - pointed * 0.04
+  const downturnedTipZ = lerpNumber(0.48, 0.58, curl) - pointed * 0.052
+  const innerRoofX = lerpNumber(0.7, 0.78, curl) - pointed * 0.032
+  const innerRoofZ = lerpNumber(0.38, 0.46, curl) - pointed * 0.03
+  const innerThroatX = lerpNumber(0.66, 0.7, curl) - pointed * 0.018
+  const innerThroatZ = lerpNumber(0.34, 0.4, curl) - pointed * 0.02
+  const throatBackX = lerpNumber(0.64, 0.66, curl)
+  const throatBackZ = lerpNumber(0.3, 0.34, curl)
+  const lowerThroatX = lerpNumber(0.7, 0.7, curl)
+  const lowerThroatZ = lerpNumber(0.22, 0.26, curl)
+  const innerFootX = lerpNumber(0.82, 0.82, curl)
+  const innerFootZ = lerpNumber(0.12, 0.12, curl)
+  const apronX = lerpNumber(0.94, 0.94, curl)
+  const apronZ = lerpNumber(0.05, 0.04, curl)
 
   return [
     point(0, 0),
     point(0.08, 0),
     point(0.17, 0.025),
-    point(0.31, 0.22),
-    point(0.47, 0.52),
-    point(0.62, 0.73),
-    point(0.77, 0.84),
+    point(0.3, 0.22),
+    point(0.45, 0.58),
     point(shoulderX, shoulderZ),
+    point(roundedCrestX, roundedCrestZ),
+    point(crestCapX, crestCapZ),
     point(forwardLipX, forwardLipZ),
     point(downturnedTipX, downturnedTipZ),
     point(innerRoofX, innerRoofZ),

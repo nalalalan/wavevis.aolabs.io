@@ -181,7 +181,7 @@ If this PDF is the only WaveVis context available, start with this section and t
   \item \textbf{Current source root:} workspace path \code{\_apps/wavevis.aolabs.io/}.
   \item \textbf{Public fallback mirror:} workspace path \code{\_apps/aolabs-site/wavevis/}. A WaveVis deploy to its own \code{gh-pages} branch does not automatically update the \code{aolabs.io/wavevis/} fallback unless the built files are mirrored there and the hub site is pushed.
   \item \textbf{Current architectural direction:} generated Moana-like localized wave. Manual \(xz\) and \(xy\) profile editors are not the active path.
-  \item \textbf{Current reference-match boundary:} the June 15, 2026 repair removes the closed under-lip pocket, rejects the vertical-chute proxy, lowers the over-inflated curl-height compensation, retunes the generator toward a broader left-tucked open-throat lip, and adds a current-vs-reference trace overlay. The current claim is a bounded broad-curl match for the linkage simulator, not photorealistic identity with the supplied water frame.
+  \item \textbf{Current reference-match boundary:} the June 16, 2026 repair replaces the prior pointed sail and K-shaped return with a rounded-cap, open-throat curl; broadens terminal participation across the full linkage sheet; lowers the over-inflated curl-height compensation; and keeps a current-vs-reference trace overlay. The current claim is a bounded rounded open-curl simulator state, not photorealistic identity with the supplied water frame.
 \end{itemize}
 
 \subsection{What the next agent must not repeat}
@@ -200,12 +200,12 @@ The repeated failures that this document is meant to prevent are:
 
 \subsection{Current live-state evidence}
 
-Figures~\ref{fig:current-live-side}--\ref{fig:current-live-slice} record the current source-rendered linkage state from the same geometry model that builds the public bundle: side view is the full three-dimensional sheet, the reference overlay extracts the centerline silhouette, cross-section is separate, and the full linkage array is present in 3D. The June 15, 2026 state removes the earlier closed under-lip pocket, replaces the near-vertical chute proxy with a mid-height lip-nose, open-throat gate, and broad side-aspect gate, and records the remaining reference-match boundary as a visible overlay instead of an invisible claim.
+Figures~\ref{fig:current-live-side}--\ref{fig:current-live-slice} record the current source-rendered linkage state from the same geometry model that builds the public bundle: side view is the full three-dimensional sheet, the reference overlay extracts the centerline silhouette, cross-section is separate, and the full linkage array is present in 3D. The June 16, 2026 state removes the pointed sail, hard crest tab, and K-shaped return from the previous pass; replaces them with a rounded cap, open throat, broad terminal sheet participation, and no bowl-pocket validation; and records the remaining reference-match boundary as a visible overlay instead of an invisible claim.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.98\linewidth]{current-live-side.png}
-\caption{Current source-rendered side linkage for the default inverse-sheet state. This is not a cross-section. The full linkage sheet remains visible, the previous closed under-lip pocket is removed, and the terminal lip now tucks leftward from the shoulder while leaving an open throat before the flat return.}
+\caption{Current source-rendered side linkage for the default inverse-sheet state. This is not a cross-section. The full linkage sheet remains visible, the previous pointed sail and K-shaped return are removed, and the terminal lip now forms a rounded open throat before the flat return.}
 \label{fig:current-live-side}
 \end{figure}
 
@@ -647,7 +647,7 @@ The current acceptance evidence expected from \code{scripts/check-inverse-sheet.
   \item maximum arm surface leak is zero;
   \item no bowl-pocket count is reported for default, compact-user, and breaking-wide presets;
   \item side-overhang aspect stays in the tightened broad-curl band: startup default at least \(1.30\), compact user morph case at least \(1.35\), and both below the long-flat-strip ceiling;
-  \item broad open-curl lip stats keep \code{openThroatVisible}, \code{noVisibleDimplePocket}, \code{noBackfoldCavity}, and \code{returnToFlat} true while allowing a wide tucked nose instead of forcing the old vertical-chute proxy;
+  \item broad open-curl lip stats keep \code{openThroatVisible}, \code{noVisibleDimplePocket}, \code{noBackfoldCavity}, and \code{returnToFlat} true while allowing a wide rounded cap and tucked nose instead of forcing the old vertical-chute proxy;
   \item slider robustness reports no bad cases.
 \end{itemize}
 
@@ -726,13 +726,13 @@ This section is intentionally blunt so a future chat does not have to infer whet
   \item The Inverse Sheet tab is the first/default option; Double-Layer Sarrus is secondary.
   \item The current PDF route is the WaveVis fallback paper route: \code{/wavevis/proofs/}, file \code{wavevis-system-architecture.pdf}.
   \item Side, Cross Section, and 3D are separate view modes. Side is the full three-dimensional sheet seen from the side; Cross Section is the slice/debug view.
-  \item The current generator and renderer are checked by \code{npm run check:geometry}; the June 15 check includes mid-height lip-nose selection, \code{openThroatVisible}, bounded terminal-lip run, no visible dimple pocket, no bowl pockets, side-render full-array scope, slider robustness, and rigid-cell connector invariants.
-  \item Source-rendered side, reference-overlay, isometric, and cross-section figures were regenerated from the passing geometry model because browser screenshot capture can time out on the WebGL canvas.
+  \item The current generator and renderer are checked by \code{npm run check:geometry}; the June 16 check includes rounded-cap terminal response, \code{openThroatVisible}, bounded terminal-lip run, no visible dimple pocket, no bowl pockets, side-render full-array scope, slider robustness, and rigid-cell connector invariants.
+  \item Source-rendered side, reference-overlay, isometric, and cross-section figures were regenerated from the passing geometry model; the built app canvas was also verified at desktop and mobile sizes.
 \end{itemize}
 
 \textbf{Open state that must not be overstated:}
 \begin{itemize}
-  \item Exact photorealistic Moana-water matching is not a proven completed result. The correct claim is that the generator now passes the broad open-curl linkage gate, includes a visible current-vs-reference overlay, and moves from a vertical-chute/barrel failure toward a broader left-tucked open-throat lip without regressing full-array linkage.
+  \item Exact photorealistic Moana-water matching is not a proven completed result. The correct claim is that the generator now passes the rounded open-curl linkage gate, includes a visible current-vs-reference overlay, and moves from the pointed-sail/K-return failure toward a broad rounded cap and open throat without regressing full-array linkage.
   \item \code{https://wavevis.aolabs.io/} is still treated as blocked/stale unless a fresh certificate and body check passes.
   \item This is a simulator and architecture record. It is not evidence that a physical lattice prototype has been fabricated or experimentally validated.
   \item If Alan reports a visible dimple, cavity, side wall, bowl, missing curl, zig-zag, disconnected cell, or cross-section/side confusion after this PDF ships, the live rendered artifact overrides this paper. Repair the source and update the validation gate.

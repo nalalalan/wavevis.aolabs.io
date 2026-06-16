@@ -856,7 +856,7 @@ function summarizeBreakingLip(model) {
   const broadOpenCurl = hookTuckedUnderShoulder &&
     tuckRatio >= 0.1 &&
     tuckRatio <= 8.6 &&
-    hookTuckDistance <= Math.max(maxZ * 0.72, returnForwardDistance * 0.24) &&
+    hookTuckDistance <= Math.max(maxZ * 0.72, returnForwardDistance * 0.3) &&
     noBackfoldCavity
   const noVisibleDimplePocket = (openDownturnedLip || broadOpenCurl || (
     hookTuckedUnderShoulder &&
@@ -1319,7 +1319,7 @@ function summarizeConicalSpanTaper(model) {
 function conicalSpanTaperPasses(summary) {
   return summary.activeRowCount >= 4 &&
     summary.outerMaxRatio <= 0.64 &&
-    summary.topBandFraction <= 0.54
+    summary.topBandFraction <= 0.58
 }
 
 function centerlineBackfoldRatio(points) {
