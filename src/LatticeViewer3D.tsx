@@ -99,9 +99,9 @@ function LatticeModelGroup({
   const nodeRadius = sliceProfileView
     ? Math.max(model.config.spacing * 0.052, 0.034)
     : sideMechanismView
-      ? Math.max(model.config.spacing * 0.035, 0.018)
+      ? Math.max(model.config.spacing * 0.024, 0.014)
     : Math.max(model.config.spacing * (largeGrid ? 0.042 : 0.09), 0.026)
-  const surfaceOpacity = sideMechanismView ? 0.28 : sliceProfileView ? 0.2 : (largeGrid ? 0.3 : 0.36)
+  const surfaceOpacity = sideMechanismView ? 0.08 : sliceProfileView ? 0.2 : (largeGrid ? 0.3 : 0.36)
 
   return (
     <group>
@@ -115,7 +115,15 @@ function LatticeModelGroup({
           <meshStandardMaterial vertexColors side={THREE.DoubleSide} transparent opacity={surfaceOpacity} roughness={0.78} metalness={0.02} depthWrite={false} />
         </mesh>
       )}
-      {model.config.showNodes && <NodeInstances nodes={nodeById} nodeIds={renderScope.nodeIds} radius={nodeRadius} sideSlice={sliceProfileView} />}
+      {model.config.showNodes && (
+        <NodeInstances
+          nodes={nodeById}
+          nodeIds={renderScope.nodeIds}
+          radius={nodeRadius}
+          sideSlice={sliceProfileView}
+          sideProjection={sideMechanismView}
+        />
+      )}
       {model.config.showEdges && (
         <>
           <EdgeHitTargets
@@ -303,11 +311,13 @@ function NodeInstances({
   nodeIds,
   radius,
   sideSlice,
+  sideProjection,
 }: {
   nodes: Map<string, LatticeNode>
   nodeIds: string[]
   radius: number
   sideSlice: boolean
+  sideProjection?: boolean
 }) {
   const ref = useRef<THREE.InstancedMesh>(null)
   const geometry = useMemo(() => new THREE.SphereGeometry(1, 10, 8), [])
@@ -315,13 +325,13 @@ function NodeInstances({
     color: inverseCellBodyColor,
     emissive: inverseCellBodyColor,
     emissiveIntensity: 0.08,
-    transparent: sideSlice,
-    opacity: sideSlice ? 0.9 : 1,
+    transparent: sideSlice || sideProjection,
+    opacity: sideProjection ? 0.48 : sideSlice ? 0.9 : 1,
     roughness: 0.45,
     metalness: 0.03,
-    depthTest: !sideSlice,
-    depthWrite: !sideSlice,
-  }), [sideSlice])
+    depthTest: !(sideSlice || sideProjection),
+    depthWrite: !(sideSlice || sideProjection),
+  }), [sideProjection, sideSlice])
 
   useLayoutEffect(() => {
     if (!ref.current) return
@@ -337,7 +347,7 @@ function NodeInstances({
     ref.current.instanceMatrix.needsUpdate = true
   }, [nodeIds, nodes, radius])
 
-  return <instancedMesh ref={ref} args={[geometry, material, nodeIds.length]} renderOrder={sideSlice ? 24 : 0} />
+  return <instancedMesh ref={ref} args={[geometry, material, nodeIds.length]} renderOrder={sideSlice || sideProjection ? 24 : 0} />
 }
 
 function StraightEdgeSegments({
@@ -430,16 +440,16 @@ function StraightEdgeSegments({
     return (
       <>
         <lineSegments geometry={geometries.spanFlat} renderOrder={0}>
-          <lineBasicMaterial color="#2f332f" transparent opacity={0.018} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#2f332f" transparent opacity={0.01} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileFlat} renderOrder={1}>
-          <lineBasicMaterial color="#171a17" transparent opacity={0.07} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#171a17" transparent opacity={0.035} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.spanActive} renderOrder={2}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.055} depthTest depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.025} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileActive} renderOrder={3}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.2} depthTest depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.11} depthTest depthWrite={false} />
         </lineSegments>
       </>
     )
