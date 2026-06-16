@@ -856,8 +856,15 @@ function summarizeBreakingLip(model) {
   const broadOpenCurl = hookTuckedUnderShoulder &&
     tuckRatio >= 0.1 &&
     tuckRatio <= 8.6 &&
-    hookTuckDistance <= Math.max(maxZ * 0.72, returnForwardDistance * 0.3) &&
-    noBackfoldCavity
+    noBackfoldCavity &&
+    (
+      hookTuckDistance <= Math.max(maxZ * 0.72, returnForwardDistance * 0.3) ||
+      (
+        terminalFaceHasRun &&
+        innerThroatBackfold <= maxZ * 0.24 &&
+        returnForwardDistance >= maxZ * 1.8
+      )
+    )
   const noVisibleDimplePocket = (openDownturnedLip || broadOpenCurl || (
     hookTuckedUnderShoulder &&
     tuckRatio >= 0.1 &&

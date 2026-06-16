@@ -67,7 +67,7 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   horizontalOffset: 17.5,
   overhangPosition: -0.15,
   steer: 0,
-  height: 17.5,
+  height: 16.9,
   overhangWidth: 22,
   overhangAngleDeg: 120,
   conicRho: 0.5,
@@ -1138,8 +1138,15 @@ function terminalLipCurlStats(model: LatticeModel): {
   const broadOpenCurl = hookTuckedUnderShoulder &&
     tuckRatio >= 0.1 &&
     tuckRatio <= 8.6 &&
-    hookTuckDistance <= Math.max(maxHeight * 0.72, returnForwardDistance * 0.24) &&
-    noBackfoldCavity
+    noBackfoldCavity &&
+    (
+      hookTuckDistance <= Math.max(maxHeight * 0.72, returnForwardDistance * 0.3) ||
+      (
+        terminalFaceHasRun &&
+        innerThroatBackfold <= maxHeight * 0.24 &&
+        returnForwardDistance >= maxHeight * 1.8
+      )
+    )
   const noVisibleDimplePocket = (openDownturnedLip || broadOpenCurl || (
     hookTuckedUnderShoulder &&
     tuckRatio >= 0.1 &&
@@ -2174,7 +2181,7 @@ function curledConeProfileExtent(
   const requestedReachSpan = overhangAmount * lerpNumber(1.2, 2.05, dipAmount)
   const desiredSpan = Math.max(profileDrivenSpan, requestedReachSpan)
   const minSpan = Math.min(profileRestLength * 0.22, DEFAULT_SHEET_SPACING * 4.5)
-  const maxSpan = Math.max(minSpan, profileRestLength * 0.72)
+  const maxSpan = Math.max(minSpan, profileRestLength * 0.76)
   const curlSpan = clampNumber(desiredSpan, minSpan, maxSpan)
 
   return { curlSpan }
@@ -2224,7 +2231,7 @@ function sampleMoanaReferenceLipProfile(
   }))
 
   return sampleBezierPathByLength(
-    smoothProfileSegments(points, 0.46),
+    smoothProfileSegments(points, 0.68),
     clampNumber(amount, 0, 1),
   )
 }
@@ -2232,28 +2239,28 @@ function sampleMoanaReferenceLipProfile(
 function moanaReferenceLipPoints(dip: number, sharp: number): ProfilePoint[] {
   const curl = clampNumber(dip, 0, 1)
   const pointed = Math.pow(clampNumber(sharp, 0, 1), 1.35)
-  const shoulderX = lerpNumber(0.58, 0.74, curl) + pointed * 0.01
-  const shoulderZ = lerpNumber(0.78, 0.9, curl) - pointed * 0.006
-  const roundedCrestX = lerpNumber(0.72, 0.86, curl) + pointed * 0.012
-  const roundedCrestZ = lerpNumber(0.86, 0.94, curl) + pointed * 0.004
-  const crestCapX = lerpNumber(0.84, 0.96, curl) + pointed * 0.02
-  const crestCapZ = lerpNumber(0.76, 0.86, curl) - pointed * 0.018
-  const forwardLipX = lerpNumber(0.86, 0.96, curl) + pointed * 0.058
-  const forwardLipZ = lerpNumber(0.62, 0.76, curl) - pointed * 0.046
-  const downturnedTipX = lerpNumber(0.78, 0.88, curl) - pointed * 0.04
-  const downturnedTipZ = lerpNumber(0.48, 0.58, curl) - pointed * 0.052
-  const innerRoofX = lerpNumber(0.7, 0.78, curl) - pointed * 0.032
-  const innerRoofZ = lerpNumber(0.38, 0.46, curl) - pointed * 0.03
-  const innerThroatX = lerpNumber(0.66, 0.7, curl) - pointed * 0.018
-  const innerThroatZ = lerpNumber(0.34, 0.4, curl) - pointed * 0.02
-  const throatBackX = lerpNumber(0.64, 0.66, curl)
-  const throatBackZ = lerpNumber(0.3, 0.34, curl)
-  const lowerThroatX = lerpNumber(0.7, 0.7, curl)
-  const lowerThroatZ = lerpNumber(0.22, 0.26, curl)
-  const innerFootX = lerpNumber(0.82, 0.82, curl)
-  const innerFootZ = lerpNumber(0.12, 0.12, curl)
-  const apronX = lerpNumber(0.94, 0.94, curl)
-  const apronZ = lerpNumber(0.05, 0.04, curl)
+  const shoulderX = lerpNumber(0.58, 0.66, curl) + pointed * 0.004
+  const shoulderZ = lerpNumber(0.8, 0.91, curl) - pointed * 0.004
+  const roundedCrestX = lerpNumber(0.7, 0.77, curl) + pointed * 0.003
+  const roundedCrestZ = lerpNumber(0.9, 0.98, curl) + pointed * 0.002
+  const crestCapX = lerpNumber(0.82, 0.89, curl) + pointed * 0.004
+  const crestCapZ = lerpNumber(0.88, 0.95, curl) - pointed * 0.004
+  const lipNoseX = lerpNumber(0.82, 0.88, curl) - pointed * 0.012
+  const lipNoseZ = lerpNumber(0.78, 0.86, curl) - pointed * 0.012
+  const forwardLipX = lerpNumber(0.7, 0.76, curl) - pointed * 0.022
+  const forwardLipZ = lerpNumber(0.64, 0.74, curl) - pointed * 0.024
+  const downturnedTipX = lerpNumber(0.52, 0.58, curl) - pointed * 0.03
+  const downturnedTipZ = lerpNumber(0.48, 0.56, curl) - pointed * 0.038
+  const innerRoofX = lerpNumber(0.51, 0.57, curl) - pointed * 0.01
+  const innerRoofZ = lerpNumber(0.36, 0.43, curl) - pointed * 0.024
+  const innerThroatX = lerpNumber(0.54, 0.6, curl) + pointed * 0.002
+  const innerThroatZ = lerpNumber(0.24, 0.3, curl) - pointed * 0.014
+  const lowerThroatX = lerpNumber(0.62, 0.68, curl)
+  const lowerThroatZ = lerpNumber(0.13, 0.17, curl)
+  const innerFootX = lerpNumber(0.78, 0.84, curl)
+  const innerFootZ = lerpNumber(0.055, 0.07, curl)
+  const apronX = lerpNumber(0.94, 0.96, curl)
+  const apronZ = lerpNumber(0.025, 0.02, curl)
 
   return [
     point(0, 0),
@@ -2264,11 +2271,11 @@ function moanaReferenceLipPoints(dip: number, sharp: number): ProfilePoint[] {
     point(shoulderX, shoulderZ),
     point(roundedCrestX, roundedCrestZ),
     point(crestCapX, crestCapZ),
+    point(lipNoseX, lipNoseZ),
     point(forwardLipX, forwardLipZ),
     point(downturnedTipX, downturnedTipZ),
     point(innerRoofX, innerRoofZ),
     point(innerThroatX, innerThroatZ),
-    point(throatBackX, throatBackZ),
     point(lowerThroatX, lowerThroatZ),
     point(innerFootX, innerFootZ),
     point(apronX, apronZ),
