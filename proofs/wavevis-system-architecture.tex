@@ -181,7 +181,7 @@ If this PDF is the only WaveVis context available, start with this section and t
   \item \textbf{Current source root:} workspace path \code{\_apps/wavevis.aolabs.io/}.
   \item \textbf{Public fallback mirror:} workspace path \code{\_apps/aolabs-site/wavevis/}. A WaveVis deploy to its own \code{gh-pages} branch does not automatically update the \code{aolabs.io/wavevis/} fallback unless the built files are mirrored there and the hub site is pushed.
   \item \textbf{Current architectural direction:} stored reference-trace Moana-like localized wave. Manual \(xz\) and \(xy\) profile editors are not the active path.
-  \item \textbf{Current reference-match boundary:} the June 16, 2026 repair replaces the compressed side trace with the stored broad open-curl trace, flips the side camera to the reference-facing direction, smooths the visible side contour, keeps the full linkage sheet visible, and preserves the current-vs-reference trace overlay. The current claim is a bounded rounded open-curl simulator state, not photorealistic identity with the supplied water frame.
+  \item \textbf{Current reference-match boundary:} the June 16, 2026 repair replaces the compressed side trace with a fuller stored open-curl trace whose inner return drops sooner, moves the side camera to a true side-on reference direction, smooths the visible side contour, reduces rail-dominant tunnel cues, keeps the full linkage sheet visible, and preserves the current-vs-reference trace overlay. The current claim is a bounded rounded open-curl simulator state, not photorealistic identity with the supplied water frame.
 \end{itemize}
 
 \subsection{What the next agent must not repeat}
@@ -200,7 +200,7 @@ The repeated failures that this document is meant to prevent are:
 
 \subsection{Current live-state evidence}
 
-Figures~\ref{fig:current-live-side}--\ref{fig:current-live-slice} record the current source-rendered linkage state from the same geometry model that builds the public bundle: side view is the full three-dimensional sheet, the reference overlay extracts the centerline silhouette, cross-section is separate, and the full linkage array is present in 3D. The June 16, 2026 state replaces the flattened side profile with the stored broad open-curl reference trace, faces the side view in the reference direction, preserves the full node/edge array, and records the remaining reference-match boundary as a visible overlay instead of an invisible claim.
+Figures~\ref{fig:current-live-side}--\ref{fig:current-live-slice} record the current source-rendered linkage state from the same geometry model that builds the public bundle: side view is the full three-dimensional sheet, the reference overlay extracts the centerline silhouette, cross-section is separate, and the full linkage array is present in 3D. The June 16, 2026 state replaces the flattened side profile with a fuller stored open-curl reference trace, lowers the inner return to open the throat, faces the side view in the true reference direction, reduces rail-dominant tunnel cues, preserves the full node/edge array, and records the remaining reference-match boundary as a visible overlay instead of an invisible claim.
 
 \begin{figure}[H]
 \centering
@@ -212,7 +212,7 @@ Figures~\ref{fig:current-live-side}--\ref{fig:current-live-slice} record the cur
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.92\linewidth]{current-live-reference-overlay.png}
-\caption{Current centerline silhouette against the normalized broad open-curl reference trace. The overlay is the human-facing shape gate for this repair: it shows the crest alignment and open throat while keeping the remaining inner-return difference explicit.}
+\caption{Current centerline silhouette against the normalized fuller open-curl reference trace. The overlay is the human-facing shape gate for this repair: it shows the crest alignment, lower inner return, and open throat while keeping the remaining reference difference explicit.}
 \label{fig:current-live-reference-overlay}
 \end{figure}
 
@@ -519,7 +519,7 @@ Renderer & Shows the actual mechanism. & Fake shell, hidden wall, side view as c
 
 \section{Generated Moana target}
 
-The current visible app does not ask the user to draw a profile. That path created too much ambiguity and repeatedly made the simulator look like a swept tunnel or hand-edited cavity rather than a single coherent wave. The source may still contain historical helper functions for compatibility, but the user-facing target is now driven by a stored broad open-curl reference trace: a localized Moana-ocean deformation with a broad rear ramp, rounded crest, forward-and-down lip, open underside, smooth lateral fade, and flat rectangular perimeter.
+The current visible app does not ask the user to draw a profile. That path created too much ambiguity and repeatedly made the simulator look like a swept tunnel or hand-edited cavity rather than a single coherent wave. The source may still contain historical helper functions for compatibility, but the user-facing target is now driven by a stored fuller open-curl reference trace: a localized Moana-ocean deformation with a broad rear ramp, rounded crest, forward-and-down lip, lower inner return, open underside, smooth lateral fade, and flat rectangular perimeter.
 
 The generated target is a reference field, not a set of cell locations. The final cell grid is determined by row and column counts, then sampled against that target. A clean state must keep the full linkage array visible while making the centerline and the lateral silhouette read as one plunging wave. The generator must never stitch the lip directly to the ground or draw a hard polygon boundary around a former editor curve, because that creates the wall, bowl, and cavity failures this record explicitly rejects. The curl is also resolution-sensitive: under-resolved column counts are promoted to the smooth-wave minimum because honoring a compact column request recreated the visible dimple and made the side silhouette fail.
 
@@ -732,7 +732,7 @@ This section is intentionally blunt so a future chat does not have to infer whet
 
 \textbf{Open state that must not be overstated:}
 \begin{itemize}
-  \item Exact photorealistic Moana-water matching is not a proven completed result. The correct claim is that the generator now passes the rounded open-curl linkage gate, includes a visible current-vs-reference overlay, and moves from the prior flattened/sail-like failure toward a broad rounded cap and open throat without regressing full-array linkage.
+  \item Exact photorealistic Moana-water matching is not a proven completed result. The correct claim is that the generator now passes the fuller rounded open-curl linkage gate, includes a visible current-vs-reference overlay, and moves from the prior flattened/sail-like failure toward a broad rounded cap, lower inner return, and open throat without regressing full-array linkage.
   \item \code{https://wavevis.aolabs.io/} is still treated as blocked/stale unless a fresh certificate and body check passes.
   \item This is a simulator and architecture record. It is not evidence that a physical lattice prototype has been fabricated or experimentally validated.
   \item If Alan reports a visible dimple, cavity, side wall, bowl, missing curl, zig-zag, disconnected cell, or cross-section/side confusion after this PDF ships, the live rendered artifact overrides this paper. Repair the source and update the validation gate.

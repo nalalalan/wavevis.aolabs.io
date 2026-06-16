@@ -101,7 +101,7 @@ function LatticeModelGroup({
     : sideMechanismView
       ? Math.max(model.config.spacing * 0.035, 0.018)
     : Math.max(model.config.spacing * (largeGrid ? 0.042 : 0.09), 0.026)
-  const surfaceOpacity = sideMechanismView ? 0.18 : sliceProfileView ? 0.2 : (largeGrid ? 0.3 : 0.36)
+  const surfaceOpacity = sideMechanismView ? 0.22 : sliceProfileView ? 0.2 : (largeGrid ? 0.3 : 0.36)
 
   return (
     <group>
@@ -439,7 +439,7 @@ function StraightEdgeSegments({
           <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.055} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileActive} renderOrder={3}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.58} depthTest depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.34} depthTest depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -755,7 +755,7 @@ function positionCamera(
     view === 'top'
       ? new THREE.Vector3(target.x, target.y, target.z + distance)
     : view === 'side'
-      ? new THREE.Vector3(target.x - distance * 0.14, target.y + distance, target.z + distance * 0.025)
+      ? new THREE.Vector3(target.x, target.y + distance, target.z + distance * 0.012)
       : view === 'isometric'
         ? new THREE.Vector3(target.x + distance * 0.34, target.y - distance * 0.98, target.z + distance * 0.2)
       : view === 'slice'
