@@ -92,7 +92,7 @@ function LatticeModelGroup({
     return model.quads
   }, [model, sliceProfileView])
   const surfaceGeometry = useMemo(() => buildSurfaceGeometry(model, nodeById, quadMetricById, dihedralByQuad, surfaceQuads), [model, nodeById, quadMetricById, dihedralByQuad, surfaceQuads])
-  const surfaceVisible = model.config.showSurface && view !== 'side' && view !== 'isometric'
+  const surfaceVisible = model.config.showSurface && view !== 'isometric'
   const labelsVisible = model.config.showLabels && model.config.rows <= 15 && model.config.columns <= 15
   const largeGrid = model.config.rows > 30 || model.config.columns > 30
   const edgePickRadius = Math.max(model.config.spacing * (largeGrid ? 0.08 : 0.09), 0.035)
@@ -101,7 +101,7 @@ function LatticeModelGroup({
     : sideMechanismView
       ? Math.max(model.config.spacing * 0.035, 0.018)
     : Math.max(model.config.spacing * (largeGrid ? 0.042 : 0.09), 0.026)
-  const surfaceOpacity = sliceProfileView ? 0.2 : (largeGrid ? 0.38 : 0.42)
+  const surfaceOpacity = sideMechanismView ? 0.18 : sliceProfileView ? 0.2 : (largeGrid ? 0.3 : 0.36)
 
   return (
     <group>
@@ -112,7 +112,7 @@ function LatticeModelGroup({
       )}
       {surfaceVisible && (
         <mesh geometry={surfaceGeometry}>
-          <meshStandardMaterial vertexColors side={THREE.DoubleSide} transparent opacity={surfaceOpacity} roughness={0.78} metalness={0.02} depthWrite={!sliceProfileView} />
+          <meshStandardMaterial vertexColors side={THREE.DoubleSide} transparent opacity={surfaceOpacity} roughness={0.78} metalness={0.02} depthWrite={false} />
         </mesh>
       )}
       {model.config.showNodes && <NodeInstances nodes={nodeById} nodeIds={renderScope.nodeIds} radius={nodeRadius} sideSlice={sliceProfileView} />}
@@ -127,6 +127,12 @@ function LatticeModelGroup({
           />
           <StraightEdgeSegments nodes={nodeById} scope={renderScope} />
         </>
+      )}
+      {sideMechanismView && (
+        <SideProfileSilhouette
+          model={model}
+          compact={model.config.showNodes || model.config.showEdges}
+        />
       )}
       {sliceProfileView && (
         <SideProfileSilhouette
@@ -228,19 +234,29 @@ function SideProfileSilhouette({
       rawPoints.push({ point, col })
     }
 
-    const columnRange = activeSideColumnRange(model, 'focus')
-    const points = rawPoints
+    const maxZ = Math.max(...rawPoints.map(({ point }) => point[2]), 0)
+    const activeThreshold = Math.max(maxZ * 0.045, model.config.spacing * 0.035)
+    const activeCols = rawPoints
+      .filter(({ point }) => point[2] >= activeThreshold)
+      .map(({ col }) => col)
+    if (activeCols.length < 2) return null
+
+    const columnRange = {
+      minCol: Math.max(0, Math.min(...activeCols) - 2),
+      maxCol: Math.min(model.config.columns - 1, Math.max(...activeCols) + 2),
+    }
+    const points = smoothSideProfilePoints(rawPoints
       .filter(({ col }) => col >= columnRange.minCol && col <= columnRange.maxCol)
-      .map(({ point }) => new THREE.Vector3(...point))
+      .map(({ point }) => new THREE.Vector3(...point)))
     if (points.length < 2) return null
 
     const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal', 0.35)
     const baseRadius = Math.max(
-      model.config.spacing * (model.config.rows > 30 || model.config.columns > 30 ? 0.055 : 0.07),
-      0.026,
+      model.config.spacing * (model.config.rows > 30 || model.config.columns > 30 ? 0.036 : 0.05),
+      0.018,
     )
-    const coreRadius = baseRadius * (subtle ? 0.92 : compact ? 1.85 : 1)
-    const haloRadius = coreRadius * (subtle ? 1.38 : compact ? 2.05 : 1.75)
+    const coreRadius = baseRadius * (subtle ? 0.82 : compact ? 1.45 : 1)
+    const haloRadius = coreRadius * (subtle ? 1.18 : compact ? 1.72 : 1.42)
 
     return {
       core: new THREE.TubeGeometry(curve, Math.max(points.length * 12, 64), coreRadius, 10, false),
@@ -260,6 +276,26 @@ function SideProfileSilhouette({
       </mesh>
     </group>
   )
+}
+
+function smoothSideProfilePoints(points: THREE.Vector3[]): THREE.Vector3[] {
+  if (points.length < 5) return points
+
+  let smoothed = points.map((point) => point.clone())
+  for (let pass = 0; pass < 2; pass += 1) {
+    smoothed = smoothed.map((point, index) => {
+      if (index === 0 || index === smoothed.length - 1) return point.clone()
+      const previous = smoothed[index - 1]
+      const next = smoothed[index + 1]
+      return new THREE.Vector3(
+        previous.x * 0.18 + point.x * 0.64 + next.x * 0.18,
+        point.y,
+        previous.z * 0.18 + point.z * 0.64 + next.z * 0.18,
+      )
+    })
+  }
+
+  return smoothed
 }
 
 function NodeInstances({
@@ -355,8 +391,8 @@ function StraightEdgeSegments({
     }
 
     const maxHeight = Math.max(...nodeValues.map((node) => node.currentPosition[2]), 0.000001)
-    const activeThreshold = Math.max(maxHeight * 0.035, 0.045)
-    const displacementThreshold = Math.max(maxHeight * 0.018, 0.035)
+    const activeThreshold = Math.max(maxHeight * 0.12, 0.08)
+    const displacementThreshold = Math.max(maxHeight * 0.035, 0.045)
     const centerRow = (Math.max(...nodeValues.map((node) => node.row), 0)) * 0.5
     const focusHalfRows = Math.max(1.5, Math.min(3.5, nodeValues.length > 0 ? Math.sqrt(nodeValues.length) * 0.026 : 1.5))
     const sideEdgeActive = (edge: LatticeEdge) => {
@@ -368,7 +404,9 @@ function StraightEdgeSegments({
         distanceVec(a.currentPosition, a.restPosition),
         distanceVec(b.currentPosition, b.restPosition),
       )
-      return maxZ >= activeThreshold || maxDisplacement >= displacementThreshold
+      const lifted = maxZ >= activeThreshold
+      const displacedNearCurl = maxDisplacement >= displacementThreshold && maxZ >= activeThreshold * 0.72
+      return lifted || displacedNearCurl
     }
     const sideProfileFocus = (edge: LatticeEdge) => {
       const a = nodes.get(edge.nodeA)
@@ -401,7 +439,7 @@ function StraightEdgeSegments({
           <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.055} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileActive} renderOrder={3}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.9} depthTest depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.58} depthTest depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -717,7 +755,7 @@ function positionCamera(
     view === 'top'
       ? new THREE.Vector3(target.x, target.y, target.z + distance)
     : view === 'side'
-      ? new THREE.Vector3(target.x + distance * 0.14, target.y - distance, target.z + distance * 0.025)
+      ? new THREE.Vector3(target.x - distance * 0.14, target.y + distance, target.z + distance * 0.025)
       : view === 'isometric'
         ? new THREE.Vector3(target.x + distance * 0.34, target.y - distance * 0.98, target.z + distance * 0.2)
       : view === 'slice'

@@ -88,7 +88,7 @@ def compile_model() -> dict:
     )
     loader = f"""
       const {{ buildInverseSheetModel }} = require({json.dumps(str(TMP / "latticeGeometry.js"))});
-      const model = buildInverseSheetModel({{ profileMode: 'generated' }});
+      const model = buildInverseSheetModel();
       process.stdout.write(JSON.stringify({{
         config: model.config,
         nodes: model.nodes,
@@ -141,7 +141,7 @@ def current(node: dict) -> tuple[float, float, float]:
 
 def side_project(point: tuple[float, float, float]) -> tuple[float, float]:
     x, y, z = point
-    return x + y * 0.006, z - y * 0.0025
+    return -x + y * 0.006, z - y * 0.0025
 
 
 def iso_project(point: tuple[float, float, float]) -> tuple[float, float]:
@@ -184,10 +184,11 @@ def sorted_edges(model: dict, nodes: dict[str, dict], projection: str) -> list[d
     return sorted(model["edges"], key=depth)
 
 
-def line_color(edge: dict, a: dict, b: dict, center_row: int, center_col: int) -> tuple[int, int, int]:
+def line_color(edge: dict, a: dict, b: dict, center_row: int, active_height: float) -> tuple[int, int, int]:
+    del edge
     row_near_center = abs(a["row"] - center_row) <= 1 and abs(b["row"] - center_row) <= 1
-    col_near_lip = a["col"] >= center_col or b["col"] >= center_col
-    if row_near_center and col_near_lip:
+    active_lip = current(a)[2] >= active_height or current(b)[2] >= active_height
+    if row_near_center and active_lip:
         return LIP
     if row_near_center:
         return CENTER
@@ -201,6 +202,7 @@ def render_lattice(model: dict, filename: str, title: str, subtitle: str, projec
     nodes = node_map(model)
     center_row = model["config"]["rows"] // 2
     center_col = int(model["config"]["columns"] * 0.56)
+    active_height = max(model["summary"]["maxHeight"] * 0.12, 0.08)
 
     if center_only:
         visible_nodes = [
@@ -226,7 +228,7 @@ def render_lattice(model: dict, filename: str, title: str, subtitle: str, projec
     for edge in visible_edges:
         a = nodes[edge["nodeA"]]
         b = nodes[edge["nodeB"]]
-        color = line_color(edge, a, b, center_row, center_col)
+        color = line_color(edge, a, b, center_row, active_height)
         alpha = 225 if color in (LIP, CENTER) else 95
         width = 3 if color in (LIP, CENTER) else 1
         p0 = to_canvas(projector(current(a)))
@@ -237,7 +239,17 @@ def render_lattice(model: dict, filename: str, title: str, subtitle: str, projec
     center_nodes = sorted((node for node in model["nodes"] if node["row"] == center_row), key=lambda node: node["col"])
     center_path = [to_canvas(projector(current(node))) for node in center_nodes]
     draw.line(center_path, fill=(*INK, 235), width=5, joint="curve")
-    lip_path = [to_canvas(projector(current(node))) for node in center_nodes if node["col"] >= center_col]
+    active_indices = [
+        index for index, node in enumerate(center_nodes)
+        if current(node)[2] >= active_height
+    ]
+    if active_indices:
+        start = max(0, min(active_indices) - 1)
+        end = min(len(center_nodes) - 1, max(active_indices) + 1)
+        lip_nodes = center_nodes[start:end + 1]
+    else:
+        lip_nodes = []
+    lip_path = [to_canvas(projector(current(node))) for node in lip_nodes]
     if len(lip_path) >= 2:
         draw.line(lip_path, fill=(*LIP, 245), width=6, joint="curve")
 
@@ -252,7 +264,7 @@ def render_lattice(model: dict, filename: str, title: str, subtitle: str, projec
 def centerline_side_points(model: dict) -> list[tuple[float, float]]:
     center_row = model["config"]["rows"] // 2
     center_nodes = sorted((node for node in model["nodes"] if node["row"] == center_row), key=lambda node: node["col"])
-    return [(current(node)[0], current(node)[2]) for node in center_nodes]
+    return [(-current(node)[0], current(node)[2]) for node in center_nodes]
 
 
 def normalize_wave_profile(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
@@ -282,7 +294,8 @@ def render_reference_overlay(model: dict) -> None:
     img = Image.new("RGB", size, PAPER)
     draw = ImageDraw.Draw(img, "RGBA")
     current_profile = normalize_wave_profile(centerline_side_points(model))
-    all_points = current_profile + REFERENCE_TRACE
+    reference_trace = [(1 - x, z) for x, z in REFERENCE_TRACE]
+    all_points = current_profile + reference_trace
     to_canvas = make_mapper(all_points, size, margin=150)
 
     draw_header(
@@ -296,7 +309,7 @@ def render_reference_overlay(model: dict) -> None:
     ground_left = to_canvas((0, 0))
     ground_right = to_canvas((1, 0))
     draw.line((*ground_left, *ground_right), fill=(*MUTED, 95), width=2)
-    draw_polyline(draw, REFERENCE_TRACE, to_canvas, REFERENCE, 7)
+    draw_polyline(draw, reference_trace, to_canvas, REFERENCE, 7)
     draw_polyline(draw, current_profile, to_canvas, CENTER, 5)
     lip_start = max(0, int(len(current_profile) * 0.56))
     draw_polyline(draw, current_profile[lip_start:], to_canvas, LIP, 6)

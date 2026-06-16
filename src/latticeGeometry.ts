@@ -49,7 +49,7 @@ const CORE_PROFILE_START = 0.02
 const CORE_PROFILE_END = 1
 const CORE_OVERHANG_HEIGHT_FRACTION = 0.28
 export const DEFAULT_CUSTOM_PROFILE_POINTS =
-  '0,0;0.08,0;0.17,0.025;0.3,0.29;0.45,0.63;0.61,0.84;0.76,0.88;0.88,0.78;0.97,0.55;0.995,0.35;0.96,0.22;0.86,0.18;0.73,0.3;0.63,0.3;0.55,0.18;0.54,0.08;0.62,0.035;0.84,0.018;1,0'
+  '0,0;0.08,0;0.17,0.02;0.3,0.22;0.45,0.62;0.66,0.91;0.77,0.98;0.89,0.95;0.88,0.86;0.76,0.74;0.58,0.56;0.57,0.43;0.6,0.3;0.68,0.17;0.84,0.07;0.96,0.02;1,0'
 export const DEFAULT_CUSTOM_SECTION_POINTS =
   '0,0.025;0.08,0.22;0.22,0.78;0.39,1;0.57,0.82;0.72,0.42;0.86,0.18;1,0.035'
 
@@ -64,18 +64,18 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   supportFraction: 0.14,
   radiusMode: 'autoPreserveLength',
   bendRadius: 4,
-  horizontalOffset: 17.5,
+  horizontalOffset: 22.5,
   overhangPosition: -0.15,
   steer: 0,
-  height: 16.9,
-  overhangWidth: 22,
+  height: 13.5,
+  overhangWidth: 32,
   overhangAngleDeg: 120,
   conicRho: 0.5,
   curlRadius: 0.65,
-  profileMode: 'generated',
+  profileMode: 'custom',
   profilePoints: DEFAULT_CUSTOM_PROFILE_POINTS,
   sectionPoints: DEFAULT_CUSTOM_SECTION_POINTS,
-  profileScale: 1.08,
+  profileScale: 0.55,
   xySliceLevel: 0.33,
   smoothing: 1,
   lipSharpness: 0.28,
@@ -86,7 +86,7 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   bendWeight: 0.02,
   shearWeight: 0.02,
   dihedralWeight: 0.02,
-  showSurface: false,
+  showSurface: true,
   showRestGhost: false,
   showNodes: true,
   showEdges: true,
@@ -97,6 +97,7 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
 
 const TARGET_PRESETS: TargetPreset[] = ['overhang']
 const RADIUS_MODES: RadiusMode[] = ['autoPreserveLength', 'manual']
+const PROFILE_MODES: InverseSheetConfig['profileMode'][] = ['custom', 'generated']
 const COLOR_MODE_VALUES = COLOR_MODES.map((mode) => mode.value)
 const OVERHANG_ANGLE_MIN_DEG = 90
 const OVERHANG_ANGLE_PARALLEL_DEG = 90
@@ -145,7 +146,7 @@ export function sanitizeInverseSheetConfig(input: LooseConfig = {}): InverseShee
     overhangAngleDeg,
     conicRho: readNumber(raw.conicRho, DEFAULT_INVERSE_SHEET_CONFIG.conicRho, CONIC_RHO_MIN, CONIC_RHO_MAX),
     curlRadius: readNumber(raw.curlRadius, DEFAULT_INVERSE_SHEET_CONFIG.curlRadius, CURL_RADIUS_MIN, CURL_RADIUS_MAX),
-    profileMode: DEFAULT_INVERSE_SHEET_CONFIG.profileMode,
+    profileMode: readOneOf(raw.profileMode, PROFILE_MODES, DEFAULT_INVERSE_SHEET_CONFIG.profileMode),
     profilePoints: serializeProfilePoints(parseProfilePoints(readString(raw.profilePoints, DEFAULT_CUSTOM_PROFILE_POINTS))),
     sectionPoints: serializeProfilePoints(parseProfilePoints(readString(raw.sectionPoints, DEFAULT_CUSTOM_SECTION_POINTS))),
     profileScale: readNumber(raw.profileScale, DEFAULT_INVERSE_SHEET_CONFIG.profileScale, 0.35, 1.55),
@@ -1729,8 +1730,8 @@ function customProfileTargetPosition(
   const shapeMask = clampNumber(rowMask * longitudinalMask, 0, 1)
   if (shapeMask <= 0.000001) return rest
 
-  const profileSpan = profileRestLength * lerpNumber(0.66, 0.952, scaleAmount)
-  const profileHeight = profileRestLength * lerpNumber(0.5, 0.82, scaleAmount)
+  const profileSpan = profileRestLength * lerpNumber(0.82, 1.04, scaleAmount)
+  const profileHeight = profileRestLength * lerpNumber(0.31, 0.52, scaleAmount)
   const restX = profileRestLength * profileU
   const horizontalProjection = profile.x * profileSpan - restX
   const liftedHeight = Math.max(0, profile.z) * profileHeight
@@ -2239,28 +2240,28 @@ function sampleMoanaReferenceLipProfile(
 function moanaReferenceLipPoints(dip: number, sharp: number): ProfilePoint[] {
   const curl = clampNumber(dip, 0, 1)
   const pointed = Math.pow(clampNumber(sharp, 0, 1), 1.35)
-  const shoulderX = lerpNumber(0.58, 0.66, curl) + pointed * 0.004
+  const shoulderX = lerpNumber(0.55, 0.62, curl) + pointed * 0.003
   const shoulderZ = lerpNumber(0.8, 0.91, curl) - pointed * 0.004
-  const roundedCrestX = lerpNumber(0.7, 0.77, curl) + pointed * 0.003
-  const roundedCrestZ = lerpNumber(0.9, 0.98, curl) + pointed * 0.002
-  const crestCapX = lerpNumber(0.82, 0.89, curl) + pointed * 0.004
-  const crestCapZ = lerpNumber(0.88, 0.95, curl) - pointed * 0.004
-  const lipNoseX = lerpNumber(0.82, 0.88, curl) - pointed * 0.012
-  const lipNoseZ = lerpNumber(0.78, 0.86, curl) - pointed * 0.012
-  const forwardLipX = lerpNumber(0.7, 0.76, curl) - pointed * 0.022
-  const forwardLipZ = lerpNumber(0.64, 0.74, curl) - pointed * 0.024
-  const downturnedTipX = lerpNumber(0.52, 0.58, curl) - pointed * 0.03
-  const downturnedTipZ = lerpNumber(0.48, 0.56, curl) - pointed * 0.038
-  const innerRoofX = lerpNumber(0.51, 0.57, curl) - pointed * 0.01
-  const innerRoofZ = lerpNumber(0.36, 0.43, curl) - pointed * 0.024
-  const innerThroatX = lerpNumber(0.54, 0.6, curl) + pointed * 0.002
-  const innerThroatZ = lerpNumber(0.24, 0.3, curl) - pointed * 0.014
-  const lowerThroatX = lerpNumber(0.62, 0.68, curl)
-  const lowerThroatZ = lerpNumber(0.13, 0.17, curl)
-  const innerFootX = lerpNumber(0.78, 0.84, curl)
-  const innerFootZ = lerpNumber(0.055, 0.07, curl)
-  const apronX = lerpNumber(0.94, 0.96, curl)
-  const apronZ = lerpNumber(0.025, 0.02, curl)
+  const roundedCrestX = lerpNumber(0.67, 0.73, curl) + pointed * 0.002
+  const roundedCrestZ = lerpNumber(0.9, 0.99, curl) + pointed * 0.002
+  const crestCapX = lerpNumber(0.76, 0.83, curl) + pointed * 0.003
+  const crestCapZ = lerpNumber(0.9, 0.96, curl) - pointed * 0.003
+  const lipNoseX = lerpNumber(0.77, 0.82, curl) - pointed * 0.026
+  const lipNoseZ = lerpNumber(0.8, 0.87, curl) - pointed * 0.025
+  const forwardLipX = lerpNumber(0.66, 0.71, curl) - pointed * 0.038
+  const forwardLipZ = lerpNumber(0.68, 0.76, curl) - pointed * 0.04
+  const downturnedTipX = lerpNumber(0.5, 0.55, curl) - pointed * 0.052
+  const downturnedTipZ = lerpNumber(0.5, 0.57, curl) - pointed * 0.056
+  const innerRoofX = lerpNumber(0.48, 0.52, curl) - pointed * 0.016
+  const innerRoofZ = lerpNumber(0.38, 0.45, curl) - pointed * 0.035
+  const innerThroatX = lerpNumber(0.52, 0.56, curl) + pointed * 0.002
+  const innerThroatZ = lerpNumber(0.27, 0.33, curl) - pointed * 0.026
+  const lowerThroatX = lerpNumber(0.62, 0.67, curl)
+  const lowerThroatZ = lerpNumber(0.18, 0.22, curl)
+  const innerFootX = lerpNumber(0.78, 0.82, curl)
+  const innerFootZ = lerpNumber(0.095, 0.115, curl)
+  const apronX = lerpNumber(0.91, 0.94, curl)
+  const apronZ = lerpNumber(0.045, 0.055, curl)
 
   return [
     point(0, 0),
