@@ -101,7 +101,7 @@ function LatticeModelGroup({
     : sideMechanismView
       ? Math.max(model.config.spacing * 0.02, 0.012)
     : Math.max(model.config.spacing * (largeGrid ? 0.042 : 0.09), 0.026)
-  const surfaceOpacity = sideMechanismView ? 0.045 : sliceProfileView ? 0.2 : (largeGrid ? 0.3 : 0.36)
+  const surfaceOpacity = sideMechanismView ? 0.018 : sliceProfileView ? 0.2 : (largeGrid ? 0.3 : 0.36)
 
   return (
     <group>
@@ -253,11 +253,15 @@ function SideProfileSilhouette({
       minCol: Math.max(0, Math.min(...activeCols) - 2),
       maxCol: Math.min(model.config.columns - 1, Math.max(...activeCols) + 2),
     }
+    const terminalRange = findTerminalLipRange(rawPoints, model.config.spacing)
+    const displayMaxCol = terminalRange
+      ? Math.min(model.config.columns - 1, Math.max(columnRange.maxCol, rawPoints[terminalRange.returnIndex].col))
+      : columnRange.maxCol
     const points = smoothSideProfilePoints(rawPoints
-      .filter(({ col }) => col >= columnRange.minCol && col <= columnRange.maxCol)
+      .filter(({ col }) => col >= columnRange.minCol && col <= displayMaxCol)
       .map(({ point }) => new THREE.Vector3(...point)))
     if (points.length < 2) return null
-    const terminalPoints = buildTerminalLipProfilePoints(rawPoints, model.config.spacing)
+    const terminalPoints = buildTerminalLipProfilePoints(rawPoints, model.config.spacing, terminalRange)
 
     const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal', 0.35)
     const baseRadius = Math.max(
@@ -303,11 +307,17 @@ function SideProfileSilhouette({
   )
 }
 
-function buildTerminalLipProfilePoints(rawPoints: Array<{ point: Vec3; col: number }>, spacing: number): THREE.Vector3[] {
-  if (rawPoints.length < 5) return []
+type TerminalLipRange = {
+  crestIndex: number
+  tipIndex: number
+  returnIndex: number
+}
+
+function findTerminalLipRange(rawPoints: Array<{ point: Vec3; col: number }>, spacing: number): TerminalLipRange | null {
+  if (rawPoints.length < 5) return null
 
   const maxZ = Math.max(...rawPoints.map(({ point }) => point[2]), 0)
-  if (maxZ <= spacing * 0.2) return []
+  if (maxZ <= spacing * 0.2) return null
 
   let crestIndex = 0
   for (let index = 1; index < rawPoints.length; index += 1) {
@@ -317,29 +327,48 @@ function buildTerminalLipProfilePoints(rawPoints: Array<{ point: Vec3; col: numb
   const postCrestIndexes = rawPoints
     .map((_, index) => index)
     .filter((index) => index > crestIndex && rawPoints[index].point[2] >= maxZ * 0.035)
-  if (postCrestIndexes.length < 2) return []
+  if (postCrestIndexes.length < 2) return null
 
-  const targetTipZ = maxZ * 0.24
   const tipIndex = postCrestIndexes.reduce((best, index) => {
     const point = rawPoints[index].point
     const bestPoint = rawPoints[best].point
-    const distance = Math.abs(point[2] - targetTipZ)
-    const bestDistance = Math.abs(bestPoint[2] - targetTipZ)
-    if (distance < bestDistance - 0.000001) return index
-    if (Math.abs(distance - bestDistance) <= 0.000001 && point[0] < bestPoint[0]) return index
+    if (point[0] > bestPoint[0] + spacing * 0.05) return index
+    if (Math.abs(point[0] - bestPoint[0]) <= spacing * 0.05 && point[2] < bestPoint[2]) return index
     return best
   }, postCrestIndexes[0])
-
-  const returnIndexes = rawPoints
+  const visibleReturnIndexes = rawPoints
     .map((_, index) => index)
-    .filter((index) => index > tipIndex && rawPoints[index].point[2] <= maxZ * 0.065)
-  const returnIndex = returnIndexes.length
-    ? Math.min(rawPoints.length - 1, returnIndexes[0] + 1)
-    : Math.min(rawPoints.length - 1, tipIndex + 7)
-  const startIndex = Math.max(crestIndex + 1, tipIndex - 3)
+    .filter((index) => index >= tipIndex && rawPoints[index].point[2] >= maxZ * 0.009)
+  const returnIndex = visibleReturnIndexes.length
+    ? visibleReturnIndexes[visibleReturnIndexes.length - 1]
+    : tipIndex
+  const postCrestForwardRun = rawPoints[tipIndex].point[0] - rawPoints[crestIndex].point[0]
+  const postCrestDrop = rawPoints[crestIndex].point[2] - rawPoints[returnIndex].point[2]
+  if (postCrestForwardRun < spacing * 0.5 || postCrestDrop < maxZ * 0.18) return null
+
+  return {
+    crestIndex,
+    tipIndex,
+    returnIndex,
+  }
+}
+
+function buildTerminalLipProfilePoints(
+  rawPoints: Array<{ point: Vec3; col: number }>,
+  spacing: number,
+  providedRange: TerminalLipRange | null = findTerminalLipRange(rawPoints, spacing),
+): THREE.Vector3[] {
+  if (!providedRange) return []
+
+  const maxZ = Math.max(...rawPoints.map(({ point }) => point[2]), 0)
+  if (maxZ <= spacing * 0.2) return []
+
+  const { crestIndex, returnIndex } = providedRange
+
+  const startIndex = crestIndex
   const section = rawPoints.slice(startIndex, returnIndex + 1)
     .filter(({ point }, index, points) =>
-      point[2] >= maxZ * 0.018 || index === 0 || index === points.length - 1)
+      point[2] >= maxZ * 0.008 || index === 0 || index === points.length - 1)
 
   return section.map(({ point }) => new THREE.Vector3(...point))
 }

@@ -181,7 +181,7 @@ If this PDF is the only WaveVis context available, start with this section and t
   \item \textbf{Current source root:} workspace path \code{\_apps/wavevis.aolabs.io/}.
   \item \textbf{Public fallback mirror:} workspace path \code{\_apps/aolabs-site/wavevis/}. A WaveVis deploy to its own \code{gh-pages} branch does not automatically update the \code{aolabs.io/wavevis/} fallback unless the built files are mirrored there and the hub site is pushed.
   \item \textbf{Current architectural direction:} source-baked breaking-wave custom profile localized into the inverse-sheet field. Manual \(xz\) and \(xy\) profile editors are not the active path.
-  \item \textbf{Current reference-match boundary:} the June 17, 2026 curl/dip follow-up moves the default away from the upright rounded-cap state by lowering the height-to-reach ratio, placing the farthest forward sample at the downturned lip, and keeping the underside return open instead of closed into a bowl, pucker, or lower-lip dimple. The current default keeps an open throat, a true side-on camera, no bowl-pocket count in the default/compact/wide gates, full linkage visibility, and a current-vs-reference trace overlay. The current claim is a closer localized plunging-wave linkage state, not photorealistic identity with the supplied water frame.
+  \item \textbf{Current reference-match boundary:} the June 17, 2026 curl/dip follow-up replaces the looped handmade side profile with the source-baked breaking-wave trace, removes the closed angular interior return, and makes the terminal lip a forward/downward curve rather than a lower-lip dimple or horizontal tongue. The current side renderer keeps the low return branch visible after the forward-most lip point so the interior reads as a curved throat instead of a cut-off face. The current default keeps a true side-on camera, zero self-intersections in the default trace gate, no bowl-pocket count in the default/compact/wide gates, full linkage visibility, and a current-vs-reference trace overlay. The current claim is a closer localized plunging-wave linkage state, not photorealistic identity with the supplied water frame.
 \end{itemize}
 
 \subsection{What the next agent must not repeat}
@@ -200,19 +200,19 @@ The repeated failures that this document is meant to prevent are:
 
 \subsection{Current live-state evidence}
 
-Figures~\ref{fig:current-live-side}--\ref{fig:current-live-slice} record the current source-rendered linkage state from the same geometry model that builds the public bundle: side view is the full three-dimensional sheet, the reference overlay extracts the centerline silhouette, cross-section is separate, and the full linkage array is present in 3D. The June 17, 2026 follow-up uses a source-baked custom profile, sharpens the terminal lip, places the forward-most feature at a low downturned point, and keeps the underside return open while preserving zero bowl pockets. The repair also updates the side-aspect guard so the verified state is a downturned breaking lip with a bounded body, not a vertical rounded protrusion, lower-lip dimple, or horizontal tongue. It faces the side view in the true reference direction, preserves the full \(4928\)-node and \(9700\)-edge array, and records the remaining reference-match boundary as a visible overlay instead of an invisible claim.
+Figures~\ref{fig:current-live-side}--\ref{fig:current-live-slice} record the current source-rendered linkage state from the same geometry model that builds the public bundle: side view is the full three-dimensional sheet, the reference overlay extracts the centerline silhouette, cross-section is separate, and the full linkage array is present in 3D. The June 17, 2026 follow-up uses the source-baked breaking-wave profile as the default custom trace, removes the previous closed interior loop, and highlights the post-crest lip as a smooth forward/downward terminal branch with the low return branch still visible. The repair also updates the side-aspect guard with a reference-trace fit check, a zero-self-intersection check, and a terminal-drop check so the verified state is a downturned breaking lip with a bounded body, not a vertical rounded protrusion, lower-lip dimple, angular interior loop, horizontal tongue, or renderer-trimmed chute. It preserves the full \(4928\)-node and \(9700\)-edge array, keeps max height at \(12.72\) and max tensile strain at \(3.86\) in the default proof render, and records the remaining reference-match boundary as a visible overlay instead of an invisible claim.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.98\linewidth]{current-live-side.png}
-\caption{Current source-rendered side linkage for the default inverse-sheet state. This is not a cross-section. The full linkage sheet remains visible, and the side camera faces the rounded open throat and flat return in the same direction as the reference family.}
+\caption{Current source-rendered side linkage for the default inverse-sheet state. This is not a cross-section. The full linkage sheet remains visible, and the side camera faces the rounded open throat, visible low return branch, and flat return in the same direction as the reference family.}
 \label{fig:current-live-side}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.92\linewidth]{current-live-reference-overlay.png}
-\caption{Current centerline silhouette against the normalized source-baked breaking-wave target. The overlay is the human-facing shape gate for this repair: it shows the crest alignment, lower inner return, and open throat while keeping the remaining reference difference explicit.}
+\caption{Current centerline silhouette against the normalized source-baked breaking-wave target. The overlay is the human-facing shape gate for this repair: it shows crest alignment, a smooth downturned terminal branch, and no closed angular interior loop while keeping the remaining reference difference explicit.}
 \label{fig:current-live-reference-overlay}
 \end{figure}
 
@@ -370,7 +370,8 @@ These checks are guards, not substitutes for the human-facing screenshot. A visi
   \item \code{view=side} sets a side camera over the full three-dimensional linkage array;
   \item \code{view=slice} is the cross-section/profile view;
   \item \code{view=isometric} shows the full rectangular array in perspective;
-  \item surface rendering is off by default and hidden in side/isometric so cells/connectors remain the artifact;
+  \item surface rendering is intentionally faint in side view and hidden in isometric so cells/connectors remain the artifact;
+  \item side-view silhouette highlighting must include the curved low return after the forward-most lip point; trimming at the maximum-reach point makes the throat read angular even when the model contains a return branch;
   \item cells and connectors are display toggles, not repair paths.
 \end{itemize}
 If the renderer needs to hide rows to make the shape readable, the generator is still wrong.

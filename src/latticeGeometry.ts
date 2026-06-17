@@ -49,7 +49,7 @@ const CORE_PROFILE_START = 0.02
 const CORE_PROFILE_END = 1
 const CORE_OVERHANG_HEIGHT_FRACTION = 0.28
 export const DEFAULT_CUSTOM_PROFILE_POINTS =
-  '0,0;0.08,0;0.18,0.022;0.31,0.15;0.44,0.43;0.57,0.72;0.67,0.93;0.735,1;0.795,0.955;0.86,0.78;0.92,0.54;0.985,0.28;0.99,0.18;0.955,0.085;0.905,0.035;0.865,0.02;0.92,0.008;1,0'
+  '0,0;0.034,0.003;0.144,0.036;0.193,0.069;0.226,0.099;0.256,0.131;0.282,0.167;0.302,0.205;0.321,0.244;0.34,0.284;0.359,0.323;0.377,0.362;0.395,0.402;0.414,0.441;0.433,0.48;0.451,0.52;0.47,0.559;0.488,0.598;0.507,0.638;0.525,0.677;0.544,0.716;0.563,0.755;0.582,0.794;0.601,0.834;0.621,0.872;0.641,0.911;0.664,0.948;0.693,0.981;0.73,1;0.766,0.974;0.791,0.938;0.808,0.899;0.824,0.858;0.84,0.818;0.854,0.777;0.867,0.736;0.879,0.694;0.89,0.652;0.902,0.611;0.914,0.569;0.925,0.527;0.937,0.486;0.948,0.444;0.96,0.402;0.971,0.361;0.982,0.319;0.993,0.277;1,0.234;0.999,0.191;0.995,0.148;0.988,0.106;0.973,0.065;0.946,0.03;0.909,0.02;0.946,0.01;1,0'
 export const DEFAULT_CUSTOM_SECTION_POINTS =
   '0,0.025;0.08,0.22;0.22,0.78;0.39,1;0.57,0.82;0.72,0.42;0.86,0.18;1,0.035'
 
@@ -1772,8 +1772,8 @@ function customProfileRowMask(
   const returnTail = smootherStep((profileU - 0.84) / 0.13)
   const heightTaper = lerpNumber(1.08, 0.66, smootherStep(Math.max(0, profileZ) / 0.82))
   const bodyTaper = lerpNumber(0.92, 1.7, broadBack * (1 - terminalCurl * 0.72))
-  const curlTaper = lerpNumber(1, 0.44, terminalCurl)
-  const returnTailTaper = lerpNumber(1, 0.5, returnTail * lipAmount)
+  const curlTaper = lerpNumber(1, 0.28, terminalCurl)
+  const returnTailTaper = lerpNumber(1, 0.34, returnTail * lipAmount)
   const bodyHalfWidth = clampNumber(
     config.overhangWidth *
       lerpNumber(0.14, 0.58, effectiveEnvelope) *

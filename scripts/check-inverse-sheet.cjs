@@ -52,6 +52,7 @@ const DEFAULT_GRID_DENOMINATOR = Math.max(DEFAULT_SHEET_ROWS - 1, DEFAULT_SHEET_
 const MAX_STEER_ANGLE_RAD = Math.PI / 4
 const CORE_PROFILE_START = 0.02
 const CORE_PROFILE_END = 1
+const SOURCE_BREAKING_WAVE_TRACE = '0,0;0.034,0.003;0.144,0.036;0.193,0.069;0.226,0.099;0.256,0.131;0.282,0.167;0.302,0.205;0.321,0.244;0.34,0.284;0.359,0.323;0.377,0.362;0.395,0.402;0.414,0.441;0.433,0.48;0.451,0.52;0.47,0.559;0.488,0.598;0.507,0.638;0.525,0.677;0.544,0.716;0.563,0.755;0.582,0.794;0.601,0.834;0.621,0.872;0.641,0.911;0.664,0.948;0.693,0.981;0.73,1;0.766,0.974;0.791,0.938;0.808,0.899;0.824,0.858;0.84,0.818;0.854,0.777;0.867,0.736;0.879,0.694;0.89,0.652;0.902,0.611;0.914,0.569;0.925,0.527;0.937,0.486;0.948,0.444;0.96,0.402;0.971,0.361;0.982,0.319;0.993,0.277;1,0.234;0.999,0.191;0.995,0.148;0.988,0.106;0.973,0.065;0.946,0.03;0.909,0.02;0.946,0.01;1,0'
 
 const failures = [...runInverseSheetSanityChecks()]
 const startupUrlParamCoverage = summarizeStartupUrlParamCoverage()
@@ -277,6 +278,7 @@ const sideOverhangAspect = {
   userMorphHalfLip120: summarizeSideOverhangAspect(userSideAspectModel),
   startupDefault: summarizeSideOverhangAspect(buildInverseSheetModel()),
 }
+const defaultReferenceTraceFit = summarizeReferenceTraceFit(buildInverseSheetModel())
 const sliderRobustness = summarizeSliderRobustness()
 
 if (!(flatContributionPair.heightResidual <= 0.03 &&
@@ -388,11 +390,15 @@ if (displayInvariant.maxResidual > 0.000001 || displayInvariant.maxMetricResidua
 if (!(sideOverhangAspect.userMorphHalfLip120.aspectRatio >= 2 &&
   sideOverhangAspect.userMorphHalfLip120.aspectRatio <= 2.65 &&
   sideOverhangAspect.userMorphHalfLip120.overhangToHeight >= 0.62 &&
-  sideOverhangAspect.userMorphHalfLip120.overhangToHeight <= 0.95 &&
+  sideOverhangAspect.userMorphHalfLip120.overhangToHeight <= 1.5 &&
   sideOverhangAspect.startupDefault.aspectRatio >= 1.9 &&
   sideOverhangAspect.startupDefault.aspectRatio <= 2.35 &&
   sideOverhangAspect.startupDefault.overhangToHeight >= 0.62 &&
-  sideOverhangAspect.startupDefault.overhangToHeight <= 0.95)) {
+  sideOverhangAspect.startupDefault.overhangToHeight <= 1.5 &&
+  defaultReferenceTraceFit.maxResidual <= 0.09 &&
+  defaultReferenceTraceFit.rmsResidual <= 0.05 &&
+  defaultReferenceTraceFit.selfIntersections === 0 &&
+  defaultReferenceTraceFit.terminalDropRatio >= 0.75)) {
   failures.push('side-view terminal geometry should read as a downturned breaking lip with bounded body, not a vertical mound, dimple pocket, or horizontal tongue')
 }
 
@@ -502,6 +508,7 @@ const report = {
   resolutionInvariant,
   displayInvariant,
   sideOverhangAspect,
+  defaultReferenceTraceFit,
   sliderRobustness,
 }
 
@@ -703,6 +710,133 @@ function summarizeSideOverhangAspect(model) {
     overhangToHeight: round(model.summary.overhangAmount / Math.max(model.summary.maxHeight, 0.000001)),
     sampleCount: section.length,
   }
+}
+
+function summarizeReferenceTraceFit(model) {
+  const current = normalizedSideProfileTrace(model)
+  const reference = parseReferenceTrace(SOURCE_BREAKING_WAVE_TRACE).map((point) => ({
+    x: 1 - point.x,
+    z: point.z,
+  }))
+
+  if (current.length < 3 || reference.length < 3) {
+    return {
+      maxResidual: Infinity,
+      rmsResidual: Infinity,
+      selfIntersections: Infinity,
+      terminalDropRatio: 0,
+      sampleCount: current.length,
+    }
+  }
+
+  const samples = 72
+  let residualSum = 0
+  let maxResidual = 0
+  for (let index = 0; index < samples; index += 1) {
+    const amount = index / Math.max(samples - 1, 1)
+    const a = sampleTraceByLength(current, amount)
+    const b = sampleTraceByLength(reference, amount)
+    const residual = Math.hypot(a.x - b.x, a.z - b.z)
+    residualSum += residual * residual
+    maxResidual = Math.max(maxResidual, residual)
+  }
+
+  const crestIndex = current.reduce((best, point, index) => point.z > current[best].z ? index : best, 0)
+  const terminalPoint = current.slice(crestIndex + 1).reduce((best, point) => {
+    if (!best) return point
+    if (point.x < best.x - 0.000001) return point
+    if (Math.abs(point.x - best.x) <= 0.000001 && point.z < best.z) return point
+    return best
+  }, undefined) ?? current[current.length - 1]
+  const terminalDropRatio = (current[crestIndex].z - terminalPoint.z) / Math.max(current[crestIndex].z, 0.000001)
+
+  return {
+    maxResidual: round(maxResidual),
+    rmsResidual: round(Math.sqrt(residualSum / samples)),
+    selfIntersections: countTraceSelfIntersections(current),
+    terminalDropRatio: round(terminalDropRatio),
+    sampleCount: current.length,
+  }
+}
+
+function normalizedSideProfileTrace(model) {
+  const points = centerlinePoints(model)
+  const maxZ = Math.max(...points.map((point) => point.z), 0.000001)
+  const active = points
+    .map((point, index) => ({ point, index }))
+    .filter(({ point }) => point.z > maxZ * 0.018)
+  if (active.length < 3) return []
+
+  const start = Math.max(0, active[0].index - 2)
+  const end = Math.min(points.length - 1, active[active.length - 1].index + 1)
+  const section = points.slice(start, end + 1)
+  const screenPoints = section.map((point) => ({ x: -point.x, z: Math.max(0, point.z) }))
+  const minX = Math.min(...screenPoints.map((point) => point.x))
+  const maxX = Math.max(...screenPoints.map((point) => point.x))
+  const spanX = Math.max(maxX - minX, 0.000001)
+
+  return screenPoints.map((point) => ({
+    x: (point.x - minX) / spanX,
+    z: point.z / maxZ,
+  }))
+}
+
+function parseReferenceTrace(value) {
+  return value.split(';').map((chunk) => {
+    const [x, z] = chunk.split(',').map(Number)
+    return { x, z }
+  })
+}
+
+function sampleTraceByLength(points, amount) {
+  const lengths = [0]
+  let total = 0
+  for (let index = 1; index < points.length; index += 1) {
+    total += Math.hypot(points[index].x - points[index - 1].x, points[index].z - points[index - 1].z)
+    lengths[index] = total
+  }
+  const target = clampNumber(amount, 0, 1) * total
+  for (let index = 1; index < points.length; index += 1) {
+    if (lengths[index] < target) continue
+    const local = (target - lengths[index - 1]) / Math.max(lengths[index] - lengths[index - 1], 0.000001)
+    return {
+      x: lerpNumber(points[index - 1].x, points[index].x, local),
+      z: lerpNumber(points[index - 1].z, points[index].z, local),
+    }
+  }
+  return points[points.length - 1]
+}
+
+function countTraceSelfIntersections(points) {
+  let intersections = 0
+  for (let a = 0; a < points.length - 1; a += 1) {
+    for (let b = a + 2; b < points.length - 1; b += 1) {
+      if (a === 0 && b === points.length - 2) continue
+      if (segmentsIntersect(points[a], points[a + 1], points[b], points[b + 1])) intersections += 1
+    }
+  }
+  return intersections
+}
+
+function segmentsIntersect(a, b, c, d) {
+  const abx = b.x - a.x
+  const abz = b.z - a.z
+  const acx = c.x - a.x
+  const acz = c.z - a.z
+  const adx = d.x - a.x
+  const adz = d.z - a.z
+  const cdx = d.x - c.x
+  const cdz = d.z - c.z
+  const cax = a.x - c.x
+  const caz = a.z - c.z
+  const cbx = b.x - c.x
+  const cbz = b.z - c.z
+  const o1 = abx * acz - abz * acx
+  const o2 = abx * adz - abz * adx
+  const o3 = cdx * caz - cdz * cax
+  const o4 = cdx * cbz - cdz * cbx
+  const epsilon = 0.000001
+  return o1 * o2 < -epsilon && o3 * o4 < -epsilon
 }
 
 function summarizeModelHealth(model) {

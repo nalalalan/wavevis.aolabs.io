@@ -223,7 +223,9 @@ def sorted_edges(model: dict, nodes: dict[str, dict], projection: str) -> list[d
 
 
 def line_color(edge: dict, a: dict, b: dict, center_row: int, active_height: float) -> tuple[int, int, int]:
-    del edge
+    if edge.get("orientation") != "horizontal":
+        return GRID
+
     row_near_center = abs(a["row"] - center_row) <= 1 and abs(b["row"] - center_row) <= 1
     active_lip = current(a)[2] >= active_height or current(b)[2] >= active_height
     if row_near_center and active_lip:
@@ -276,20 +278,16 @@ def render_lattice(model: dict, filename: str, title: str, subtitle: str, projec
     # Draw the central node path over the full linkage so the lip silhouette is auditable.
     center_nodes = sorted((node for node in model["nodes"] if node["row"] == center_row), key=lambda node: node["col"])
     center_path = [to_canvas(projector(current(node))) for node in center_nodes]
-    draw.line(center_path, fill=(*INK, 235), width=5, joint="curve")
-    active_indices = [
-        index for index, node in enumerate(center_nodes)
-        if current(node)[2] >= active_height
-    ]
-    if active_indices:
-        start = max(0, min(active_indices) - 1)
-        end = min(len(center_nodes) - 1, max(active_indices) + 1)
+    draw.line(smooth_canvas_polyline(center_path, 2), fill=(*INK, 235), width=5, joint="curve")
+    terminal_range = terminal_lip_node_range(center_nodes)
+    if terminal_range:
+        start, end = terminal_range
         lip_nodes = center_nodes[start:end + 1]
     else:
         lip_nodes = []
     lip_path = [to_canvas(projector(current(node))) for node in lip_nodes]
     if len(lip_path) >= 2:
-        draw.line(lip_path, fill=(*LIP, 245), width=6, joint="curve")
+        draw.line(smooth_canvas_polyline(lip_path, 2), fill=(*LIP, 245), width=6, joint="curve")
 
     for node in center_nodes[::4]:
         x, y = to_canvas(projector(current(node)))
@@ -325,6 +323,44 @@ def draw_polyline(draw: ImageDraw.ImageDraw, points: list[tuple[float, float]], 
         return
     canvas_points = [to_canvas(point) for point in points]
     draw.line(canvas_points, fill=(*color, 235), width=width, joint="curve")
+
+
+def smooth_canvas_polyline(points: list[tuple[float, float]], passes: int = 2) -> list[tuple[float, float]]:
+    if len(points) < 3:
+        return points
+    smoothed = points[:]
+    for _ in range(passes):
+        next_points = [smoothed[0]]
+        for index in range(len(smoothed) - 1):
+            x0, y0 = smoothed[index]
+            x1, y1 = smoothed[index + 1]
+            next_points.append((x0 * 0.75 + x1 * 0.25, y0 * 0.75 + y1 * 0.25))
+            next_points.append((x0 * 0.25 + x1 * 0.75, y0 * 0.25 + y1 * 0.75))
+        next_points.append(smoothed[-1])
+        smoothed = next_points
+    return smoothed
+
+
+def terminal_lip_node_range(center_nodes: list[dict]) -> tuple[int, int] | None:
+    if len(center_nodes) < 5:
+        return None
+    max_z = max(current(node)[2] for node in center_nodes)
+    if max_z <= 0:
+        return None
+    crest_index = max(range(len(center_nodes)), key=lambda index: current(center_nodes[index])[2])
+    post_crest = [
+        index for index in range(crest_index + 1, len(center_nodes))
+        if current(center_nodes[index])[2] >= max_z * 0.035
+    ]
+    if len(post_crest) < 2:
+        return None
+    tip_index = max(post_crest, key=lambda index: (current(center_nodes[index])[0], -current(center_nodes[index])[2]))
+    visible_return = [
+        index for index in range(tip_index, len(center_nodes))
+        if current(center_nodes[index])[2] >= max_z * 0.009
+    ]
+    return_index = visible_return[-1] if visible_return else tip_index
+    return crest_index, return_index
 
 
 def render_reference_overlay(model: dict) -> None:
