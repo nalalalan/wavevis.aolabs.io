@@ -24,61 +24,19 @@ REFERENCE = (11, 136, 151)
 FILL = (237, 231, 221)
 
 REFERENCE_TRACE = [
-    (0.0, 0.0001),
-    (0.0341, 0.0026),
-    (0.1444, 0.0355),
-    (0.1932, 0.0691),
-    (0.2258, 0.0992),
-    (0.2565, 0.1309),
-    (0.2816, 0.1666),
-    (0.3018, 0.2052),
-    (0.3211, 0.2443),
-    (0.3399, 0.2835),
-    (0.3585, 0.3228),
-    (0.3769, 0.3622),
-    (0.3954, 0.4016),
-    (0.414, 0.4409),
-    (0.4326, 0.4802),
-    (0.4512, 0.5195),
-    (0.4697, 0.5589),
-    (0.4882, 0.5982),
-    (0.5067, 0.6376),
-    (0.5253, 0.6769),
-    (0.544, 0.7162),
-    (0.5629, 0.7553),
-    (0.582, 0.7944),
-    (0.6012, 0.8335),
-    (0.6207, 0.8724),
-    (0.6406, 0.9112),
-    (0.6636, 0.9482),
-    (0.6929, 0.9811),
-    (0.7299, 1.0),
-    (0.7657, 0.9738),
-    (0.791, 0.9384),
-    (0.8082, 0.8985),
-    (0.8244, 0.8583),
-    (0.8399, 0.8178),
-    (0.8543, 0.7769),
-    (0.8667, 0.7355),
-    (0.8786, 0.6939),
-    (0.8904, 0.6522),
-    (0.902, 0.6106),
-    (0.9135, 0.5689),
-    (0.925, 0.5272),
-    (0.9366, 0.4855),
-    (0.9482, 0.4439),
-    (0.9598, 0.4022),
-    (0.9712, 0.3605),
-    (0.9823, 0.3187),
-    (0.9929, 0.2768),
-    (1.0, 0.2343),
-    (0.9991, 0.1913),
-    (0.995, 0.1484),
-    (0.9877, 0.1058),
-    (0.9725, 0.0653),
-    (0.9464, 0.0303),
-    (0.9088, 0.0202),
-    (0.9456, 0.0097),
+    (0.0, 0.0),
+    (0.08, 0.01),
+    (0.18, 0.04),
+    (0.3, 0.16),
+    (0.44, 0.44),
+    (0.58, 0.78),
+    (0.69, 0.98),
+    (0.78, 1.0),
+    (0.86, 0.9),
+    (0.91, 0.62),
+    (0.91, 0.34),
+    (0.86, 0.16),
+    (0.74, 0.07),
 ]
 
 
@@ -223,15 +181,11 @@ def sorted_edges(model: dict, nodes: dict[str, dict], projection: str) -> list[d
 
 
 def line_color(edge: dict, a: dict, b: dict, center_row: int, active_height: float) -> tuple[int, int, int]:
+    del center_row, active_height
     if edge.get("orientation") != "horizontal":
         return GRID
 
-    row_near_center = abs(a["row"] - center_row) <= 1 and abs(b["row"] - center_row) <= 1
-    active_lip = current(a)[2] >= active_height or current(b)[2] >= active_height
-    if row_near_center and active_lip:
-        return LIP
-    if row_near_center:
-        return CENTER
+    del a, b
     return GRID
 
 
@@ -275,13 +229,14 @@ def render_lattice(model: dict, filename: str, title: str, subtitle: str, projec
         p1 = to_canvas(projector(current(b)))
         draw.line((*p0, *p1), fill=(*color, alpha), width=width)
 
-    # Draw the central node path over the full linkage so the lip silhouette is auditable.
+    # Draw the app-equivalent side silhouette over the full linkage so the lip shape is auditable.
     center_nodes = sorted((node for node in model["nodes"] if node["row"] == center_row), key=lambda node: node["col"])
-    center_path = [to_canvas(projector(current(node))) for node in center_nodes]
+    center_path_nodes = side_profile_display_nodes(center_nodes)
+    center_path = [to_canvas(projector(current(node))) for node in center_path_nodes]
     draw.line(smooth_canvas_polyline(center_path, 2), fill=(*INK, 235), width=5, joint="curve")
     terminal_range = terminal_lip_node_range(center_nodes)
     if terminal_range:
-        start, end = terminal_range
+        start, end, _curved_end = terminal_range
         lip_nodes = center_nodes[start:end + 1]
     else:
         lip_nodes = []
@@ -291,7 +246,7 @@ def render_lattice(model: dict, filename: str, title: str, subtitle: str, projec
 
     for node in center_nodes[::4]:
         x, y = to_canvas(projector(current(node)))
-        draw.ellipse((x - 3, y - 3, x + 3, y + 3), fill=(*INK, 235))
+        draw.ellipse((x - 2, y - 2, x + 2, y + 2), fill=(*INK, 90))
 
     img.save(FIGURES / filename)
     img.save(VERIFY / filename.replace(".png", "-verification.png"))
@@ -300,7 +255,7 @@ def render_lattice(model: dict, filename: str, title: str, subtitle: str, projec
 def centerline_side_points(model: dict) -> list[tuple[float, float]]:
     center_row = model["config"]["rows"] // 2
     center_nodes = sorted((node for node in model["nodes"] if node["row"] == center_row), key=lambda node: node["col"])
-    return [(-current(node)[0], current(node)[2]) for node in center_nodes]
+    return [(-current(node)[0], current(node)[2]) for node in side_silhouette_nodes(center_nodes)]
 
 
 def normalize_wave_profile(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
@@ -341,7 +296,42 @@ def smooth_canvas_polyline(points: list[tuple[float, float]], passes: int = 2) -
     return smoothed
 
 
-def terminal_lip_node_range(center_nodes: list[dict]) -> tuple[int, int] | None:
+def side_profile_display_nodes(center_nodes: list[dict]) -> list[dict]:
+    if len(center_nodes) < 5:
+        return center_nodes
+    max_z = max(current(node)[2] for node in center_nodes)
+    if max_z <= 0:
+        return center_nodes
+    active = [
+        index for index, node in enumerate(center_nodes)
+        if current(node)[2] >= max_z * 0.045
+    ]
+    if len(active) < 2:
+        return center_nodes
+    profile_start = max(0, active[0] - 2)
+    terminal_range = terminal_lip_node_range(center_nodes)
+    profile_end = min(len(center_nodes) - 1, active[-1] + 1)
+    if terminal_range:
+        terminal_start, _tip, _curved_end = terminal_range
+        profile_end = min(profile_end, terminal_start)
+    return center_nodes[profile_start:profile_end + 1]
+
+
+def side_silhouette_nodes(center_nodes: list[dict]) -> list[dict]:
+    body_nodes = side_profile_display_nodes(center_nodes)
+    terminal_range = terminal_lip_node_range(center_nodes)
+    if not terminal_range:
+        return body_nodes
+    terminal_start, terminal_tip, _curved_end = terminal_range
+    lip_nodes = center_nodes[terminal_start:terminal_tip + 1]
+    if not body_nodes:
+        return lip_nodes
+    if lip_nodes and body_nodes[-1]["id"] == lip_nodes[0]["id"]:
+        return body_nodes + lip_nodes[1:]
+    return body_nodes + lip_nodes
+
+
+def terminal_lip_node_range(center_nodes: list[dict]) -> tuple[int, int, int] | None:
     if len(center_nodes) < 5:
         return None
     max_z = max(current(node)[2] for node in center_nodes)
@@ -354,13 +344,59 @@ def terminal_lip_node_range(center_nodes: list[dict]) -> tuple[int, int] | None:
     ]
     if len(post_crest) < 2:
         return None
-    tip_index = max(post_crest, key=lambda index: (current(center_nodes[index])[0], -current(center_nodes[index])[2]))
-    visible_return = [
-        index for index in range(tip_index, len(center_nodes))
-        if current(center_nodes[index])[2] >= max_z * 0.009
+    target_tip_z = max_z * 0.06
+    low_tip_candidates = [
+        index for index in post_crest
+        if current(center_nodes[index])[2] <= target_tip_z * 1.35
     ]
-    return_index = visible_return[-1] if visible_return else tip_index
-    return crest_index, return_index
+    tip_index = (
+        terminal_local_minimum_index(center_nodes, low_tip_candidates[0], max_z)
+        if low_tip_candidates else
+        min(
+            post_crest,
+            key=lambda index: (
+                abs(current(center_nodes[index])[2] - target_tip_z),
+                current(center_nodes[index])[0],
+            ),
+        )
+    )
+    start_index = terminal_lip_profile_start_index(center_nodes, crest_index, tip_index, max_z)
+    visible_interior = [
+        index for index in range(tip_index, len(center_nodes))
+        if index > tip_index
+        and current(center_nodes[index])[2] >= max_z * 0.045
+        and current(center_nodes[index])[2] <= max_z * 0.32
+    ]
+    curved_end = (
+        visible_interior[-1]
+        if visible_interior else tip_index
+    )
+    return start_index, tip_index, curved_end
+
+
+def terminal_lip_profile_start_index(center_nodes: list[dict], crest_index: int, tip_index: int, max_z: float) -> int:
+    shoulder_indexes = [
+        index for index in range(crest_index + 1, tip_index)
+        if current(center_nodes[index])[2] >= max_z * 0.48
+    ]
+    if not shoulder_indexes:
+        return min(max(crest_index + 2, crest_index), tip_index)
+    return max(shoulder_indexes, key=lambda index: (current(center_nodes[index])[0], current(center_nodes[index])[2]))
+
+
+def terminal_local_minimum_index(center_nodes: list[dict], first_low_index: int, max_z: float) -> int:
+    tip_index = first_low_index
+    for index in range(first_low_index + 1, len(center_nodes)):
+        point_z = current(center_nodes[index])[2]
+        tip_z = current(center_nodes[tip_index])[2]
+        if point_z < tip_z - max_z * 0.004:
+            tip_index = index
+            continue
+        if point_z > tip_z + max_z * 0.035:
+            break
+        if point_z > max_z * 0.18:
+            break
+    return tip_index
 
 
 def render_reference_overlay(model: dict) -> None:
@@ -375,7 +411,7 @@ def render_reference_overlay(model: dict) -> None:
     draw_header(
         draw,
         "Reference trace against current side silhouette",
-        "Teal is the source-baked breaking-wave target; red/black is the centerline extracted from the full linkage.",
+        "Teal is the curated custom Moana-ocean target; red/black is the centerline extracted from the full linkage.",
         summarize(model),
     )
     draw.rounded_rectangle((54, 154, size[0] - 54, size[1] - 72), radius=18, fill=(255, 253, 248, 255), outline=(224, 216, 204, 255), width=2)
@@ -383,8 +419,8 @@ def render_reference_overlay(model: dict) -> None:
     ground_left = to_canvas((0, 0))
     ground_right = to_canvas((1, 0))
     draw.line((*ground_left, *ground_right), fill=(*MUTED, 95), width=2)
-    draw_polyline(draw, reference_trace, to_canvas, REFERENCE, 7)
-    draw_polyline(draw, current_profile, to_canvas, CENTER, 5)
+    draw_polyline(draw, reference_trace, to_canvas, REFERENCE, 9)
+    draw_polyline(draw, current_profile, to_canvas, CENTER, 4)
     lip_start = max(0, int(len(current_profile) * 0.56))
     draw_polyline(draw, current_profile[lip_start:], to_canvas, LIP, 6)
 

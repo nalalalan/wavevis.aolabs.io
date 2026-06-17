@@ -136,7 +136,7 @@
 \end{center}
 
 \vspace{0.35em}
-\noindent\textbf{WaveVis is an inverse simulator for a mostly flat rectangular linkage sheet with one localized plunging-wave deformation rising out of the sheet. The primary visual target is the Moana ocean reference geometry supplied for this project: a translucent, water-like sheet rising from a flat surface, swelling into a rounded crest, curling forward and downward, and returning to flat without walls, cavities, or extruded tunnel behavior. The intended artifact is not an extruded ribbon, half-pipe, swept cross-section, roof, bridge, or hollow shell. It is a full array of linkage cells over a fixed flat perimeter: the center region ramps upward, forms a rounded crest, projects a lip forward and downward, and fades smoothly back into the surrounding sheet in all directions. The reference geometry is an acceptance target, not a success claim. A generated state is still open if the human-facing render reads as a tunnel, wall-covered cavity, angular blob, missing curl, or broken linkage even when code checks pass. A verification URL is also part of the artifact: if the page ignores URL slider parameters, the screenshot is not evidence for the state Alan requested. This paper replaces the earlier narrow constraint-proof PDF as the visible system record. It defines the reference geometry, coordinate systems, generated Moana-ocean target, visible slider semantics, topology invariants, rendering views, failure modes, verification gates, deployment state, and handoff procedure required before WaveVis work can be called correct.}
+\noindent\textbf{WaveVis is an inverse simulator for a mostly flat rectangular linkage sheet with one localized plunging-wave deformation rising out of the sheet. The primary visual target is the Moana ocean reference geometry supplied for this project: a translucent, water-like sheet rising from a flat surface, swelling into a rounded crest, curling forward and downward, and returning to flat without walls, cavities, or extruded tunnel behavior. The intended artifact is not an extruded ribbon, half-pipe, swept cross-section, roof, bridge, or hollow shell. It is a full array of linkage cells over a fixed flat perimeter: the center region ramps upward, forms a rounded crest, projects a lip forward and downward, and fades smoothly back into the surrounding sheet in all directions. The reference geometry is an acceptance target, not a success claim. A rendered state is still open if the human-facing render reads as a tunnel, wall-covered cavity, angular blob, missing curl, or broken linkage even when code checks pass. A verification URL is also part of the artifact: if the page ignores URL slider parameters, the screenshot is not evidence for the state Alan requested. This paper replaces the earlier narrow constraint-proof PDF as the visible system record. It defines the reference geometry, coordinate systems, curated Moana-ocean target, visible slider semantics, topology invariants, rendering views, failure modes, verification gates, deployment state, and handoff procedure required before WaveVis work can be called correct.}
 
 \vspace{0.65em}
 \noindent\textbf{Fresh-chat use.} This PDF is intended to be the first artifact a new WaveVis chat reads. It is not only a public paper. It is the continuation manual for the current simulator: what shape is being made, what failures were rejected, which files own the implementation, how each slider is allowed to behave, what tests must pass, what public route is verified, what remains unresolved, and how to continue without re-learning the same mistakes from chat history.
@@ -180,8 +180,8 @@ If this PDF is the only WaveVis context available, start with this section and t
   \item \textbf{Visible PDF action:} the WaveVis header links to the paper file under \code{/proofs/}. File: \code{wavevis-system-architecture.pdf}. The old connector proof remains a source artifact, not the primary user-facing paper action.
   \item \textbf{Current source root:} workspace path \code{\_apps/wavevis.aolabs.io/}.
   \item \textbf{Public fallback mirror:} workspace path \code{\_apps/aolabs-site/wavevis/}. A WaveVis deploy to its own \code{gh-pages} branch does not automatically update the \code{aolabs.io/wavevis/} fallback unless the built files are mirrored there and the hub site is pushed.
-  \item \textbf{Current architectural direction:} source-baked breaking-wave custom profile localized into the inverse-sheet field. Manual \(xz\) and \(xy\) profile editors are not the active path.
-  \item \textbf{Current reference-match boundary:} the June 17, 2026 curl/dip follow-up replaces the looped handmade side profile with the source-baked breaking-wave trace, removes the closed angular interior return, and makes the terminal lip a forward/downward curve rather than a lower-lip dimple or horizontal tongue. The current side renderer keeps the low return branch visible after the forward-most lip point so the interior reads as a curved throat instead of a cut-off face. The current default keeps a true side-on camera, zero self-intersections in the default trace gate, no bowl-pocket count in the default/compact/wide gates, full linkage visibility, and a current-vs-reference trace overlay. The current claim is a closer localized plunging-wave linkage state, not photorealistic identity with the supplied water frame.
+  \item \textbf{Current architectural direction:} curated custom Moana-ocean profile localized into the inverse-sheet field. Manual \(xz\) and \(xy\) profile editors are not the active path.
+  \item \textbf{Current reference-match boundary:} the June 17, 2026 curl/dip repair restores the stronger custom ocean-body family after the generated tuning overfit individual dimple/cavity complaints and regressed the whole silhouette. The current side renderer shows a longer, lower full-sheet body with a rounded crest, a forward/downturned lip, and a curved throat; the low structural return is excluded from the side silhouette so it does not read as a flat tongue. The current default keeps a true side-on camera, zero self-intersections in the default trace gate, no bowl-pocket count in the default/compact/wide gates, full linkage visibility, and a current-vs-reference trace overlay. The current claim is a closer localized plunging-wave linkage state, not photorealistic identity with the supplied water frame.
 \end{itemize}
 
 \subsection{What the next agent must not repeat}
@@ -200,19 +200,19 @@ The repeated failures that this document is meant to prevent are:
 
 \subsection{Current live-state evidence}
 
-Figures~\ref{fig:current-live-side}--\ref{fig:current-live-slice} record the current source-rendered linkage state from the same geometry model that builds the public bundle: side view is the full three-dimensional sheet, the reference overlay extracts the centerline silhouette, cross-section is separate, and the full linkage array is present in 3D. The June 17, 2026 follow-up uses the source-baked breaking-wave profile as the default custom trace, removes the previous closed interior loop, and highlights the post-crest lip as a smooth forward/downward terminal branch with the low return branch still visible. The repair also updates the side-aspect guard with a reference-trace fit check, a zero-self-intersection check, and a terminal-drop check so the verified state is a downturned breaking lip with a bounded body, not a vertical rounded protrusion, lower-lip dimple, angular interior loop, horizontal tongue, or renderer-trimmed chute. It preserves the full \(4928\)-node and \(9700\)-edge array, keeps max height at \(12.72\) and max tensile strain at \(3.86\) in the default proof render, and records the remaining reference-match boundary as a visible overlay instead of an invisible claim.
+Figures~\ref{fig:current-live-side}--\ref{fig:current-live-slice} record the current source-rendered linkage state from the same geometry model that builds the public bundle: side view is the full three-dimensional sheet, the reference overlay extracts the centerline silhouette, cross-section is separate, and the full linkage array is present in 3D. The June 17, 2026 repair restores the curated custom Moana-ocean body as the default target after generated tuning overfit the cavity/dimple complaint and regressed the whole silhouette. The side view now uses a wider, lower wave body, a rounded crest, a forward/downturned lip, and a curved interior throat while trimming the low flat structural return out of the visible silhouette. The repair also updates the side gate with a custom Moana-wave aspect check, a reference-trace fit check, a zero-self-intersection check, slider robustness checks, and terminal-drop measurement so the verified state is a lower breaking-wave curl with preserved linkage, not a vertical rounded protrusion, lower-lip dimple, angular interior loop, horizontal tongue, or renderer-trimmed chute. It preserves the full \(4928\)-node and \(9700\)-edge array, keeps max height at \(12.75\) and max tensile strain at \(4.79\) in the default proof render, records zero rendered-neighbor residual and zero bowl pockets in the default gates, and keeps the remaining reference-match boundary visible in the overlay instead of turning it into a success claim.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.98\linewidth]{current-live-side.png}
-\caption{Current source-rendered side linkage for the default inverse-sheet state. This is not a cross-section. The full linkage sheet remains visible, and the side camera faces the rounded open throat, visible low return branch, and flat return in the same direction as the reference family.}
+\caption{Current source-rendered side linkage for the default inverse-sheet state. This is not a cross-section. The full linkage sheet remains visible, and the side camera faces the rounded open throat and downturned lip while the low structural return is muted out of the silhouette.}
 \label{fig:current-live-side}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.92\linewidth]{current-live-reference-overlay.png}
-\caption{Current centerline silhouette against the normalized source-baked breaking-wave target. The overlay is the human-facing shape gate for this repair: it shows crest alignment, a smooth downturned terminal branch, and no closed angular interior loop while keeping the remaining reference difference explicit.}
+\caption{Current centerline silhouette against the normalized Moana-wave target trace. The overlay is the human-facing shape gate for this repair: it shows the lower, longer breaking body, rounded crest, forward/downturned terminal branch, and open curved throat while keeping the remaining reference difference explicit.}
 \label{fig:current-live-reference-overlay}
 \end{figure}
 
@@ -273,7 +273,7 @@ A fresh agent continuing WaveVis should do the following in order:
 
 \section{Current implementation state}
 
-\subsection{Defaults and generated target}
+\subsection{Defaults and target}
 
 The current inverse-sheet default is intentionally taller and sharper than earlier flat presets:
 \[
@@ -328,11 +328,11 @@ The displacement is zero outside the support field and on the perimeter. The sup
 \[
   \psi_{\mathrm{steer}} = 45^\circ\,\mathrm{clamp}(\code{steer},-1,1).
 \]
-They must not modify the generated wave profile, width, curl, strain, or topology. Validation aligns geometries back to the canonical frame and checks that residual shape differences are near zero for position and bounded for steer.
+They must not modify the curated wave profile, width, curl, strain, or topology. Validation aligns geometries back to the canonical frame and checks that residual shape differences are near zero for position and bounded for steer.
 
 \subsection{Morph control}
 
-\code{morph} is not a shape recipe. It interpolates from rest to the already-generated target:
+\code{morph} is not a shape recipe. It interpolates from rest to the completed target:
 \[
   p_{ij}(m) = (1-g(m))p^0_{ij} + g(m)p^*_{ij}.
 \]
@@ -371,7 +371,7 @@ These checks are guards, not substitutes for the human-facing screenshot. A visi
   \item \code{view=slice} is the cross-section/profile view;
   \item \code{view=isometric} shows the full rectangular array in perspective;
   \item surface rendering is intentionally faint in side view and hidden in isometric so cells/connectors remain the artifact;
-  \item side-view silhouette highlighting must include the curved low return after the forward-most lip point; trimming at the maximum-reach point makes the throat read angular even when the model contains a return branch;
+  \item side-view silhouette highlighting must include the curved throat after the forward-most lip point while muting the low flat structural return; trimming at the maximum-reach point makes the throat read angular, but showing the whole return creates a horizontal tongue;
   \item cells and connectors are display toggles, not repair paths.
 \end{itemize}
 If the renderer needs to hide rows to make the shape readable, the generator is still wrong.
@@ -444,7 +444,7 @@ Figure~\ref{fig:outcome-map} gives the practical acceptance boundary. The shape 
   \put(66,23){\makebox(0,0)[l]{downward lip}}
   \put(39,11){\makebox(0,0)[r]{open tube}}
 \end{picture}
-\caption{Desired side silhouette as an outcome object. The drawing is not a literal mesh recipe. It is the visible side-view contract: smooth back ramp, larger outer radius, smaller inner radius, curled lip, and flat return. The three-dimensional solver must then localize this silhouette in the middle of a full sheet rather than sweep it as a constant tunnel.}
+\caption{Desired side silhouette as an outcome object. The drawing is not a literal mesh recipe. It is the visible side-view contract: smooth back ramp, larger outer radius, smaller inner radius, curled lip, and curved interior throat. The three-dimensional solver must then localize this silhouette in the middle of a full sheet rather than sweep it as a constant tunnel.}
 \label{fig:outcome-map}
 \end{figure}
 
@@ -488,7 +488,7 @@ The target-building pipeline is:
 \begin{enumerate}
   \item sanitize rows, columns, visible sliders, hidden legacy shape parameters, display flags, and URL parameters;
   \item build the full rectangular node grid;
-  \item compute the canonical Moana-ocean wave displacement from the generated target;
+  \item compute the canonical Moana-ocean wave displacement from the curated target;
   \item apply the span envelope that localizes the wave in \(y\);
   \item preserve the boundary by forcing perimeter displacement to zero;
   \item apply morph interpolation from rest to target;
@@ -498,7 +498,7 @@ The target-building pipeline is:
   \item render the full array, side view, or cross-section without substituting fake surfaces.
 \end{enumerate}
 
-The distinction between the generated target and rigid placement parameters is essential. The visible app no longer exposes manual \(xz\) or \(xy\) profile editors. The generator owns the Moana-ocean target. The user-facing sliders are intentionally narrow: scale uniformly resizes that target, morph blends from rest to the completed target, steer rotates the finished target around the anchor, and position translates the finished target horizontally. Neither steer nor position may feed back into profile curvature, curl, width, strain generation, or cell topology.
+The distinction between the curated target and rigid placement parameters is essential. The visible app no longer exposes manual \(xz\) or \(xy\) profile editors. The source target owns the Moana-ocean profile. The user-facing sliders are intentionally narrow: scale uniformly resizes that target, morph blends from rest to the completed target, steer rotates the finished target around the anchor, and position translates the finished target horizontally. Neither steer nor position may feed back into profile curvature, curl, width, strain generation, or cell topology.
 
 \begin{table}[H]
 \centering
@@ -519,11 +519,11 @@ Renderer & Shows the actual mechanism. & Fake shell, hidden wall, side view as c
 \caption{Pipeline stages and the failure modes each stage must prevent.}
 \end{table}
 
-\section{Generated Moana target}
+\section{Curated Moana Target}
 
-The current visible app does not ask the user to draw a profile. That path created too much ambiguity and repeatedly made the simulator look like a swept tunnel or hand-edited cavity rather than a single coherent wave. The source may still contain historical helper functions for compatibility, but the user-facing target is now driven by the generated Moana lip/body profile: a localized ocean deformation with a broad rear ramp, rounded crest, forward-and-down lip, open underside, smooth lateral fade, and flat rectangular perimeter.
+The current visible app does not ask the user to draw a profile. That path created too much ambiguity and repeatedly made the simulator look like a swept tunnel or hand-edited cavity rather than a single coherent wave. The user-facing target is now driven by a curated custom Moana-ocean lip/body profile: a localized ocean deformation with a broad rear ramp, rounded crest, forward-and-down lip, open underside, smooth lateral fade, and flat rectangular perimeter.
 
-The generated target is a reference field, not a set of cell locations. The final cell grid is determined by row and column counts, then sampled against that target. A clean state must keep the full linkage array visible while making the centerline and the lateral silhouette read as one plunging wave. The generator must never stitch the lip directly to the ground or draw a hard polygon boundary around a former editor curve, because that creates the wall, bowl, and cavity failures this record explicitly rejects. The curl is also resolution-sensitive: under-resolved column counts are promoted to the smooth-wave minimum because honoring a compact column request recreated the visible dimple and made the side silhouette fail.
+The curated target is a reference field, not a set of cell locations. The final cell grid is determined by row and column counts, then sampled against that target. A clean state must keep the full linkage array visible while making the centerline and the lateral silhouette read as one plunging wave. The target must never stitch the lip directly to the ground or draw a hard polygon boundary around a former editor curve, because that creates the wall, bowl, and cavity failures this record explicitly rejects. The curl is also resolution-sensitive: under-resolved column counts are promoted to the smooth-wave minimum because honoring a compact column request recreated the visible dimple and made the side silhouette fail.
 
 \section{Slider semantics}
 
@@ -535,19 +535,19 @@ The generated target is a reference field, not a set of cell locations. The fina
 Control & Intended effect & Must not do \\
 \midrule
 \code{morph} & Blend rest sheet into the completed target. & Remesh, flip cells, create zig-zags, change profile identity. \\
-\code{scale} & Uniformly enlarge or reduce the generated Moana-ocean target. & Change steer, position, topology, or the target's wave identity. \\
+\code{scale} & Uniformly enlarge or reduce the curated Moana-ocean target. & Change steer, position, topology, or the target's wave identity. \\
 \code{steer} & Rigid yaw rotation of the finished wave. & Bend, stretch, or reshape the wave. \\
 \code{position} & Rigid horizontal translation of the finished wave. & Change silhouette, strain field, or curl. \\
 display toggles & Surface, flat grid, cells, and connectors are display layers only. & Hide broken geometry or substitute a fake repair path. \\
 \bottomrule
 \end{tabular}
 }
-\caption{Visible control contract after removing manual profile editors and hidden shape sliders. The generated Moana-ocean target is the default shape; visible controls must preserve that shape unless their narrow role explicitly changes scale, morph, steer, position, or display layers.}
+\caption{Visible control contract after removing manual profile editors and hidden shape sliders. The curated Moana-ocean target is the default shape; visible controls must preserve that shape unless their narrow role explicitly changes scale, morph, steer, position, or display layers.}
 \end{table}
 
 \section{Breaking-wave geometry}
 
-The desired generated-mode profile is closer to a localized plunging wave than to a cone, cylinder, or arch. The useful approximation is a tapered, asymmetric surface whose highest crest sits behind the curl, whose outer radius is larger than the inner radius, and whose underside remains open. Along the centerline, a breaking wave profile can be represented as three joined curve families:
+The desired default profile is closer to a localized plunging wave than to a cone, cylinder, or arch. The useful approximation is a tapered, asymmetric surface whose highest crest sits behind the curl, whose outer radius is larger than the inner radius, and whose underside remains open. Along the centerline, a breaking wave profile can be represented as three joined curve families:
 \[
   P(u)=
   \begin{cases}
@@ -648,7 +648,7 @@ The current acceptance evidence expected from \code{scripts/check-inverse-sheet.
   \item maximum connector endpoint gap is zero;
   \item maximum arm surface leak is zero;
   \item no bowl-pocket count is reported for default, compact-user, and breaking-wide presets;
-  \item side-overhang aspect stays in the downturned-lip band: startup default aspect between \(1.90\) and \(2.35\), compact user morph case between \(2.00\) and \(2.65\), and both with reach-to-height between \(0.62\) and \(0.95\);
+  \item side-overhang aspect stays in the downturned-lip band: startup default aspect between \(1.35\) and \(2.25\), compact user morph case between \(1.45\) and \(2.45\), and both with reach-to-height between \(0.72\) and \(1.25\);
   \item broad open-curl lip stats keep \code{openThroatVisible}, \code{noVisibleDimplePocket}, \code{noBackfoldCavity}, and \code{returnToFlat} true while allowing a wide rounded cap and tucked nose instead of forcing the old vertical-chute proxy;
   \item slider robustness reports no bad cases.
 \end{itemize}
@@ -728,14 +728,14 @@ This section is intentionally blunt so a future chat does not have to infer whet
   \item The Inverse Sheet tab is the first/default option; Double-Layer Sarrus is secondary.
   \item The current PDF route is the WaveVis fallback paper route: \code{/wavevis/proofs/}, file \code{wavevis-system-architecture.pdf}.
   \item Side, Cross Section, and 3D are separate view modes. Side is the full three-dimensional sheet seen from the side; Cross Section is the slice/debug view.
-  \item The current generator and renderer are checked by \code{npm run check:geometry}; the June 17 curl/dip follow-up uses the source-baked custom breaking-wave default, \code{openThroatVisible}, bounded terminal-lip run, no visible dimple pocket, no bowl pockets, side-render full-array scope, slider robustness, and rigid-cell connector invariants.
-  \item The current side render keeps the full cells and connectors visible while using a lower height-to-reach ratio, sharper lip profile, forward low free tip, open underside return, and downturned-lip side-aspect guard so the curl reads as a breaking wave rather than a rounded protruding cap or horizontal tongue.
-  \item Source-rendered side, reference-overlay, isometric, and cross-section figures were regenerated from the passing geometry model. Current source metrics are \(4928\) rendered nodes, \(9700\) rendered edges, zero rendered-neighbor residual, zero bowl pockets, max height \(12.69\), max overhang \(9.63\), and max tensile strain \(5.24\).
+  \item The current generator and renderer are checked by \code{npm run check:geometry}; the June 17 curl/dip repair uses the curated custom Moana-wave default, a custom side-aspect gate, reference-trace fit, terminal-drop measurement, no bowl pockets, side-render full-array scope, slider robustness, and rigid-cell connector invariants.
+  \item The current side render keeps the full cells and connectors visible while using a lower height-to-reach ratio, sharper lip profile, forward low free tip, curved interior throat, muted low return, and downturned-lip side-aspect guard so the curl reads as a breaking wave rather than a rounded protruding cap or horizontal tongue.
+  \item Source-rendered side, reference-overlay, isometric, and cross-section figures were regenerated from the passing geometry model. Current source metrics are \(4928\) rendered nodes, \(9700\) rendered edges, zero rendered-neighbor residual, zero bowl pockets, max height \(12.75\), max side overhang \(15.42\), startup side aspect \(2.10\), morph-half-lip side aspect \(2.34\), terminal-drop ratio \(0.929\), and max tensile strain \(4.79\).
 \end{itemize}
 
 \textbf{Open state that must not be overstated:}
 \begin{itemize}
-  \item Exact photorealistic Moana-water matching is not a proven completed result. The correct claim is that the generator now passes the generated localized-wave linkage gate, includes a visible current-vs-reference overlay, and moves closer to the requested curl/dip without regressing full-array linkage.
+  \item Exact photorealistic Moana-water matching is not a proven completed result. The correct claim is that the simulator now passes the curated Moana-wave linkage gate, includes a visible current-vs-reference overlay, and moves closer to the requested curl/dip without regressing full-array linkage.
   \item \code{https://wavevis.aolabs.io/} is still treated as blocked/stale unless a fresh certificate and body check passes.
   \item This is a simulator and architecture record. It is not evidence that a physical lattice prototype has been fabricated or experimentally validated.
   \item If Alan reports a visible dimple, cavity, side wall, bowl, missing curl, zig-zag, disconnected cell, or cross-section/side confusion after this PDF ships, the live rendered artifact overrides this paper. Repair the source and update the validation gate.
@@ -767,7 +767,7 @@ The public app serves a static build. The architecture PDF is placed in the publ
 
 \section{Discussion}
 
-The main design lesson is that WaveVis cannot be corrected by tuning only the side profile. The user-facing failure was three-dimensional: side walls, swept tubes, missing full-array linkages, broken side/cross-section semantics, and zig-zag legs. The architecture therefore now uses a single generated target contract rather than a manual editor contract. The sheet generator is responsible for creating a localized Moana-like displacement field with lateral fade, boundary preservation, topology completeness, and a visible curled lip.
+The main design lesson is that WaveVis cannot be corrected by tuning only the side profile. The user-facing failure was three-dimensional: side walls, swept tubes, missing full-array linkages, broken side/cross-section semantics, and zig-zag legs. The architecture therefore now uses a single curated target contract rather than a manual editor contract. The sheet generator is responsible for creating a localized Moana-like displacement field with lateral fade, boundary preservation, topology completeness, and a visible curled lip.
 
 This distinction also clarifies future work. If the simulator produces a good cross-section but a bad side view, the cross-section is only evidence that the profile exists somewhere. The real artifact still fails if the full three-dimensional render hides the curl or reads as an extrusion. Similarly, if the mesh is clean but the wave looks like a low mound, the mechanism is not enough. Both the shape and the linkage must be correct.
 

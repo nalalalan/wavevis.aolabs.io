@@ -54,7 +54,7 @@ export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequ
         <Suspense fallback={null}>
           <LatticeModelGroup model={model} selected={selected} view={viewRequest.view} onEdgePick={onEdgePick} />
         </Suspense>
-        <SceneGrid bounds={model.bounds} />
+        {viewRequest.view !== 'side' && viewRequest.view !== 'slice' && <SceneGrid bounds={model.bounds} />}
         {viewRequest.view !== 'side' && viewRequest.view !== 'slice' && (
           <Suspense fallback={null}>
             <AxisLabels bounds={model.bounds} />
@@ -101,7 +101,7 @@ function LatticeModelGroup({
     : sideMechanismView
       ? Math.max(model.config.spacing * 0.02, 0.012)
     : Math.max(model.config.spacing * (largeGrid ? 0.042 : 0.09), 0.026)
-  const surfaceOpacity = sideMechanismView ? 0.018 : sliceProfileView ? 0.2 : (largeGrid ? 0.3 : 0.36)
+  const surfaceOpacity = sideMechanismView ? 0.006 : sliceProfileView ? 0.2 : (largeGrid ? 0.3 : 0.36)
 
   return (
     <group>
@@ -254,8 +254,11 @@ function SideProfileSilhouette({
       maxCol: Math.min(model.config.columns - 1, Math.max(...activeCols) + 2),
     }
     const terminalRange = findTerminalLipRange(rawPoints, model.config.spacing)
-    const displayMaxCol = terminalRange
-      ? Math.min(model.config.columns - 1, Math.max(columnRange.maxCol, rawPoints[terminalRange.returnIndex].col))
+    const terminalStartIndex = terminalRange
+      ? terminalLipProfileStartIndex(rawPoints, terminalRange)
+      : null
+    const displayMaxCol = terminalRange && terminalStartIndex !== null
+      ? Math.min(columnRange.maxCol, rawPoints[terminalStartIndex].col)
       : columnRange.maxCol
     const points = smoothSideProfilePoints(rawPoints
       .filter(({ col }) => col >= columnRange.minCol && col <= displayMaxCol)
@@ -268,16 +271,16 @@ function SideProfileSilhouette({
       model.config.spacing * (model.config.rows > 30 || model.config.columns > 30 ? 0.036 : 0.05),
       0.018,
     )
-    const coreRadius = baseRadius * (subtle ? 0.82 : compact ? 1.45 : 1)
-    const haloRadius = coreRadius * (subtle ? 1.18 : compact ? 1.72 : 1.42)
+    const coreRadius = baseRadius * (subtle ? 0.82 : compact ? 1.18 : 1)
+    const haloRadius = coreRadius * (subtle ? 1.18 : compact ? 1.45 : 1.42)
 
     return {
       core: new THREE.TubeGeometry(curve, Math.max(points.length * 12, 64), coreRadius, 10, false),
       halo: new THREE.TubeGeometry(curve, Math.max(points.length * 12, 64), haloRadius, 10, false),
       terminal: terminalPoints.length >= 2
         ? {
-            core: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(terminalPoints, false, 'centripetal', 0.22), Math.max(terminalPoints.length * 14, 48), coreRadius * 1.28, 10, false),
-            halo: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(terminalPoints, false, 'centripetal', 0.22), Math.max(terminalPoints.length * 14, 48), haloRadius * 1.18, 10, false),
+            core: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(terminalPoints, false, 'centripetal', 0.22), Math.max(terminalPoints.length * 14, 48), coreRadius * 0.88, 10, false),
+            halo: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(terminalPoints, false, 'centripetal', 0.22), Math.max(terminalPoints.length * 14, 48), haloRadius * 0.96, 10, false),
           }
         : null,
     }
@@ -310,6 +313,7 @@ function SideProfileSilhouette({
 type TerminalLipRange = {
   crestIndex: number
   tipIndex: number
+  curvedInteriorEndIndex: number
   returnIndex: number
 }
 
@@ -329,11 +333,17 @@ function findTerminalLipRange(rawPoints: Array<{ point: Vec3; col: number }>, sp
     .filter((index) => index > crestIndex && rawPoints[index].point[2] >= maxZ * 0.035)
   if (postCrestIndexes.length < 2) return null
 
-  const tipIndex = postCrestIndexes.reduce((best, index) => {
+  const targetTipZ = maxZ * 0.06
+  const firstLowTipIndex = postCrestIndexes.find((index) => rawPoints[index].point[2] <= targetTipZ * 1.35)
+  const tipIndex = firstLowTipIndex !== undefined
+    ? terminalLocalMinimumIndex(rawPoints, firstLowTipIndex, maxZ)
+    : postCrestIndexes.reduce((best, index) => {
     const point = rawPoints[index].point
     const bestPoint = rawPoints[best].point
-    if (point[0] > bestPoint[0] + spacing * 0.05) return index
-    if (Math.abs(point[0] - bestPoint[0]) <= spacing * 0.05 && point[2] < bestPoint[2]) return index
+    const distance = Math.abs(point[2] - targetTipZ)
+    const bestDistance = Math.abs(bestPoint[2] - targetTipZ)
+    if (distance < bestDistance - spacing * 0.01) return index
+    if (Math.abs(distance - bestDistance) <= spacing * 0.01 && point[0] < bestPoint[0]) return index
     return best
   }, postCrestIndexes[0])
   const visibleReturnIndexes = rawPoints
@@ -342,15 +352,41 @@ function findTerminalLipRange(rawPoints: Array<{ point: Vec3; col: number }>, sp
   const returnIndex = visibleReturnIndexes.length
     ? visibleReturnIndexes[visibleReturnIndexes.length - 1]
     : tipIndex
-  const postCrestForwardRun = rawPoints[tipIndex].point[0] - rawPoints[crestIndex].point[0]
+  const curvedInteriorIndexes = rawPoints
+    .map((_, index) => index)
+    .filter((index) =>
+      index > tipIndex &&
+      rawPoints[index].point[2] >= maxZ * 0.045 &&
+      rawPoints[index].point[2] <= maxZ * 0.32)
+  const curvedInteriorEndIndex = curvedInteriorIndexes.length
+    ? curvedInteriorIndexes[curvedInteriorIndexes.length - 1]
+    : tipIndex
+  const postCrestForwardRun = Math.abs(rawPoints[tipIndex].point[0] - rawPoints[crestIndex].point[0])
   const postCrestDrop = rawPoints[crestIndex].point[2] - rawPoints[returnIndex].point[2]
   if (postCrestForwardRun < spacing * 0.5 || postCrestDrop < maxZ * 0.18) return null
 
   return {
     crestIndex,
     tipIndex,
+    curvedInteriorEndIndex,
     returnIndex,
   }
+}
+
+function terminalLocalMinimumIndex(rawPoints: Array<{ point: Vec3; col: number }>, firstLowIndex: number, maxZ: number): number {
+  let tipIndex = firstLowIndex
+  for (let index = firstLowIndex + 1; index < rawPoints.length; index += 1) {
+    const point = rawPoints[index].point
+    const tipPoint = rawPoints[tipIndex].point
+    if (point[2] < tipPoint[2] - maxZ * 0.004) {
+      tipIndex = index
+      continue
+    }
+    if (point[2] > tipPoint[2] + maxZ * 0.035) break
+    if (point[2] > maxZ * 0.18) break
+  }
+
+  return tipIndex
 }
 
 function buildTerminalLipProfilePoints(
@@ -363,14 +399,34 @@ function buildTerminalLipProfilePoints(
   const maxZ = Math.max(...rawPoints.map(({ point }) => point[2]), 0)
   if (maxZ <= spacing * 0.2) return []
 
-  const { crestIndex, returnIndex } = providedRange
+  const { tipIndex } = providedRange
 
-  const startIndex = crestIndex
-  const section = rawPoints.slice(startIndex, returnIndex + 1)
+  const startIndex = terminalLipProfileStartIndex(rawPoints, providedRange)
+  const section = rawPoints.slice(startIndex, tipIndex + 1)
     .filter(({ point }, index, points) =>
       point[2] >= maxZ * 0.008 || index === 0 || index === points.length - 1)
 
   return section.map(({ point }) => new THREE.Vector3(...point))
+}
+
+function terminalLipProfileStartIndex(rawPoints: Array<{ point: Vec3; col: number }>, range: TerminalLipRange): number {
+  const maxZ = Math.max(...rawPoints.map(({ point }) => point[2]), 0)
+  const shoulderIndexes = rawPoints
+    .map((_, index) => index)
+    .filter((index) =>
+      index > range.crestIndex &&
+      index < range.tipIndex &&
+      rawPoints[index].point[2] >= maxZ * 0.48)
+  const shoulderIndex = shoulderIndexes.reduce((best, index) => {
+    if (best === null) return index
+    const point = rawPoints[index].point
+    const bestPoint = rawPoints[best].point
+    if (point[0] > bestPoint[0] + 0.000001) return index
+    if (Math.abs(point[0] - bestPoint[0]) <= 0.000001 && point[2] > bestPoint[2]) return index
+    return best
+  }, null as number | null)
+
+  return Math.min(Math.max(shoulderIndex ?? range.crestIndex + 2, range.crestIndex), range.tipIndex)
 }
 
 function smoothSideProfilePoints(points: THREE.Vector3[]): THREE.Vector3[] {
@@ -488,7 +544,7 @@ function StraightEdgeSegments({
     }
 
     const maxHeight = Math.max(...nodeValues.map((node) => node.currentPosition[2]), 0.000001)
-    const activeThreshold = Math.max(maxHeight * 0.12, 0.08)
+    const activeThreshold = Math.max(maxHeight * 0.18, 0.08)
     const displacementThreshold = Math.max(maxHeight * 0.035, 0.045)
     const centerRow = (Math.max(...nodeValues.map((node) => node.row), 0)) * 0.5
     const focusHalfRows = Math.max(0.85, Math.min(1.7, nodeValues.length > 0 ? Math.sqrt(nodeValues.length) * 0.016 : 0.85))
@@ -502,7 +558,7 @@ function StraightEdgeSegments({
         distanceVec(b.currentPosition, b.restPosition),
       )
       const lifted = maxZ >= activeThreshold
-      const displacedNearCurl = maxDisplacement >= displacementThreshold && maxZ >= activeThreshold * 0.72
+      const displacedNearCurl = maxDisplacement >= displacementThreshold && maxZ >= activeThreshold
       return lifted || displacedNearCurl
     }
     const sideProfileFocus = (edge: LatticeEdge) => {
@@ -530,13 +586,13 @@ function StraightEdgeSegments({
           <lineBasicMaterial color="#2f332f" transparent opacity={0.004} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileFlat} renderOrder={1}>
-          <lineBasicMaterial color="#171a17" transparent opacity={0.012} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#171a17" transparent opacity={0.002} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.spanActive} renderOrder={2}>
           <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.01} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileActive} renderOrder={3}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.07} depthTest depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.008} depthTest depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -852,7 +908,7 @@ function positionCamera(
     view === 'top'
       ? new THREE.Vector3(target.x, target.y, target.z + distance)
     : view === 'side'
-      ? new THREE.Vector3(target.x, target.y + distance, target.z + distance * 0.012)
+      ? new THREE.Vector3(target.x, target.y + distance, target.z)
       : view === 'isometric'
         ? new THREE.Vector3(target.x + distance * 0.34, target.y - distance * 0.98, target.z + distance * 0.2)
       : view === 'slice'
@@ -967,7 +1023,7 @@ function activeSideColumnRange(model: LatticeModel, mode: 'render' | 'focus'): {
   const centerlineNodes = model.nodes
     .filter((node) => node.row === centerRow)
     .sort((a, b) => a.col - b.col)
-  const threshold = mode === 'focus' ? 0.18 : 0.1
+  const threshold = mode === 'focus' ? 0.08 : 0.1
   const lifted = centerlineNodes
     .filter((node) => node.currentPosition[2] > maxHeight * threshold)
     .map((node) => node.col)
@@ -977,7 +1033,7 @@ function activeSideColumnRange(model: LatticeModel, mode: 'render' | 'focus'): {
   }
 
   const padColumns = mode === 'focus'
-    ? Math.max(8, Math.ceil(model.config.columns * 0.1))
+    ? Math.max(14, Math.ceil(model.config.columns * 0.18))
     : Math.max(2, Math.ceil(model.config.columns * 0.035))
   return {
     minCol: Math.max(0, Math.min(...lifted) - padColumns),
