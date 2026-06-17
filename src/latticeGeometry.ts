@@ -72,7 +72,7 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   overhangAngleDeg: 120,
   conicRho: 0.5,
   curlRadius: 0.65,
-  profileMode: 'custom',
+  profileMode: 'generated',
   profilePoints: DEFAULT_CUSTOM_PROFILE_POINTS,
   sectionPoints: DEFAULT_CUSTOM_SECTION_POINTS,
   profileScale: 0.55,
@@ -2247,17 +2247,17 @@ function moanaReferenceLipPoints(dip: number, sharp: number): ProfilePoint[] {
   const crestCapX = lerpNumber(0.76, 0.83, curl) + pointed * 0.003
   const crestCapZ = lerpNumber(0.9, 0.96, curl) - pointed * 0.003
   const lipNoseX = lerpNumber(0.77, 0.82, curl) - pointed * 0.026
-  const lipNoseZ = lerpNumber(0.8, 0.87, curl) - pointed * 0.025
+  const lipNoseZ = lerpNumber(0.8, 0.82, curl) - pointed * 0.024
   const forwardLipX = lerpNumber(0.66, 0.71, curl) - pointed * 0.038
-  const forwardLipZ = lerpNumber(0.68, 0.76, curl) - pointed * 0.04
+  const forwardLipZ = lerpNumber(0.68, 0.67, curl) - pointed * 0.036
   const downturnedTipX = lerpNumber(0.5, 0.55, curl) - pointed * 0.052
-  const downturnedTipZ = lerpNumber(0.5, 0.57, curl) - pointed * 0.056
+  const downturnedTipZ = lerpNumber(0.5, 0.43, curl) - pointed * 0.045
   const innerRoofX = lerpNumber(0.48, 0.52, curl) - pointed * 0.016
-  const innerRoofZ = lerpNumber(0.38, 0.45, curl) - pointed * 0.035
+  const innerRoofZ = lerpNumber(0.38, 0.34, curl) - pointed * 0.024
   const innerThroatX = lerpNumber(0.52, 0.56, curl) + pointed * 0.002
-  const innerThroatZ = lerpNumber(0.27, 0.33, curl) - pointed * 0.026
+  const innerThroatZ = lerpNumber(0.27, 0.275, curl) - pointed * 0.018
   const lowerThroatX = lerpNumber(0.62, 0.67, curl)
-  const lowerThroatZ = lerpNumber(0.18, 0.22, curl)
+  const lowerThroatZ = lerpNumber(0.18, 0.19, curl)
   const innerFootX = lerpNumber(0.78, 0.82, curl)
   const innerFootZ = lerpNumber(0.095, 0.115, curl)
   const apronX = lerpNumber(0.91, 0.94, curl)
