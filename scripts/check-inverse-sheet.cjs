@@ -385,11 +385,15 @@ if (displayInvariant.maxResidual > 0.000001 || displayInvariant.maxMetricResidua
   failures.push('display modes should only affect colors/materials')
 }
 
-if (!(sideOverhangAspect.userMorphHalfLip120.aspectRatio >= 1.35 &&
-  sideOverhangAspect.userMorphHalfLip120.aspectRatio <= 1.95 &&
-  sideOverhangAspect.startupDefault.aspectRatio >= 1.3 &&
-  sideOverhangAspect.startupDefault.aspectRatio <= 1.72)) {
-  failures.push('side-view overhang geometry should read as a broad breaking-wave profile, not a vertical wall or long flat strip')
+if (!(sideOverhangAspect.userMorphHalfLip120.aspectRatio >= 2 &&
+  sideOverhangAspect.userMorphHalfLip120.aspectRatio <= 2.65 &&
+  sideOverhangAspect.userMorphHalfLip120.overhangToHeight >= 0.62 &&
+  sideOverhangAspect.userMorphHalfLip120.overhangToHeight <= 0.95 &&
+  sideOverhangAspect.startupDefault.aspectRatio >= 1.9 &&
+  sideOverhangAspect.startupDefault.aspectRatio <= 2.35 &&
+  sideOverhangAspect.startupDefault.overhangToHeight >= 0.62 &&
+  sideOverhangAspect.startupDefault.overhangToHeight <= 0.95)) {
+  failures.push('side-view terminal geometry should read as a downturned breaking lip with bounded body, not a vertical mound, dimple pocket, or horizontal tongue')
 }
 
 if (!sliderRobustness.ok) {
@@ -777,7 +781,7 @@ function summarizeBreakingLip(model) {
     point.x >= shoulder.x - allowedTipTuck
   ))
   const tipPool = hookCandidates.length ? hookCandidates : postShoulder
-  const targetTipZ = maxZ * 0.44
+  const targetTipZ = maxZ * 0.24
   const tip = tipPool.reduce((best, point) => {
     const targetDistance = Math.abs(point.z - targetTipZ)
     const bestDistance = Math.abs(best.z - targetTipZ)

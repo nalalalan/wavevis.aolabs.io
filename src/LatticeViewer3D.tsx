@@ -257,6 +257,7 @@ function SideProfileSilhouette({
       .filter(({ col }) => col >= columnRange.minCol && col <= columnRange.maxCol)
       .map(({ point }) => new THREE.Vector3(...point)))
     if (points.length < 2) return null
+    const terminalPoints = buildTerminalLipProfilePoints(rawPoints, model.config.spacing)
 
     const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal', 0.35)
     const baseRadius = Math.max(
@@ -269,6 +270,12 @@ function SideProfileSilhouette({
     return {
       core: new THREE.TubeGeometry(curve, Math.max(points.length * 12, 64), coreRadius, 10, false),
       halo: new THREE.TubeGeometry(curve, Math.max(points.length * 12, 64), haloRadius, 10, false),
+      terminal: terminalPoints.length >= 2
+        ? {
+            core: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(terminalPoints, false, 'centripetal', 0.22), Math.max(terminalPoints.length * 14, 48), coreRadius * 1.28, 10, false),
+            halo: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(terminalPoints, false, 'centripetal', 0.22), Math.max(terminalPoints.length * 14, 48), haloRadius * 1.18, 10, false),
+          }
+        : null,
     }
   }, [compact, model, row, subtle])
 
@@ -282,8 +289,59 @@ function SideProfileSilhouette({
       <mesh geometry={profile.core} renderOrder={30}>
         <meshBasicMaterial color="#141713" transparent opacity={subtle ? 0.68 : compact ? 0.76 : 0.86} depthTest={false} depthWrite={false} />
       </mesh>
+      {profile.terminal && (
+        <>
+          <mesh geometry={profile.terminal.halo} renderOrder={31}>
+            <meshBasicMaterial color="#fff8ee" transparent opacity={subtle ? 0.32 : compact ? 0.58 : 0.6} depthTest={false} depthWrite={false} />
+          </mesh>
+          <mesh geometry={profile.terminal.core} renderOrder={32}>
+            <meshBasicMaterial color="#8d332b" transparent opacity={subtle ? 0.74 : compact ? 0.84 : 0.9} depthTest={false} depthWrite={false} />
+          </mesh>
+        </>
+      )}
     </group>
   )
+}
+
+function buildTerminalLipProfilePoints(rawPoints: Array<{ point: Vec3; col: number }>, spacing: number): THREE.Vector3[] {
+  if (rawPoints.length < 5) return []
+
+  const maxZ = Math.max(...rawPoints.map(({ point }) => point[2]), 0)
+  if (maxZ <= spacing * 0.2) return []
+
+  let crestIndex = 0
+  for (let index = 1; index < rawPoints.length; index += 1) {
+    if (rawPoints[index].point[2] > rawPoints[crestIndex].point[2]) crestIndex = index
+  }
+
+  const postCrestIndexes = rawPoints
+    .map((_, index) => index)
+    .filter((index) => index > crestIndex && rawPoints[index].point[2] >= maxZ * 0.035)
+  if (postCrestIndexes.length < 2) return []
+
+  const targetTipZ = maxZ * 0.24
+  const tipIndex = postCrestIndexes.reduce((best, index) => {
+    const point = rawPoints[index].point
+    const bestPoint = rawPoints[best].point
+    const distance = Math.abs(point[2] - targetTipZ)
+    const bestDistance = Math.abs(bestPoint[2] - targetTipZ)
+    if (distance < bestDistance - 0.000001) return index
+    if (Math.abs(distance - bestDistance) <= 0.000001 && point[0] < bestPoint[0]) return index
+    return best
+  }, postCrestIndexes[0])
+
+  const returnIndexes = rawPoints
+    .map((_, index) => index)
+    .filter((index) => index > tipIndex && rawPoints[index].point[2] <= maxZ * 0.065)
+  const returnIndex = returnIndexes.length
+    ? Math.min(rawPoints.length - 1, returnIndexes[0] + 1)
+    : Math.min(rawPoints.length - 1, tipIndex + 7)
+  const startIndex = Math.max(crestIndex + 1, tipIndex - 3)
+  const section = rawPoints.slice(startIndex, returnIndex + 1)
+    .filter(({ point }, index, points) =>
+      point[2] >= maxZ * 0.018 || index === 0 || index === points.length - 1)
+
+  return section.map(({ point }) => new THREE.Vector3(...point))
 }
 
 function smoothSideProfilePoints(points: THREE.Vector3[]): THREE.Vector3[] {
