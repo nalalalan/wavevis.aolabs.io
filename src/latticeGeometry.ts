@@ -67,7 +67,7 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   horizontalOffset: 22.5,
   overhangPosition: -0.15,
   steer: 0,
-  height: 13.5,
+  height: 14.8,
   overhangWidth: 32,
   overhangAngleDeg: 120,
   conicRho: 0.5,
@@ -78,7 +78,7 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   profileScale: 0.55,
   xySliceLevel: 0.33,
   smoothing: 1,
-  lipSharpness: 0.28,
+  lipSharpness: 0.58,
   wallSmoothness: 0.28,
   flatContribution: 0.35,
   widthScale: 1,
@@ -1632,8 +1632,8 @@ function terminalLipSpanMask(
   const requestedHalfWidth = clampNumber(config.overhangWidth * 0.5 * spanScale, gridSpacingY * 2.15, maxHalfWidth)
   const terminalOpen = smootherStep((profileU - 0.42) / 0.28)
   const feather = Math.max(
-    gridSpacingY * lerpNumber(1.8, 3.3, terminalOpen),
-    requestedHalfWidth * lerpNumber(0.28, 0.46, terminalOpen),
+    gridSpacingY * lerpNumber(1.35, 2.35, terminalOpen),
+    requestedHalfWidth * lerpNumber(0.18, 0.29, terminalOpen),
   )
   const centerRidgeHalfWidth = Math.max(
     DEFAULT_SHEET_SPAN / Math.max(config.rows - 1, 1) * 0.56,
@@ -1641,12 +1641,12 @@ function terminalLipSpanMask(
     1.55,
   )
   const lateLipHalfWidth = Math.max(
-    centerRidgeHalfWidth * lerpNumber(1.44, 1.1, curl),
-    requestedHalfWidth * lerpNumber(0.78, 0.68, curl),
+    centerRidgeHalfWidth * lerpNumber(1.2, 0.96, curl),
+    requestedHalfWidth * lerpNumber(0.55, 0.36, curl),
   )
   const earlyLipHalfWidth = Math.max(
-    centerRidgeHalfWidth * lerpNumber(1.74, 1.4, curl),
-    requestedHalfWidth * lerpNumber(1.02, 0.92, curl),
+    centerRidgeHalfWidth * lerpNumber(1.46, 1.18, curl),
+    requestedHalfWidth * lerpNumber(0.8, 0.62, curl),
   )
   const fullHalfWidth = lerpNumber(earlyLipHalfWidth, lateLipHalfWidth, terminalOpen * curl)
   const distance = Math.abs(centeredY)
@@ -1665,11 +1665,11 @@ function generatedCurlRowWeight(profileU: number, uncenteredY: number, config: I
   const terminal = smootherStep((profileU - 0.36) / 0.42)
   const coreHalfWidth = Math.max(
     gridSpacingY * 1.85,
-    config.overhangWidth * lerpNumber(0.24, 0.135, terminal * curl),
+    config.overhangWidth * lerpNumber(0.18, 0.075, terminal * curl),
   )
   const featherWidth = Math.max(
-    gridSpacingY * 7.25,
-    config.overhangWidth * lerpNumber(0.48, 0.34, terminal * curl),
+    gridSpacingY * 5.1,
+    config.overhangWidth * lerpNumber(0.34, 0.22, terminal * curl),
   )
   const distance = Math.abs(centeredY)
 
@@ -1688,7 +1688,7 @@ function localCurlProfileWeight(profileU: number, uncenteredY: number, config: I
   const gridSpacingY = DEFAULT_SHEET_SPAN / Math.max(config.rows - 1, 1)
   const terminal = smootherStep((profileU - 0.36) / 0.42)
   const coreHalfWidth = gridSpacingY * lerpNumber(2.8, 2.2, terminal * curl)
-  const featherWidth = gridSpacingY * lerpNumber(11.2, 8.8, terminal * curl)
+  const featherWidth = gridSpacingY * lerpNumber(8.1, 5.2, terminal * curl)
   const distance = Math.abs(centeredY)
 
   if (distance <= coreHalfWidth) return 1
@@ -2232,7 +2232,7 @@ function sampleMoanaReferenceLipProfile(
   }))
 
   return sampleBezierPathByLength(
-    smoothProfileSegments(points, 0.68),
+    smoothProfileSegments(points, 0.7),
     clampNumber(amount, 0, 1),
   )
 }
@@ -2241,23 +2241,23 @@ function moanaReferenceLipPoints(dip: number, sharp: number): ProfilePoint[] {
   const curl = clampNumber(dip, 0, 1)
   const pointed = Math.pow(clampNumber(sharp, 0, 1), 1.35)
   const shoulderX = lerpNumber(0.55, 0.62, curl) + pointed * 0.003
-  const shoulderZ = lerpNumber(0.8, 0.91, curl) - pointed * 0.004
+  const shoulderZ = lerpNumber(0.8, 0.94, curl) - pointed * 0.004
   const roundedCrestX = lerpNumber(0.67, 0.73, curl) + pointed * 0.002
   const roundedCrestZ = lerpNumber(0.9, 0.99, curl) + pointed * 0.002
   const crestCapX = lerpNumber(0.76, 0.83, curl) + pointed * 0.003
   const crestCapZ = lerpNumber(0.9, 0.96, curl) - pointed * 0.003
-  const lipNoseX = lerpNumber(0.77, 0.82, curl) - pointed * 0.026
-  const lipNoseZ = lerpNumber(0.8, 0.82, curl) - pointed * 0.024
-  const forwardLipX = lerpNumber(0.66, 0.71, curl) - pointed * 0.038
-  const forwardLipZ = lerpNumber(0.68, 0.67, curl) - pointed * 0.036
-  const downturnedTipX = lerpNumber(0.5, 0.55, curl) - pointed * 0.052
-  const downturnedTipZ = lerpNumber(0.5, 0.43, curl) - pointed * 0.045
-  const innerRoofX = lerpNumber(0.48, 0.52, curl) - pointed * 0.016
-  const innerRoofZ = lerpNumber(0.38, 0.34, curl) - pointed * 0.024
-  const innerThroatX = lerpNumber(0.52, 0.56, curl) + pointed * 0.002
-  const innerThroatZ = lerpNumber(0.27, 0.275, curl) - pointed * 0.018
-  const lowerThroatX = lerpNumber(0.62, 0.67, curl)
-  const lowerThroatZ = lerpNumber(0.18, 0.19, curl)
+  const lipNoseX = lerpNumber(0.8, 0.875, curl) - pointed * 0.018
+  const lipNoseZ = lerpNumber(0.74, 0.605, curl) - pointed * 0.05
+  const forwardLipX = lerpNumber(0.735, 0.805, curl) - pointed * 0.038
+  const forwardLipZ = lerpNumber(0.55, 0.43, curl) - pointed * 0.058
+  const downturnedTipX = lerpNumber(0.61, 0.69, curl) - pointed * 0.05
+  const downturnedTipZ = lerpNumber(0.38, 0.205, curl) - pointed * 0.065
+  const innerRoofX = lerpNumber(0.565, 0.625, curl) - pointed * 0.018
+  const innerRoofZ = lerpNumber(0.255, 0.205, curl) - pointed * 0.032
+  const innerThroatX = lerpNumber(0.545, 0.602, curl) + pointed * 0.002
+  const innerThroatZ = lerpNumber(0.215, 0.175, curl) - pointed * 0.024
+  const lowerThroatX = lerpNumber(0.64, 0.7, curl)
+  const lowerThroatZ = lerpNumber(0.145, 0.125, curl)
   const innerFootX = lerpNumber(0.78, 0.82, curl)
   const innerFootZ = lerpNumber(0.095, 0.115, curl)
   const apronX = lerpNumber(0.91, 0.94, curl)
