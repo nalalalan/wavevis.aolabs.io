@@ -236,11 +236,16 @@ def render_lattice(model: dict, filename: str, title: str, subtitle: str, projec
     draw.line(smooth_canvas_polyline(center_path, 2), fill=(*INK, 235), width=5, joint="curve")
     terminal_range = terminal_lip_node_range(center_nodes)
     if terminal_range:
-        start, end, _curved_end = terminal_range
-        lip_nodes = center_nodes[start:end + 1]
+        start, tip, curved_end = terminal_range
+        lip_nodes = center_nodes[start:tip + 1]
+        inner_lip_nodes = center_nodes[tip:curved_end + 1] if curved_end > tip else []
     else:
         lip_nodes = []
+        inner_lip_nodes = []
     lip_path = [to_canvas(projector(current(node))) for node in lip_nodes]
+    inner_lip_path = [to_canvas(projector(current(node))) for node in inner_lip_nodes]
+    if len(inner_lip_path) >= 2:
+        draw.line(smooth_canvas_polyline(inner_lip_path, 2), fill=(*LIP, 170), width=4, joint="curve")
     if len(lip_path) >= 2:
         draw.line(smooth_canvas_polyline(lip_path, 2), fill=(*LIP, 245), width=6, joint="curve")
 
@@ -322,8 +327,8 @@ def side_silhouette_nodes(center_nodes: list[dict]) -> list[dict]:
     terminal_range = terminal_lip_node_range(center_nodes)
     if not terminal_range:
         return body_nodes
-    terminal_start, terminal_tip, _curved_end = terminal_range
-    lip_nodes = center_nodes[terminal_start:terminal_tip + 1]
+    terminal_start, _terminal_tip, curved_end = terminal_range
+    lip_nodes = center_nodes[terminal_start:curved_end + 1]
     if not body_nodes:
         return lip_nodes
     if lip_nodes and body_nodes[-1]["id"] == lip_nodes[0]["id"]:
@@ -368,20 +373,14 @@ def terminal_lip_node_range(center_nodes: list[dict]) -> tuple[int, int, int] | 
         and current(center_nodes[index])[2] <= max_z * 0.32
     ]
     curved_end = (
-        visible_interior[-1]
+        max(visible_interior, key=lambda index: current(center_nodes[index])[2])
         if visible_interior else tip_index
     )
     return start_index, tip_index, curved_end
 
 
 def terminal_lip_profile_start_index(center_nodes: list[dict], crest_index: int, tip_index: int, max_z: float) -> int:
-    shoulder_indexes = [
-        index for index in range(crest_index + 1, tip_index)
-        if current(center_nodes[index])[2] >= max_z * 0.48
-    ]
-    if not shoulder_indexes:
-        return min(max(crest_index + 2, crest_index), tip_index)
-    return max(shoulder_indexes, key=lambda index: (current(center_nodes[index])[0], current(center_nodes[index])[2]))
+    return min(max(crest_index, 0), tip_index)
 
 
 def terminal_local_minimum_index(center_nodes: list[dict], first_low_index: int, max_z: float) -> int:

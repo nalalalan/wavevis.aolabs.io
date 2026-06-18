@@ -255,7 +255,7 @@ function SideProfileSilhouette({
     }
     const terminalRange = findTerminalLipRange(rawPoints, model.config.spacing)
     const terminalStartIndex = terminalRange
-      ? terminalLipProfileStartIndex(rawPoints, terminalRange)
+      ? terminalLipProfileStartIndex(terminalRange)
       : null
     const displayMaxCol = terminalRange && terminalStartIndex !== null
       ? Math.min(columnRange.maxCol, rawPoints[terminalStartIndex].col)
@@ -265,6 +265,7 @@ function SideProfileSilhouette({
       .map(({ point }) => new THREE.Vector3(...point)))
     if (points.length < 2) return null
     const terminalPoints = buildTerminalLipProfilePoints(rawPoints, model.config.spacing, terminalRange)
+    const innerCurlPoints = buildTerminalLipReturnProfilePoints(rawPoints, model.config.spacing, terminalRange)
 
     const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal', 0.35)
     const baseRadius = Math.max(
@@ -283,6 +284,12 @@ function SideProfileSilhouette({
             halo: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(terminalPoints, false, 'centripetal', 0.22), Math.max(terminalPoints.length * 14, 48), haloRadius * 0.96, 10, false),
           }
         : null,
+      innerCurl: innerCurlPoints.length >= 2
+        ? {
+            core: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(innerCurlPoints, false, 'centripetal', 0.22), Math.max(innerCurlPoints.length * 14, 32), coreRadius * 0.58, 10, false),
+            halo: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(innerCurlPoints, false, 'centripetal', 0.22), Math.max(innerCurlPoints.length * 14, 32), haloRadius * 0.58, 10, false),
+          }
+        : null,
     }
   }, [compact, model, row, subtle])
 
@@ -296,13 +303,23 @@ function SideProfileSilhouette({
       <mesh geometry={profile.core} renderOrder={30}>
         <meshBasicMaterial color="#141713" transparent opacity={subtle ? 0.68 : compact ? 0.76 : 0.86} depthTest={false} depthWrite={false} />
       </mesh>
+      {profile.innerCurl && (
+        <>
+          <mesh geometry={profile.innerCurl.halo} renderOrder={31}>
+            <meshBasicMaterial color="#fff8ee" transparent opacity={subtle ? 0.18 : compact ? 0.36 : 0.38} depthTest={false} depthWrite={false} />
+          </mesh>
+          <mesh geometry={profile.innerCurl.core} renderOrder={32}>
+            <meshBasicMaterial color="#8d332b" transparent opacity={subtle ? 0.42 : compact ? 0.6 : 0.64} depthTest={false} depthWrite={false} />
+          </mesh>
+        </>
+      )}
       {profile.terminal && (
         <>
-          <mesh geometry={profile.terminal.halo} renderOrder={31}>
+          <mesh geometry={profile.terminal.halo} renderOrder={33}>
             <meshBasicMaterial color="#fff8ee" transparent opacity={subtle ? 0.32 : compact ? 0.58 : 0.6} depthTest={false} depthWrite={false} />
           </mesh>
-          <mesh geometry={profile.terminal.core} renderOrder={32}>
-            <meshBasicMaterial color="#8d332b" transparent opacity={subtle ? 0.74 : compact ? 0.84 : 0.9} depthTest={false} depthWrite={false} />
+          <mesh geometry={profile.terminal.core} renderOrder={34}>
+            <meshBasicMaterial color="#8d332b" transparent opacity={subtle ? 0.76 : compact ? 0.86 : 0.92} depthTest={false} depthWrite={false} />
           </mesh>
         </>
       )}
@@ -359,7 +376,9 @@ function findTerminalLipRange(rawPoints: Array<{ point: Vec3; col: number }>, sp
       rawPoints[index].point[2] >= maxZ * 0.045 &&
       rawPoints[index].point[2] <= maxZ * 0.32)
   const curvedInteriorEndIndex = curvedInteriorIndexes.length
-    ? curvedInteriorIndexes[curvedInteriorIndexes.length - 1]
+    ? curvedInteriorIndexes.reduce((best, index) =>
+      rawPoints[index].point[2] > rawPoints[best].point[2] ? index : best,
+    curvedInteriorIndexes[0])
     : tipIndex
   const postCrestForwardRun = Math.abs(rawPoints[tipIndex].point[0] - rawPoints[crestIndex].point[0])
   const postCrestDrop = rawPoints[crestIndex].point[2] - rawPoints[returnIndex].point[2]
@@ -401,32 +420,37 @@ function buildTerminalLipProfilePoints(
 
   const { tipIndex } = providedRange
 
-  const startIndex = terminalLipProfileStartIndex(rawPoints, providedRange)
+  const startIndex = terminalLipProfileStartIndex(providedRange)
   const section = rawPoints.slice(startIndex, tipIndex + 1)
+    .filter(({ point }, index, points) =>
+      point[2] >= maxZ * 0.008 || index === 0 || index === points.length - 1 || startIndex + index === tipIndex)
+
+  return section.map(({ point }) => new THREE.Vector3(...point))
+}
+
+function buildTerminalLipReturnProfilePoints(
+  rawPoints: Array<{ point: Vec3; col: number }>,
+  spacing: number,
+  providedRange: TerminalLipRange | null = findTerminalLipRange(rawPoints, spacing),
+): THREE.Vector3[] {
+  if (!providedRange) return []
+
+  const maxZ = Math.max(...rawPoints.map(({ point }) => point[2]), 0)
+  if (maxZ <= spacing * 0.2) return []
+
+  const { tipIndex, curvedInteriorEndIndex } = providedRange
+  const endIndex = Math.max(tipIndex, curvedInteriorEndIndex)
+  if (endIndex <= tipIndex) return []
+
+  const section = rawPoints.slice(tipIndex, endIndex + 1)
     .filter(({ point }, index, points) =>
       point[2] >= maxZ * 0.008 || index === 0 || index === points.length - 1)
 
   return section.map(({ point }) => new THREE.Vector3(...point))
 }
 
-function terminalLipProfileStartIndex(rawPoints: Array<{ point: Vec3; col: number }>, range: TerminalLipRange): number {
-  const maxZ = Math.max(...rawPoints.map(({ point }) => point[2]), 0)
-  const shoulderIndexes = rawPoints
-    .map((_, index) => index)
-    .filter((index) =>
-      index > range.crestIndex &&
-      index < range.tipIndex &&
-      rawPoints[index].point[2] >= maxZ * 0.48)
-  const shoulderIndex = shoulderIndexes.reduce((best, index) => {
-    if (best === null) return index
-    const point = rawPoints[index].point
-    const bestPoint = rawPoints[best].point
-    if (point[0] > bestPoint[0] + 0.000001) return index
-    if (Math.abs(point[0] - bestPoint[0]) <= 0.000001 && point[2] > bestPoint[2]) return index
-    return best
-  }, null as number | null)
-
-  return Math.min(Math.max(shoulderIndex ?? range.crestIndex + 2, range.crestIndex), range.tipIndex)
+function terminalLipProfileStartIndex(range: TerminalLipRange): number {
+  return Math.min(Math.max(range.crestIndex, 0), range.tipIndex)
 }
 
 function smoothSideProfilePoints(points: THREE.Vector3[]): THREE.Vector3[] {

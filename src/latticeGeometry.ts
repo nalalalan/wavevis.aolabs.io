@@ -49,7 +49,7 @@ const CORE_PROFILE_START = 0.02
 const CORE_PROFILE_END = 1
 const CORE_OVERHANG_HEIGHT_FRACTION = 0.28
 export const DEFAULT_CUSTOM_PROFILE_POINTS =
-  '0,0;0.034,0.003;0.144,0.036;0.193,0.069;0.226,0.099;0.256,0.131;0.282,0.167;0.302,0.205;0.321,0.244;0.34,0.284;0.359,0.323;0.377,0.362;0.395,0.402;0.414,0.441;0.433,0.48;0.451,0.52;0.47,0.559;0.488,0.598;0.507,0.638;0.525,0.677;0.544,0.716;0.563,0.755;0.582,0.794;0.601,0.834;0.621,0.872;0.641,0.911;0.664,0.948;0.693,0.981;0.73,1;0.785,0.992;0.845,0.955;0.9,0.86;0.945,0.7;0.962,0.52;0.94,0.34;0.885,0.16;0.82,0.035;0.765,0.002;0.718,0.055;0.692,0.145;0.748,0.052;0.88,0.018;1,0'
+  '0,0;0.034,0.003;0.144,0.036;0.193,0.069;0.226,0.099;0.256,0.131;0.282,0.167;0.302,0.205;0.321,0.244;0.34,0.284;0.359,0.323;0.377,0.362;0.395,0.402;0.414,0.441;0.433,0.48;0.451,0.52;0.47,0.559;0.488,0.598;0.507,0.638;0.525,0.677;0.544,0.716;0.563,0.755;0.582,0.794;0.601,0.834;0.621,0.872;0.641,0.911;0.664,0.948;0.693,0.981;0.73,1;0.792,0.996;0.858,0.946;0.913,0.828;0.951,0.63;0.958,0.43;0.939,0.248;0.904,0.105;0.875,0.026;0.867,0.002;0.82,0.034;0.781,0.112;0.756,0.222;0.764,0.31;0.812,0.252;0.886,0.108;0.953,0.024;1,0'
 export const DEFAULT_CUSTOM_SECTION_POINTS =
   '0,0.025;0.08,0.22;0.22,0.78;0.39,1;0.57,0.82;0.72,0.42;0.86,0.18;1,0.035'
 
@@ -1041,13 +1041,16 @@ function terminalLipCurlStats(model: LatticeModel): {
   ))
   const hookPool = hookCandidates.length ? hookCandidates : postShoulder
   const targetTipZ = maxHeight * 0.08
-  const tip = hookPool.reduce((best, node) => {
-    const targetDistance = Math.abs(node.currentPosition[2] - targetTipZ)
-    const bestDistance = Math.abs(best.currentPosition[2] - targetTipZ)
-    if (targetDistance < bestDistance - 0.000001) return node
-    if (Math.abs(targetDistance - bestDistance) <= 0.000001 && node.currentPosition[0] < best.currentPosition[0]) return node
-    return best
-  }, hookPool[0])
+  const firstLowTipIndex = hookPool.findIndex((node) => node.currentPosition[2] <= targetTipZ * 1.25)
+  const tip = firstLowTipIndex >= 0
+    ? terminalCurlLocalMinimum(hookPool, firstLowTipIndex, maxHeight)
+    : hookPool.reduce((best, node) => {
+      const targetDistance = Math.abs(node.currentPosition[2] - targetTipZ)
+      const bestDistance = Math.abs(best.currentPosition[2] - targetTipZ)
+      if (targetDistance < bestDistance - 0.000001) return node
+      if (Math.abs(targetDistance - bestDistance) <= 0.000001 && node.currentPosition[0] < best.currentPosition[0]) return node
+      return best
+    }, hookPool[0])
   const postTip = centerline.filter((node) => node.col > tip.col)
   const activePostTip = postTip.filter((node) => (
     horizontalDisplacement(node) >= maxHorizontalReach * 0.02 ||
@@ -1154,10 +1157,17 @@ function terminalLipCurlStats(model: LatticeModel): {
     returnRatio >= 0.1 &&
     flatReturn.currentPosition[0] > tip.currentPosition[0] + model.config.spacing * 0.85 &&
     flatReturn.currentPosition[2] <= maxHeight * 0.16
-  const openThroatVisible = openThroatHeight >= maxHeight * 0.075 &&
+  const raisedOpenThroatVisible = openThroatHeight >= maxHeight * 0.075 &&
     tip.currentPosition[2] >= maxHeight * 0.055 &&
     tip.currentPosition[2] <= maxHeight * 0.78 &&
     hookTuckDistance >= model.config.spacing * 1.2
+  const lowPointedTipVisible = tip.currentPosition[2] >= maxHeight * 0.01 &&
+    tip.currentPosition[2] <= maxHeight * 0.14 &&
+    terminalFaceHasRun &&
+    returnToFlat &&
+    noVisibleDimplePocket &&
+    finalTangentAngleDeg <= -70
+  const openThroatVisible = raisedOpenThroatVisible || lowPointedTipVisible
 
   return {
     tipBelowLastPeak: dropRatio >= 0.08,
@@ -1189,6 +1199,22 @@ function terminalLipCurlStats(model: LatticeModel): {
     returnZ: flatReturn.currentPosition[2],
     returnForwardDistance,
   }
+}
+
+function terminalCurlLocalMinimum(points: LatticeNode[], firstLowIndex: number, maxHeight: number): LatticeNode {
+  let tip = points[firstLowIndex]
+
+  for (let index = firstLowIndex + 1; index < points.length; index += 1) {
+    const node = points[index]
+    if (node.currentPosition[2] < tip.currentPosition[2] - maxHeight * 0.004) {
+      tip = node
+      continue
+    }
+    if (node.currentPosition[2] > tip.currentPosition[2] + maxHeight * 0.035) break
+    if (node.currentPosition[2] > maxHeight * 0.18) break
+  }
+
+  return tip
 }
 
 function emptyTerminalLipCurlStats() {
@@ -1770,8 +1796,8 @@ function customProfileRowMask(
   const returnTail = smootherStep((profileU - 0.84) / 0.13)
   const heightTaper = lerpNumber(1.08, 0.66, smootherStep(Math.max(0, profileZ) / 0.82))
   const bodyTaper = lerpNumber(0.92, 1.7, broadBack * (1 - terminalCurl * 0.72))
-  const curlTaper = lerpNumber(1, 0.42, terminalCurl)
-  const returnTailTaper = lerpNumber(1, 0.5, returnTail * lipAmount)
+  const curlTaper = lerpNumber(1, 0.24, terminalCurl)
+  const returnTailTaper = lerpNumber(1, 0.3, returnTail * lipAmount)
   const bodyHalfWidth = clampNumber(
     config.overhangWidth *
       lerpNumber(0.14, 0.58, effectiveEnvelope) *
@@ -1796,10 +1822,10 @@ function customProfileRowMask(
   const wallFreeCurlZone = smootherStep(curlInterior / 0.24)
   const wallFreeBodyMask = lerpNumber(
     bodyMask,
-    bodyMask * Math.pow(curlCenterGate, 3.2),
+    bodyMask * Math.pow(curlCenterGate, 3.8),
     wallFreeCurlZone,
   )
-  const curlMask = Math.pow(curlCenterGate, 1.35) * curlInterior * profileActivity
+  const curlMask = Math.pow(curlCenterGate, 1.5) * curlInterior * profileActivity
   const centerlineGuarantee = 1 - smootherStep(
     (Math.abs(sheetY) - gridSpacingY * 0.65) / Math.max(gridSpacingY * 0.9, 0.000001),
   )

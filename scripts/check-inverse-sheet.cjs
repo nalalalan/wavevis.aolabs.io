@@ -283,11 +283,11 @@ const generatedMoanaSideGate = (
   sideOverhangAspect.userMorphHalfLip120.aspectRatio >= 1.45 &&
   sideOverhangAspect.userMorphHalfLip120.aspectRatio <= 2.45 &&
   sideOverhangAspect.userMorphHalfLip120.overhangToHeight >= 0.72 &&
-  sideOverhangAspect.userMorphHalfLip120.overhangToHeight <= 1.25 &&
+  sideOverhangAspect.userMorphHalfLip120.overhangToHeight <= 1.35 &&
   sideOverhangAspect.startupDefault.aspectRatio >= 1.35 &&
   sideOverhangAspect.startupDefault.aspectRatio <= 2.25 &&
   sideOverhangAspect.startupDefault.overhangToHeight >= 0.72 &&
-  sideOverhangAspect.startupDefault.overhangToHeight <= 1.25 &&
+  sideOverhangAspect.startupDefault.overhangToHeight <= 1.35 &&
   defaultReferenceTraceFit.maxResidual <= 0.38 &&
   defaultReferenceTraceFit.rmsResidual <= 0.18 &&
   defaultReferenceTraceFit.selfIntersections === 0 &&
@@ -772,10 +772,14 @@ function normalizedSideProfileTrace(model) {
   const postCrestTipCandidates = activeSection
     .map((point, index) => ({ point, index }))
     .filter(({ point, index }) => index > localCrestIndex && point.z >= maxZ * 0.035)
-  const lowTipCandidate = postCrestTipCandidates.find((candidate) =>
+  const lowTipCandidateIndex = postCrestTipCandidates.findIndex((candidate) =>
     candidate.point.z <= maxZ * 0.08 * 1.25)
-  const localTipIndex = lowTipCandidate
-    ? lowTipCandidate.index
+  const localTipIndex = lowTipCandidateIndex >= 0
+    ? terminalTraceLocalMinimumIndex(
+      activeSection,
+      postCrestTipCandidates[lowTipCandidateIndex].index,
+      maxZ,
+    )
     : postCrestTipCandidates.length
       ? postCrestTipCandidates.reduce((best, candidate) => {
       const targetTipZ = maxZ * 0.08
@@ -796,6 +800,23 @@ function normalizedSideProfileTrace(model) {
     x: (point.x - minX) / spanX,
     z: point.z / maxZ,
   }))
+}
+
+function terminalTraceLocalMinimumIndex(points, firstLowIndex, maxZ) {
+  let tipIndex = firstLowIndex
+
+  for (let index = firstLowIndex + 1; index < points.length; index += 1) {
+    const point = points[index]
+    const tip = points[tipIndex]
+    if (point.z < tip.z - maxZ * 0.004) {
+      tipIndex = index
+      continue
+    }
+    if (point.z > tip.z + maxZ * 0.035) break
+    if (point.z > maxZ * 0.18) break
+  }
+
+  return tipIndex
 }
 
 function parseReferenceTrace(value) {
@@ -931,15 +952,18 @@ function summarizeBreakingLip(model) {
     point.z <= shoulder.z - maxZ * 0.08 &&
     point.x >= shoulder.x - allowedTipTuck
   ))
-  const tipPool = hookCandidates.length ? hookCandidates : postShoulder
   const targetTipZ = maxZ * 0.08
-  const tip = tipPool.reduce((best, point) => {
-    const targetDistance = Math.abs(point.z - targetTipZ)
-    const bestDistance = Math.abs(best.z - targetTipZ)
-    if (targetDistance < bestDistance - 0.000001) return point
-    if (Math.abs(targetDistance - bestDistance) <= 0.000001 && point.x < best.x) return point
-    return best
-  }, tipPool[0])
+  const tipPool = hookCandidates.length ? hookCandidates : postShoulder
+  const firstLowTipIndex = tipPool.findIndex((point) => point.z <= targetTipZ * 1.25)
+  const tip = firstLowTipIndex >= 0
+    ? terminalTraceLocalMinimum(tipPool, firstLowTipIndex, maxZ)
+    : tipPool.reduce((best, point) => {
+      const targetDistance = Math.abs(point.z - targetTipZ)
+      const bestDistance = Math.abs(best.z - targetTipZ)
+      if (targetDistance < bestDistance - 0.000001) return point
+      if (Math.abs(targetDistance - bestDistance) <= 0.000001 && point.x < best.x) return point
+      return best
+    }, tipPool[0])
   const postTip = points.filter((point) => point.col > tip.col)
   const activePostTip = postTip.filter((point) => point.reach >= maxReach * 0.02 || point.z > maxZ * 0.005)
   const forwardFlatReturnCandidates = postTip.filter((point) =>
@@ -1008,6 +1032,9 @@ function summarizeBreakingLip(model) {
   const terminalFaceDrop = Math.max(shoulder.z - tip.z, model.config.spacing)
   const terminalFaceHasRun = terminalFaceRun >= model.config.spacing * 1.2 &&
     terminalFaceRun / terminalFaceDrop >= 0.13
+  const returnToFlat = flatReturn !== tip &&
+    flatReturn.z <= maxZ * 0.14 &&
+    returnForwardDistance > model.config.spacing * 0.85
   const broadOpenCurl = hookTuckedUnderShoulder &&
     tuckRatio >= 0.1 &&
     tuckRatio <= 8.6 &&
@@ -1028,10 +1055,17 @@ function summarizeBreakingLip(model) {
     returnRatio >= 0.1 &&
     flatReturn.x > tip.x + model.config.spacing * 0.85 &&
     flatReturn.z <= maxZ * 0.16
-  const openThroatVisible = openThroatHeight >= maxZ * 0.075 &&
+  const raisedOpenThroatVisible = openThroatHeight >= maxZ * 0.075 &&
     tip.z >= maxZ * 0.055 &&
     tip.z <= maxZ * 0.78 &&
     hookTuckDistance >= model.config.spacing * 1.2
+  const lowPointedTipVisible = tip.z >= maxZ * 0.01 &&
+    tip.z <= maxZ * 0.14 &&
+    terminalFaceHasRun &&
+    returnToFlat &&
+    noVisibleDimplePocket &&
+    finalTangentAngleDeg <= -70
+  const openThroatVisible = raisedOpenThroatVisible || lowPointedTipVisible
 
   return {
     tipBelowLastPeak: dropRatio >= 0.08,
@@ -1039,9 +1073,7 @@ function summarizeBreakingLip(model) {
     hookTuckedUnderShoulder,
     openDownturnedLip,
     terminalFaceHasRun,
-    returnToFlat: flatReturn !== tip &&
-      flatReturn.z <= maxZ * 0.14 &&
-      returnForwardDistance > model.config.spacing * 0.85,
+    returnToFlat,
     smoothTerminalReturn: maxTerminalSegmentDrop <= maxZ * 0.48,
     noBackfoldCavity,
     noVisibleDimplePocket,
@@ -1068,6 +1100,10 @@ function summarizeBreakingLip(model) {
     returnZ: round(flatReturn.z),
     returnForwardDistance: round(returnForwardDistance),
   }
+}
+
+function terminalTraceLocalMinimum(points, firstLowIndex, maxZ) {
+  return points[terminalTraceLocalMinimumIndex(points, firstLowIndex, maxZ)]
 }
 
 function emptyBreakingLipSummary() {
