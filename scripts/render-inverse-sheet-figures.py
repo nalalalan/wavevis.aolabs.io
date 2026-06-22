@@ -242,7 +242,7 @@ def render_lattice(model: dict, filename: str, title: str, subtitle: str, projec
         b = nodes[edge["nodeB"]]
         color = line_color(edge, a, b, center_row, active_height)
         folded_top = projection_name == "top" and top_folded_edge(edge, a, b, max(model["summary"]["maxHeight"], 0.000001))
-        alpha = 18 if folded_top else 225 if color in (LIP, CENTER) else 95
+        alpha = 7 if folded_top else 225 if color in (LIP, CENTER) else 95
         width = 3 if color in (LIP, CENTER) else 1
         p0 = to_canvas(projector(current(a)))
         p1 = to_canvas(projector(current(b)))
@@ -265,7 +265,7 @@ def render_lattice(model: dict, filename: str, title: str, subtitle: str, projec
         lip_path = [to_canvas(projector(current(node))) for node in lip_nodes]
         inner_lip_path = [to_canvas(projector(current(node))) for node in inner_lip_nodes]
         if len(inner_lip_path) >= 2:
-            draw.line(smooth_canvas_polyline(inner_lip_path, 2), fill=(*LIP, 170), width=4, joint="curve")
+            draw.line(smooth_canvas_polyline(inner_lip_path, 2), fill=(*INK, 125), width=3, joint="curve")
         if len(lip_path) >= 2:
             draw.line(smooth_canvas_polyline(lip_path, 2), fill=(*LIP, 245), width=6, joint="curve")
 

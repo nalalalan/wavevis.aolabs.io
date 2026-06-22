@@ -315,7 +315,7 @@ function SideProfileSilhouette({
             <meshBasicMaterial color="#fff8ee" transparent opacity={subtle ? 0.18 : compact ? 0.36 : 0.38} depthTest={false} depthWrite={false} />
           </mesh>
           <mesh geometry={profile.innerCurl.core} renderOrder={32}>
-            <meshBasicMaterial color="#8d332b" transparent opacity={subtle ? 0.42 : compact ? 0.6 : 0.64} depthTest={false} depthWrite={false} />
+            <meshBasicMaterial color="#343631" transparent opacity={subtle ? 0.3 : compact ? 0.42 : 0.46} depthTest={false} depthWrite={false} />
           </mesh>
         </>
       )}
@@ -680,7 +680,7 @@ function StraightEdgeSegments({
           <lineBasicMaterial color="#343631" transparent opacity={0.3} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.topFold} renderOrder={1}>
-          <lineBasicMaterial color="#343631" transparent opacity={0.018} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#343631" transparent opacity={0.006} depthTest depthWrite={false} />
         </lineSegments>
       </>
     )
