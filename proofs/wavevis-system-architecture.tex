@@ -181,7 +181,7 @@ If this PDF is the only WaveVis context available, start with this section and t
   \item \textbf{Current source root:} workspace path \code{\_apps/wavevis.aolabs.io/}.
   \item \textbf{Public fallback mirror:} workspace path \code{\_apps/aolabs-site/wavevis/}. A WaveVis deploy to its own \code{gh-pages} branch does not automatically update the \code{aolabs.io/wavevis/} fallback unless the built files are mirrored there and the hub site is pushed.
   \item \textbf{Current architectural direction:} curated custom Moana-ocean profile localized into the inverse-sheet field. Manual \(xz\) and \(xy\) profile editors are not the active path.
-  \item \textbf{Current reference-match boundary:} the June 18, 2026 curl/tip repair keeps the stronger custom ocean-body family and corrects the terminal branch that had read as a side-wall pocket instead of a breaking-wave lip. The current side renderer shows a longer full-sheet body with a rounded crest, a stronger visible curl, a lower pointed free tip, and a curved throat; the low structural return is drawn as an inner return instead of taking over the side silhouette as a flat tongue. The current default keeps a true side-on camera, zero self-intersections in the default trace gate, no bowl-pocket count in the default/compact/wide gates, full linkage visibility, and a current-vs-reference trace overlay. The current claim is a closer localized plunging-wave linkage state, not photorealistic identity with the supplied water frame.
+  \item \textbf{Current reference-match boundary:} the June 22, 2026 top-footprint repair keeps the June 18 curl/tip repair while separating the top-plan footprint from the side-height curl mask. The current side renderer still shows a longer full-sheet body with a rounded crest, a stronger visible curl, a lower pointed free tip, and a curved throat; the top view now uses a broader rounded plan footprint, suppresses the surface fill from the plan view, and applies top-specific folded-face line weighting instead of letting the curl taper and side-view centerline emphasis collapse the array into a large triangular fan. The current default keeps a true side-on camera, zero self-intersections in the default trace gate, no bowl-pocket count in the default/compact/wide gates, full linkage visibility, a top-footprint roundness gate, and a current-vs-reference trace overlay. The current claim is a closer localized plunging-wave linkage state, not photorealistic identity with the supplied water frame.
 \end{itemize}
 
 \subsection{What the next agent must not repeat}
@@ -196,11 +196,12 @@ The repeated failures that this document is meant to prevent are:
   \item Do not wire the lip directly to the ground or draw filler geometry across the open underside.
   \item Do not make \code{position} or \code{steer} shape controls. They are rigid post-shape transforms.
   \item Do not call the work done from code intent, automated checks, a nicer profile line, or a local-only screenshot.
+  \item Do not let the top view collapse into a big triangle, wedge, or V fan while the side view looks acceptable.
 \end{enumerate}
 
 \subsection{Current live-state evidence}
 
-Figures~\ref{fig:current-live-side}--\ref{fig:current-live-slice} record the current source-rendered linkage state from the same geometry model that builds the public bundle: side view is the full three-dimensional sheet, the reference overlay extracts the centerline silhouette, cross-section is separate, and the full linkage array is present in 3D. The June 18, 2026 repair strengthens the curated Moana-ocean terminal branch after the prior state still read too much like a pocketed roll. The side view now uses a wider, lower wave body, a rounded crest, a stronger forward/downturned lip, a lower pointed free tip, and a curved interior throat while keeping the low return visually secondary. The repair also updates the side gate with a custom Moana-wave aspect check, a reference-trace fit check, a zero-self-intersection check, slider robustness checks, and terminal-drop measurement so the verified state is a lower breaking-wave curl with preserved linkage, not a vertical rounded protrusion, lower-lip dimple, angular interior loop, horizontal tongue, or renderer-trimmed chute. It preserves the full \(4928\)-node and \(9700\)-edge array, keeps max height at \(12.78\) and max tensile strain at \(5.49\) in the default proof render, records zero rendered-neighbor residual and zero bowl pockets in the default gates, and keeps the remaining reference-match boundary visible in the overlay instead of turning it into a success claim.
+Figures~\ref{fig:current-live-side}--\ref{fig:current-live-slice} record the current source-rendered linkage state from the same geometry model that builds the public bundle: side view is the full three-dimensional sheet, the top view is the full plan projection, the reference overlay extracts the centerline silhouette, cross-section is separate, and the full linkage array is present in 3D. The June 22, 2026 repair preserves the June 18 curl/tip repair while correcting the top view that had read as one large triangular fan. The source now drives vertical height/curl with the tight side mask and drives in-plane displacement with a separate rounded plan mask plus small lateral footprint relief, so the side can keep the lower downturned lip without forcing the plan footprint into a wedge. The app top view and the top proof figure suppress the surface fill and de-emphasize folded high-lift face edges instead of drawing the side-view centerline/lip emphasis through the plan. The repair also adds a top-footprint roundness gate beside the custom side-aspect gate, reference-trace fit, zero-self-intersection check, slider robustness checks, terminal-drop measurement, and rigid-cell connector invariants. It preserves the full \(4928\)-node and \(9700\)-edge array, keeps max height at \(12.78\) and max tensile strain at \(3.96\) in the default proof render, records zero rendered-neighbor residual and zero bowl pockets in the default gates, and keeps the remaining reference-match boundary visible in the overlay instead of turning it into a success claim.
 
 \begin{figure}[H]
 \centering
@@ -221,6 +222,13 @@ Figures~\ref{fig:current-live-side}--\ref{fig:current-live-slice} record the cur
 \includegraphics[width=0.98\linewidth]{current-live-isometric.png}
 \caption{Current source-rendered 3D/isometric linkage for the same default state. The full rectangular array remains visible; the renderer must not scope this view down to a side slice. This figure is evidence for full-array visibility and no hidden filler.}
 \label{fig:current-live-isometric}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\linewidth]{current-live-top.png}
+\caption{Current source-rendered top linkage for the same default state. This is the gate that catches the June 22 failure: the plan footprint must read as a rounded localized wave body, not as a large triangle, wedge, or V fan caused by reusing the side curl taper, surface fill, or side-view highlight treatment.}
+\label{fig:current-live-top}
 \end{figure}
 
 \begin{figure}[H]
@@ -666,7 +674,7 @@ Numeric checks must be followed by rendered verification. The minimum visual pas
   \item check \code{Side}: full 3D side camera, visible curl, no cross-section substitution, no wall covering the open underside;
   \item check \code{Cross Section}: profile/slice only, useful for debugging but not a substitute for side;
   \item check \code{3D}: full rectangular array, localized center deformation, no swept tunnel, no hidden rows;
-  \item check \code{Top}: footprint/taper should be localized, not a constant extruded strip;
+  \item check \code{Top}: footprint/taper should be localized and rounded, not a constant extruded strip or a large triangular fan;
   \item inspect cells/connectors at the curl for zig-zags, random long arms, detached legs, overlaps, or missing four-leg interior connectivity;
   \item check lower \code{lipDip} values as well as \(120^\circ\), because old low-lip cases became unstable even when max lip looked acceptable;
   \item check \code{morph}=0, 0.5, and 1 because half-morph repeatedly exposed mangled intermediate states.
@@ -724,16 +732,16 @@ Progress does not automatically ingest every active Codex chat. If a future Wave
 
 This section is intentionally blunt so a future chat does not have to infer whether the system is finished.
 
-\textbf{Verified current state on June 18, 2026:}
+\textbf{Verified current state on June 22, 2026:}
 \begin{itemize}
   \item The reliable public route is \code{https://aolabs.io/wavevis/}.
   \item The public WaveVis page includes a clickable AO Labs home mark, an app identity mark, the \code{wavevis.aolabs.io} title, and a \code{System Architecture PDF} action.
   \item The Inverse Sheet tab is the first/default option; Double-Layer Sarrus is secondary.
   \item The current PDF route is the WaveVis fallback paper route: \code{/wavevis/proofs/}, file \code{wavevis-system-architecture.pdf}.
   \item Side, Cross Section, and 3D are separate view modes. Side is the full three-dimensional sheet seen from the side; Cross Section is the slice/debug view.
-  \item The current generator and renderer are checked by \code{npm run check:geometry}; the June 18 curl/tip repair uses the curated custom Moana-wave default, a custom side-aspect gate, reference-trace fit, terminal-drop measurement, no bowl pockets, side-render full-array scope, slider robustness, and rigid-cell connector invariants.
-  \item The current side render keeps the full cells and connectors visible while using a sharper terminal curl profile, lower pointed free tip, curved interior throat, muted low return, and downturned-lip side-aspect guard so the curl reads more like a breaking wave rather than a rounded protruding cap, cavity, or horizontal tongue.
-  \item Source-rendered side, reference-overlay, isometric, and cross-section figures were regenerated from the passing geometry model. Current source metrics are \(4928\) rendered nodes, \(9700\) rendered edges, zero rendered-neighbor residual, zero bowl pockets, max height \(12.78\), max side overhang \(16.61\), startup side aspect \(2.13\), morph-half-lip side aspect \(2.37\), terminal-drop ratio \(0.993\), and max tensile strain \(5.49\).
+  \item The current generator and renderer are checked by \code{npm run check:geometry}; the June 22 top-footprint repair uses the curated custom Moana-wave default, separate vertical and plan footprint masks, lateral footprint relief, top-specific surface suppression and folded-face line weighting, a top-footprint roundness gate, a custom side-aspect gate, reference-trace fit, terminal-drop measurement, no bowl pockets, side-render full-array scope, slider robustness, and rigid-cell connector invariants.
+  \item The current side render keeps the full cells and connectors visible while using a sharper terminal curl profile, lower pointed free tip, curved interior throat, muted low return, and downturned-lip side-aspect guard so the curl reads more like a breaking wave rather than a rounded protruding cap, cavity, or horizontal tongue. The current top render keeps a broader rounded footprint instead of a large triangle and no longer borrows the side-view surface fill or centerline/lip highlight.
+  \item Source-rendered side, reference-overlay, isometric, top, and cross-section figures were regenerated from the passing geometry model. Current source metrics are \(4928\) rendered nodes, \(9700\) rendered edges, zero rendered-neighbor residual, zero bowl pockets, max height \(12.78\), max side overhang \(16.61\), startup side aspect \(2.13\), morph-half-lip side aspect \(2.37\), terminal-drop ratio \(0.993\), default top-footprint collapse ratio \(1.143\), default top-footprint peak dominance \(1.135\), and max tensile strain \(3.96\).
 \end{itemize}
 
 \textbf{Open state that must not be overstated:}

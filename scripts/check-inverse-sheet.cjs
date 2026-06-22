@@ -218,6 +218,24 @@ const conicalSpanTaper = {
   })),
   breakingWide: summarizeConicalSpanTaper(lipDipSweepModels[118]),
 }
+const topFootprintRoundness = {
+  default: summarizeTopFootprintRoundness(buildInverseSheetModel()),
+  compactUser: summarizeTopFootprintRoundness(buildInverseSheetModel({
+    rows: 24,
+    columns: 24,
+    height: 8,
+    horizontalOffset: 9,
+    overhangPosition: -0.15,
+    steer: 0,
+    overhangAngleDeg: 118,
+    overhangWidth: 17,
+    lipSharpness: 0.28,
+    smoothing: 1,
+    wallSmoothness: 0.18,
+    flatContribution: 0.35,
+  })),
+  breakingWide: summarizeTopFootprintRoundness(lipDipSweepModels[118]),
+}
 const outerRadiusSmoothness = {
   default: summarizeOuterRadiusSmoothness(buildInverseSheetModel()),
   compactUser: summarizeOuterRadiusSmoothness(buildInverseSheetModel({
@@ -381,6 +399,14 @@ if (!Object.values(conicalSpanTaper).every(conicalSpanTaperPasses)) {
   failures.push('max lip dip should read as an inverted-cone taper with a curled tip, not a broad side wall')
 }
 
+if (
+  !topFootprintRoundnessPasses(topFootprintRoundness.default) ||
+  !topFootprintRoundnessPasses(topFootprintRoundness.compactUser) ||
+  !generatedTopFootprintRoundnessPasses(topFootprintRoundness.breakingWide)
+) {
+  failures.push('top view should keep a rounded footprint instead of collapsing into a big triangular fan')
+}
+
 if (!Object.values(bowlPocketCheck).every((summary) => summary.bowlPocketCount === 0)) {
   failures.push('curled cone surface should not contain bowl-like local minima')
 }
@@ -506,6 +532,7 @@ const report = {
   widthInvariant,
   lateralSmoothness,
   conicalSpanTaper,
+  topFootprintRoundness,
   bowlPocketCheck,
   outerRadiusSmoothness,
   resolutionInvariant,
@@ -1402,10 +1429,10 @@ function summarizeFootprintColumn(model, profileU) {
 
   const nodes = (columns.get(bestColumn) ?? [])
     .filter((node) => node.row > 0 && node.row < model.config.rows - 1)
-  const displacements = nodes.map((node) => distanceVec(node.currentPosition, node.restPosition))
+  const displacements = nodes.map((node) => planDisplacement(node))
   const maxDisplacement = maxOf(displacements)
   const active = nodes.filter((node) => (
-    distanceVec(node.currentPosition, node.restPosition) >= Math.max(maxDisplacement * 0.28, 0.0001)
+    planDisplacement(node) >= Math.max(maxDisplacement * 0.22, 0.0001)
   ))
   const centroidY = active.length ? mean(active.map((node) => node.restPosition[1])) : Infinity
 
@@ -1416,6 +1443,51 @@ function summarizeFootprintColumn(model, profileU) {
     centroidY: round(centroidY),
     maxDisplacement: round(maxDisplacement),
   }
+}
+
+function planDisplacement(node) {
+  return Math.hypot(
+    node.currentPosition[0] - node.restPosition[0],
+    node.currentPosition[1] - node.restPosition[1],
+  )
+}
+
+function summarizeTopFootprintRoundness(model) {
+  const samples = [0.1, 0.22, 0.36, 0.5, 0.64, 0.78, 0.9]
+  const columns = samples.map((profileU) => summarizeFootprintColumn(model, profileU))
+  const widths = columns.map((entry) => entry.activeRows)
+  const maxRows = Math.max(...widths)
+  const meanRows = mean(widths)
+  const terminalRows = mean(widths.slice(-2))
+  const maxAdjacentDrop = widths.slice(0, -1).reduce((maxDrop, width, index) => (
+    Math.max(maxDrop, (width - widths[index + 1]) / Math.max(maxRows, 1))
+  ), 0)
+  const collapseRatio = maxRows / Math.max(terminalRows, 1)
+  const peakDominance = maxRows / Math.max(meanRows, 1)
+
+  return {
+    samples: samples.map((sample) => round(sample)),
+    activeRows: widths,
+    maxRows,
+    terminalRows: round(terminalRows),
+    collapseRatio: round(collapseRatio),
+    peakDominance: round(peakDominance),
+    maxAdjacentDrop: round(maxAdjacentDrop),
+  }
+}
+
+function topFootprintRoundnessPasses(summary) {
+  return summary.collapseRatio <= 1.55 &&
+    summary.peakDominance <= 1.35 &&
+    summary.maxAdjacentDrop <= 0.25 &&
+    summary.terminalRows >= summary.maxRows * 0.62
+}
+
+function generatedTopFootprintRoundnessPasses(summary) {
+  return summary.collapseRatio <= 1.75 &&
+    summary.peakDominance <= 1.35 &&
+    summary.maxAdjacentDrop <= 0.31 &&
+    summary.terminalRows >= summary.maxRows * 0.54
 }
 
 function summarizeLocalizedCustomSheet(model) {

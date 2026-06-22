@@ -29,6 +29,7 @@ type NodeEdgeRenderScope = {
   edges: LatticeEdge[]
   sideSlice: boolean
   sideView: boolean
+  topView: boolean
 }
 
 type LatticeViewer3DProps = {
@@ -83,16 +84,17 @@ function LatticeModelGroup({
   const dihedralByQuad = useMemo(() => buildDihedralByQuad(model.dihedralMetrics), [model.dihedralMetrics])
   const sliceProfileView = view === 'slice'
   const sideMechanismView = view === 'side'
+  const topPlanView = view === 'top'
   const renderScope = useMemo(() =>
-    buildNodeEdgeRenderScope(model, sliceProfileView, sideMechanismView),
-  [model, sideMechanismView, sliceProfileView])
+    buildNodeEdgeRenderScope(model, sliceProfileView, sideMechanismView, topPlanView),
+  [model, sideMechanismView, sliceProfileView, topPlanView])
   const restGhostGeometry = useMemo(() => buildRestGhostGeometry(model, nodeById), [model, nodeById])
   const surfaceQuads = useMemo(() => {
     if (sliceProfileView) return buildSideSurfaceQuads(model, crossSectionRowBand)
     return model.quads
   }, [model, sliceProfileView])
   const surfaceGeometry = useMemo(() => buildSurfaceGeometry(model, nodeById, quadMetricById, dihedralByQuad, surfaceQuads), [model, nodeById, quadMetricById, dihedralByQuad, surfaceQuads])
-  const surfaceVisible = model.config.showSurface && view !== 'isometric'
+  const surfaceVisible = model.config.showSurface && view !== 'isometric' && view !== 'top'
   const labelsVisible = model.config.showLabels && model.config.rows <= 15 && model.config.columns <= 15
   const largeGrid = model.config.rows > 30 || model.config.columns > 30
   const edgePickRadius = Math.max(model.config.spacing * (largeGrid ? 0.08 : 0.09), 0.035)
@@ -168,6 +170,7 @@ function buildNodeEdgeRenderScope(
   model: LatticeModel,
   sideSlice: boolean,
   sideView = false,
+  topView = false,
 ): NodeEdgeRenderScope {
   if (sideView && !sideSlice) {
     return {
@@ -175,6 +178,7 @@ function buildNodeEdgeRenderScope(
       edges: model.edges,
       sideSlice: false,
       sideView: true,
+      topView: false,
     }
   }
 
@@ -184,6 +188,7 @@ function buildNodeEdgeRenderScope(
       edges: model.edges,
       sideSlice: false,
       sideView,
+      topView,
     }
   }
 
@@ -210,6 +215,7 @@ function buildNodeEdgeRenderScope(
     edges,
     sideSlice: true,
     sideView: false,
+    topView: false,
   }
 }
 
@@ -548,12 +554,40 @@ function StraightEdgeSegments({
         profileFlat: null,
         spanActive: null,
         spanFlat: null,
+        topPlan: null,
+        topFold: null,
       }
     }
 
     const nodeValues = [...nodes.values()]
     const profileEdges = scope.edges.filter((edge) => edge.orientation === 'horizontal')
     const spanEdges = scope.edges.filter((edge) => edge.orientation === 'vertical')
+
+    if (scope.topView) {
+      const maxHeight = Math.max(...nodeValues.map((node) => node.currentPosition[2]), 0.000001)
+      const foldedTopEdge = (edge: LatticeEdge) => {
+        const a = nodes.get(edge.nodeA)
+        const b = nodes.get(edge.nodeB)
+        if (!a || !b) return false
+        const maxZ = Math.max(a.currentPosition[2], b.currentPosition[2])
+        const maxPlanDisplacement = Math.max(planarDistance(a.currentPosition, a.restPosition), planarDistance(b.currentPosition, b.restPosition))
+        return maxZ >= maxHeight * 0.1 || maxPlanDisplacement >= maxHeight * 0.44
+      }
+      const foldedEdges = scope.edges.filter(foldedTopEdge)
+      const foldedIds = new Set(foldedEdges.map((edge) => edge.id))
+
+      return {
+        all: null,
+        profile: null,
+        span: null,
+        profileActive: null,
+        profileFlat: null,
+        spanActive: null,
+        spanFlat: null,
+        topPlan: buildGeometry(scope.edges.filter((edge) => !foldedIds.has(edge.id))),
+        topFold: buildGeometry(foldedEdges),
+      }
+    }
 
     if (!splitSideEdges) {
       return {
@@ -564,6 +598,8 @@ function StraightEdgeSegments({
         profileFlat: null,
         spanActive: null,
         spanFlat: null,
+        topPlan: null,
+        topFold: null,
       }
     }
 
@@ -600,8 +636,10 @@ function StraightEdgeSegments({
       profileFlat: buildGeometry(profileEdges.filter((edge) => !(sideEdgeActive(edge) && sideProfileFocus(edge)))),
       spanActive: buildGeometry(spanEdges.filter(sideEdgeActive)),
       spanFlat: buildGeometry(spanEdges.filter((edge) => !sideEdgeActive(edge))),
+      topPlan: null,
+      topFold: null,
     }
-  }, [nodes, scope.edges, splitFullGridEdges, splitSideEdges])
+  }, [nodes, scope.edges, scope.topView, splitFullGridEdges, splitSideEdges])
 
   if (splitSideEdges && geometries.profileActive && geometries.profileFlat && geometries.spanActive && geometries.spanFlat) {
     return (
@@ -630,6 +668,19 @@ function StraightEdgeSegments({
         </lineSegments>
         <lineSegments geometry={geometries.profile} renderOrder={1}>
           <lineBasicMaterial color={inverseLinkageColor} transparent opacity={scope.sideView ? 0.88 : 0.82} depthTest={!scope.sideView} depthWrite={false} />
+        </lineSegments>
+      </>
+    )
+  }
+
+  if (scope.topView && geometries.topPlan && geometries.topFold) {
+    return (
+      <>
+        <lineSegments geometry={geometries.topPlan} renderOrder={0}>
+          <lineBasicMaterial color="#343631" transparent opacity={0.3} depthTest depthWrite={false} />
+        </lineSegments>
+        <lineSegments geometry={geometries.topFold} renderOrder={1}>
+          <lineBasicMaterial color="#343631" transparent opacity={0.018} depthTest depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -1237,6 +1288,10 @@ function writeVec(array: Float32Array, offset: number, vector: Vec3): void {
 
 function distanceVec(a: Vec3, b: Vec3): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
+}
+
+function planarDistance(a: Vec3, b: Vec3): number {
+  return Math.hypot(a[0] - b[0], a[1] - b[1])
 }
 
 function writeColor(array: Float32Array, offset: number, color: THREE.Color): void {

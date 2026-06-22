@@ -150,6 +150,11 @@ def cross_project(point: tuple[float, float, float]) -> tuple[float, float]:
     return x, z
 
 
+def top_project(point: tuple[float, float, float]) -> tuple[float, float]:
+    x, y, _ = point
+    return x, y
+
+
 def draw_header(draw: ImageDraw.ImageDraw, title: str, subtitle: str, summary: dict) -> None:
     draw.text((58, 36), title, fill=INK, font=TITLE)
     draw.text((60, 82), subtitle, fill=MUTED, font=BODY)
@@ -189,6 +194,19 @@ def line_color(edge: dict, a: dict, b: dict, center_row: int, active_height: flo
     return GRID
 
 
+def top_folded_edge(edge: dict, a: dict, b: dict, max_height: float) -> bool:
+    del edge
+    max_z = max(current(a)[2], current(b)[2])
+    max_plan_displacement = max(plan_displacement(a), plan_displacement(b))
+    return max_z >= max_height * 0.1 or max_plan_displacement >= max_height * 0.44
+
+
+def plan_displacement(node: dict) -> float:
+    rest = node["restPosition"]
+    point = current(node)
+    return math.hypot(point[0] - rest[0], point[1] - rest[1])
+
+
 def render_lattice(model: dict, filename: str, title: str, subtitle: str, projection_name: str, projector: Callable[[tuple[float, float, float]], tuple[float, float]], center_only: bool = False) -> None:
     size = (1800, 1120)
     img = Image.new("RGB", size, PAPER)
@@ -223,35 +241,37 @@ def render_lattice(model: dict, filename: str, title: str, subtitle: str, projec
         a = nodes[edge["nodeA"]]
         b = nodes[edge["nodeB"]]
         color = line_color(edge, a, b, center_row, active_height)
-        alpha = 225 if color in (LIP, CENTER) else 95
+        folded_top = projection_name == "top" and top_folded_edge(edge, a, b, max(model["summary"]["maxHeight"], 0.000001))
+        alpha = 18 if folded_top else 225 if color in (LIP, CENTER) else 95
         width = 3 if color in (LIP, CENTER) else 1
         p0 = to_canvas(projector(current(a)))
         p1 = to_canvas(projector(current(b)))
         draw.line((*p0, *p1), fill=(*color, alpha), width=width)
 
-    # Draw the app-equivalent side silhouette over the full linkage so the lip shape is auditable.
-    center_nodes = sorted((node for node in model["nodes"] if node["row"] == center_row), key=lambda node: node["col"])
-    center_path_nodes = side_profile_display_nodes(center_nodes)
-    center_path = [to_canvas(projector(current(node))) for node in center_path_nodes]
-    draw.line(smooth_canvas_polyline(center_path, 2), fill=(*INK, 235), width=5, joint="curve")
-    terminal_range = terminal_lip_node_range(center_nodes)
-    if terminal_range:
-        start, tip, curved_end = terminal_range
-        lip_nodes = center_nodes[start:tip + 1]
-        inner_lip_nodes = center_nodes[tip:curved_end + 1] if curved_end > tip else []
-    else:
-        lip_nodes = []
-        inner_lip_nodes = []
-    lip_path = [to_canvas(projector(current(node))) for node in lip_nodes]
-    inner_lip_path = [to_canvas(projector(current(node))) for node in inner_lip_nodes]
-    if len(inner_lip_path) >= 2:
-        draw.line(smooth_canvas_polyline(inner_lip_path, 2), fill=(*LIP, 170), width=4, joint="curve")
-    if len(lip_path) >= 2:
-        draw.line(smooth_canvas_polyline(lip_path, 2), fill=(*LIP, 245), width=6, joint="curve")
+    if projection_name == "side":
+        # Draw the app-equivalent side silhouette over the full linkage so the lip shape is auditable.
+        center_nodes = sorted((node for node in model["nodes"] if node["row"] == center_row), key=lambda node: node["col"])
+        center_path_nodes = side_profile_display_nodes(center_nodes)
+        center_path = [to_canvas(projector(current(node))) for node in center_path_nodes]
+        draw.line(smooth_canvas_polyline(center_path, 2), fill=(*INK, 235), width=5, joint="curve")
+        terminal_range = terminal_lip_node_range(center_nodes)
+        if terminal_range:
+            start, tip, curved_end = terminal_range
+            lip_nodes = center_nodes[start:tip + 1]
+            inner_lip_nodes = center_nodes[tip:curved_end + 1] if curved_end > tip else []
+        else:
+            lip_nodes = []
+            inner_lip_nodes = []
+        lip_path = [to_canvas(projector(current(node))) for node in lip_nodes]
+        inner_lip_path = [to_canvas(projector(current(node))) for node in inner_lip_nodes]
+        if len(inner_lip_path) >= 2:
+            draw.line(smooth_canvas_polyline(inner_lip_path, 2), fill=(*LIP, 170), width=4, joint="curve")
+        if len(lip_path) >= 2:
+            draw.line(smooth_canvas_polyline(lip_path, 2), fill=(*LIP, 245), width=6, joint="curve")
 
-    for node in center_nodes[::4]:
-        x, y = to_canvas(projector(current(node)))
-        draw.ellipse((x - 2, y - 2, x + 2, y + 2), fill=(*INK, 90))
+        for node in center_nodes[::4]:
+            x, y = to_canvas(projector(current(node)))
+            draw.ellipse((x - 2, y - 2, x + 2, y + 2), fill=(*INK, 90))
 
     img.save(FIGURES / filename)
     img.save(VERIFY / filename.replace(".png", "-verification.png"))
@@ -452,6 +472,14 @@ def main() -> None:
         "Full source model with preserved rectangular array and bounded downturned lip.",
         "iso",
         iso_project,
+    )
+    render_lattice(
+        model,
+        "current-live-top.png",
+        "Current inverse-sheet top linkage",
+        "Full source model from above; the footprint stays rounded instead of collapsing into a triangular fan.",
+        "top",
+        top_project,
     )
     render_lattice(
         model,

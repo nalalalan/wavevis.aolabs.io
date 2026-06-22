@@ -1750,21 +1750,117 @@ function customProfileTargetPosition(
     z: lerpNumber(bodyProfile.z, curlProfile.z, profileBlend),
   }
   const rowMask = customProfileRowMask(profileU, profile.x, profile.z, sheetY, config, curlInterior * curlCenterGate)
+  const planRowMask = customProfilePlanRowMask(profileU, profile.x, profile.z, sheetY, config, curlInterior * curlCenterGate)
   const longitudinalMask = edgeRamp(profileU, 0, 0.035) * edgeRamp(1 - profileU, 0, 0.025)
   const shapeMask = clampNumber(rowMask * longitudinalMask, 0, 1)
-  if (shapeMask <= 0.000001) return rest
+  const planMask = clampNumber(Math.max(rowMask, planRowMask) * longitudinalMask, 0, 1)
+  if (shapeMask <= 0.000001 && planMask <= 0.000001) return rest
 
   const profileSpan = profileRestLength * lerpNumber(0.94, 1.16, scaleAmount)
   const profileHeight = profileRestLength * lerpNumber(0.27, 0.47, scaleAmount)
   const restX = profileRestLength * profileU
   const horizontalProjection = profile.x * profileSpan - restX
   const liftedHeight = Math.max(0, profile.z) * profileHeight
+  const lateralProjection = customProfilePlanLateralSpread(profileU, sheetY, config, planMask, lipAmount)
 
   return [
-    rest[0] + shapeMask * horizontalProjection,
-    rest[1],
+    rest[0] + planMask * horizontalProjection,
+    rest[1] + lateralProjection,
     shapeMask * liftedHeight,
   ]
+}
+
+function customProfilePlanLateralSpread(
+  profileU: number,
+  sheetY: number,
+  config: InverseSheetConfig,
+  planMask: number,
+  lipAmount: number,
+): number {
+  if (Math.abs(sheetY) <= 0.000001 || planMask <= 0.000001 || lipAmount <= 0.000001) return 0
+
+  const distanceToPerimeter = DEFAULT_SHEET_SPAN * 0.5 - Math.abs(sheetY)
+  const gridSpacingY = DEFAULT_SHEET_SPAN / Math.max(config.rows - 1, 1)
+  if (distanceToPerimeter <= gridSpacingY * 0.18) return 0
+
+  const sideDistance = Math.abs(sheetY)
+  const bodyLongitudinal = smootherStep((profileU - 0.14) / 0.18) *
+    (1 - smootherStep((profileU - 0.98) / 0.14))
+  const sideBand = smootherStep(
+    (sideDistance - gridSpacingY * 1.2) / Math.max(config.overhangWidth * 0.16, gridSpacingY),
+  ) * (1 - smootherStep(
+    (sideDistance - config.overhangWidth * 0.64) / Math.max(config.overhangWidth * 0.28, gridSpacingY),
+  ))
+  const terminalRound = lerpNumber(0.72, 1.12, smootherStep((profileU - 0.48) / 0.28))
+  const rimFade = edgeRamp(
+    distanceToPerimeter,
+    0,
+    gridSpacingY * lerpNumber(3.2, 6.8, clampNumber(config.smoothing, 0, 1)),
+  )
+  const spread = config.overhangWidth *
+    0.078 *
+    bodyLongitudinal *
+    sideBand *
+    terminalRound *
+    Math.pow(planMask, 0.58) *
+    rimFade *
+    lipAmount
+
+  return Math.sign(sheetY) * spread
+}
+
+function customProfilePlanRowMask(
+  profileU: number,
+  profileX: number,
+  profileZ: number,
+  sheetY: number,
+  config: InverseSheetConfig,
+  profileCurlInterior = customProfileInteriorCurlWeight(profileU, profileX, profileZ),
+): number {
+  const distanceToPerimeter = DEFAULT_SHEET_SPAN * 0.5 - Math.abs(sheetY)
+  const gridSpacingY = DEFAULT_SHEET_SPAN / Math.max(config.rows - 1, 1)
+  const envelopeAmount = sampleSectionProfileAtX(config.sectionPoints, profileX)
+  const lipAmount = customProfileLipCurlAmount(config)
+  const curlInterior = profileCurlInterior * lipAmount
+  const topFootprintFill = smootherStep((profileU - 0.24) / 0.16) *
+    (1 - smootherStep((profileU - 0.94) / 0.18)) *
+    lipAmount *
+    0.64
+  const effectiveEnvelope = Math.max(envelopeAmount * 0.88, curlInterior * 0.62, topFootprintFill)
+
+  if (distanceToPerimeter <= gridSpacingY * 0.18) return 0
+
+  const profileActivity = Math.max(smootherStep(Math.max(0, profileZ) / 0.045), curlInterior * 0.8, topFootprintFill * 1.15) *
+    edgeRamp(profileU, 0, 0.04) *
+    edgeRamp(1 - profileU, 0, 0.035)
+  if (profileActivity <= 0.000001 || effectiveEnvelope <= 0.000001) return 0
+
+  const maxHalfWidth = DEFAULT_SHEET_SPAN * 0.5 - gridSpacingY * 1.15
+  const middleBody = smootherStep((profileU - 0.1) / 0.16) * (1 - smootherStep((profileU - 0.94) / 0.18))
+  const terminalCurl = curlInterior * smootherStep((profileU - 0.56) / 0.2)
+  const returnTail = smootherStep((profileU - 0.84) / 0.13)
+  const planHalfWidth = clampNumber(
+    config.overhangWidth *
+      lerpNumber(0.18, 0.62, effectiveEnvelope) *
+      lerpNumber(0.82, 1.04, profileActivity) *
+      lerpNumber(0.9, 1.16, middleBody),
+    gridSpacingY * 2.2,
+    maxHalfWidth,
+  ) * lerpNumber(1, 0.88, terminalCurl) * lerpNumber(1, 0.9, returnTail * lipAmount)
+  const normalizedDistance = Math.abs(sheetY) / Math.max(planHalfWidth, 0.000001)
+  const roundedFootprint = Math.exp(-Math.pow(normalizedDistance, 3.4)) *
+    (1 - smootherStep((normalizedDistance - 1.12) / 0.36)) *
+    profileActivity
+  const rimFade = edgeRamp(
+    distanceToPerimeter,
+    0,
+    gridSpacingY * lerpNumber(3.2, 6.8, clampNumber(config.smoothing, 0, 1)),
+  )
+  const centerlineGuarantee = 1 - smootherStep(
+    (Math.abs(sheetY) - gridSpacingY * 0.8) / Math.max(gridSpacingY * 1.1, 0.000001),
+  )
+
+  return clampNumber(Math.max(roundedFootprint, centerlineGuarantee * profileActivity) * rimFade, 0, 1)
 }
 
 function customProfileRowMask(
@@ -1781,7 +1877,11 @@ function customProfileRowMask(
   const lipAmount = customProfileLipCurlAmount(config)
   const curlInterior = profileCurlInterior * lipAmount
   const curlCenterGate = customProfileCurlCenterGate(sheetY, config)
-  const effectiveEnvelope = Math.max(envelopeAmount, curlInterior * 0.42)
+  const topFootprintFill = smootherStep((profileU - 0.3) / 0.13) *
+    (1 - smootherStep((profileU - 0.8) / 0.18)) *
+    lipAmount *
+    0.34
+  const effectiveEnvelope = Math.max(envelopeAmount, curlInterior * 0.42, topFootprintFill)
 
   if (distanceToPerimeter <= gridSpacingY * 0.18) return 0
 
@@ -1795,9 +1895,9 @@ function customProfileRowMask(
   const terminalCurl = curlInterior * smootherStep((profileU - 0.56) / 0.2)
   const returnTail = smootherStep((profileU - 0.84) / 0.13)
   const heightTaper = lerpNumber(1.08, 0.66, smootherStep(Math.max(0, profileZ) / 0.82))
-  const bodyTaper = lerpNumber(0.92, 1.7, broadBack * (1 - terminalCurl * 0.72))
-  const curlTaper = lerpNumber(1, 0.24, terminalCurl)
-  const returnTailTaper = lerpNumber(1, 0.3, returnTail * lipAmount)
+  const bodyTaper = lerpNumber(0.92, 1.18, broadBack * (1 - terminalCurl * 0.62))
+  const curlTaper = lerpNumber(1, 0.42, terminalCurl)
+  const returnTailTaper = lerpNumber(1, 0.5, returnTail * lipAmount)
   const bodyHalfWidth = clampNumber(
     config.overhangWidth *
       lerpNumber(0.14, 0.58, effectiveEnvelope) *
@@ -1822,10 +1922,10 @@ function customProfileRowMask(
   const wallFreeCurlZone = smootherStep(curlInterior / 0.24)
   const wallFreeBodyMask = lerpNumber(
     bodyMask,
-    bodyMask * Math.pow(curlCenterGate, 3.8),
+    bodyMask * Math.pow(curlCenterGate, 3.35),
     wallFreeCurlZone,
   )
-  const curlMask = Math.pow(curlCenterGate, 1.5) * curlInterior * profileActivity
+  const curlMask = Math.pow(curlCenterGate, 1.32) * curlInterior * profileActivity
   const centerlineGuarantee = 1 - smootherStep(
     (Math.abs(sheetY) - gridSpacingY * 0.65) / Math.max(gridSpacingY * 0.9, 0.000001),
   )
@@ -2048,6 +2148,15 @@ function canonicalOverhangTargetPosition(
     edgeRamp(profileU, 0, coreLongitudinalFade) *
     lipWallFreeMask *
     Math.max(curlRowWeight, 0.1)
+  const topPlanLongitudinal = smootherStep((profileU - 0.12) / 0.18) *
+    (1 - smootherStep((profileU - 1.02) / 0.12))
+  const topPlanWidth = transverseSupportMask(
+    uncenteredY - DEFAULT_WAVE_FIELD_SPAN * 0.5,
+    config,
+    Math.max(wallSmoothness, 0.72),
+    config.overhangWidth * lerpNumber(1.85, 2.35, lipStrength),
+  )
+  const topPlanCarrier = lipStrength * topPlanLongitudinal * Math.pow(topPlanWidth, 0.48) * 1.3
   const resolvedShapeMask = lipStrength > 0.000001
     ? clampNumber(Math.max(shapeMask, fullCurlCarrier), 0, 1)
     : shapeMask
@@ -2093,6 +2202,7 @@ function canonicalOverhangTargetPosition(
       resolvedShapeMask,
       supportMask * centerPreserve * lipStrength * smootherStep((profileU - 0.18) / 0.42) * 0.16,
       lipWallFreeMask * lipOpening * 0.42,
+      topPlanCarrier,
     ), 0, 1)
     : resolvedShapeMask
   const verticalShapeMask = lipStrength > 0.000001
