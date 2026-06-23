@@ -281,8 +281,8 @@ def render_lattice(model: dict, filename: str, title: str, subtitle: str, projec
         p1 = to_canvas(projector(current(b)))
         draw.line((*p0, *p1), fill=(*color, alpha), width=width)
 
-    if projection_name in ("side", "iso"):
-        # Draw the app-equivalent centerline silhouette over the full linkage so the lip shape is auditable.
+    if projection_name == "iso":
+        # Draw the app-equivalent centerline silhouette over the full linkage so the lip shape is auditable in 3D.
         center_nodes = sorted((node for node in model["nodes"] if node["row"] == center_row), key=lambda node: node["col"])
         center_path_nodes = side_profile_display_nodes(center_nodes)
         center_path = [to_canvas(projector(current(node))) for node in center_path_nodes]
@@ -493,7 +493,7 @@ def main() -> None:
         model,
         "current-live-side.png",
         "Current inverse-sheet side linkage",
-        "Full source model, center row highlighted; red marks the active terminal lip.",
+        "Full source model; side view uses the mesh itself rather than a center trace overlay.",
         "side",
         side_project,
     )

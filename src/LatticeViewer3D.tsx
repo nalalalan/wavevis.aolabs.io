@@ -94,9 +94,9 @@ function LatticeModelGroup({
   const largeGrid = model.config.rows > 30 || model.config.columns > 30
   const edgePickRadius = Math.max(model.config.spacing * (largeGrid ? 0.08 : 0.09), 0.035)
   const nodeRadius = sideMechanismView
-      ? Math.max(model.config.spacing * 0.02, 0.012)
+      ? Math.max(model.config.spacing * 0.026, 0.016)
     : Math.max(model.config.spacing * (largeGrid ? 0.042 : 0.09), 0.026)
-  const surfaceOpacity = sideMechanismView ? 0.006 : isometricMechanismView ? 0.09 : (largeGrid ? 0.3 : 0.36)
+  const surfaceOpacity = sideMechanismView ? 0.018 : isometricMechanismView ? 0.09 : (largeGrid ? 0.3 : 0.36)
 
   return (
     <group>
@@ -129,12 +129,6 @@ function LatticeModelGroup({
           />
           <StraightEdgeSegments nodes={nodeById} scope={renderScope} />
         </>
-      )}
-      {sideMechanismView && (
-        <SideProfileSilhouette
-          model={model}
-          compact={model.config.showNodes || model.config.showEdges}
-        />
       )}
       {isometricMechanismView && (
         <SideProfileSilhouette
@@ -409,7 +403,7 @@ function NodeInstances({
     emissive: inverseCellBodyColor,
     emissiveIntensity: 0.08,
     transparent: sideProjection,
-    opacity: sideProjection ? 0.3 : 1,
+    opacity: sideProjection ? 0.56 : 1,
     roughness: 0.45,
     metalness: 0.03,
     depthTest: !sideProjection,
@@ -560,16 +554,16 @@ function StraightEdgeSegments({
     return (
       <>
         <lineSegments geometry={geometries.spanFlat} renderOrder={0}>
-          <lineBasicMaterial color="#2f332f" transparent opacity={0.004} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#5b5851" transparent opacity={0.07} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileFlat} renderOrder={1}>
-          <lineBasicMaterial color="#171a17" transparent opacity={0.002} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#3d3a34" transparent opacity={0.09} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.spanActive} renderOrder={2}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.01} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#22221f" transparent opacity={0.17} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileActive} renderOrder={3}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.008} depthTest depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.24} depthTest={false} depthWrite={false} />
         </lineSegments>
       </>
     )
