@@ -285,8 +285,8 @@ function SideProfileSilhouette({
       halo: new THREE.TubeGeometry(curve, Math.max(points.length * 12, 64), haloRadius, 10, false),
       terminal: terminalPoints.length >= 2
         ? {
-            core: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(terminalPoints, false, 'centripetal', 0.22), Math.max(terminalPoints.length * 14, 48), coreRadius * 1.16, 10, false),
-            halo: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(terminalPoints, false, 'centripetal', 0.22), Math.max(terminalPoints.length * 14, 48), haloRadius * 1.28, 10, false),
+            core: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(terminalPoints, false, 'centripetal', 0.2), Math.max(terminalPoints.length * 16, 56), coreRadius * 1.9, 10, false),
+            halo: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(terminalPoints, false, 'centripetal', 0.2), Math.max(terminalPoints.length * 16, 56), haloRadius * 1.45, 10, false),
           }
         : null,
     }
@@ -308,7 +308,7 @@ function SideProfileSilhouette({
             <meshBasicMaterial color="#fff8ee" transparent opacity={subtle ? 0.32 : compact ? 0.58 : 0.6} depthTest={false} depthWrite={false} />
           </mesh>
           <mesh geometry={profile.terminal.core} renderOrder={34}>
-            <meshBasicMaterial color="#8d332b" transparent opacity={subtle ? 0.86 : compact ? 0.94 : 0.98} depthTest={false} depthWrite={false} />
+            <meshBasicMaterial color="#10100f" transparent opacity={subtle ? 0.9 : compact ? 0.98 : 1} depthTest={false} depthWrite={false} />
           </mesh>
         </>
       )}
@@ -411,10 +411,12 @@ function buildTerminalLipProfilePoints(
   const maxZ = Math.max(...rawPoints.map(({ point }) => point[2]), 0)
   if (maxZ <= spacing * 0.2) return []
 
-  const { tipIndex } = providedRange
+  const { tipIndex, returnIndex } = providedRange
 
   const startIndex = terminalLipProfileStartIndex(providedRange)
-  const section = rawPoints.slice(startIndex, tipIndex + 1)
+  const shortReturnEndIndex = Math.min(returnIndex, tipIndex + Math.max(2, Math.round(rawPoints.length * 0.028)))
+  const endIndex = Math.max(tipIndex, shortReturnEndIndex)
+  const section = rawPoints.slice(startIndex, endIndex + 1)
     .filter(({ point }, index, points) =>
       point[2] >= maxZ * 0.008 || index === 0 || index === points.length - 1 || startIndex + index === tipIndex)
 
