@@ -271,7 +271,6 @@ function SideProfileSilhouette({
       .map(({ point }) => new THREE.Vector3(...point)))
     if (points.length < 2) return null
     const terminalPoints = buildTerminalLipProfilePoints(rawPoints, model.config.spacing, terminalRange)
-    const innerCurlPoints = buildTerminalLipReturnProfilePoints(rawPoints, model.config.spacing, terminalRange)
 
     const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal', 0.35)
     const baseRadius = Math.max(
@@ -290,12 +289,6 @@ function SideProfileSilhouette({
             halo: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(terminalPoints, false, 'centripetal', 0.22), Math.max(terminalPoints.length * 14, 48), haloRadius * 0.96, 10, false),
           }
         : null,
-      innerCurl: innerCurlPoints.length >= 2
-        ? {
-            core: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(innerCurlPoints, false, 'centripetal', 0.22), Math.max(innerCurlPoints.length * 14, 32), coreRadius * 0.58, 10, false),
-            halo: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(innerCurlPoints, false, 'centripetal', 0.22), Math.max(innerCurlPoints.length * 14, 32), haloRadius * 0.58, 10, false),
-          }
-        : null,
     }
   }, [compact, model, row, subtle])
 
@@ -309,16 +302,6 @@ function SideProfileSilhouette({
       <mesh geometry={profile.core} renderOrder={30}>
         <meshBasicMaterial color="#141713" transparent opacity={subtle ? 0.68 : compact ? 0.76 : 0.86} depthTest={false} depthWrite={false} />
       </mesh>
-      {profile.innerCurl && (
-        <>
-          <mesh geometry={profile.innerCurl.halo} renderOrder={31}>
-            <meshBasicMaterial color="#fff8ee" transparent opacity={subtle ? 0.18 : compact ? 0.36 : 0.38} depthTest={false} depthWrite={false} />
-          </mesh>
-          <mesh geometry={profile.innerCurl.core} renderOrder={32}>
-            <meshBasicMaterial color="#343631" transparent opacity={subtle ? 0.3 : compact ? 0.42 : 0.46} depthTest={false} depthWrite={false} />
-          </mesh>
-        </>
-      )}
       {profile.terminal && (
         <>
           <mesh geometry={profile.terminal.halo} renderOrder={33}>
@@ -359,7 +342,7 @@ function findTerminalLipRange(rawPoints: Array<{ point: Vec3; col: number }>, sp
   const targetTipZ = maxZ * 0.06
   const firstLowTipIndex = postCrestIndexes.find((index) => rawPoints[index].point[2] <= targetTipZ * 1.35)
   const tipIndex = firstLowTipIndex !== undefined
-    ? terminalLocalMinimumIndex(rawPoints, firstLowTipIndex, maxZ)
+    ? terminalLocalMinimumIndex(rawPoints, firstLowTipIndex, maxZ, spacing)
     : postCrestIndexes.reduce((best, index) => {
     const point = rawPoints[index].point
     const bestPoint = rawPoints[best].point
@@ -398,11 +381,15 @@ function findTerminalLipRange(rawPoints: Array<{ point: Vec3; col: number }>, sp
   }
 }
 
-function terminalLocalMinimumIndex(rawPoints: Array<{ point: Vec3; col: number }>, firstLowIndex: number, maxZ: number): number {
+function terminalLocalMinimumIndex(rawPoints: Array<{ point: Vec3; col: number }>, firstLowIndex: number, maxZ: number, spacing: number): number {
   let tipIndex = firstLowIndex
   for (let index = firstLowIndex + 1; index < rawPoints.length; index += 1) {
     const point = rawPoints[index].point
     const tipPoint = rawPoints[tipIndex].point
+    if (
+      point[2] <= maxZ * 0.025 &&
+      Math.abs(point[0] - tipPoint[0]) >= spacing * 1.15
+    ) break
     if (point[2] < tipPoint[2] - maxZ * 0.004) {
       tipIndex = index
       continue
@@ -430,27 +417,6 @@ function buildTerminalLipProfilePoints(
   const section = rawPoints.slice(startIndex, tipIndex + 1)
     .filter(({ point }, index, points) =>
       point[2] >= maxZ * 0.008 || index === 0 || index === points.length - 1 || startIndex + index === tipIndex)
-
-  return section.map(({ point }) => new THREE.Vector3(...point))
-}
-
-function buildTerminalLipReturnProfilePoints(
-  rawPoints: Array<{ point: Vec3; col: number }>,
-  spacing: number,
-  providedRange: TerminalLipRange | null = findTerminalLipRange(rawPoints, spacing),
-): THREE.Vector3[] {
-  if (!providedRange) return []
-
-  const maxZ = Math.max(...rawPoints.map(({ point }) => point[2]), 0)
-  if (maxZ <= spacing * 0.2) return []
-
-  const { tipIndex, curvedInteriorEndIndex } = providedRange
-  const endIndex = Math.max(tipIndex, curvedInteriorEndIndex)
-  if (endIndex <= tipIndex) return []
-
-  const section = rawPoints.slice(tipIndex, endIndex + 1)
-    .filter(({ point }, index, points) =>
-      point[2] >= maxZ * 0.008 || index === 0 || index === points.length - 1)
 
   return section.map(({ point }) => new THREE.Vector3(...point))
 }
@@ -983,7 +949,7 @@ function positionCamera(
     view === 'top'
       ? new THREE.Vector3(target.x, target.y, target.z + distance)
     : view === 'side'
-      ? new THREE.Vector3(target.x, target.y + distance, target.z)
+      ? new THREE.Vector3(target.x, target.y - distance, target.z)
       : view === 'isometric'
         ? new THREE.Vector3(target.x + distance * 0.34, target.y - distance * 0.98, target.z + distance * 0.2)
       : view === 'slice'

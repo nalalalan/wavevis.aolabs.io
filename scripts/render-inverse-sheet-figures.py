@@ -36,7 +36,7 @@ REFERENCE_TRACE = [
     (0.91, 0.62),
     (0.91, 0.34),
     (0.86, 0.16),
-    (0.74, 0.07),
+    (0.74, 0.035),
 ]
 
 
@@ -84,7 +84,8 @@ def compile_model() -> dict:
     )
     loader = f"""
       const {{ buildInverseSheetModel }} = require({json.dumps(str(TMP / "latticeGeometry.js"))});
-      const model = buildInverseSheetModel();
+      const config = JSON.parse(process.env.WAVEVIS_RENDER_CONFIG_JSON || "{{}}");
+      const model = buildInverseSheetModel(config);
       process.stdout.write(JSON.stringify({{
         config: model.config,
         nodes: model.nodes,
@@ -137,7 +138,7 @@ def current(node: dict) -> tuple[float, float, float]:
 
 def side_project(point: tuple[float, float, float]) -> tuple[float, float]:
     x, y, z = point
-    return -x + y * 0.006, z - y * 0.0025
+    return x - y * 0.006, z - y * 0.0025
 
 
 def iso_project(point: tuple[float, float, float]) -> tuple[float, float]:
@@ -256,16 +257,11 @@ def render_lattice(model: dict, filename: str, title: str, subtitle: str, projec
         draw.line(smooth_canvas_polyline(center_path, 2), fill=(*INK, 235), width=5, joint="curve")
         terminal_range = terminal_lip_node_range(center_nodes)
         if terminal_range:
-            start, tip, curved_end = terminal_range
+            start, tip, _curved_end = terminal_range
             lip_nodes = center_nodes[start:tip + 1]
-            inner_lip_nodes = center_nodes[tip:curved_end + 1] if curved_end > tip else []
         else:
             lip_nodes = []
-            inner_lip_nodes = []
         lip_path = [to_canvas(projector(current(node))) for node in lip_nodes]
-        inner_lip_path = [to_canvas(projector(current(node))) for node in inner_lip_nodes]
-        if len(inner_lip_path) >= 2:
-            draw.line(smooth_canvas_polyline(inner_lip_path, 2), fill=(*INK, 125), width=3, joint="curve")
         if len(lip_path) >= 2:
             draw.line(smooth_canvas_polyline(lip_path, 2), fill=(*LIP, 245), width=6, joint="curve")
 
@@ -280,7 +276,7 @@ def render_lattice(model: dict, filename: str, title: str, subtitle: str, projec
 def centerline_side_points(model: dict) -> list[tuple[float, float]]:
     center_row = model["config"]["rows"] // 2
     center_nodes = sorted((node for node in model["nodes"] if node["row"] == center_row), key=lambda node: node["col"])
-    return [(-current(node)[0], current(node)[2]) for node in side_silhouette_nodes(center_nodes)]
+    return [(current(node)[0], current(node)[2]) for node in side_silhouette_nodes(center_nodes)]
 
 
 def normalize_wave_profile(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
@@ -406,8 +402,12 @@ def terminal_lip_profile_start_index(center_nodes: list[dict], crest_index: int,
 def terminal_local_minimum_index(center_nodes: list[dict], first_low_index: int, max_z: float) -> int:
     tip_index = first_low_index
     for index in range(first_low_index + 1, len(center_nodes)):
-        point_z = current(center_nodes[index])[2]
-        tip_z = current(center_nodes[tip_index])[2]
+        point = current(center_nodes[index])
+        tip = current(center_nodes[tip_index])
+        point_z = point[2]
+        tip_z = tip[2]
+        if point_z <= max_z * 0.025 and abs(point[0] - tip[0]) >= 1.15:
+            break
         if point_z < tip_z - max_z * 0.004:
             tip_index = index
             continue
@@ -423,7 +423,7 @@ def render_reference_overlay(model: dict) -> None:
     img = Image.new("RGB", size, PAPER)
     draw = ImageDraw.Draw(img, "RGBA")
     current_profile = normalize_wave_profile(centerline_side_points(model))
-    reference_trace = [(1 - x, z) for x, z in REFERENCE_TRACE]
+    reference_trace = REFERENCE_TRACE
     all_points = current_profile + reference_trace
     to_canvas = make_mapper(all_points, size, margin=150)
 
