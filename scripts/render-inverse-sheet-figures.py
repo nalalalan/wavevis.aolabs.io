@@ -163,12 +163,7 @@ def side_project(point: tuple[float, float, float]) -> tuple[float, float]:
 
 def iso_project(point: tuple[float, float, float]) -> tuple[float, float]:
     x, y, z = point
-    return (x - y) * 0.86, (x + y) * 0.31 - z * 1.15
-
-
-def cross_project(point: tuple[float, float, float]) -> tuple[float, float]:
-    x, _, z = point
-    return x, z
+    return x - y * 0.28, z * 1.12 + y * 0.1
 
 
 def top_project(point: tuple[float, float, float]) -> tuple[float, float]:
@@ -263,14 +258,31 @@ def render_lattice(model: dict, filename: str, title: str, subtitle: str, projec
         b = nodes[edge["nodeB"]]
         color = line_color(edge, a, b, center_row, active_height)
         folded_top = projection_name == "top" and top_folded_edge(edge, a, b, max(model["summary"]["maxHeight"], 0.000001))
-        alpha = 7 if folded_top else 225 if color in (LIP, CENTER) else 95
-        width = 3 if color in (LIP, CENTER) else 1
+        if projection_name == "iso":
+            max_edge_z = max(current(a)[2], current(b)[2])
+            max_edge_displacement = max(plan_displacement(a), plan_displacement(b))
+            near_center = abs(((a["row"] + b["row"]) * 0.5) - center_row) <= 2.1
+            active_edge = max_edge_z >= active_height or (max_edge_displacement >= model["summary"]["maxHeight"] * 0.035 and max_edge_z >= active_height * 0.55)
+            if edge.get("orientation") == "horizontal" and near_center and active_edge:
+                color = CENTER
+                alpha = 180
+                width = 2
+            elif active_edge:
+                color = CENTER
+                alpha = 84
+                width = 1
+            else:
+                alpha = 44
+                width = 1
+        else:
+            alpha = 7 if folded_top else 225 if color in (LIP, CENTER) else 95
+            width = 3 if color in (LIP, CENTER) else 1
         p0 = to_canvas(projector(current(a)))
         p1 = to_canvas(projector(current(b)))
         draw.line((*p0, *p1), fill=(*color, alpha), width=width)
 
-    if projection_name == "side":
-        # Draw the app-equivalent side silhouette over the full linkage so the lip shape is auditable.
+    if projection_name in ("side", "iso"):
+        # Draw the app-equivalent centerline silhouette over the full linkage so the lip shape is auditable.
         center_nodes = sorted((node for node in model["nodes"] if node["row"] == center_row), key=lambda node: node["col"])
         center_path_nodes = side_profile_display_nodes(center_nodes)
         center_path = [to_canvas(projector(current(node))) for node in center_path_nodes]
@@ -283,7 +295,7 @@ def render_lattice(model: dict, filename: str, title: str, subtitle: str, projec
             lip_nodes = []
         lip_path = [to_canvas(projector(current(node))) for node in lip_nodes]
         if len(lip_path) >= 2:
-            draw.line(smooth_canvas_polyline(lip_path, 2), fill=(*LIP, 245), width=6, joint="curve")
+            draw.line(smooth_canvas_polyline(lip_path, 2), fill=(*LIP, 245), width=7 if projection_name == "iso" else 6, joint="curve")
 
         for node in center_nodes[::4]:
             x, y = to_canvas(projector(current(node)))
@@ -489,7 +501,7 @@ def main() -> None:
         model,
         "current-live-isometric.png",
         "Current inverse-sheet isometric linkage",
-        "Full source model with preserved rectangular array and bounded downturned lip.",
+        "Three-quarter 3D view; full sheet retained while the center curl and lip stay readable.",
         "iso",
         iso_project,
     )
@@ -500,15 +512,6 @@ def main() -> None:
         "Full source model from above; the footprint stays rounded instead of collapsing into a triangular fan.",
         "top",
         top_project,
-    )
-    render_lattice(
-        model,
-        "current-live-cross-section.png",
-        "Current inverse-sheet cross-section",
-        "Central rows only; this stays separate from the full side view.",
-        "cross",
-        cross_project,
-        center_only=True,
     )
     render_reference_overlay(model)
 

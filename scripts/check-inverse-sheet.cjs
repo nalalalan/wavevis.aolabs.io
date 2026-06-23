@@ -459,7 +459,7 @@ if (
   sideRenderDirectLines.maxRenderedNeighborDegreeResidual !== 0 ||
   sideRenderDirectLines.minRenderedInteriorDegree < 4
 ) {
-  failures.push('side view should show the full node array with direct rectangular linkages, not a sliced cross-section or hidden span legs')
+  failures.push('side view should show the full node array with direct rectangular linkages, not a profile-only debug view or hidden span legs')
 }
 
 if (mechanism.maxPairLengthSpread > 0.005) {
@@ -1399,15 +1399,15 @@ function summarizeCustomSliceMapping(model) {
     stats.frontShoulder.activeRows >= stats.tailTaper.activeRows + 4 &&
     stats.body.activeRows >= stats.tailTaper.activeRows + 4 &&
     Math.max(...widths) < model.config.rows - 2
-  const sliceStaysCentered = maxCenterOffset <= gridSpacingY * 0.7
+  const centerSpanStaysCentered = maxCenterOffset <= gridSpacingY * 0.7
 
   return {
     ...stats,
     widthRangeRows: Math.max(...widths) - Math.min(...widths),
     maxCenterOffset: round(maxCenterOffset),
     localizedSpanFalloff,
-    sliceStaysCentered,
-    ok: localizedSpanFalloff && sliceStaysCentered,
+    centerSpanStaysCentered,
+    ok: localizedSpanFalloff && centerSpanStaysCentered,
   }
 }
 

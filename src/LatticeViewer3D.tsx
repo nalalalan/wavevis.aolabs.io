@@ -22,13 +22,12 @@ import { canvasResizeObserver } from './resizeObserverPolyfill'
 
 const inverseLinkageColor = '#111111'
 const inverseCellBodyColor = '#2f3130'
-const crossSectionRowBand = 1
 
 type NodeEdgeRenderScope = {
   nodeIds: string[]
   edges: LatticeEdge[]
-  sideSlice: boolean
   sideView: boolean
+  isometricView: boolean
   topView: boolean
 }
 
@@ -55,8 +54,8 @@ export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequ
         <Suspense fallback={null}>
           <LatticeModelGroup model={model} selected={selected} view={viewRequest.view} onEdgePick={onEdgePick} />
         </Suspense>
-        {viewRequest.view !== 'side' && viewRequest.view !== 'slice' && <SceneGrid bounds={model.bounds} />}
-        {viewRequest.view !== 'side' && viewRequest.view !== 'slice' && (
+        {viewRequest.view === 'top' && <SceneGrid bounds={model.bounds} />}
+        {viewRequest.view === 'top' && (
           <Suspense fallback={null}>
             <AxisLabels bounds={model.bounds} />
           </Suspense>
@@ -82,32 +81,26 @@ function LatticeModelGroup({
   const nodeById = useMemo(() => new Map(model.nodes.map((node) => [node.id, node])), [model.nodes])
   const quadMetricById = useMemo(() => new Map(model.quadMetrics.map((metric) => [metric.quadId, metric])), [model.quadMetrics])
   const dihedralByQuad = useMemo(() => buildDihedralByQuad(model.dihedralMetrics), [model.dihedralMetrics])
-  const sliceProfileView = view === 'slice'
   const sideMechanismView = view === 'side'
+  const isometricMechanismView = view === 'isometric'
   const topPlanView = view === 'top'
   const renderScope = useMemo(() =>
-    buildNodeEdgeRenderScope(model, sliceProfileView, sideMechanismView, topPlanView),
-  [model, sideMechanismView, sliceProfileView, topPlanView])
+    buildNodeEdgeRenderScope(model, sideMechanismView, isometricMechanismView, topPlanView),
+  [isometricMechanismView, model, sideMechanismView, topPlanView])
   const restGhostGeometry = useMemo(() => buildRestGhostGeometry(model, nodeById), [model, nodeById])
-  const surfaceQuads = useMemo(() => {
-    if (sliceProfileView) return buildSideSurfaceQuads(model, crossSectionRowBand)
-    return model.quads
-  }, [model, sliceProfileView])
-  const surfaceGeometry = useMemo(() => buildSurfaceGeometry(model, nodeById, quadMetricById, dihedralByQuad, surfaceQuads), [model, nodeById, quadMetricById, dihedralByQuad, surfaceQuads])
-  const surfaceVisible = model.config.showSurface && view !== 'isometric' && view !== 'top'
+  const surfaceGeometry = useMemo(() => buildSurfaceGeometry(model, nodeById, quadMetricById, dihedralByQuad, model.quads), [model, nodeById, quadMetricById, dihedralByQuad])
+  const surfaceVisible = model.config.showSurface && view !== 'top'
   const labelsVisible = model.config.showLabels && model.config.rows <= 15 && model.config.columns <= 15
   const largeGrid = model.config.rows > 30 || model.config.columns > 30
   const edgePickRadius = Math.max(model.config.spacing * (largeGrid ? 0.08 : 0.09), 0.035)
-  const nodeRadius = sliceProfileView
-    ? Math.max(model.config.spacing * 0.052, 0.034)
-    : sideMechanismView
+  const nodeRadius = sideMechanismView
       ? Math.max(model.config.spacing * 0.02, 0.012)
     : Math.max(model.config.spacing * (largeGrid ? 0.042 : 0.09), 0.026)
-  const surfaceOpacity = sideMechanismView ? 0.006 : sliceProfileView ? 0.2 : (largeGrid ? 0.3 : 0.36)
+  const surfaceOpacity = sideMechanismView ? 0.006 : isometricMechanismView ? 0.09 : (largeGrid ? 0.3 : 0.36)
 
   return (
     <group>
-      {model.config.showRestGhost && view !== 'side' && view !== 'slice' && (
+      {model.config.showRestGhost && view !== 'side' && (
         <lineSegments geometry={restGhostGeometry}>
           <lineBasicMaterial color="#9e968c" transparent opacity={0.28} />
         </lineSegments>
@@ -122,7 +115,6 @@ function LatticeModelGroup({
           nodes={nodeById}
           nodeIds={renderScope.nodeIds}
           radius={nodeRadius}
-          sideSlice={sliceProfileView}
           sideProjection={sideMechanismView}
         />
       )}
@@ -144,7 +136,7 @@ function LatticeModelGroup({
           compact={model.config.showNodes || model.config.showEdges}
         />
       )}
-      {sliceProfileView && (
+      {isometricMechanismView && (
         <SideProfileSilhouette
           model={model}
           compact={model.config.showNodes || model.config.showEdges}
@@ -156,66 +148,18 @@ function LatticeModelGroup({
   )
 }
 
-function buildSideSurfaceQuads(model: LatticeModel, rowBand = 1): LatticeQuad[] {
-  if (model.config.rows < 2) return model.quads
-  const centerQuadRow = Math.max(0, Math.min(model.config.rows - 2, Math.floor((model.config.rows - 2) * 0.5)))
-  const halfBand = Math.max(0, Math.floor(rowBand * 0.5))
-  const minRow = Math.max(0, centerQuadRow - halfBand)
-  const maxRow = Math.min(model.config.rows - 2, centerQuadRow + halfBand)
-
-  return model.quads.filter((quad) => quad.row >= minRow && quad.row <= maxRow)
-}
-
 function buildNodeEdgeRenderScope(
   model: LatticeModel,
-  sideSlice: boolean,
   sideView = false,
+  isometricView = false,
   topView = false,
 ): NodeEdgeRenderScope {
-  if (sideView && !sideSlice) {
-    return {
-      nodeIds: model.nodes.map((node) => node.id),
-      edges: model.edges,
-      sideSlice: false,
-      sideView: true,
-      topView: false,
-    }
-  }
-
-  if (!sideSlice) {
-    return {
-      nodeIds: model.nodes.map((node) => node.id),
-      edges: model.edges,
-      sideSlice: false,
-      sideView,
-      topView,
-    }
-  }
-
-  const sliceRow = Math.round((model.config.rows - 1) * 0.5)
-  const sliceNodeIds = new Set(
-    model.nodes
-      .filter((node) => node.row === sliceRow)
-      .map((node) => node.id),
-  )
-  const edges = model.edges.filter((edge) =>
-    edge.orientation === 'horizontal' &&
-    sliceNodeIds.has(edge.nodeA) &&
-    sliceNodeIds.has(edge.nodeB),
-  )
-  const activeNodeIds = new Set<string>()
-
-  edges.forEach((edge) => {
-    activeNodeIds.add(edge.nodeA)
-    activeNodeIds.add(edge.nodeB)
-  })
-
   return {
-    nodeIds: [...activeNodeIds],
-    edges,
-    sideSlice: true,
-    sideView: false,
-    topView: false,
+    nodeIds: model.nodes.map((node) => node.id),
+    edges: model.edges,
+    sideView,
+    isometricView,
+    topView,
   }
 }
 
@@ -233,11 +177,11 @@ function SideProfileSilhouette({
   const profile = useMemo(() => {
     if (model.summary.maxHeight <= model.config.spacing * 0.2) return null
 
-    const sliceRow = clampIndex(row ?? Math.round((model.config.rows - 1) * 0.5), model.config.rows)
+    const profileRow = clampIndex(row ?? Math.round((model.config.rows - 1) * 0.5), model.config.rows)
     const rawPoints: Array<{ point: Vec3; col: number }> = []
 
     for (let col = 0; col < model.config.columns; col += 1) {
-      const node = model.nodes.find((candidate) => candidate.row === sliceRow && candidate.col === col)
+      const node = model.nodes.find((candidate) => candidate.row === profileRow && candidate.col === col)
       if (!node) continue
 
       const point: Vec3 = [
@@ -308,7 +252,7 @@ function SideProfileSilhouette({
             <meshBasicMaterial color="#fff8ee" transparent opacity={subtle ? 0.32 : compact ? 0.58 : 0.6} depthTest={false} depthWrite={false} />
           </mesh>
           <mesh geometry={profile.terminal.core} renderOrder={34}>
-            <meshBasicMaterial color="#10100f" transparent opacity={subtle ? 0.9 : compact ? 0.98 : 1} depthTest={false} depthWrite={false} />
+            <meshBasicMaterial color="#a64236" transparent opacity={subtle ? 0.9 : compact ? 0.98 : 1} depthTest={false} depthWrite={false} />
           </mesh>
         </>
       )}
@@ -451,13 +395,11 @@ function NodeInstances({
   nodes,
   nodeIds,
   radius,
-  sideSlice,
   sideProjection,
 }: {
   nodes: Map<string, LatticeNode>
   nodeIds: string[]
   radius: number
-  sideSlice: boolean
   sideProjection?: boolean
 }) {
   const ref = useRef<THREE.InstancedMesh>(null)
@@ -466,13 +408,13 @@ function NodeInstances({
     color: inverseCellBodyColor,
     emissive: inverseCellBodyColor,
     emissiveIntensity: 0.08,
-    transparent: sideSlice || sideProjection,
-    opacity: sideProjection ? 0.3 : sideSlice ? 0.9 : 1,
+    transparent: sideProjection,
+    opacity: sideProjection ? 0.3 : 1,
     roughness: 0.45,
     metalness: 0.03,
-    depthTest: !(sideSlice || sideProjection),
-    depthWrite: !(sideSlice || sideProjection),
-  }), [sideProjection, sideSlice])
+    depthTest: !sideProjection,
+    depthWrite: !sideProjection,
+  }), [sideProjection])
 
   useLayoutEffect(() => {
     if (!ref.current) return
@@ -488,7 +430,7 @@ function NodeInstances({
     ref.current.instanceMatrix.needsUpdate = true
   }, [nodeIds, nodes, radius])
 
-  return <instancedMesh ref={ref} args={[geometry, material, nodeIds.length]} renderOrder={sideSlice || sideProjection ? 24 : 0} />
+  return <instancedMesh ref={ref} args={[geometry, material, nodeIds.length]} renderOrder={sideProjection ? 24 : 0} />
 }
 
 function StraightEdgeSegments({
@@ -498,8 +440,8 @@ function StraightEdgeSegments({
   nodes: Map<string, LatticeNode>
   scope: NodeEdgeRenderScope
 }) {
-  const splitSideEdges = scope.sideView && !scope.sideSlice
-  const splitFullGridEdges = !scope.sideSlice
+  const splitSideEdges = scope.sideView
+  const splitIsometricEdges = scope.isometricView
   const geometries = useMemo(() => {
     const buildGeometry = (edges: LatticeEdge[]) => {
       const positions = new Float32Array(edges.length * 2 * 3)
@@ -511,20 +453,6 @@ function StraightEdgeSegments({
       const nextGeometry = new THREE.BufferGeometry()
       nextGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
       return nextGeometry
-    }
-
-    if (!splitFullGridEdges) {
-      return {
-        all: buildGeometry(scope.edges),
-        profile: null,
-        span: null,
-        profileActive: null,
-        profileFlat: null,
-        spanActive: null,
-        spanFlat: null,
-        topPlan: null,
-        topFold: null,
-      }
     }
 
     const nodeValues = [...nodes.values()]
@@ -557,7 +485,7 @@ function StraightEdgeSegments({
       }
     }
 
-    if (!splitSideEdges) {
+    if (!(splitSideEdges || splitIsometricEdges)) {
       return {
         all: null,
         profile: buildGeometry(profileEdges),
@@ -607,7 +535,26 @@ function StraightEdgeSegments({
       topPlan: null,
       topFold: null,
     }
-  }, [nodes, scope.edges, scope.topView, splitFullGridEdges, splitSideEdges])
+  }, [nodes, scope.edges, scope.topView, splitIsometricEdges, splitSideEdges])
+
+  if (splitIsometricEdges && geometries.profileActive && geometries.profileFlat && geometries.spanActive && geometries.spanFlat) {
+    return (
+      <>
+        <lineSegments geometry={geometries.spanFlat} renderOrder={0}>
+          <lineBasicMaterial color="#312f2a" transparent opacity={0.018} depthTest depthWrite={false} />
+        </lineSegments>
+        <lineSegments geometry={geometries.profileFlat} renderOrder={1}>
+          <lineBasicMaterial color="#26241f" transparent opacity={0.05} depthTest depthWrite={false} />
+        </lineSegments>
+        <lineSegments geometry={geometries.spanActive} renderOrder={2}>
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.1} depthTest={false} depthWrite={false} />
+        </lineSegments>
+        <lineSegments geometry={geometries.profileActive} renderOrder={3}>
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.68} depthTest={false} depthWrite={false} />
+        </lineSegments>
+      </>
+    )
+  }
 
   if (splitSideEdges && geometries.profileActive && geometries.profileFlat && geometries.spanActive && geometries.spanFlat) {
     return (
@@ -628,7 +575,7 @@ function StraightEdgeSegments({
     )
   }
 
-  if (!scope.sideSlice && geometries.profile && geometries.span) {
+  if (geometries.profile && geometries.span) {
     return (
       <>
         <lineSegments geometry={geometries.span} renderOrder={0}>
@@ -655,13 +602,13 @@ function StraightEdgeSegments({
   }
 
   return (
-    <lineSegments geometry={geometries.all ?? undefined} renderOrder={scope.sideSlice ? 23 : 0}>
+    <lineSegments geometry={geometries.all ?? undefined} renderOrder={0}>
       <lineBasicMaterial
         color={inverseLinkageColor}
-        transparent={scope.sideSlice || scope.sideView}
-        opacity={scope.sideSlice ? 0.94 : scope.sideView ? 0.82 : 0.9}
-        depthTest={!scope.sideSlice}
-        depthWrite={!scope.sideSlice}
+        transparent={scope.sideView}
+        opacity={scope.sideView ? 0.82 : 0.9}
+        depthTest
+        depthWrite
       />
     </lineSegments>
   )
@@ -747,7 +694,7 @@ function SelectedHighlight({
   view: CameraViewRequest['view']
 }) {
   if (!selected) return null
-  const sideLikeView = view === 'side' || view === 'slice' || view === 'isometric'
+  const sideLikeView = view === 'side' || view === 'isometric'
 
   if (selected.kind === 'edge') {
     const edge = model.edges.find((candidate) => candidate.id === selected.id)
@@ -931,16 +878,17 @@ function positionCamera(
   view: CameraViewRequest['view'],
   selected?: SelectedElement,
 ): void {
-  const sideLikeView = view === 'side' || view === 'slice'
-  const overviewView = view === 'top' || view === 'isometric'
+  const sideLikeView = view === 'side'
   const bounds = !selected && sideLikeView
     ? activeSideProfileBounds(model)
-    : !selected && overviewView
+    : !selected && view === 'isometric'
+      ? activeIsometricCurlBounds(model)
+    : !selected && view === 'top'
       ? activeOverviewBounds(model)
       : model.bounds
   const maxSpan = Math.max(bounds.span[0], bounds.span[1], bounds.span[2], 2)
   const focus = focusForSelected(model, selected ?? null)
-  const fov = focus ? 32 : view === 'side' || view === 'isometric' ? 16 : view === 'slice' ? 14 : 42
+  const fov = focus ? 32 : view === 'side' ? 16 : view === 'isometric' ? 18 : 42
   const fitDistance = cameraDistanceForView(bounds, view, fov, camera.aspect)
   const sideProjectionScale = 1
   const distance = focus
@@ -952,11 +900,9 @@ function positionCamera(
       ? new THREE.Vector3(target.x, target.y, target.z + distance)
     : view === 'side'
       ? new THREE.Vector3(target.x, target.y - distance, target.z)
-      : view === 'isometric'
-        ? new THREE.Vector3(target.x + distance * 0.34, target.y - distance * 0.98, target.z + distance * 0.2)
-      : view === 'slice'
-        ? new THREE.Vector3(target.x, target.y - distance, target.z)
-        : new THREE.Vector3(target.x + distance * 0.82, target.y - distance * 0.92, target.z + distance * 0.78)
+    : view === 'isometric'
+        ? new THREE.Vector3(target.x + distance * 0.22, target.y - distance * 1, target.z + distance * 0.16)
+      : new THREE.Vector3(target.x + distance * 0.82, target.y - distance * 0.92, target.z + distance * 0.78)
 
   camera.position.copy(position)
   if (view === 'top') {
@@ -967,13 +913,56 @@ function positionCamera(
   camera.lookAt(target)
 
   camera.fov = fov
-  camera.zoom = view === 'side' ? 1.08 : view === 'slice' ? 0.92 : view === 'isometric' ? 1.02 : 1
+  camera.zoom = view === 'side' ? 1.08 : view === 'isometric' ? 1.18 : 1
   camera.near = 0.01
   camera.far = Math.max(distance * 8, 100)
   camera.updateProjectionMatrix()
 
   controls?.target.copy(target)
   controls?.update()
+}
+
+function activeIsometricCurlBounds(model: LatticeModel): LatticeBounds {
+  const centerRow = clampIndex((model.config.rows - 1) * 0.5, model.config.rows)
+  const columnRange = activeSideColumnRange(model, 'focus')
+  const centerlineNodes = model.nodes
+    .filter((node) => node.row === centerRow && node.col >= columnRange.minCol && node.col <= columnRange.maxCol)
+    .sort((a, b) => a.col - b.col)
+
+  if (centerlineNodes.length < 2) return activeOverviewBounds(model)
+
+  const minX = Math.min(...centerlineNodes.map((node) => node.currentPosition[0]))
+  const maxX = Math.max(...centerlineNodes.map((node) => node.currentPosition[0]))
+  const minZ = Math.min(...centerlineNodes.map((node) => node.currentPosition[2]), 0)
+  const maxZ = Math.max(...centerlineNodes.map((node) => node.currentPosition[2]))
+  const profileHeight = Math.max(maxZ - minZ, model.config.spacing * 5)
+  const profileWidth = Math.max(maxX - minX, model.config.spacing * 5)
+  const desiredSpanX = Math.max(profileWidth + profileHeight * 0.72, profileHeight * 1.52, model.config.spacing * 11)
+  const desiredSpanY = Math.max(model.config.spacing * 22, Math.min(model.bounds.span[1] * 0.42, desiredSpanX * 0.52))
+  const padZ = Math.max(model.config.spacing * 1.7, profileHeight * 0.34)
+  const centerX = (minX + maxX) * 0.5
+  const min: Vec3 = [
+    centerX - desiredSpanX * 0.5,
+    model.bounds.center[1] - desiredSpanY * 0.5,
+    Math.min(0, minZ - padZ * 0.2),
+  ]
+  const max: Vec3 = [
+    centerX + desiredSpanX * 0.5,
+    model.bounds.center[1] + desiredSpanY * 0.5,
+    maxZ + padZ,
+  ]
+  const center: Vec3 = [
+    (min[0] + max[0]) * 0.5,
+    model.bounds.center[1],
+    (min[2] + max[2]) * 0.5,
+  ]
+
+  return {
+    min,
+    max,
+    center,
+    span: [max[0] - min[0], max[1] - min[1], max[2] - min[2]],
+  }
 }
 
 function clampIndex(value: number, length: number): number {
@@ -1094,8 +1083,8 @@ function cameraDistanceForView(
   const fov = THREE.MathUtils.degToRad(fovDeg)
   const tanHalfFov = Math.tan(fov / 2)
 
-  if (view === 'side' || view === 'slice') {
-    return fitPerspectiveDistance(bounds.span[0], bounds.span[2], tanHalfFov, safeAspect, view === 'side' ? 1.18 : 1.34)
+  if (view === 'side') {
+    return fitPerspectiveDistance(bounds.span[0], bounds.span[2], tanHalfFov, safeAspect, 1.18)
   }
 
   if (view === 'top') {

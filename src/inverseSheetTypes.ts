@@ -196,7 +196,7 @@ export type SelectedElement =
   | { kind: 'dihedral'; id: string }
   | null
 
-export type CameraView = 'isometric' | 'top' | 'side' | 'slice'
+export type CameraView = 'isometric' | 'top' | 'side'
 
 export type CameraViewRequest = {
   view: CameraView

@@ -136,7 +136,7 @@
 \end{center}
 
 \vspace{0.35em}
-\noindent\textbf{WaveVis is an inverse simulator for a mostly flat rectangular linkage sheet with one localized plunging-wave deformation rising out of the sheet. The primary visual target is the supplied breaking-wave reference family: Moana-like water stills plus the June 23, 2026 line drawing with a broad outer arch, inward spiral curl, downturned hook tip, smooth inner throat, and long low return. The intended artifact is not an extruded ribbon, half-pipe, swept cross-section, roof, bridge, or hollow shell. It is a full array of linkage cells over a fixed flat perimeter: the center region ramps upward, forms a rounded crest, projects a lip forward and downward, curls into the hooked tip, and fades smoothly back into the surrounding sheet in all directions. The reference geometry is an acceptance target, not a success claim. A rendered state is still open if the human-facing render reads as a tunnel, wall-covered cavity, angular blob, missing curl, missing hook, or broken linkage even when code checks pass. A verification URL is also part of the artifact: if the page ignores URL slider parameters, the screenshot is not evidence for the state Alan requested. This paper replaces the earlier narrow constraint-proof PDF as the visible system record. It defines the reference geometry, coordinate systems, curated breaking-wave target, visible slider semantics, topology invariants, rendering views, failure modes, verification gates, deployment state, and handoff procedure required before WaveVis work can be called correct.}
+\noindent\textbf{WaveVis is an inverse simulator for a mostly flat rectangular linkage sheet with one localized plunging-wave deformation rising out of the sheet. The primary visual target is the supplied breaking-wave reference family: Moana-like water stills plus the June 23, 2026 line drawing with a broad outer arch, inward spiral curl, downturned hook tip, smooth inner throat, and long low return. The intended artifact is not an extruded ribbon, half-pipe, swept strip, roof, bridge, or hollow shell. It is a full array of linkage cells over a fixed flat perimeter: the center region ramps upward, forms a rounded crest, projects a lip forward and downward, curls into the hooked tip, and fades smoothly back into the surrounding sheet in all directions. The reference geometry is an acceptance target, not a success claim. A rendered state is still open if the human-facing render reads as a tunnel, wall-covered cavity, angular blob, missing curl, missing hook, or broken linkage even when code checks pass. A verification URL is also part of the artifact: if the page ignores URL slider parameters, the screenshot is not evidence for the state Alan requested. This paper replaces the earlier narrow constraint-proof PDF as the visible system record. It defines the reference geometry, coordinate systems, curated breaking-wave target, visible slider semantics, topology invariants, rendering views, failure modes, verification gates, deployment state, and handoff procedure required before WaveVis work can be called correct.}
 
 \vspace{0.65em}
 \noindent\textbf{Fresh-chat use.} This PDF is intended to be the first artifact a new WaveVis chat reads. It is not only a public paper. It is the continuation manual for the current simulator: what shape is being made, what failures were rejected, which files own the implementation, how each slider is allowed to behave, what tests must pass, what public route is verified, what remains unresolved, and how to continue without re-learning the same mistakes from chat history.
@@ -150,7 +150,7 @@
 
 WaveVis exists to explore whether a cellular Sarrus-style linkage array can approximate visually meaningful three-dimensional sheet deformations while preserving mechanical readability. The simulator therefore has two simultaneous jobs. First, it must generate a target shape that resembles the supplied Moana ocean references rather than a generic height field. Second, it must keep the linkage graph legible: cells, nodes, connector pairs, and edges must remain visible and connected rather than being hidden under cosmetic surfaces or erased when the shape becomes difficult.
 
-The current design problem is stricter than drawing a pretty profile. A side silhouette can look acceptable while the actual three-dimensional sheet has a wall across the underside, a cavity where the lip should be open, an extruded-barrel cross-section, or zig-zagging linkage legs that no longer read as a mechanism. Conversely, a mesh can satisfy a local numerical check while failing the human outcome: a full rectangular sheet with a localized plunging wave. WaveVis must therefore treat the visible artifact, the mechanism topology, the parameter semantics, and the regression checks as one architecture.
+The current design problem is stricter than drawing a pretty profile. A side silhouette can look acceptable while the actual three-dimensional sheet has a wall across the underside, a cavity where the lip should be open, an extruded barrel, or zig-zagging linkage legs that no longer read as a mechanism. Conversely, a mesh can satisfy a local numerical check while failing the human outcome: a full rectangular sheet with a localized plunging wave. WaveVis must therefore treat the visible artifact, the mechanism topology, the parameter semantics, and the regression checks as one architecture.
 
 The central correction captured here is that a breaking wave is not made by sweeping one two-dimensional profile sideways. A swept profile creates a tunnel, canopy, or half-pipe. The required object is a localized deformation field on a flat sheet:
 \[
@@ -188,16 +188,16 @@ If this PDF is the only WaveVis context available, start with this section and t
   \item \textbf{Current source root:} workspace path \code{\_apps/wavevis.aolabs.io/}.
   \item \textbf{Public fallback mirror:} workspace path \code{\_apps/aolabs-site/wavevis/}. A WaveVis deploy to its own \code{gh-pages} branch does not automatically update the \code{aolabs.io/wavevis/} fallback unless the built files are mirrored there and the hub site is pushed.
   \item \textbf{Current architectural direction:} curated custom Moana-ocean profile localized into the inverse-sheet field. Manual \(xz\) and \(xy\) profile editors are not the active path.
-  \item \textbf{Current reference-match boundary:} the June 23, 2026 curl/tip and lateral-wall repair now targets the supplied line drawing in Figure~\ref{fig:breaking-wave-line-reference}, not only the older water stills. The default trace keeps the rounded top footprint that replaced the large triangular fan, uses the natural left-to-right wave read, and retunes the centerline around a broad outer arch, smaller inward curl, downturned hooked tip, smooth inner throat, and long low return. The renderer strengthens the terminal lip overlay without using it to hide broken cells. The source separates broad plan-footprint support from height-bearing curl rows, suppresses the lateral side-wall body band in the terminal curl zone, and keeps the no-bowl-pocket gate at zero for default, compact, and wide cases. The top view keeps a broader rounded plan footprint, suppresses the surface fill from the plan view, and applies top-specific folded-face line weighting instead of letting the curl taper and side-view centerline emphasis collapse the array into a triangle. The current default keeps a true side-on camera, zero self-intersections in the default trace gate, full linkage visibility, a top-footprint roundness gate, widened downturned-lip aspect gates, and a current-vs-reference trace overlay. The current claim is a visibly closer localized plunging-wave linkage state with an open remaining reference gap, not exact identity with the supplied drawing.
+  \item \textbf{Current reference-match boundary:} the June 23, 2026 curl/tip and lateral-wall repair now targets the supplied line drawing in Figure~\ref{fig:breaking-wave-line-reference}, not only the older water stills. The default trace keeps the rounded top footprint that replaced the large triangular fan, uses the natural left-to-right wave read, and retunes the centerline around a broad outer arch, smaller inward curl, downturned hooked tip, smooth inner throat, and long low return. The renderer strengthens the terminal lip overlay without using it to hide broken cells. The June 23 3D repair treats isometric view as its own outcome: it no longer hides the surface or lets a top-biased full-grid projection make the curl read as a gray cavity. Instead, the app uses a lower three-quarter camera, faint actual surface, active-linkage emphasis, and the same source-derived curl/lip trace so the 3D view reads as a breaking-wave overhang while keeping the full sheet visible. The source separates broad plan-footprint support from height-bearing curl rows, suppresses the lateral side-wall body band in the terminal curl zone, and keeps the no-bowl-pocket gate at zero for default, compact, and wide cases. The top view keeps a broader rounded plan footprint, suppresses the surface fill from the plan view, and applies top-specific folded-face line weighting instead of letting the curl taper and side-view centerline emphasis collapse the array into a triangle. The current default keeps a true side-on camera, zero self-intersections in the default trace gate, full linkage visibility, a top-footprint roundness gate, widened downturned-lip aspect gates, and a current-vs-reference trace overlay. The current claim is a visibly closer localized plunging-wave linkage state with an open remaining reference gap, not exact identity with the supplied drawing.
 \end{itemize}
 
 \subsection{What the next agent must not repeat}
 
 The repeated failures that this document is meant to prevent are:
 \begin{enumerate}
-  \item Do not make a swept tunnel, ribbon, canopy, roof, half-pipe, bridge, or extruded cross-section.
+  \item Do not make a swept tunnel, ribbon, canopy, roof, half-pipe, bridge, or extruded strip.
   \item Do not form a bowl, dimple, cavity, pucker, or side wall that covers the underside of the curl.
-  \item Do not show a cross-section when Alan clicks Side. Side is a side camera view of the full three-dimensional sheet.
+  \item Do not replace Side with a profile-only debug view. Side is a side camera view of the full three-dimensional sheet.
   \item Do not hide, ghost, clip, or remove linkage cells because they look bad. Fix the geometry.
   \item Do not remove the full array, cells, connectors, or pairwise linkage truth while chasing a prettier silhouette.
   \item Do not wire the lip directly to the ground or draw filler geometry across the open underside.
@@ -208,12 +208,12 @@ The repeated failures that this document is meant to prevent are:
 
 \subsection{Current live-state evidence}
 
-Figures~\ref{fig:current-live-side}--\ref{fig:current-live-slice} record the current source-rendered linkage state from the same geometry model that builds the public bundle: side view is the full three-dimensional sheet, the top view is the full plan projection, the reference overlay extracts the centerline silhouette, cross-section is separate, and the full linkage array is present in 3D. The June 23, 2026 supplied-line repair preserves the rounded top footprint that replaced the large triangular fan, changes the side camera and paper projection to read as a left-to-right breaking wave, and retunes the default profile toward the new line reference's broad outer arch, inward spiral curl, downturned hooked tip, smooth curved interior, and long low return. The source separates vertical height/curl from the rounded plan mask plus lateral footprint relief, and the latest lateral-wall pass suppresses height-bearing side bands in the terminal curl zone without collapsing the plan footprint into a wedge. The repair keeps the top-footprint roundness gate beside widened custom side-aspect gates, reference-trace fit, zero-self-intersection check, slider robustness checks, terminal-drop measurement, bowl-pocket gate, and rigid-cell connector invariants. It preserves the full \(4928\)-node and \(9700\)-edge array, keeps max height at \(12.41\) and max tensile strain at \(4.93\) in the default proof render, records a default reference-trace max residual of \(0.2002\), RMS residual of \(0.1149\), terminal-drop ratio of \(0.9593\), default top-footprint collapse ratio of \(1.1\), zero rendered-neighbor residual, and zero bowl pockets in the default gates. The overlay is still treated as an open reference-match boundary rather than a success claim.
+Figures~\ref{fig:current-live-side}--\ref{fig:current-live-top} record the current source-rendered linkage state from the same geometry model that builds the public bundle: side view is the full three-dimensional sheet, the top view is the full plan projection, the reference overlay extracts the centerline silhouette, and the full linkage array is present in 3D. The June 23, 2026 supplied-line repair preserves the rounded top footprint that replaced the large triangular fan, changes the side camera and paper projection to read as a left-to-right breaking wave, and retunes the default profile toward the new line reference's broad outer arch, inward spiral curl, downturned hooked tip, smooth curved interior, and long low return. The 3D follow-up repairs the isometric proof and app view that previously made the same geometry read as a flat grid with a central dent: the proof projection now treats height as height, the app isometric camera is lower and closer, the actual surface is faintly present, and active center curl plus red terminal lip are visible over the full sheet. The source separates vertical height/curl from the rounded plan mask plus lateral footprint relief, and the latest lateral-wall pass suppresses height-bearing side bands in the terminal curl zone without collapsing the plan footprint into a wedge. The repair keeps the top-footprint roundness gate beside widened custom side-aspect gates, reference-trace fit, zero-self-intersection check, slider robustness checks, terminal-drop measurement, bowl-pocket gate, and rigid-cell connector invariants. It preserves the full \(4928\)-node and \(9700\)-edge array, keeps max height at \(12.41\) and max tensile strain at \(4.93\) in the default proof render, records a default reference-trace max residual of \(0.2002\), RMS residual of \(0.1149\), terminal-drop ratio of \(0.9593\), default top-footprint collapse ratio of \(1.1\), zero rendered-neighbor residual, and zero bowl pockets in the default gates. The overlay is still treated as an open reference-match boundary rather than a success claim.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.98\linewidth]{current-live-side.png}
-\caption{Current source-rendered side linkage for the default inverse-sheet state. This is not a cross-section. The full linkage sheet remains visible, and the side camera now reads as a left-to-right wave with a rounded crest, open throat, and downturned terminal lip while the low structural return is kept out of the terminal-tip gate.}
+\caption{Current source-rendered side linkage for the default inverse-sheet state. The full linkage sheet remains visible, and the side camera now reads as a left-to-right wave with a rounded crest, open throat, and downturned terminal lip while the low structural return is kept out of the terminal-tip gate.}
 \label{fig:current-live-side}
 \end{figure}
 
@@ -227,7 +227,7 @@ Figures~\ref{fig:current-live-side}--\ref{fig:current-live-slice} record the cur
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.98\linewidth]{current-live-isometric.png}
-\caption{Current source-rendered 3D/isometric linkage for the same default state. The full rectangular array remains visible; the renderer must not scope this view down to a side slice. This figure is evidence for full-array visibility and no hidden filler.}
+\caption{Current source-rendered 3D/isometric linkage for the same default state after the 3D-view repair. The full rectangular array remains visible, but the projection now reads as a lower three-quarter breaking wave with a source-derived center curl and red terminal lip instead of a top-biased flat grid with a central cavity. This figure is evidence for full-array visibility and no hidden filler, not proof of exact reference identity.}
 \label{fig:current-live-isometric}
 \end{figure}
 
@@ -236,13 +236,6 @@ Figures~\ref{fig:current-live-side}--\ref{fig:current-live-slice} record the cur
 \includegraphics[width=0.98\linewidth]{current-live-top.png}
 \caption{Current source-rendered top linkage for the same default state. This is the gate that catches the June 22 failure: the plan footprint must read as a rounded localized wave body, not as a large triangle, wedge, or V fan caused by reusing the side curl taper, surface fill, or side-view highlight treatment.}
 \label{fig:current-live-top}
-\end{figure}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.98\linewidth]{current-live-cross-section.png}
-\caption{Current source-rendered cross-section for the same default state. This mode intentionally isolates central rows. It is useful for debugging the curl, but it is not allowed to substitute for the full 3D side view or 3D view.}
-\label{fig:current-live-slice}
 \end{figure}
 
 \subsection{File map}
@@ -255,7 +248,7 @@ Figures~\ref{fig:current-live-side}--\ref{fig:current-live-slice} record the cur
 File or route & Ownership \\
 \midrule
 \code{src/latticeGeometry.ts} & Source of truth for the inverse sheet model, defaults, sanitization, target displacement field, morph behavior, metrics, and geometry sanity checks. \\
-\code{src/LatticeViewer3D.tsx} & Source of truth for Canvas rendering, side/isometric/slice view separation, full-array edge/node scope, surface visibility, camera presets, and visual layers. \\
+\code{src/LatticeViewer3D.tsx} & Source of truth for Canvas rendering, side/isometric/top full-sheet camera behavior, full-array edge/node scope, surface visibility, camera presets, and visual layers. \\
 \code{src/TargetShapeControls.tsx} & Source of truth for the visible inverse-sheet controls: rows, columns, views, scale, morph, position, steer, display toggles, reset, export, and import. \\
 \code{src/InverseSheetTab.tsx} & Source of truth for URL-state loading, tab order, view requests, import/export plumbing, and the Inverse Sheet first-tab behavior. \\
 \code{scripts/check-inverse-sheet.cjs} & Main inverse-sheet regression checker. It compiles the TypeScript geometry and checks parameter semantics, lip curl, flatContribution, side-render scope, low-lip stability, lateral smoothness, no bowl pockets, and startup URL coverage. \\
@@ -278,7 +271,7 @@ A fresh agent continuing WaveVis should do the following in order:
   \item Open the verified public route \code{https://aolabs.io/wavevis/} and the current local route if a dev server is running.
   \item Reproduce Alan's active preset from the URL before changing source. Do not judge a different default state.
   \item Run \code{npm run check:geometry}. If it fails, fix source before visual tuning.
-  \item Render and inspect \code{Side}, \code{Cross Section}, and \code{3D}. Side must be full 3D; Cross Section must be the slice.
+  \item Render and inspect \code{Side}, \code{3D}, and \code{Top}. Side and 3D must both be full-sheet views with the curl visible.
   \item Make the smallest source change that improves the human-facing Moana-wave outcome without regressing the mechanism invariants.
   \item Re-run \code{npm run check:geometry} and \code{npm run build}.
   \item Verify live/public output after deploy or fallback mirror update. A local screenshot is not the public artifact.
@@ -383,9 +376,9 @@ These checks are guards, not substitutes for the human-facing screenshot. A visi
 \code{LatticeViewer3D.tsx} renders nodes and straight connector segments from the actual lattice graph. In the current contract:
 \begin{itemize}
   \item \code{view=side} sets a side camera over the full three-dimensional linkage array;
-  \item \code{view=slice} is the cross-section/profile view;
-  \item \code{view=isometric} shows the full rectangular array in perspective;
-  \item surface rendering is intentionally faint in side view and hidden in isometric so cells/connectors remain the artifact;
+  \item \code{view=isometric} shows the full rectangular array in perspective while still making the curl and lip readable;
+  \item surface rendering is intentionally faint in side view and faint in isometric so cells/connectors remain the artifact while the 3D volume does not disappear into a gray line field;
+  \item isometric view keeps a lower three-quarter camera, removes auxiliary grid/axis clutter, emphasizes active curl edges, and overlays the same source-derived centerline/terminal lip trace used by the side audit;
   \item side-view silhouette highlighting must include the curved throat after the forward-most lip point while muting the low flat structural return; trimming at the maximum-reach point makes the throat read angular, but showing the whole return creates a horizontal tongue;
   \item cells and connectors are display toggles, not repair paths.
 \end{itemize}
@@ -436,7 +429,7 @@ The accepted target is a ``flat sheet plus localized plunging wave'':
   \item the array remains a full linkage field with nodes and legs, not a hidden or clipped shell.
 \end{itemize}
 
-Figure~\ref{fig:outcome-map} gives the practical acceptance boundary. The shape must read as a local wave in a sheet, not as an extrusion. A single cross-section can guide the profile, but the generated three-dimensional field must vary across span.
+Figure~\ref{fig:outcome-map} gives the practical acceptance boundary. The shape must read as a local wave in a sheet, not as an extrusion. A single side profile can guide the curl, but the generated three-dimensional field must vary across span.
 
 \begin{figure}[H]
 \centering
@@ -473,7 +466,7 @@ The WaveVis generator and renderer must preserve the following hard constraints:
   \item \textbf{No erratic legs.} Long arms, spikes, zig-zags, random backtracking, and visible overlaps indicate a broken geometry or render path.
   \item \textbf{Smooth strain sharing.} Adjacent rows and columns should change gradually enough that the mesh reads as a continuous mechanism field.
   \item \textbf{Localized wave.} The curl must be strongest near the center and fade laterally. A constant side-to-side tunnel is not the target.
-  \item \textbf{Side/cross-section separation.} Side view shows the side view of the full three-dimensional render. Cross-section view is the only mode that intentionally slices or projects the center profile.
+  \item \textbf{Full-view side semantics.} Side view shows the full three-dimensional render from the side. It must not be replaced by a profile-only debug view.
   \item \textbf{No filler geometry.} Cosmetic walls, caps, planks, bridges, hidden couplers, or masks must not be used to conceal a bad mechanism.
 \end{enumerate}
 
@@ -510,7 +503,7 @@ The target-building pipeline is:
   \item apply rigid steer and position transforms after the shape is finalized;
   \item build full rectangular edge and quad topology;
   \item compute strain, bend, shear, dihedral, and display metrics;
-  \item render the full array, side view, or cross-section without substituting fake surfaces.
+  \item render the full array, side view, 3D view, and top view without substituting fake surfaces.
 \end{enumerate}
 
 The distinction between the curated target and rigid placement parameters is essential. The visible app no longer exposes manual \(xz\) or \(xy\) profile editors. The source target owns the Moana-ocean profile. The user-facing sliders are intentionally narrow: scale uniformly resizes that target, morph blends from rest to the completed target, steer rotates the finished target around the anchor, and position translates the finished target horizontally. Neither steer nor position may feed back into profile curvature, curl, width, strain generation, or cell topology.
@@ -527,7 +520,7 @@ Span envelope & Localizes the wave in the sheet. & Swept barrel, side wall, U-sh
 Boundary clamp & Keeps the perimeter flat. & Pulled sheet edges, non-flat perimeter. \\
 Morph & Interpolates rest to target only. & Half-morph mangling, topology change while sliding. \\
 Topology & Keeps full node/edge/quad graph. & Missing grid, hidden cells, detached legs. \\
-Renderer & Shows the actual mechanism. & Fake shell, hidden wall, side view as cross-section. \\
+Renderer & Shows the actual mechanism. & Fake shell, hidden wall, side view as profile-only debug output. \\
 \bottomrule
 \end{tabular}
 }
@@ -603,14 +596,14 @@ The mechanism evidence from the earlier proof remains relevant. The all-four-equ
 
 \section{Rendering modes}
 
-WaveVis has at least three distinct views:
+WaveVis has three product views:
 \begin{itemize}
   \item \textbf{3D/isometric view} shows the full rectangular array in perspective.
-  \item \textbf{Side view} is a camera view of the full three-dimensional render from the side. It is not a cross-section and must not slice away rows.
-  \item \textbf{Cross-section view} intentionally shows a selected slice or profile. This is the only mode that may look like a profile projection.
+  \item \textbf{Side view} is a camera view of the full three-dimensional render from the side and must show the curl.
+  \item \textbf{Top view} shows the full plan footprint and catches triangular or wedge-like plan regressions.
 \end{itemize}
 
-The view contract matters because a side view can hide the curl if lateral geometry forms a wall over the open underside. In that case the correct fix is to reshape the three-dimensional surface so the lateral envelope follows the wave contour and fades out, not to switch the side view into a cross-section or hide the wall.
+The view contract matters because a side view can hide the curl if lateral geometry forms a wall over the open underside. In that case the correct fix is to reshape the three-dimensional surface so the lateral envelope follows the wave contour and fades out, not to switch the side view into a profile-only debug output or hide the wall.
 
 \section{Verification gates}
 
@@ -630,7 +623,7 @@ Lip curl & Crest height minus lip-nose height; terminal slope; \code{terminalFac
 Span localization & Row-wise height profile across \(y\). & Center strong, sides faded; no swept tunnel. \\
 Morph continuity & Residual between adjacent morph samples. & No sudden jumps or topology flips. \\
 Slider isolation & Aligned geometries across position/steer/width changes. & Rigid controls stay rigid; width stays span-only. \\
-Visual side check & Browser side view screenshot or direct render inspection. & Curl visible without cross-section mode. \\
+Visual side check & Browser side view screenshot or direct render inspection. & Curl visible in the full side view. \\
 Defect repair loop & Confirmed visible defects re-enter source repair. & Acknowledging dimples, pockets, walls, or missing curl is not a stopping state. \\
 \code{noVisibleDimplePocket} & Open downturn, return advancement, and curl clearance in the centerline. & The tip may curl downward, but it must not form a tight pucker, pocket, dimple, or enclosed bowl. \\
 Startup URL parser & Covers all public and legacy slider aliases. & A shared verification URL cannot silently load a different height, overhang, lip dip, width, or smoothing state. \\
@@ -678,9 +671,8 @@ These checks are designed around Alan's repeated failures. If a future change re
 Numeric checks must be followed by rendered verification. The minimum visual pass is:
 \begin{enumerate}
   \item render the exact user URL/preset, not a nearby default;
-  \item check \code{Side}: full 3D side camera, visible curl, no cross-section substitution, no wall covering the open underside;
-  \item check \code{Cross Section}: profile/slice only, useful for debugging but not a substitute for side;
-  \item check \code{3D}: full rectangular array, localized center deformation, no swept tunnel, no hidden rows;
+  \item check \code{Side}: full 3D side camera, visible curl, no profile-only substitution, no wall covering the open underside;
+  \item check \code{3D}: full-sheet perspective view, visible curl/overhang, localized center deformation, no swept tunnel, no hidden rows;
   \item check \code{Top}: footprint/taper should be localized and rounded, not a constant extruded strip or a large triangular fan;
   \item inspect cells/connectors at the curl for zig-zags, random long arms, detached legs, overlaps, or missing four-leg interior connectivity;
   \item check lower \code{lipDip} values as well as \(120^\circ\), because old low-lip cases became unstable even when max lip looked acceptable;
@@ -745,10 +737,10 @@ This section is intentionally blunt so a future chat does not have to infer whet
   \item The public WaveVis page includes a clickable AO Labs home mark, an app identity mark, the \code{wavevis.aolabs.io} title, and a \code{System Architecture PDF} action.
   \item The Inverse Sheet tab is the first/default option; Double-Layer Sarrus is secondary.
   \item The current PDF route is the WaveVis fallback paper route: \code{/wavevis/proofs/}, file \code{wavevis-system-architecture.pdf}.
-  \item Side, Cross Section, and 3D are separate view modes. Side is the full three-dimensional sheet seen from the side; Cross Section is the slice/debug view.
+  \item Side, Top, and 3D are the product view modes. Side is the full three-dimensional sheet seen from the side, not a profile-only debug view.
   \item The current generator and renderer are checked by \code{npm run check:geometry}; the June 23 supplied-line curl/tip and lateral-wall repair uses the curated custom breaking-wave default, separate vertical and plan footprint masks, terminal-zone side-wall suppression, lateral footprint relief, top-specific surface suppression and folded-face line weighting, a top-footprint roundness gate, widened custom side-aspect gates, reference-trace fit, terminal-drop measurement, no bowl pockets, side-render full-array scope, slider robustness, and rigid-cell connector invariants.
-  \item The current side render keeps the full cells and connectors visible while using a left-to-right side camera, broad outer arch, inward curling lip, downturned hooked tip, curved interior throat, long low return, and no hidden filler. The current top render keeps a broader rounded footprint instead of a large triangle and no longer borrows the side-view surface fill or centerline/lip highlight.
-  \item Source-rendered side, reference-overlay, isometric, top, and cross-section figures were regenerated from the passing geometry model. Current source metrics are \(4928\) rendered nodes, \(9700\) rendered edges, zero rendered-neighbor residual, zero bowl pockets, default reference-trace max residual \(0.2002\), reference-trace RMS residual \(0.1149\), terminal-drop ratio \(0.9593\), default top-footprint collapse ratio \(1.1\), max height \(12.41\), and max tensile strain \(4.93\).
+  \item The current side render keeps the full cells and connectors visible while using a left-to-right side camera, broad outer arch, inward curling lip, downturned hooked tip, curved interior throat, long low return, and no hidden filler. The current 3D render keeps the full sheet visible while using a lower three-quarter camera, faint actual surface, active curl edge weighting, and a red terminal lip trace so the overhang reads as a breaking wave instead of a cavity. The current top render keeps a broader rounded footprint instead of a large triangle and no longer borrows the side-view surface fill or centerline/lip highlight.
+  \item Source-rendered side, reference-overlay, isometric, and top figures were regenerated from the passing geometry model. Current source metrics are \(4928\) rendered nodes, \(9700\) rendered edges, zero rendered-neighbor residual, zero bowl pockets, default reference-trace max residual \(0.2002\), reference-trace RMS residual \(0.1149\), terminal-drop ratio \(0.9593\), default top-footprint collapse ratio \(1.1\), max height \(12.41\), and max tensile strain \(4.93\).
 \end{itemize}
 
 \textbf{Open state that must not be overstated:}
@@ -756,15 +748,15 @@ This section is intentionally blunt so a future chat does not have to infer whet
   \item Exact matching to the supplied breaking-wave line drawing or photorealistic Moana-water frame is not a proven completed result. The correct claim is that the simulator now passes the curated breaking-wave linkage gate, includes a visible current-vs-reference overlay, and moves closer to the requested curl, tip, and overhang without regressing full-array linkage.
   \item \code{https://wavevis.aolabs.io/} is still treated as blocked/stale unless a fresh certificate and body check passes.
   \item This is a simulator and architecture record. It is not evidence that a physical lattice prototype has been fabricated or experimentally validated.
-  \item If Alan reports a visible dimple, cavity, side wall, bowl, missing curl, zig-zag, disconnected cell, or cross-section/side confusion after this PDF ships, the live rendered artifact overrides this paper. Repair the source and update the validation gate.
+  \item If Alan reports a visible dimple, cavity, side wall, bowl, missing curl, zig-zag, disconnected cell, or profile/side confusion after this PDF ships, the live rendered artifact overrides this paper. Repair the source and update the validation gate.
 \end{itemize}
 
 \section{Failure modes}
 
 The most important failure classes are now explicit:
 \begin{enumerate}
-  \item \textbf{Swept barrel.} One side profile is dragged sideways at constant cross-section. The result reads as a tunnel, roof, half-pipe, or bridge.
-  \item \textbf{Side-wall cover.} The lip may exist in a cross-section, but full side view shows a wall covering the open underside.
+  \item \textbf{Swept barrel.} One side profile is dragged sideways at constant span. The result reads as a tunnel, roof, half-pipe, or bridge.
+  \item \textbf{Side-wall cover.} The lip may exist in a center profile, but full side view shows a wall covering the open underside.
   \item \textbf{Straight chute.} The crest drops nearly vertically to a flat shelf instead of curling forward and under.
   \item \textbf{Blob or lump.} Excess smoothing or broad support creates a mound with no wave identity.
   \item \textbf{Top dent.} The outer crest has a kink or concave dent where a smooth radius is required.
@@ -785,15 +777,15 @@ The public app serves a static build. The architecture PDF is placed in the publ
 
 \section{Discussion}
 
-The main design lesson is that WaveVis cannot be corrected by tuning only the side profile. The user-facing failure was three-dimensional: side walls, swept tubes, missing full-array linkages, broken side/cross-section semantics, and zig-zag legs. The architecture therefore now uses a single curated target contract rather than a manual editor contract. The sheet generator is responsible for creating a localized Moana-like displacement field with lateral fade, boundary preservation, topology completeness, and a visible curled lip.
+The main design lesson is that WaveVis cannot be corrected by tuning only the side profile. The user-facing failure was three-dimensional: side walls, swept tubes, missing full-array linkages, broken side-view semantics, and zig-zag legs. The architecture therefore now uses a single curated target contract rather than a manual editor contract. The sheet generator is responsible for creating a localized Moana-like displacement field with lateral fade, boundary preservation, topology completeness, and a visible curled lip.
 
-This distinction also clarifies future work. If the simulator produces a good cross-section but a bad side view, the cross-section is only evidence that the profile exists somewhere. The real artifact still fails if the full three-dimensional render hides the curl or reads as an extrusion. Similarly, if the mesh is clean but the wave looks like a low mound, the mechanism is not enough. Both the shape and the linkage must be correct.
+This distinction also clarifies future work. If the simulator produces a good center profile but a bad side view, the profile is only evidence that the curve exists somewhere. The real artifact still fails if the full three-dimensional render hides the curl or reads as an extrusion. Similarly, if the mesh is clean but the wave looks like a low mound, the mechanism is not enough. Both the shape and the linkage must be correct.
 
 A newer lesson is that defect naming is not progress by itself. If a rendered state shows dimples, pockets, side walls, or a missing curl, the correct workflow is source repair, geometry-check update, rendered screenshot verification, and public-bundle verification. The current check names this directly as \code{noVisibleDimplePocket}: the lip must remain an open downturned branch with visible clearance and a return that advances into the flat sheet instead of folding into a pucker. The same source-of-truth rule applies to URL state. Several correction screenshots used URLs that carried explicit height, overhang, width, lipDip, and smoothing values; ignoring those parameters caused the page to render a different geometry than the requested test state. The startup parser is now part of validation through \code{startupUrlParamCoverage}. The architecture record is useful only if it changes the generator, state loader, and acceptance loop; it cannot substitute for a corrected human-facing WaveVis render.
 
 \section{Acknowledgements}
 
-This record was written to reduce repeated handoff burden during WaveVis development. The repeated complaints about side walls, missing cells, zig-zag legs, cross-section confusion, and swept-barrel geometry are treated as acceptance criteria rather than optional polish notes.
+This record was written to reduce repeated handoff burden during WaveVis development. The repeated complaints about side walls, missing cells, zig-zag legs, profile-view confusion, and swept-barrel geometry are treated as acceptance criteria rather than optional polish notes.
 
 \section{Funding}
 
