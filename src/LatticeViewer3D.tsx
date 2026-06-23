@@ -285,8 +285,8 @@ function SideProfileSilhouette({
       halo: new THREE.TubeGeometry(curve, Math.max(points.length * 12, 64), haloRadius, 10, false),
       terminal: terminalPoints.length >= 2
         ? {
-            core: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(terminalPoints, false, 'centripetal', 0.22), Math.max(terminalPoints.length * 14, 48), coreRadius * 0.88, 10, false),
-            halo: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(terminalPoints, false, 'centripetal', 0.22), Math.max(terminalPoints.length * 14, 48), haloRadius * 0.96, 10, false),
+            core: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(terminalPoints, false, 'centripetal', 0.22), Math.max(terminalPoints.length * 14, 48), coreRadius * 1.16, 10, false),
+            halo: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(terminalPoints, false, 'centripetal', 0.22), Math.max(terminalPoints.length * 14, 48), haloRadius * 1.28, 10, false),
           }
         : null,
     }
@@ -308,7 +308,7 @@ function SideProfileSilhouette({
             <meshBasicMaterial color="#fff8ee" transparent opacity={subtle ? 0.32 : compact ? 0.58 : 0.6} depthTest={false} depthWrite={false} />
           </mesh>
           <mesh geometry={profile.terminal.core} renderOrder={34}>
-            <meshBasicMaterial color="#8d332b" transparent opacity={subtle ? 0.76 : compact ? 0.86 : 0.92} depthTest={false} depthWrite={false} />
+            <meshBasicMaterial color="#8d332b" transparent opacity={subtle ? 0.86 : compact ? 0.94 : 0.98} depthTest={false} depthWrite={false} />
           </mesh>
         </>
       )}

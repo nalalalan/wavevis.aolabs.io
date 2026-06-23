@@ -49,7 +49,7 @@ const CORE_PROFILE_START = 0.02
 const CORE_PROFILE_END = 1
 const CORE_OVERHANG_HEIGHT_FRACTION = 0.28
 export const DEFAULT_CUSTOM_PROFILE_POINTS =
-  '0,0;0.034,0.003;0.144,0.036;0.193,0.069;0.226,0.099;0.256,0.131;0.282,0.167;0.302,0.205;0.321,0.244;0.34,0.284;0.359,0.323;0.377,0.362;0.395,0.402;0.414,0.441;0.433,0.48;0.451,0.52;0.47,0.559;0.488,0.598;0.507,0.638;0.525,0.677;0.544,0.716;0.563,0.755;0.582,0.794;0.601,0.834;0.621,0.872;0.641,0.911;0.664,0.948;0.693,0.981;0.73,1;0.792,0.996;0.858,0.9;0.913,0.62;0.913,0.34;0.86,0.16;0.74,0.035;0.765,0.14;0.79,0.24;0.764,0.31;0.812,0.252;0.886,0.108;0.953,0.024;1,0'
+  '0,0;0.034,0.003;0.144,0.036;0.193,0.069;0.226,0.099;0.256,0.131;0.282,0.167;0.302,0.205;0.321,0.244;0.34,0.284;0.359,0.323;0.377,0.362;0.395,0.402;0.414,0.441;0.433,0.48;0.451,0.52;0.47,0.559;0.488,0.598;0.507,0.638;0.525,0.677;0.544,0.716;0.563,0.755;0.582,0.794;0.601,0.834;0.621,0.872;0.641,0.911;0.664,0.948;0.693,0.981;0.73,1;0.792,0.996;0.858,0.9;0.913,0.66;0.94,0.42;0.918,0.22;0.842,0.09;0.72,0.018;0.84,0.016;0.94,0.012;1,0'
 export const DEFAULT_CUSTOM_SECTION_POINTS =
   '0,0.025;0.08,0.22;0.22,0.78;0.39,1;0.57,0.82;0.72,0.42;0.86,0.18;1,0.035'
 
@@ -1896,8 +1896,8 @@ function customProfileRowMask(
   const returnTail = smootherStep((profileU - 0.84) / 0.13)
   const heightTaper = lerpNumber(1.08, 0.66, smootherStep(Math.max(0, profileZ) / 0.82))
   const bodyTaper = lerpNumber(0.92, 1.18, broadBack * (1 - terminalCurl * 0.62))
-  const curlTaper = lerpNumber(1, 0.42, terminalCurl)
-  const returnTailTaper = lerpNumber(1, 0.5, returnTail * lipAmount)
+  const curlTaper = lerpNumber(1, 0.28, terminalCurl)
+  const returnTailTaper = lerpNumber(1, 0.36, returnTail * lipAmount)
   const bodyHalfWidth = clampNumber(
     config.overhangWidth *
       lerpNumber(0.14, 0.58, effectiveEnvelope) *
@@ -1922,10 +1922,10 @@ function customProfileRowMask(
   const wallFreeCurlZone = smootherStep(curlInterior / 0.24)
   const wallFreeBodyMask = lerpNumber(
     bodyMask,
-    bodyMask * Math.pow(curlCenterGate, 3.35),
+    bodyMask * Math.pow(curlCenterGate, 4.7),
     wallFreeCurlZone,
   )
-  const curlMask = Math.pow(curlCenterGate, 1.32) * curlInterior * profileActivity
+  const curlMask = Math.pow(curlCenterGate, 1.55) * curlInterior * profileActivity
   const centerlineGuarantee = 1 - smootherStep(
     (Math.abs(sheetY) - gridSpacingY * 0.65) / Math.max(gridSpacingY * 0.9, 0.000001),
   )

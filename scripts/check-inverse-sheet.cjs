@@ -52,7 +52,7 @@ const DEFAULT_GRID_DENOMINATOR = Math.max(DEFAULT_SHEET_ROWS - 1, DEFAULT_SHEET_
 const MAX_STEER_ANGLE_RAD = Math.PI / 4
 const CORE_PROFILE_START = 0.02
 const CORE_PROFILE_END = 1
-const SOURCE_BREAKING_WAVE_TRACE = '0,0;0.08,0.01;0.18,0.04;0.3,0.16;0.44,0.44;0.58,0.78;0.69,0.98;0.78,1;0.86,0.9;0.91,0.62;0.91,0.34;0.86,0.16;0.74,0.035'
+const SOURCE_BREAKING_WAVE_TRACE = '0,0;0.08,0.01;0.18,0.04;0.3,0.16;0.44,0.44;0.58,0.78;0.69,0.98;0.78,1;0.86,0.9;0.91,0.66;0.94,0.42;0.92,0.22;0.84,0.09;0.72,0.018'
 
 const failures = [...runInverseSheetSanityChecks()]
 const startupUrlParamCoverage = summarizeStartupUrlParamCoverage()
