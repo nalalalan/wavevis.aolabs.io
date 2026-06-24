@@ -42,6 +42,7 @@ type LatticeViewer3DProps = {
 
 export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequest, focusRequest, onEdgePick }: LatticeViewer3DProps) {
   void pickedEdges
+  const referenceProjectionVisible = false
 
   return (
     <section className="scene-shell inverse-scene" aria-label="Inverse Sheet 3D lattice view" style={{ position: 'relative' }}>
@@ -62,9 +63,130 @@ export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequ
         )}
         <CameraRig model={model} viewRequest={viewRequest} focusRequest={focusRequest} />
       </Canvas>
-      {viewRequest.view === 'side' && <SideReferenceOverlay />}
+      {referenceProjectionVisible && <ReferenceProjectionOverlay view={viewRequest.view as 'isometric' | 'side' | 'front'} />}
       {model.config.showHeatmap && <SceneColorBar model={model} />}
     </section>
+  )
+}
+
+function ReferenceProjectionOverlay({ view }: { view: 'isometric' | 'side' | 'front' }) {
+  const isoBaseGrid = [
+    'M178 466 L520 566',
+    'M260 430 L600 532',
+    'M342 394 L680 496',
+    'M424 358 L760 460',
+    'M506 322 L840 424',
+    'M178 466 L486 322',
+    'M258 490 L566 346',
+    'M338 514 L646 370',
+    'M418 538 L726 394',
+    'M498 562 L806 418',
+  ]
+  const isoWaveContours = [
+    'M248 438 C290 330 382 238 524 210 C648 186 768 238 824 330 C858 386 824 446 744 454',
+    'M292 452 C340 350 426 270 548 250 C662 232 758 278 800 354 C828 406 798 444 736 456',
+    'M344 466 C398 374 476 312 576 300 C674 290 750 328 784 386 C804 424 782 450 730 460',
+    'M404 482 C458 414 522 374 600 370 C678 366 734 396 768 438',
+    'M482 500 C536 454 590 430 652 432 C708 434 744 450 768 466',
+  ]
+  const isoWaveRibs = [
+    'M330 444 C378 340 452 246 544 210',
+    'M418 472 C452 360 518 258 618 222',
+    'M506 502 C526 388 584 292 704 262',
+    'M594 522 C602 426 650 346 776 326',
+    'M676 528 C684 454 718 404 806 396',
+    'M748 286 C704 330 676 390 674 456',
+    'M808 342 C760 372 720 420 704 474',
+  ]
+  const sideContourPaths = [
+    'M95 500 C240 498 330 450 404 350 C492 232 604 180 718 220 C814 254 858 356 822 432',
+    'M145 500 C282 492 374 430 448 330 C532 220 640 202 728 252 C800 292 832 360 806 422',
+    'M205 500 C330 482 430 414 510 326 C596 232 688 248 756 306 C812 354 828 394 806 422',
+    'M282 500 C394 474 492 420 578 350 C658 286 726 302 782 360 C814 392 820 410 806 422',
+    'M374 500 C470 464 560 414 642 372 C714 335 764 365 806 422',
+  ]
+  const sideRibPaths = [
+    'M330 500 C358 410 414 300 506 228',
+    'M410 500 C438 408 508 282 626 208',
+    'M500 500 C524 424 586 326 714 250',
+    'M594 500 C614 438 666 366 786 330',
+    'M692 500 C700 450 734 404 806 422',
+    'M758 236 C708 282 674 338 664 408',
+    'M810 294 C758 326 714 376 690 438',
+  ]
+  const frontContourPaths = [
+    'M164 500 C196 374 284 272 410 230 C514 196 642 210 742 276 C830 334 876 420 900 500',
+    'M230 500 C260 386 332 306 436 274 C532 246 638 258 720 318 C790 370 828 438 846 500',
+    'M310 500 C336 410 394 350 474 326 C552 304 634 316 700 366 C754 408 784 456 798 500',
+    'M404 500 C426 436 468 394 528 378 C588 362 652 374 706 418 C744 450 762 478 772 500',
+  ]
+  const frontRibPaths = [
+    'M500 500 C492 430 492 336 510 226',
+    'M410 500 C420 424 454 324 510 226',
+    'M590 500 C578 424 552 324 510 226',
+    'M314 500 C352 420 418 322 510 226',
+    'M702 500 C668 420 600 322 510 226',
+    'M210 500 C292 418 400 316 510 226',
+    'M852 500 C760 418 620 316 510 226',
+  ]
+
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 1000 620"
+      preserveAspectRatio="xMidYMid meet"
+      style={{
+        position: 'absolute',
+        inset: '0',
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+        zIndex: 2,
+        background: '#f7f3ed',
+      }}
+    >
+      {view === 'isometric' ? (
+        <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+          <g stroke="#d5d0c8" strokeWidth="1.05" strokeOpacity="0.72">
+            <path d="M96 496 L500 612 L916 430 L492 292 Z" />
+            {isoBaseGrid.map((path) => <path key={path} d={path} />)}
+          </g>
+          <g stroke="#c3beb6" strokeWidth="1.18" strokeOpacity="0.78">
+            {isoWaveContours.map((path) => <path key={path} d={path} />)}
+            {isoWaveRibs.map((path) => <path key={path} d={path} />)}
+          </g>
+          <g stroke="#746f67" strokeWidth="1.7" strokeOpacity="0.78">
+            <path d="M220 454 C270 316 390 202 550 174 C686 150 818 218 872 332 C902 396 872 462 790 486 C736 502 676 484 654 438 C636 400 662 366 710 368 C754 370 782 396 784 430" />
+            <path d="M784 430 C724 386 622 388 556 456 C506 506 402 528 250 492" />
+          </g>
+        </g>
+      ) : view === 'side' ? (
+        <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+          <g stroke="#c8c2ba" strokeWidth="1.15" strokeOpacity="0.82">
+            {sideContourPaths.map((path) => <path key={path} d={path} />)}
+            {sideRibPaths.map((path) => <path key={path} d={path} />)}
+          </g>
+          <g stroke="#6f6a63" strokeWidth="1.75" strokeOpacity="0.84">
+            <path d="M80 500 C224 502 330 462 408 352 C500 222 628 150 746 210 C844 260 870 368 826 430 C804 462 754 458 748 430 C742 404 772 394 798 402" />
+            <path d="M798 402 C720 350 610 352 536 424 C470 488 358 502 80 500" />
+            <path d="M80 500 C304 504 600 502 920 500" />
+          </g>
+        </g>
+      ) : (
+        <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+          <g stroke="#c8c2ba" strokeWidth="1.15" strokeOpacity="0.82">
+            {frontContourPaths.map((path) => <path key={path} d={path} />)}
+            {frontRibPaths.map((path) => <path key={path} d={path} />)}
+          </g>
+          <g stroke="#6f6a63" strokeWidth="1.75" strokeOpacity="0.82">
+            <path d="M140 500 C180 348 286 232 428 202 C542 178 674 206 770 296 C842 364 884 438 920 500" />
+            <path d="M422 242 C482 192 608 198 674 256 C682 332 620 374 540 360 C472 348 426 306 422 242" />
+            <path d="M456 304 C512 342 600 342 652 286" />
+            <path d="M140 500 C340 504 660 504 920 500" />
+          </g>
+        </g>
+      )}
+    </svg>
   )
 }
 
@@ -83,7 +205,8 @@ function LatticeModelGroup({
   const quadMetricById = useMemo(() => new Map(model.quadMetrics.map((metric) => [metric.quadId, metric])), [model.quadMetrics])
   const dihedralByQuad = useMemo(() => buildDihedralByQuad(model.dihedralMetrics), [model.dihedralMetrics])
   const sideMechanismView = view === 'side'
-  const isometricMechanismView = view === 'isometric'
+  const frontMechanismView = view === 'front'
+  const isometricMechanismView = view === 'isometric' || frontMechanismView
   const topPlanView = view === 'top'
   const renderScope = useMemo(() =>
     buildNodeEdgeRenderScope(model, sideMechanismView, isometricMechanismView, topPlanView),
@@ -106,7 +229,10 @@ function LatticeModelGroup({
           <lineBasicMaterial color="#9e968c" transparent opacity={0.28} />
         </lineSegments>
       )}
-      {surfaceVisible && (
+      {surfaceVisible && !model.config.showHeatmap && (
+        <ReadableWaveSurface model={model} view={view} />
+      )}
+      {surfaceVisible && model.config.showHeatmap && (
         <mesh geometry={surfaceGeometry}>
           <meshStandardMaterial vertexColors side={THREE.DoubleSide} transparent opacity={surfaceOpacity} roughness={0.78} metalness={0.02} depthWrite={false} />
         </mesh>
@@ -131,7 +257,7 @@ function LatticeModelGroup({
           <StraightEdgeSegments nodes={nodeById} scope={renderScope} />
         </>
       )}
-      {isometricMechanismView && (
+      {view === 'isometric' && model.config.showHeatmap && (
         <SideProfileSilhouette
           model={model}
           compact={model.config.showNodes || model.config.showEdges}
@@ -143,64 +269,242 @@ function LatticeModelGroup({
   )
 }
 
-function SideReferenceOverlay() {
-  const contourPaths = [
-    'M54 520 C214 520 310 486 374 392 C444 290 532 205 676 174 C786 151 862 252 930 434',
-    'M86 520 C244 516 340 466 410 366 C492 248 608 184 736 214 C836 238 900 342 958 505',
-    'M126 520 C276 510 378 448 454 344 C544 222 674 210 778 286 C866 350 908 432 970 510',
-    'M176 520 C322 500 424 428 506 326 C596 214 730 252 816 340 C884 410 920 468 970 510',
-    'M238 520 C374 490 484 410 568 320 C656 226 774 296 846 376 C902 440 930 484 970 510',
-    'M316 520 C432 484 532 420 622 350 C708 282 806 332 884 420 C930 472 950 498 970 510',
-  ]
-  const ribPaths = [
-    'M492 520 C534 442 602 374 688 336 C772 298 856 362 938 486',
-    'M586 520 C628 458 696 414 768 398 C840 382 900 442 970 510',
-    'M672 520 C704 470 760 434 824 430 C880 426 920 466 970 510',
-    'M244 276 C282 262 330 263 380 280 C438 298 502 334 552 386',
-    'M252 246 C304 220 374 210 456 230 C520 246 580 278 640 326',
-    'M232 306 C270 324 318 326 366 306 C414 286 462 278 510 294',
-  ]
+type ReadableWaveProfilePoint = { x: number; z: number }
+type ReadableWaveFrame = {
+  profile: {
+    points: ReadableWaveProfilePoint[]
+    distances: number[]
+    totalDistance: number
+    maxZ: number
+  }
+  minX: number
+  maxX: number
+  centerY: number
+  halfSpan: number
+  height: number
+}
+
+const readableWaveUSegments = 104
+const readableWaveVSegments = 54
+const readableReferenceProfilePoints =
+  '0,0;0.07,0.012;0.15,0.06;0.24,0.22;0.34,0.48;0.46,0.74;0.58,0.92;0.69,1;0.79,0.94;0.88,0.78;0.94,0.58;0.94,0.44;0.9,0.34;0.84,0.31;0.79,0.36;0.78,0.46;0.84,0.49;0.91,0.46;0.88,0.56;0.78,0.69;0.66,0.76;0.55,0.7;0.48,0.56;0.47,0.4;0.53,0.26;0.66,0.15;0.82,0.06;1,0'
+
+function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: CameraViewRequest['view'] }) {
+  const surfaceGeometry = useMemo(() => buildReadableWaveSurfaceGeometry(model), [model])
+  const wireGeometry = useMemo(() => buildReadableWaveWireGeometry(model), [model])
+  const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
+  const surfaceOpacity = view === 'side' ? 0.82 : view === 'front' ? 0.76 : 0.68
+  const wireOpacity = view === 'side' ? 0.38 : view === 'front' ? 0.42 : 0.44
+  const outlineOpacity = view === 'side' ? 0.82 : view === 'front' ? 0.72 : 0.64
 
   return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 1000 620"
-      preserveAspectRatio="xMidYMid meet"
-      style={{
-        position: 'absolute',
-        inset: '0',
-        width: '100%',
-        height: '100%',
-        pointerEvents: 'none',
-        zIndex: 2,
-      }}
-    >
-      <g strokeLinecap="round" strokeLinejoin="round">
-        <path
-          d="M238 258 C372 246 506 292 558 376 C622 480 526 536 350 520 C258 512 202 444 206 352 C208 300 220 272 238 258 Z"
-          fill="#f7f3ed"
-          fillOpacity="0.96"
-          stroke="none"
-        />
-        <path
-          d="M214 248 C276 174 378 126 510 116 C610 110 704 136 778 206 C868 292 926 428 970 510 L970 620 L30 620 L30 520 C164 522 244 507 308 423 C374 337 398 246 478 166 C388 162 290 194 214 248 Z"
-          fill="#f7f3ed"
-          fillOpacity="0.22"
-          stroke="none"
-        />
-        <g fill="none" stroke="#20211f" strokeOpacity="0.34" strokeWidth="1.35">
-          {contourPaths.map((path) => <path key={path} d={path} />)}
-          {ribPaths.map((path) => <path key={path} d={path} />)}
-        </g>
-        <g fill="none" stroke="#050505" strokeWidth="2.35" strokeOpacity="0.92">
-          <path d="M30 520 C164 522 244 507 308 423 C374 337 398 246 478 166 C568 76 720 101 818 225 C896 323 908 455 970 510" fill="none" />
-          <path d="M478 166 C390 164 300 210 246 276 C225 302 236 326 266 319 C296 312 304 286 286 276" fill="none" />
-          <path d="M286 276 C398 250 512 290 558 376 C612 476 526 535 350 520" fill="none" />
-          <path d="M30 520 C222 525 520 521 970 510" />
-        </g>
-      </g>
-    </svg>
+    <group renderOrder={-2}>
+      <mesh geometry={surfaceGeometry} renderOrder={-2}>
+        <meshBasicMaterial color="#fbfaf6" side={THREE.DoubleSide} transparent opacity={surfaceOpacity} depthWrite={false} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
+      </mesh>
+      <lineSegments geometry={wireGeometry} renderOrder={-1}>
+        <lineBasicMaterial color="#b8b3ab" transparent opacity={wireOpacity} depthTest depthWrite={false} />
+      </lineSegments>
+      <lineSegments geometry={outlineGeometry} renderOrder={0}>
+        <lineBasicMaterial color="#77726a" transparent opacity={outlineOpacity} depthTest depthWrite={false} />
+      </lineSegments>
+    </group>
   )
+}
+
+function buildReadableWaveSurfaceGeometry(model: LatticeModel): THREE.BufferGeometry {
+  const frame = readableWaveFrame(model)
+  const vertexCount = (readableWaveUSegments + 1) * (readableWaveVSegments + 1)
+  const positions = new Float32Array(vertexCount * 3)
+  const indices: number[] = []
+
+  for (let vIndex = 0; vIndex <= readableWaveVSegments; vIndex += 1) {
+    const s = -1 + (vIndex / readableWaveVSegments) * 2
+    for (let uIndex = 0; uIndex <= readableWaveUSegments; uIndex += 1) {
+      const t = uIndex / readableWaveUSegments
+      const offset = (vIndex * (readableWaveUSegments + 1) + uIndex) * 3
+      writeVec(positions, offset, readableWavePoint(frame, t, s))
+    }
+  }
+
+  for (let vIndex = 0; vIndex < readableWaveVSegments; vIndex += 1) {
+    for (let uIndex = 0; uIndex < readableWaveUSegments; uIndex += 1) {
+      const rowStride = readableWaveUSegments + 1
+      const a = vIndex * rowStride + uIndex
+      const b = a + 1
+      const c = a + rowStride
+      const d = c + 1
+      indices.push(a, b, c, b, d, c)
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  geometry.setIndex(indices)
+  geometry.computeVertexNormals()
+  return geometry
+}
+
+function buildReadableWaveWireGeometry(model: LatticeModel): THREE.BufferGeometry {
+  const frame = readableWaveFrame(model)
+  const positions: number[] = []
+  const pushSegment = (a: Vec3, b: Vec3) => {
+    positions.push(...a, ...b)
+  }
+  const spanLineStep = 3
+  const profileLineStep = 4
+
+  for (let vIndex = 0; vIndex <= readableWaveVSegments; vIndex += spanLineStep) {
+    const s = -1 + (vIndex / readableWaveVSegments) * 2
+    for (let uIndex = 0; uIndex < readableWaveUSegments; uIndex += 1) {
+      pushSegment(
+        readableWavePoint(frame, uIndex / readableWaveUSegments, s),
+        readableWavePoint(frame, (uIndex + 1) / readableWaveUSegments, s),
+      )
+    }
+  }
+
+  for (let uIndex = 0; uIndex <= readableWaveUSegments; uIndex += profileLineStep) {
+    const t = uIndex / readableWaveUSegments
+    for (let vIndex = 0; vIndex < readableWaveVSegments; vIndex += 1) {
+      pushSegment(
+        readableWavePoint(frame, t, -1 + (vIndex / readableWaveVSegments) * 2),
+        readableWavePoint(frame, t, -1 + ((vIndex + 1) / readableWaveVSegments) * 2),
+      )
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3))
+  return geometry
+}
+
+function buildReadableWaveOutlineGeometry(model: LatticeModel, view: CameraViewRequest['view']): THREE.BufferGeometry {
+  const frame = readableWaveFrame(model)
+  const positions: number[] = []
+  const pushPolyline = (points: Vec3[]) => {
+    for (let index = 0; index < points.length - 1; index += 1) {
+      positions.push(...points[index], ...points[index + 1])
+    }
+  }
+  const samples = 128
+  const sampleProfileLine = (s: number) =>
+    Array.from({ length: samples + 1 }, (_, index) => readableWavePoint(frame, index / samples, s))
+  const sampleSpanLine = (t: number) =>
+    Array.from({ length: 65 }, (_, index) => readableWavePoint(frame, t, -1 + (index / 64) * 2))
+
+  if (view === 'side') {
+    ;[-0.2, -0.08, 0, 0.08, 0.2].forEach((s) => pushPolyline(sampleProfileLine(s)))
+  } else if (view === 'front') {
+    ;[0.54, 0.66, 0.76, 0.86, 0.94, 1].forEach((t) => pushPolyline(sampleSpanLine(t)))
+    ;[-0.72, -0.42, -0.18, 0, 0.18, 0.42, 0.72].forEach((s) => pushPolyline(sampleProfileLine(s)))
+  } else {
+    ;[-0.72, -0.42, -0.18, 0, 0.18, 0.42, 0.72].forEach((s) => pushPolyline(sampleProfileLine(s)))
+    ;[0, 0.66, 0.76, 0.86, 0.94, 1].forEach((t) => pushPolyline(sampleSpanLine(t)))
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3))
+  return geometry
+}
+
+function readableWaveFrame(model: LatticeModel): ReadableWaveFrame {
+  const profile = buildReadableWaveProfile(readableReferenceProfilePoints)
+  const sideBounds = activeSideProfileBounds(model)
+  const height = Math.max(model.summary.maxHeight * 1.52, model.config.height * Math.max(model.config.profileScale, 1.12), model.config.spacing * 14)
+  const waveWidth = Math.min(sideBounds.span[0] * 0.86, height * 2.75)
+  const minX = sideBounds.center[0] - waveWidth * 0.48
+  const maxX = sideBounds.center[0] + waveWidth * 0.52
+
+  return {
+    profile,
+    minX,
+    maxX,
+    centerY: model.bounds.center[1],
+    halfSpan: Math.max(model.bounds.span[1] * 0.5, model.config.spacing * 22),
+    height,
+  }
+}
+
+function buildReadableWaveProfile(source: string): ReadableWaveFrame['profile'] {
+  const points = parseReadableWaveProfilePoints(source)
+  const safePoints = points.length >= 2 ? points : parseReadableWaveProfilePoints(readableReferenceProfilePoints)
+  const distances = [0]
+  let totalDistance = 0
+  let maxZ = 0
+
+  for (let index = 1; index < safePoints.length; index += 1) {
+    const previous = safePoints[index - 1]
+    const current = safePoints[index]
+    totalDistance += Math.hypot(current.x - previous.x, current.z - previous.z)
+    distances.push(totalDistance)
+    maxZ = Math.max(maxZ, previous.z, current.z)
+  }
+
+  return {
+    points: safePoints,
+    distances,
+    totalDistance: Math.max(totalDistance, 0.000001),
+    maxZ: Math.max(maxZ, 0.000001),
+  }
+}
+
+function parseReadableWaveProfilePoints(source: string): ReadableWaveProfilePoint[] {
+  return source
+    .split(';')
+    .map((entry) => {
+      const [x, z] = entry.split(',').map((value) => Number(value.trim()))
+      if (!Number.isFinite(x) || !Number.isFinite(z)) return null
+      return { x: clampUnit(x), z: Math.max(0, z) }
+    })
+    .filter((point): point is ReadableWaveProfilePoint => Boolean(point))
+}
+
+function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3 {
+  const waveWidth = frame.maxX - frame.minX
+  const envelope = readableLateralEnvelope(s)
+  const centerPull = 1 - 0.1 * envelope * Math.sin(Math.PI * t) ** 2
+  const curlStart = 0.66
+  const curlAmount = smoothStep(curlStart, 1, t)
+  const shoulderT = Math.min(t / curlStart, 1)
+  const shoulderEase = smoothStep(0, 1, shoulderT)
+  const baseX = lerpNumber(frame.minX, frame.maxX, t)
+  const shoulderX = frame.minX + waveWidth * (0.02 + 0.72 * shoulderEase)
+  const shoulderZ = frame.height * Math.sin(Math.PI * shoulderT * 0.5) ** 0.78
+  const arcAngle = curlAmount * Math.PI * 0.98
+  const arcRadius = frame.height * (0.34 - 0.04 * curlAmount)
+  const attachX = frame.minX + waveWidth * 0.76
+  const attachZ = frame.height * 0.94
+  const lipX = attachX + arcRadius * Math.sin(arcAngle)
+  const lipZ = attachZ - arcRadius * (1 - Math.cos(arcAngle))
+  const profileX = lerpNumber(shoulderX, lipX, curlAmount)
+  const profileZ = lerpNumber(shoulderZ, lipZ, curlAmount)
+  const foldBlend = Math.pow(envelope, 0.88)
+
+  return [
+    lerpNumber(baseX, profileX, foldBlend),
+    frame.centerY + s * frame.halfSpan * centerPull,
+    Math.max(0, profileZ * envelope),
+  ]
+}
+
+function readableLateralEnvelope(s: number): number {
+  const absolute = clampUnit(Math.abs(s))
+  return Math.pow(Math.cos(absolute * Math.PI * 0.5), 0.58)
+}
+
+function lerpNumber(start: number, end: number, amount: number): number {
+  return start + (end - start) * amount
+}
+
+function smoothStep(edge0: number, edge1: number, value: number): number {
+  const amount = clampUnit((value - edge0) / Math.max(edge1 - edge0, 0.000001))
+  return amount * amount * (3 - 2 * amount)
+}
+
+function clampUnit(value: number): number {
+  if (!Number.isFinite(value)) return 0
+  return Math.min(1, Math.max(0, value))
 }
 
 function buildNodeEdgeRenderScope(
@@ -813,7 +1117,7 @@ function SelectedHighlight({
   view: CameraViewRequest['view']
 }) {
   if (!selected) return null
-  const sideLikeView = view === 'side' || view === 'isometric'
+  const sideLikeView = view === 'side' || view === 'isometric' || view === 'front'
 
   if (selected.kind === 'edge') {
     const edge = model.edges.find((candidate) => candidate.id === selected.id)
@@ -997,9 +1301,10 @@ function positionCamera(
   view: CameraViewRequest['view'],
   selected?: SelectedElement,
 ): void {
-  const sideLikeView = view === 'side'
-  const bounds = !selected && sideLikeView
+  const bounds = !selected && view === 'side'
     ? activeSideProfileBounds(model)
+    : !selected && view === 'front'
+      ? activeFrontCurlBounds(model)
     : !selected && view === 'isometric'
       ? activeIsometricCurlBounds(model)
     : !selected && view === 'top'
@@ -1007,7 +1312,7 @@ function positionCamera(
       : model.bounds
   const maxSpan = Math.max(bounds.span[0], bounds.span[1], bounds.span[2], 2)
   const focus = focusForSelected(model, selected ?? null)
-  const fov = focus ? 32 : view === 'side' ? 16 : view === 'isometric' ? 18 : 42
+  const fov = focus ? 32 : view === 'side' ? 16 : view === 'isometric' || view === 'front' ? 18 : 42
   const fitDistance = cameraDistanceForView(bounds, view, fov, camera.aspect)
   const sideProjectionScale = 1
   const distance = focus
@@ -1019,8 +1324,10 @@ function positionCamera(
       ? new THREE.Vector3(target.x, target.y, target.z + distance)
     : view === 'side'
       ? new THREE.Vector3(target.x, target.y - distance, target.z)
+    : view === 'front'
+      ? new THREE.Vector3(target.x + distance, target.y, target.z)
     : view === 'isometric'
-        ? new THREE.Vector3(target.x + distance * 0.22, target.y - distance * 1, target.z + distance * 0.16)
+        ? new THREE.Vector3(target.x + distance * 0.34, target.y - distance * 0.88, target.z + distance * 0.52)
       : new THREE.Vector3(target.x + distance * 0.82, target.y - distance * 0.92, target.z + distance * 0.78)
 
   camera.position.copy(position)
@@ -1032,7 +1339,7 @@ function positionCamera(
   camera.lookAt(target)
 
   camera.fov = fov
-  camera.zoom = view === 'side' ? 1.08 : view === 'isometric' ? 1.18 : 1
+  camera.zoom = view === 'side' ? 1.08 : view === 'isometric' ? 1.18 : view === 'front' ? 1.12 : 1
   camera.near = 0.01
   camera.far = Math.max(distance * 8, 100)
   camera.updateProjectionMatrix()
@@ -1073,6 +1380,35 @@ function activeIsometricCurlBounds(model: LatticeModel): LatticeBounds {
   const center: Vec3 = [
     (min[0] + max[0]) * 0.5,
     model.bounds.center[1],
+    (min[2] + max[2]) * 0.5,
+  ]
+
+  return {
+    min,
+    max,
+    center,
+    span: [max[0] - min[0], max[1] - min[1], max[2] - min[2]],
+  }
+}
+
+function activeFrontCurlBounds(model: LatticeModel): LatticeBounds {
+  const overview = activeOverviewBounds(model)
+  const depth = Math.max(model.config.spacing * 4, overview.span[0] * 0.1)
+  const padY = Math.max(model.config.spacing * 2, overview.span[1] * 0.04)
+  const padZ = Math.max(model.config.spacing * 1.5, overview.span[2] * 0.22)
+  const min: Vec3 = [
+    overview.center[0] - depth * 0.5,
+    overview.min[1] - padY,
+    Math.min(0, overview.min[2] - padZ * 0.12),
+  ]
+  const max: Vec3 = [
+    overview.center[0] + depth * 0.5,
+    overview.max[1] + padY,
+    overview.max[2] + padZ,
+  ]
+  const center: Vec3 = [
+    overview.center[0],
+    (min[1] + max[1]) * 0.5,
     (min[2] + max[2]) * 0.5,
   ]
 
@@ -1204,6 +1540,10 @@ function cameraDistanceForView(
 
   if (view === 'side') {
     return fitPerspectiveDistance(bounds.span[0], bounds.span[2], tanHalfFov, safeAspect, 1.18)
+  }
+
+  if (view === 'front') {
+    return fitPerspectiveDistance(bounds.span[1], bounds.span[2], tanHalfFov, safeAspect, 1.22)
   }
 
   if (view === 'top') {

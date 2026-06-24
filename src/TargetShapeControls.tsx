@@ -80,6 +80,9 @@ export default function TargetShapeControls({
           <button type="button" className={currentView === 'side' ? 'secondary active' : 'secondary'} aria-pressed={currentView === 'side'} onClick={() => onView('side')}>
             Side
           </button>
+          <button type="button" className={currentView === 'front' ? 'secondary active' : 'secondary'} aria-pressed={currentView === 'front'} onClick={() => onView('front')}>
+            Front
+          </button>
         </div>
 
         <div className="slider-stack">
