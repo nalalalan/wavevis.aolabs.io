@@ -1451,21 +1451,22 @@ function activeIsometricCurlBounds(model: LatticeModel): LatticeBounds {
 
 function activeFrontCurlBounds(model: LatticeModel): LatticeBounds {
   const overview = activeOverviewBounds(model)
-  const depth = Math.max(model.config.spacing * 4, overview.span[0] * 0.1)
+  const curlBounds = activeIsometricCurlBounds(model)
+  const depth = Math.max(model.config.spacing * 6, curlBounds.span[0], overview.span[0] * 0.18)
   const padY = Math.max(model.config.spacing * 2, overview.span[1] * 0.04)
-  const padZ = Math.max(model.config.spacing * 1.5, overview.span[2] * 0.22)
+  const padZ = Math.max(model.config.spacing * 1.5, curlBounds.span[2] * 0.18, overview.span[2] * 0.22)
   const min: Vec3 = [
-    overview.center[0] - depth * 0.5,
+    curlBounds.center[0] - depth * 0.5,
     overview.min[1] - padY,
-    Math.min(0, overview.min[2] - padZ * 0.12),
+    Math.min(0, curlBounds.min[2] - padZ * 0.12),
   ]
   const max: Vec3 = [
-    overview.center[0] + depth * 0.5,
+    curlBounds.center[0] + depth * 0.5,
     overview.max[1] + padY,
-    overview.max[2] + padZ,
+    Math.max(overview.max[2], curlBounds.max[2]) + padZ,
   ]
   const center: Vec3 = [
-    overview.center[0],
+    curlBounds.center[0],
     (min[1] + max[1]) * 0.5,
     (min[2] + max[2]) * 0.5,
   ]
