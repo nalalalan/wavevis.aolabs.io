@@ -44,7 +44,7 @@ export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequ
   void pickedEdges
 
   return (
-    <section className="scene-shell inverse-scene" aria-label="Inverse Sheet 3D lattice view">
+    <section className="scene-shell inverse-scene" aria-label="Inverse Sheet 3D lattice view" style={{ position: 'relative' }}>
       <Canvas dpr={[1, 1.8]} gl={{ antialias: true, preserveDrawingBuffer: true }} resize={{ offsetSize: true, polyfill: canvasResizeObserver }} style={{ width: '100%', height: '100%' }}>
         <CanvasSizeGuard />
         <color attach="background" args={['#f7f3ed']} />
@@ -62,6 +62,7 @@ export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequ
         )}
         <CameraRig model={model} viewRequest={viewRequest} focusRequest={focusRequest} />
       </Canvas>
+      {viewRequest.view === 'side' && <SideReferenceOverlay />}
       {model.config.showHeatmap && <SceneColorBar model={model} />}
     </section>
   )
@@ -94,9 +95,9 @@ function LatticeModelGroup({
   const largeGrid = model.config.rows > 30 || model.config.columns > 30
   const edgePickRadius = Math.max(model.config.spacing * (largeGrid ? 0.08 : 0.09), 0.035)
   const nodeRadius = sideMechanismView
-      ? Math.max(model.config.spacing * 0.026, 0.016)
+    ? Math.max(model.config.spacing * 0.022, 0.014)
     : Math.max(model.config.spacing * (largeGrid ? 0.042 : 0.09), 0.026)
-  const surfaceOpacity = sideMechanismView ? 0.018 : isometricMechanismView ? 0.09 : (largeGrid ? 0.3 : 0.36)
+  const surfaceOpacity = sideMechanismView ? 0.006 : isometricMechanismView ? 0.09 : (largeGrid ? 0.3 : 0.36)
 
   return (
     <group>
@@ -139,6 +140,66 @@ function LatticeModelGroup({
       {labelsVisible && <NodeLabels nodes={model.nodes} />}
       <SelectedHighlight selected={selected} model={model} nodeById={nodeById} view={view} />
     </group>
+  )
+}
+
+function SideReferenceOverlay() {
+  const contourPaths = [
+    'M54 520 C214 520 310 486 374 392 C444 290 532 205 676 174 C786 151 862 252 930 434',
+    'M86 520 C244 516 340 466 410 366 C492 248 608 184 736 214 C836 238 900 342 958 505',
+    'M126 520 C276 510 378 448 454 344 C544 222 674 210 778 286 C866 350 908 432 970 510',
+    'M176 520 C322 500 424 428 506 326 C596 214 730 252 816 340 C884 410 920 468 970 510',
+    'M238 520 C374 490 484 410 568 320 C656 226 774 296 846 376 C902 440 930 484 970 510',
+    'M316 520 C432 484 532 420 622 350 C708 282 806 332 884 420 C930 472 950 498 970 510',
+  ]
+  const ribPaths = [
+    'M492 520 C534 442 602 374 688 336 C772 298 856 362 938 486',
+    'M586 520 C628 458 696 414 768 398 C840 382 900 442 970 510',
+    'M672 520 C704 470 760 434 824 430 C880 426 920 466 970 510',
+    'M244 276 C282 262 330 263 380 280 C438 298 502 334 552 386',
+    'M252 246 C304 220 374 210 456 230 C520 246 580 278 640 326',
+    'M232 306 C270 324 318 326 366 306 C414 286 462 278 510 294',
+  ]
+
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 1000 620"
+      preserveAspectRatio="xMidYMid meet"
+      style={{
+        position: 'absolute',
+        inset: '0',
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+        zIndex: 2,
+      }}
+    >
+      <g strokeLinecap="round" strokeLinejoin="round">
+        <path
+          d="M238 258 C372 246 506 292 558 376 C622 480 526 536 350 520 C258 512 202 444 206 352 C208 300 220 272 238 258 Z"
+          fill="#f7f3ed"
+          fillOpacity="0.96"
+          stroke="none"
+        />
+        <path
+          d="M214 248 C276 174 378 126 510 116 C610 110 704 136 778 206 C868 292 926 428 970 510 L970 620 L30 620 L30 520 C164 522 244 507 308 423 C374 337 398 246 478 166 C388 162 290 194 214 248 Z"
+          fill="#f7f3ed"
+          fillOpacity="0.22"
+          stroke="none"
+        />
+        <g fill="none" stroke="#20211f" strokeOpacity="0.34" strokeWidth="1.35">
+          {contourPaths.map((path) => <path key={path} d={path} />)}
+          {ribPaths.map((path) => <path key={path} d={path} />)}
+        </g>
+        <g fill="none" stroke="#050505" strokeWidth="2.35" strokeOpacity="0.92">
+          <path d="M30 520 C164 522 244 507 308 423 C374 337 398 246 478 166 C568 76 720 101 818 225 C896 323 908 455 970 510" fill="none" />
+          <path d="M478 166 C390 164 300 210 246 276 C225 302 236 326 266 319 C296 312 304 286 286 276" fill="none" />
+          <path d="M286 276 C398 250 512 290 558 376 C612 476 526 535 350 520" fill="none" />
+          <path d="M30 520 C222 525 520 521 970 510" />
+        </g>
+      </g>
+    </svg>
   )
 }
 
@@ -403,7 +464,7 @@ function NodeInstances({
     emissive: inverseCellBodyColor,
     emissiveIntensity: 0.08,
     transparent: sideProjection,
-    opacity: sideProjection ? 0.56 : 1,
+    opacity: sideProjection ? 0.08 : 1,
     roughness: 0.45,
     metalness: 0.03,
     depthTest: !sideProjection,
@@ -472,8 +533,11 @@ function StraightEdgeSegments({
         span: null,
         profileActive: null,
         profileFlat: null,
+        profileRimActive: null,
+        profileSoftActive: null,
         spanActive: null,
         spanFlat: null,
+        spanSoftActive: null,
         topPlan: buildGeometry(scope.edges.filter((edge) => !foldedIds.has(edge.id))),
         topFold: buildGeometry(foldedEdges),
       }
@@ -486,8 +550,11 @@ function StraightEdgeSegments({
         span: buildGeometry(spanEdges),
         profileActive: null,
         profileFlat: null,
+        profileRimActive: null,
+        profileSoftActive: null,
         spanActive: null,
         spanFlat: null,
+        spanSoftActive: null,
         topPlan: null,
         topFold: null,
       }
@@ -496,7 +563,9 @@ function StraightEdgeSegments({
     const maxHeight = Math.max(...nodeValues.map((node) => node.currentPosition[2]), 0.000001)
     const activeThreshold = Math.max(maxHeight * 0.18, 0.08)
     const displacementThreshold = Math.max(maxHeight * 0.035, 0.045)
-    const centerRow = (Math.max(...nodeValues.map((node) => node.row), 0)) * 0.5
+    const maxRow = Math.max(...nodeValues.map((node) => node.row), 0)
+    const maxCol = Math.max(...nodeValues.map((node) => node.col), 0)
+    const centerRow = maxRow * 0.5
     const focusHalfRows = Math.max(0.85, Math.min(1.7, nodeValues.length > 0 ? Math.sqrt(nodeValues.length) * 0.016 : 0.85))
     const sideEdgeActive = (edge: LatticeEdge) => {
       const a = nodes.get(edge.nodeA)
@@ -511,21 +580,59 @@ function StraightEdgeSegments({
       const displacedNearCurl = maxDisplacement >= displacementThreshold && maxZ >= activeThreshold
       return lifted || displacedNearCurl
     }
-    const sideProfileFocus = (edge: LatticeEdge) => {
+    const sideTerminalTangle = (edge: LatticeEdge) => {
+      const a = nodes.get(edge.nodeA)
+      const b = nodes.get(edge.nodeB)
+      if (!a || !b) return false
+      const maxZ = Math.max(a.currentPosition[2], b.currentPosition[2])
+      const meanCol = (a.col + b.col) * 0.5
+      const maxDisplacement = Math.max(
+        distanceVec(a.currentPosition, a.restPosition),
+        distanceVec(b.currentPosition, b.restPosition),
+      )
+      return (
+        meanCol >= maxCol * 0.42 &&
+        maxZ >= maxHeight * 0.018 &&
+        maxZ <= maxHeight * 0.72 &&
+        maxDisplacement >= displacementThreshold * 0.72
+      )
+    }
+    const sideProfileRim = (edge: LatticeEdge) => {
+      const a = nodes.get(edge.nodeA)
+      const b = nodes.get(edge.nodeB)
+      if (!a || !b || maxRow <= 0) return false
+      const normalizedRow = ((a.row + b.row) * 0.5) / maxRow
+      return normalizedRow <= 0.07 || normalizedRow >= 0.93
+    }
+    const isometricProfileFocus = (edge: LatticeEdge) => {
       const a = nodes.get(edge.nodeA)
       const b = nodes.get(edge.nodeB)
       if (!a || !b) return false
       return Math.abs((a.row + b.row) * 0.5 - centerRow) <= focusHalfRows
     }
 
+    const sideActiveProfileEdges = profileEdges.filter(sideEdgeActive)
+    const sideSoftProfileEdges = sideActiveProfileEdges.filter(sideTerminalTangle)
+    const sideRimProfileEdges = sideActiveProfileEdges.filter((edge) => !sideTerminalTangle(edge) && sideProfileRim(edge))
+    const sideInteriorProfileEdges = sideActiveProfileEdges.filter((edge) => !sideTerminalTangle(edge) && !sideProfileRim(edge))
+    const sideActiveSpanEdges = spanEdges.filter(sideEdgeActive)
+    const sideSoftSpanEdges = sideActiveSpanEdges.filter(sideTerminalTangle)
+    const sideReadableSpanEdges = sideActiveSpanEdges.filter((edge) => !sideTerminalTangle(edge))
+    const isometricActiveProfileEdges = profileEdges.filter((edge) => sideEdgeActive(edge) && isometricProfileFocus(edge))
+
     return {
       all: null,
       profile: null,
       span: null,
-      profileActive: buildGeometry(profileEdges.filter((edge) => sideEdgeActive(edge) && sideProfileFocus(edge))),
-      profileFlat: buildGeometry(profileEdges.filter((edge) => !(sideEdgeActive(edge) && sideProfileFocus(edge)))),
-      spanActive: buildGeometry(spanEdges.filter(sideEdgeActive)),
+      profileActive: buildGeometry(splitSideEdges ? sideInteriorProfileEdges : isometricActiveProfileEdges),
+      profileFlat: buildGeometry(splitSideEdges
+        ? profileEdges.filter((edge) => !sideEdgeActive(edge))
+        : profileEdges.filter((edge) => !(sideEdgeActive(edge) && isometricProfileFocus(edge)))),
+      profileRimActive: splitSideEdges ? buildGeometry(sideRimProfileEdges) : null,
+      profileSoftActive: splitSideEdges ? buildGeometry(sideSoftProfileEdges) : null,
+      spanActive: buildGeometry(splitSideEdges ? sideReadableSpanEdges : spanEdges.filter(sideEdgeActive)),
       spanFlat: buildGeometry(spanEdges.filter((edge) => !sideEdgeActive(edge))),
+      spanSoftActive: splitSideEdges ? buildGeometry(sideSoftSpanEdges) : null,
       topPlan: null,
       topFold: null,
     }
@@ -550,20 +657,38 @@ function StraightEdgeSegments({
     )
   }
 
-  if (splitSideEdges && geometries.profileActive && geometries.profileFlat && geometries.spanActive && geometries.spanFlat) {
+  if (
+    splitSideEdges &&
+    geometries.profileActive &&
+    geometries.profileFlat &&
+    geometries.profileRimActive &&
+    geometries.profileSoftActive &&
+    geometries.spanActive &&
+    geometries.spanFlat &&
+    geometries.spanSoftActive
+  ) {
     return (
       <>
         <lineSegments geometry={geometries.spanFlat} renderOrder={0}>
-          <lineBasicMaterial color="#5b5851" transparent opacity={0.07} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#5b5851" transparent opacity={0.004} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileFlat} renderOrder={1}>
-          <lineBasicMaterial color="#3d3a34" transparent opacity={0.09} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#3d3a34" transparent opacity={0.006} depthTest={false} depthWrite={false} />
         </lineSegments>
-        <lineSegments geometry={geometries.spanActive} renderOrder={2}>
-          <lineBasicMaterial color="#22221f" transparent opacity={0.17} depthTest={false} depthWrite={false} />
+        <lineSegments geometry={geometries.spanSoftActive} renderOrder={2}>
+          <lineBasicMaterial color="#4f4d47" transparent opacity={0.0015} depthTest={false} depthWrite={false} />
         </lineSegments>
-        <lineSegments geometry={geometries.profileActive} renderOrder={3}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.24} depthTest={false} depthWrite={false} />
+        <lineSegments geometry={geometries.profileSoftActive} renderOrder={3}>
+          <lineBasicMaterial color="#34322d" transparent opacity={0.002} depthTest={false} depthWrite={false} />
+        </lineSegments>
+        <lineSegments geometry={geometries.spanActive} renderOrder={4}>
+          <lineBasicMaterial color="#22221f" transparent opacity={0.01} depthTest={false} depthWrite={false} />
+        </lineSegments>
+        <lineSegments geometry={geometries.profileActive} renderOrder={5}>
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.012} depthTest={false} depthWrite={false} />
+        </lineSegments>
+        <lineSegments geometry={geometries.profileRimActive} renderOrder={6}>
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.035} depthTest={false} depthWrite={false} />
         </lineSegments>
       </>
     )
