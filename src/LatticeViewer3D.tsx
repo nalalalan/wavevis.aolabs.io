@@ -288,15 +288,15 @@ type ReadableWaveFrame = {
 const readableWaveUSegments = 104
 const readableWaveVSegments = 54
 const readableReferenceProfilePoints =
-  '0,0;0.075,0.012;0.16,0.055;0.26,0.19;0.37,0.43;0.49,0.68;0.6,0.88;0.69,1;0.79,0.98;0.88,0.86;0.96,0.66;0.995,0.47;0.975,0.34;0.91,0.24;0.82,0.255;0.755,0.34;0.745,0.46;0.81,0.56;0.9,0.53;0.96,0.41'
+  '0,0;0.075,0.012;0.16,0.055;0.26,0.18;0.37,0.42;0.49,0.67;0.61,0.86;0.71,0.97;0.81,0.96;0.905,0.81;0.978,0.58;1,0.39;0.992,0.235;0.962,0.13;0.988,0.115'
 
 function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: CameraViewRequest['view'] }) {
   const surfaceGeometry = useMemo(() => buildReadableWaveSurfaceGeometry(model), [model])
   const wireGeometry = useMemo(() => buildReadableWaveWireGeometry(model, view), [model, view])
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
-  const surfaceOpacity = view === 'side' ? 0.76 : view === 'front' ? 0.76 : view === 'top' ? 0.56 : 0.68
-  const wireOpacity = view === 'side' ? 0.23 : view === 'front' ? 0.42 : view === 'top' ? 0.3 : 0.4
-  const outlineOpacity = view === 'side' ? 0.74 : view === 'front' ? 0.56 : view === 'top' ? 0.12 : 0.26
+  const surfaceOpacity = view === 'side' ? 0.52 : view === 'front' ? 0.66 : view === 'top' ? 0.14 : 0.54
+  const wireOpacity = view === 'side' ? 0.28 : view === 'front' ? 0.42 : view === 'top' ? 0.4 : 0.4
+  const outlineOpacity = view === 'side' ? 0.78 : view === 'front' ? 0.56 : view === 'top' ? 0.12 : 0.26
 
   return (
     <group renderOrder={-2}>
@@ -352,8 +352,8 @@ function buildReadableWaveWireGeometry(model: LatticeModel, view: CameraViewRequ
   const pushSegment = (a: Vec3, b: Vec3) => {
     positions.push(...a, ...b)
   }
-  const spanLineStep = 3
-  const profileLineStep = view === 'side' ? 10 : 4
+  const spanLineStep = view === 'side' ? 4 : 3
+  const profileLineStep = view === 'side' ? 12 : 4
 
   for (let vIndex = 0; vIndex <= readableWaveVSegments; vIndex += spanLineStep) {
     const s = -1 + (vIndex / readableWaveVSegments) * 2
@@ -395,7 +395,7 @@ function buildReadableWaveOutlineGeometry(model: LatticeModel, view: CameraViewR
     Array.from({ length: 65 }, (_, index) => readableWavePoint(frame, t, -1 + (index / 64) * 2))
 
   if (view === 'side') {
-    pushPolyline(sampleProfileLine(0))
+    pushPolyline(sampleOuterSideProfileLine(frame, samples))
   } else if (view === 'front') {
     ;[0.54, 0.66, 0.76, 0.86, 0.94, 1].forEach((t) => pushPolyline(sampleSpanLine(t)))
     ;[-0.72, -0.42, -0.18, 0, 0.18, 0.42, 0.72].forEach((s) => pushPolyline(sampleProfileLine(s)))
@@ -407,6 +407,25 @@ function buildReadableWaveOutlineGeometry(model: LatticeModel, view: CameraViewR
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3))
   return geometry
+}
+
+function sampleOuterSideProfileLine(frame: ReadableWaveFrame, samples: number): Vec3[] {
+  const points = Array.from({ length: samples + 1 }, (_, index) => readableWavePoint(frame, index / samples, 0))
+  let crestIndex = 0
+  for (let index = 1; index < points.length; index += 1) {
+    if (points[index][2] > points[crestIndex][2]) crestIndex = index
+  }
+
+  for (let index = crestIndex + 2; index < points.length - 1; index += 1) {
+    const previous = points[index - 1][2]
+    const current = points[index][2]
+    const next = points[index + 1][2]
+    if (current <= previous && current <= next && current < frame.height * 0.34) {
+      return points.slice(0, index + 1)
+    }
+  }
+
+  return points
 }
 
 function readableWaveFrame(model: LatticeModel): ReadableWaveFrame {
@@ -466,7 +485,7 @@ function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3
   const waveWidth = frame.maxX - frame.minX
   const envelope = readableLateralEnvelope(s)
   const foldBlend = Math.pow(envelope, 0.78)
-  const liftBlend = Math.pow(envelope, 0.72)
+  const liftBlend = Math.max(0.16, Math.pow(envelope, 0.56))
   const growth = Math.sin(frame.progress * Math.PI * 0.5)
   const curlBlend = smoothStep(0.22, 1, frame.progress)
   const profilePoint = sampleReadableWaveProfile(frame.profile, t)
@@ -476,12 +495,22 @@ function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3
   const moundZ = frame.height * 0.72 * moundLift
   const curledX = frame.minX + waveWidth * profilePoint.x
   const curledZ = frame.height * (profilePoint.z / frame.profile.maxZ)
-  const centerX = lerpNumber(moundX, curledX, curlBlend)
-  const centerZ = lerpNumber(moundZ, curledZ, curlBlend) * growth
+  let centerX = lerpNumber(moundX, curledX, curlBlend)
+  let centerZ = lerpNumber(moundZ, curledZ, curlBlend) * growth
+  const throatCurl = frame.progress *
+    smoothStep(0.72, 0.9, t) *
+    (1 - smoothStep(0.965, 1, t)) *
+    Math.pow(Math.max(envelope, 0.08), 0.18)
+  centerX -= waveWidth * 0.14 * throatCurl
+  centerZ = Math.max(0, centerZ - frame.height * 0.055 * throatCurl)
   const normalizedHeight = clampUnit(centerZ / Math.max(frame.height, 0.000001))
   const curlFootprint = smoothStep(0.46, 0.84, t)
   const throatPull = frame.progress * (0.13 * normalizedHeight ** 0.68 + 0.4 * curlFootprint)
-  const spanScale = 1 - throatPull * (0.48 + 0.52 * Math.pow(envelope, 0.42))
+  const terminalTipTaper = frame.progress * smoothStep(0.54, 1, t)
+  const spanScale = Math.max(
+    0.035,
+    (1 - throatPull * (0.48 + 0.52 * Math.pow(envelope, 0.42))) * (1 - terminalTipTaper * 0.9),
+  )
 
   return [
     lerpNumber(baseX, centerX, foldBlend),
@@ -505,15 +534,25 @@ function sampleReadableWaveProfile(profile: ReadableWaveFrame['profile'], t: num
   const localAmount = (distance - previousDistance) / Math.max(nextDistance - previousDistance, 0.000001)
   const previous = profile.points[previousIndex] ?? profile.points[0]
   const next = profile.points[nextIndex] ?? profile.points[profile.points.length - 1]
+  const beforePrevious = profile.points[Math.max(previousIndex - 1, 0)] ?? previous
+  const afterNext = profile.points[Math.min(nextIndex + 1, profile.points.length - 1)] ?? next
+  const amount = clampUnit(localAmount)
 
   return {
-    x: lerpNumber(previous.x, next.x, clampUnit(localAmount)),
-    z: lerpNumber(previous.z, next.z, clampUnit(localAmount)),
+    x: clampUnit(catmullRomNumber(beforePrevious.x, previous.x, next.x, afterNext.x, amount)),
+    z: Math.max(0, catmullRomNumber(beforePrevious.z, previous.z, next.z, afterNext.z, amount)),
   }
 }
 
 function lerpNumber(start: number, end: number, amount: number): number {
   return start + (end - start) * amount
+}
+
+function catmullRomNumber(a: number, b: number, c: number, d: number, amount: number): number {
+  const t = clampUnit(amount)
+  const t2 = t * t
+  const t3 = t2 * t
+  return 0.5 * ((2 * b) + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3)
 }
 
 function smoothStep(edge0: number, edge1: number, value: number): number {
