@@ -288,15 +288,15 @@ type ReadableWaveFrame = {
 const readableWaveUSegments = 104
 const readableWaveVSegments = 54
 const readableReferenceProfilePoints =
-  '0,0;0.075,0.012;0.16,0.055;0.26,0.19;0.37,0.43;0.49,0.68;0.6,0.88;0.68,1;0.77,0.99;0.86,0.89;0.94,0.72;0.99,0.54;0.97,0.39;0.9,0.28;0.81,0.3;0.75,0.39;0.77,0.5;0.84,0.57;0.93,0.48'
+  '0,0;0.075,0.012;0.16,0.055;0.26,0.19;0.37,0.43;0.49,0.68;0.6,0.88;0.69,1;0.79,0.98;0.88,0.86;0.96,0.66;0.995,0.47;0.975,0.34;0.91,0.24;0.82,0.255;0.755,0.34;0.745,0.46;0.81,0.56;0.9,0.53;0.96,0.41'
 
 function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: CameraViewRequest['view'] }) {
   const surfaceGeometry = useMemo(() => buildReadableWaveSurfaceGeometry(model), [model])
   const wireGeometry = useMemo(() => buildReadableWaveWireGeometry(model, view), [model, view])
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
-  const surfaceOpacity = view === 'side' ? 0.82 : view === 'front' ? 0.76 : view === 'top' ? 0.56 : 0.68
-  const wireOpacity = view === 'side' ? 0.31 : view === 'front' ? 0.42 : view === 'top' ? 0.3 : 0.4
-  const outlineOpacity = view === 'side' ? 0.68 : view === 'front' ? 0.56 : view === 'top' ? 0.12 : 0.26
+  const surfaceOpacity = view === 'side' ? 0.76 : view === 'front' ? 0.76 : view === 'top' ? 0.56 : 0.68
+  const wireOpacity = view === 'side' ? 0.23 : view === 'front' ? 0.42 : view === 'top' ? 0.3 : 0.4
+  const outlineOpacity = view === 'side' ? 0.74 : view === 'front' ? 0.56 : view === 'top' ? 0.12 : 0.26
 
   return (
     <group renderOrder={-2}>
@@ -353,7 +353,7 @@ function buildReadableWaveWireGeometry(model: LatticeModel, view: CameraViewRequ
     positions.push(...a, ...b)
   }
   const spanLineStep = 3
-  const profileLineStep = view === 'side' ? 8 : 4
+  const profileLineStep = view === 'side' ? 10 : 4
 
   for (let vIndex = 0; vIndex <= readableWaveVSegments; vIndex += spanLineStep) {
     const s = -1 + (vIndex / readableWaveVSegments) * 2
@@ -413,7 +413,7 @@ function readableWaveFrame(model: LatticeModel): ReadableWaveFrame {
   const profile = buildReadableWaveProfile(readableReferenceProfilePoints)
   const sideBounds = activeSideProfileBounds(model)
   const height = Math.max(model.summary.maxHeight * 1.52, model.config.height * Math.max(model.config.profileScale, 1.12), model.config.spacing * 14)
-  const waveWidth = Math.min(sideBounds.span[0] * 0.86, height * 2.75)
+  const waveWidth = Math.min(sideBounds.span[0] * 0.82, height * 2.18)
   const minX = sideBounds.center[0] - waveWidth * 0.48
   const maxX = sideBounds.center[0] + waveWidth * 0.52
 
