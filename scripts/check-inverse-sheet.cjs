@@ -1289,7 +1289,7 @@ function summarizeReadableSurfaceRenderContract() {
     ['readable bounds sample the display projection', 'readableWaveDisplayPoint(frame, view, t'],
     ['front view keeps dense but pale lengthwise wire density', "view === 'front' ? 2"],
     ['front view keeps dense but pale spanwise wire density', "view === 'front' ? 5"],
-    ['front view keeps a softened outline trace', "view === 'front' ? 0.16"],
+    ['front view keeps a softened outline trace', "view === 'front' ? 0.12"],
     ['front view exposes wire through the readable lip', "depthTest={view !== 'front'}"],
     ['front outline includes continuous terminal lip contour samples', '[0.56, 0.76, 0.84, 0.88, 0.9, 0.92, 0.94, 1]'],
   ]
@@ -1299,8 +1299,8 @@ function summarizeReadableSurfaceRenderContract() {
     ['front terminal lip is bounded before the terminal edge', 'smoothStep(0.76, 0.88, t) * (1 - smoothStep(0.94, 1, t))'],
     ['front terminal lip is pulled toward the viewer', 'waveWidth * 0.12 * centralLipMask'],
     ['front terminal lip lowers through the center instead of making one dome', 'lerpNumber(domeHeight, tuckedLip, clampUnit(0.82 * centralLipMask))'],
-    ['front lifted body pinches inward while the base stays wide', 'const bodyPinch = 0.2 * bodyBand * Math.pow(envelope, 0.36)'],
-    ['front terminal lip keeps rounded width instead of collapsing to a centerline', '0.36 * centralLipMask'],
+    ['front lifted body pinches inward while the base stays wide', 'const bodyPinch = 0.32 * bodyBand * Math.pow(envelope, 0.36)'],
+    ['front terminal lip keeps rounded width instead of collapsing to a centerline', '0.3 * centralLipMask'],
   ]
   const forbiddenFragments = [
     ['front projection uses nonexistent frame.length', 'frame.length'],

@@ -302,7 +302,7 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
   const surfaceOpacity = view === 'side' ? 0.62 : view === 'front' ? 0.72 : view === 'top' ? 0.08 : 0.66
   const wireOpacity = view === 'side' ? 0.24 : view === 'front' ? 0.16 : view === 'top' ? 0.18 : 0.24
-  const outlineOpacity = view === 'side' ? 0.42 : view === 'front' ? 0.16 : view === 'top' ? 0.02 : 0.16
+  const outlineOpacity = view === 'side' ? 0.42 : view === 'front' ? 0.12 : view === 'top' ? 0.02 : 0.16
 
   return (
     <group renderOrder={-2}>
@@ -539,21 +539,21 @@ function readableWaveFrontPoint(frame: ReadableWaveFrame, t: number, s: number):
   const frontDepthCenter = (frame.minX + frame.maxX) * 0.5
   const envelope = readableLateralEnvelope(s)
   const bodyBand = smoothStep(0.04, 0.56, t) * (1 - smoothStep(0.94, 1, t))
-  const bodyArch = frame.height * 0.68 *
+  const bodyArch = frame.height * 0.82 *
     (Math.sin(Math.PI * clampUnit(t * 0.9 + 0.03)) ** 1.04) *
     Math.pow(envelope, 0.92) *
     bodyBand
   const capBand = smoothStep(0.54, 0.72, t) * (1 - smoothStep(0.92, 1, t))
   const lipReturnBand = smoothStep(0.76, 0.88, t) * (1 - smoothStep(0.94, 1, t))
-  const centralLipMask = lipReturnBand * Math.pow(envelope, 1.18)
-  const bodyPinch = 0.2 * bodyBand * Math.pow(envelope, 0.36)
-  const capArch = frame.height * 0.8 * Math.pow(envelope, 0.72) * capBand
-  const tuckedLip = frame.height * (0.55 - 0.2 * Math.pow(envelope, 0.64))
+  const centralLipMask = lipReturnBand * Math.pow(envelope, 0.78)
+  const bodyPinch = 0.32 * bodyBand * Math.pow(envelope, 0.36)
+  const capArch = frame.height * 0.94 * Math.pow(envelope, 0.42) * capBand
+  const tuckedLip = frame.height * (0.6 - 0.18 * Math.pow(envelope, 0.5))
   const domeHeight = Math.max(wavePoint[2] * 0.16, bodyArch * (1 - 0.44 * capBand), capArch)
   const spanPinch = clampUnit(
     bodyPinch +
-    0.2 * capBand * Math.pow(envelope, 0.28) +
-    0.36 * centralLipMask,
+    0.34 * capBand * Math.pow(envelope, 0.28) +
+    0.3 * centralLipMask,
   )
 
   return [
