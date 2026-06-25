@@ -1292,6 +1292,12 @@ function summarizeReadableSurfaceRenderContract() {
     ['front view keeps a softened outline trace', "view === 'front' ? 0.1"],
     ['front view depth-tests the grid against the readable lip', 'depthTest depthWrite={false}'],
     ['front outline avoids a heavy terminal contour stack', '[0.58, 0.72, 0.86, 0.94]'],
+    ['side view keeps a pale surface skin', "view === 'side' ? 0.5"],
+    ['side view keeps a pale wire grid', "view === 'side' ? 0.18"],
+    ['side outline stays visible through the curl', "depthTest={view !== 'side'}"],
+    ['terminal lip lift stays broad across the body', 'const lipLiftBlend = lerpNumber(liftBlend, Math.pow(envelope, 0.92), frame.progress * lipBody * 0.26)'],
+    ['terminal curl pinch stays bounded', 'Math.min(0.28, frame.progress * planFoldBlend * (0.05 * curlShoulder + 0.24 * lipTip))'],
+    ['isometric camera avoids the end-cap barrel angle', 'new THREE.Vector3(target.x + distance * 0.58, target.y - distance * 0.76, target.z + distance * 0.56)'],
   ]
   const requiredFrontFragments = [
     ['front projection derives depth center from frame bounds', 'const frontDepthCenter = (frame.minX + frame.maxX) * 0.5'],
