@@ -162,6 +162,14 @@ function readInitialInverseSheetConfig(): InverseSheetConfig {
   readNumberConfigParam(search, config, 'flatContribution', 'flatContribution')
   readNumberConfigParam(search, config, 'conicRho', 'conicRho')
   readNumberConfigParam(search, config, 'curlRadius', 'curlRadius')
+  readBooleanConfigParam(search, config, 'showSurface', 'showSurface')
+  readBooleanConfigParam(search, config, 'surface', 'showSurface')
+  readBooleanConfigParam(search, config, 'showRestGhost', 'showRestGhost')
+  readBooleanConfigParam(search, config, 'flatGrid', 'showRestGhost')
+  readBooleanConfigParam(search, config, 'showNodes', 'showNodes')
+  readBooleanConfigParam(search, config, 'cells', 'showNodes')
+  readBooleanConfigParam(search, config, 'showEdges', 'showEdges')
+  readBooleanConfigParam(search, config, 'connectors', 'showEdges')
 
   return sanitizeInverseSheetConfig(config)
 }
@@ -197,6 +205,21 @@ function readIntegerConfigParam<Key extends keyof InverseSheetConfig>(
   const value = Number(search.get(param))
   if (Number.isFinite(value)) {
     config[key] = Math.min(max, Math.max(min, Math.round(value))) as InverseSheetConfig[Key]
+  }
+}
+
+function readBooleanConfigParam<Key extends keyof InverseSheetConfig>(
+  search: URLSearchParams,
+  config: Partial<InverseSheetConfig>,
+  param: string,
+  key: Key,
+): void {
+  if (!search.has(param)) return
+  const raw = search.get(param)?.trim().toLowerCase()
+  if (raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on') {
+    config[key] = true as InverseSheetConfig[Key]
+  } else if (raw === '0' || raw === 'false' || raw === 'no' || raw === 'off') {
+    config[key] = false as InverseSheetConfig[Key]
   }
 }
 
