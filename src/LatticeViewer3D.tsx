@@ -546,14 +546,14 @@ function readableWaveFrontPoint(frame: ReadableWaveFrame, t: number, s: number):
   const capBand = smoothStep(0.54, 0.72, t) * (1 - smoothStep(0.92, 1, t))
   const lipReturnBand = smoothStep(0.76, 0.88, t) * (1 - smoothStep(0.94, 1, t))
   const centralLipMask = lipReturnBand * Math.pow(envelope, 1.18)
-  const bodyPinch = 0.24 * bodyBand * Math.pow(envelope, 0.36)
-  const capArch = frame.height * 0.78 * Math.pow(envelope, 0.74) * capBand
-  const tuckedLip = frame.height * (0.34 + 0.2 * Math.pow(envelope, 0.58))
+  const bodyPinch = 0.2 * bodyBand * Math.pow(envelope, 0.36)
+  const capArch = frame.height * 0.8 * Math.pow(envelope, 0.72) * capBand
+  const tuckedLip = frame.height * (0.55 - 0.2 * Math.pow(envelope, 0.64))
   const domeHeight = Math.max(wavePoint[2] * 0.16, bodyArch * (1 - 0.44 * capBand), capArch)
   const spanPinch = clampUnit(
     bodyPinch +
-    0.26 * capBand * Math.pow(envelope, 0.28) +
-    0.56 * centralLipMask,
+    0.2 * capBand * Math.pow(envelope, 0.28) +
+    0.36 * centralLipMask,
   )
 
   return [

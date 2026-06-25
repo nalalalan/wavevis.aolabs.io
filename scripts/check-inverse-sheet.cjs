@@ -1299,7 +1299,8 @@ function summarizeReadableSurfaceRenderContract() {
     ['front terminal lip is bounded before the terminal edge', 'smoothStep(0.76, 0.88, t) * (1 - smoothStep(0.94, 1, t))'],
     ['front terminal lip is pulled toward the viewer', 'waveWidth * 0.12 * centralLipMask'],
     ['front terminal lip lowers through the center instead of making one dome', 'lerpNumber(domeHeight, tuckedLip, clampUnit(0.82 * centralLipMask))'],
-    ['front lifted body pinches inward while the base stays wide', 'const bodyPinch = 0.24 * bodyBand * Math.pow(envelope, 0.36)'],
+    ['front lifted body pinches inward while the base stays wide', 'const bodyPinch = 0.2 * bodyBand * Math.pow(envelope, 0.36)'],
+    ['front terminal lip keeps rounded width instead of collapsing to a centerline', '0.36 * centralLipMask'],
   ]
   const forbiddenFragments = [
     ['front projection uses nonexistent frame.length', 'frame.length'],
