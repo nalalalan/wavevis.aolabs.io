@@ -302,8 +302,8 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
   const throatGeometry = useMemo(() => view === 'isometric' ? buildReadableWaveThroatGeometry(model) : null, [model, view])
   const surfaceOpacity = view === 'side' ? 0.28 : view === 'front' ? 0.72 : view === 'top' ? 0.08 : 0.48
-  const wireOpacity = view === 'side' ? 0.16 : view === 'front' ? 0.21 : view === 'top' ? 0.18 : 0.25
-  const outlineOpacity = view === 'side' ? 0.14 : view === 'front' ? 0.1 : view === 'top' ? 0.02 : 0.1
+  const wireOpacity = view === 'side' ? 0.16 : view === 'front' ? 0.21 : view === 'top' ? 0.18 : 0.22
+  const outlineOpacity = view === 'side' ? 0.14 : view === 'front' ? 0.1 : view === 'top' ? 0.02 : 0.085
 
   return (
     <group renderOrder={-2}>
@@ -322,7 +322,7 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
       </lineSegments>
       {throatGeometry && (
         <lineSegments geometry={throatGeometry} renderOrder={1}>
-          <lineBasicMaterial color="#7b766f" transparent opacity={0.18} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#7b766f" transparent opacity={0.16} depthTest={false} depthWrite={false} />
         </lineSegments>
       )}
     </group>
@@ -607,9 +607,9 @@ function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number
   const envelope = readableLateralEnvelope(s)
   const interior = Math.pow(envelope, 0.42)
   const curlRegion = smoothStep(0.2, 0.98, t)
-  const terminalRegion = smoothStep(0.62, 1, t)
-  const planPinch = clampUnit(0.2 * curlRegion * interior + 0.74 * terminalRegion * Math.pow(envelope, 0.72))
-  const xBlend = clampUnit(0.12 * curlRegion * Math.pow(envelope, 0.9) + 0.58 * terminalRegion * interior)
+  const terminalRegion = smoothStep(0.62, 0.98, t)
+  const planPinch = clampUnit(0.15 * curlRegion * interior + 0.42 * terminalRegion * Math.pow(envelope, 0.95))
+  const xBlend = clampUnit(0.08 * curlRegion * Math.pow(envelope, 1.05) + 0.34 * terminalRegion * interior)
 
   return [
     lerpNumber(baseX, wavePoint[0], xBlend),
