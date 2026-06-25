@@ -34,7 +34,12 @@ execFileSync(
   { cwd: root, stdio: 'inherit' },
 )
 
-const { buildInverseSheetModel, getInverseSheetUsableRanges, runInverseSheetSanityChecks } = require(path.join(outDir, 'latticeGeometry.js'))
+const {
+  DEFAULT_INVERSE_SHEET_CONFIG,
+  buildInverseSheetModel,
+  getInverseSheetUsableRanges,
+  runInverseSheetSanityChecks,
+} = require(path.join(outDir, 'latticeGeometry.js'))
 const { buildRigidCellMechanism, rigidCellMechanismStats } = require(path.join(outDir, 'rigidCellMechanism.js'))
 const inverseSheetTabSource = fs.readFileSync(path.join(root, 'src', 'InverseSheetTab.tsx'), 'utf8')
 
@@ -56,6 +61,7 @@ const SOURCE_BREAKING_WAVE_TRACE = '0,0;0.035,0.02;0.075,0.07;0.118,0.17;0.17,0.
 
 const failures = [...runInverseSheetSanityChecks()]
 const startupUrlParamCoverage = summarizeStartupUrlParamCoverage()
+const startupDisplayContract = summarizeStartupDisplayContract()
 const generatedMode = { profileMode: 'generated' }
 const breakingLipConfig = {
   ...generatedMode,
@@ -443,6 +449,10 @@ if (!startupUrlParamCoverage.ok) {
   failures.push(`startup URL state should cover every public inverse-sheet slider alias: missing ${startupUrlParamCoverage.missing.join(', ')}`)
 }
 
+if (!startupDisplayContract.ok) {
+  failures.push(`startup display contract should default to clean surface-first rendering with URL gates for cells/connectors: ${startupDisplayContract.failures.join('; ')}`)
+}
+
 if (mechanism.maxConnectorEndpointGap > 0.0001) {
   failures.push('inverse-sheet arms should terminate directly at shared connector points')
 }
@@ -480,6 +490,7 @@ if (mechanism.maxCenterShift > 2.25) {
 
 const report = {
   startupUrlParamCoverage,
+  startupDisplayContract,
   flat0,
   flat1,
   flatContributionPair,
@@ -1210,6 +1221,43 @@ function summarizeStartupUrlParamCoverage() {
     ok: missing.length === 0,
     checked: requiredAliases.length,
     missing,
+  }
+}
+
+function summarizeStartupDisplayContract() {
+  const expectedDefaults = {
+    showSurface: true,
+    showRestGhost: false,
+    showNodes: false,
+    showEdges: false,
+    showHeatmap: false,
+  }
+  const urlAliases = [
+    ['showSurface', 'showSurface'],
+    ['surface', 'showSurface'],
+    ['showRestGhost', 'showRestGhost'],
+    ['flatGrid', 'showRestGhost'],
+    ['showNodes', 'showNodes'],
+    ['cells', 'showNodes'],
+    ['showEdges', 'showEdges'],
+    ['connectors', 'showEdges'],
+  ]
+  const defaultMismatches = Object.entries(expectedDefaults).filter(([key, expected]) => DEFAULT_INVERSE_SHEET_CONFIG[key] !== expected)
+  const missingUrlGates = urlAliases.filter(([param, key]) => (
+    !inverseSheetTabSource.includes(`readBooleanConfigParam(search, config, '${param}', '${key}')`)
+  ))
+  const failures = [
+    ...defaultMismatches.map(([key, expected]) => `${key} default is ${JSON.stringify(DEFAULT_INVERSE_SHEET_CONFIG[key])}, expected ${JSON.stringify(expected)}`),
+    ...missingUrlGates.map(([param, key]) => `${param}->${key} URL gate missing`),
+  ]
+
+  return {
+    ok: failures.length === 0,
+    defaults: Object.fromEntries(Object.keys(expectedDefaults).map((key) => [key, DEFAULT_INVERSE_SHEET_CONFIG[key]])),
+    checkedDefaults: Object.keys(expectedDefaults),
+    checkedUrlGates: urlAliases.length,
+    missingUrlGates,
+    failures,
   }
 }
 
