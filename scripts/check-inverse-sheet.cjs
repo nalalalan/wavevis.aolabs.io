@@ -1286,10 +1286,16 @@ function summarizeReadableSurfaceRenderContract() {
     ['front view reduces spanwise wire density', "view === 'front' ? 8"],
     ['front view keeps only a faint outline trace', "view === 'front' ? 0.03"],
   ]
+  const forbiddenFragments = [
+    ['front projection uses nonexistent frame.length', 'frame.length'],
+    ['front projection uses nonexistent frame.centerX', 'frame.centerX'],
+  ]
   const missingFragments = requiredFragments.filter(([, fragment]) => !latticeViewerSource.includes(fragment))
+  const presentForbiddenFragments = forbiddenFragments.filter(([, fragment]) => latticeViewerSource.includes(fragment))
   const displayPointUses = countSourceOccurrences(latticeViewerSource, 'readableWaveDisplayPoint(frame, view')
   const failures = [
     ...missingFragments.map(([label]) => `${label} missing`),
+    ...presentForbiddenFragments.map(([label]) => label),
     ...(displayPointUses < 5 ? [`readableWaveDisplayPoint used ${displayPointUses} times, expected at least 5`] : []),
   ]
 
@@ -1297,6 +1303,7 @@ function summarizeReadableSurfaceRenderContract() {
     ok: failures.length === 0,
     checkedFragments: requiredFragments.map(([label]) => label),
     missingFragments,
+    forbiddenFragments: presentForbiddenFragments,
     displayPointUses,
     failures,
   }
