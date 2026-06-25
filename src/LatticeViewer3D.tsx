@@ -301,9 +301,9 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const wireGeometry = useMemo(() => buildReadableWaveWireGeometry(model, view), [model, view])
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
   const throatGeometry = useMemo(() => view === 'isometric' ? buildReadableWaveThroatGeometry(model) : null, [model, view])
-  const surfaceOpacity = view === 'side' ? 0.28 : view === 'front' ? 0.72 : view === 'top' ? 0.08 : 0.48
-  const wireOpacity = view === 'side' ? 0.16 : view === 'front' ? 0.21 : view === 'top' ? 0.18 : 0.22
-  const outlineOpacity = view === 'side' ? 0.14 : view === 'front' ? 0.1 : view === 'top' ? 0.02 : 0.085
+  const surfaceOpacity = view === 'side' ? 0.28 : view === 'front' ? 0.72 : view === 'top' ? 0.1 : 0.48
+  const wireOpacity = view === 'side' ? 0.16 : view === 'front' ? 0.21 : view === 'top' ? 0.22 : 0.22
+  const outlineOpacity = view === 'side' ? 0.14 : view === 'front' ? 0.1 : view === 'top' ? 0.035 : 0.085
 
   return (
     <group renderOrder={-2}>
@@ -550,9 +550,9 @@ function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3
   const capLocalization = frame.progress * smoothStep(0.44, 0.82, t)
   const shoulderFoldBlend = lerpNumber(baseFoldBlend, Math.pow(envelope, 2.45), capLocalization * curlShoulder * 0.68)
   const terminalLocalization = frame.progress * lipTip
-  const foldBlend = lerpNumber(shoulderFoldBlend, Math.pow(envelope, 3), terminalLocalization * 0.78)
-  const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.28), Math.pow(envelope, 2.8), terminalLocalization * 0.82)
-  const crestLiftBlend = lerpNumber(liftBlend, Math.pow(envelope, 4), capLocalization * curlShoulder * 0.78)
+  const foldBlend = lerpNumber(shoulderFoldBlend, Math.pow(envelope, 2.35), terminalLocalization * 0.58)
+  const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.24), Math.pow(envelope, 2.15), terminalLocalization * 0.62)
+  const crestLiftBlend = lerpNumber(liftBlend, Math.pow(envelope, 3.1), capLocalization * curlShoulder * 0.7)
   const lipLiftBlend = lerpNumber(crestLiftBlend, terminalLipEnvelope, frame.progress * lipBody * 0.42)
   const curlPinch = Math.min(0.28, frame.progress * planFoldBlend * (0.05 * curlShoulder + 0.24 * lipTip))
   const yPinch = s * frame.halfSpan * curlPinch
@@ -608,8 +608,8 @@ function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number
   const interior = Math.pow(envelope, 0.42)
   const curlRegion = smoothStep(0.2, 0.98, t)
   const terminalRegion = smoothStep(0.62, 0.98, t)
-  const planPinch = clampUnit(0.15 * curlRegion * interior + 0.42 * terminalRegion * Math.pow(envelope, 0.95))
-  const xBlend = clampUnit(0.08 * curlRegion * Math.pow(envelope, 1.05) + 0.34 * terminalRegion * interior)
+  const planPinch = clampUnit(0.13 * curlRegion * interior + 0.32 * terminalRegion * Math.pow(envelope, 1.04))
+  const xBlend = clampUnit(0.07 * curlRegion * Math.pow(envelope, 1.02) + 0.3 * terminalRegion * interior)
 
   return [
     lerpNumber(baseX, wavePoint[0], xBlend),
@@ -620,7 +620,7 @@ function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number
 
 function readableLateralEnvelope(s: number): number {
   const absolute = clampUnit(Math.abs(s))
-  return Math.pow(Math.cos(absolute * Math.PI * 0.5), 2.52)
+  return Math.pow(Math.cos(absolute * Math.PI * 0.5), 2.18)
 }
 
 function sampleReadableWaveProfile(profile: ReadableWaveFrame['profile'], t: number): ReadableWaveProfilePoint {
