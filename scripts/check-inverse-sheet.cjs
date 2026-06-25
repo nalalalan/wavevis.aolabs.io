@@ -1289,12 +1289,17 @@ function summarizeReadableSurfaceRenderContract() {
     ['readable bounds sample the display projection', 'readableWaveDisplayPoint(frame, view, t'],
     ['front view reduces lengthwise wire density', "view === 'front' ? 3"],
     ['front view reduces spanwise wire density', "view === 'front' ? 8"],
-    ['front view keeps a moderated outline trace', "view === 'front' ? 0.06"],
+    ['front view keeps a moderated outline trace', "view === 'front' ? 0.22"],
+    ['front view exposes wire through the readable lip', "depthTest={view !== 'front'}"],
+    ['front outline includes continuous terminal lip contour samples', '[0.56, 0.76, 0.84, 0.88, 0.9, 0.92, 0.94, 1]'],
   ]
   const requiredFrontFragments = [
     ['front projection derives depth center from frame bounds', 'const frontDepthCenter = (frame.minX + frame.maxX) * 0.5'],
-    ['front projection compresses depth instead of stacking full side geometry', 'lerpNumber(frontDepthCenter, wavePoint[0], 0.14)'],
+    ['front projection compresses depth instead of stacking full side geometry', 'lerpNumber(frontDepthCenter, wavePoint[0], 0.12)'],
     ['front terminal lip is bounded before the terminal edge', 'smoothStep(0.76, 0.88, t) * (1 - smoothStep(0.94, 1, t))'],
+    ['front terminal lip is pulled toward the viewer', 'waveWidth * 0.12 * centralLipMask'],
+    ['front terminal lip lowers through the center instead of making one dome', 'lerpNumber(domeHeight, tuckedLip, clampUnit(0.82 * centralLipMask))'],
+    ['front lifted body pinches inward while the base stays wide', 'const bodyPinch = 0.24 * bodyBand * Math.pow(envelope, 0.36)'],
   ]
   const forbiddenFragments = [
     ['front projection uses nonexistent frame.length', 'frame.length'],
@@ -1304,6 +1309,10 @@ function summarizeReadableSurfaceRenderContract() {
     ['front cap raises outer span with a constant offset', '0.02 +'],
     ['front lip raises outer span with a constant offset', '0.03 +'],
     ['front cap pinch returns to tower-like width', '0.58 * capBand'],
+    ['front view returns to a mound-only max stack', 'Math.max(wavePoint[2] * 0.16, bodyArch * (1 - 0.48 * capBand), capArch, tuckedLip)'],
+    ['front view reintroduces a pasted cap surface', 'buildReadableWaveFrontLipGeometry'],
+    ['front view reintroduces a pasted cap wire layer', 'buildReadableWaveFrontLipWireGeometry'],
+    ['front view reintroduces a detached cap projection', 'readableWaveFrontLipPoint'],
   ]
   const missingFragments = requiredFragments.filter(([, fragment]) => !latticeViewerSource.includes(fragment))
   const missingFrontFragments = requiredFrontFragments.filter(([, fragment]) => !frontProjectionSource.includes(fragment))

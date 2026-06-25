@@ -301,8 +301,8 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const wireGeometry = useMemo(() => buildReadableWaveWireGeometry(model, view), [model, view])
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
   const surfaceOpacity = view === 'side' ? 0.62 : view === 'front' ? 0.72 : view === 'top' ? 0.08 : 0.66
-  const wireOpacity = view === 'side' ? 0.24 : view === 'front' ? 0.16 : view === 'top' ? 0.18 : 0.24
-  const outlineOpacity = view === 'side' ? 0.42 : view === 'front' ? 0.06 : view === 'top' ? 0.02 : 0.16
+  const wireOpacity = view === 'side' ? 0.24 : view === 'front' ? 0.18 : view === 'top' ? 0.18 : 0.24
+  const outlineOpacity = view === 'side' ? 0.42 : view === 'front' ? 0.22 : view === 'top' ? 0.02 : 0.16
 
   return (
     <group renderOrder={-2}>
@@ -310,10 +310,10 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
         <meshBasicMaterial color="#fbfaf6" side={THREE.DoubleSide} transparent opacity={surfaceOpacity} depthWrite={view === 'front'} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
       </mesh>
       <lineSegments geometry={wireGeometry} renderOrder={-1}>
-        <lineBasicMaterial color="#b8b3ab" transparent opacity={wireOpacity} depthTest depthWrite={false} />
+        <lineBasicMaterial color="#b8b3ab" transparent opacity={wireOpacity} depthTest={view !== 'front'} depthWrite={false} />
       </lineSegments>
       <lineSegments geometry={outlineGeometry} renderOrder={0}>
-        <lineBasicMaterial color="#77726a" transparent opacity={outlineOpacity} depthTest depthWrite={false} />
+        <lineBasicMaterial color="#77726a" transparent opacity={outlineOpacity} depthTest={view !== 'front'} depthWrite={false} />
       </lineSegments>
     </group>
   )
@@ -403,7 +403,7 @@ function buildReadableWaveOutlineGeometry(model: LatticeModel, view: CameraViewR
   if (view === 'side') {
     pushPolyline(sampleOuterSideProfileLine(frame, samples))
   } else if (view === 'front') {
-    ;[0.56, 0.76, 0.9, 1].forEach((t) => pushPolyline(sampleSpanLine(t)))
+    ;[0.56, 0.76, 0.84, 0.88, 0.9, 0.92, 0.94, 1].forEach((t) => pushPolyline(sampleSpanLine(t)))
     ;[-0.72, -0.36, 0, 0.36, 0.72].forEach((s) => pushPolyline(sampleProfileLine(s)))
   } else if (view === 'top') {
     ;[-0.72, -0.42, -0.18, 0, 0.18, 0.42, 0.72].forEach((s) =>
@@ -535,23 +535,31 @@ function readableWaveDisplayPoint(frame: ReadableWaveFrame, view: CameraViewRequ
 
 function readableWaveFrontPoint(frame: ReadableWaveFrame, t: number, s: number): Vec3 {
   const wavePoint = readableWavePoint(frame, t, s)
+  const waveWidth = frame.maxX - frame.minX
   const frontDepthCenter = (frame.minX + frame.maxX) * 0.5
   const envelope = readableLateralEnvelope(s)
   const bodyBand = smoothStep(0.04, 0.56, t) * (1 - smoothStep(0.94, 1, t))
   const bodyArch = frame.height * 0.68 *
     (Math.sin(Math.PI * clampUnit(t * 0.9 + 0.03)) ** 1.04) *
-    Math.pow(envelope, 1.06) *
+    Math.pow(envelope, 0.92) *
     bodyBand
   const capBand = smoothStep(0.54, 0.72, t) * (1 - smoothStep(0.92, 1, t))
   const lipReturnBand = smoothStep(0.76, 0.88, t) * (1 - smoothStep(0.94, 1, t))
-  const capArch = frame.height * 0.78 * Math.pow(envelope, 0.64) * capBand
-  const tuckedLip = frame.height * 0.24 * Math.pow(envelope, 1.22) * lipReturnBand
-  const spanPinch = clampUnit(0.44 * capBand + 0.18 * lipReturnBand * Math.pow(envelope, 0.82))
+  const centralLipMask = lipReturnBand * Math.pow(envelope, 1.18)
+  const bodyPinch = 0.24 * bodyBand * Math.pow(envelope, 0.36)
+  const capArch = frame.height * 0.78 * Math.pow(envelope, 0.74) * capBand
+  const tuckedLip = frame.height * (0.34 + 0.2 * Math.pow(envelope, 0.58))
+  const domeHeight = Math.max(wavePoint[2] * 0.16, bodyArch * (1 - 0.44 * capBand), capArch)
+  const spanPinch = clampUnit(
+    bodyPinch +
+    0.26 * capBand * Math.pow(envelope, 0.28) +
+    0.56 * centralLipMask,
+  )
 
   return [
-    lerpNumber(frontDepthCenter, wavePoint[0], 0.14),
+    lerpNumber(frontDepthCenter, wavePoint[0], 0.12) + waveWidth * 0.12 * centralLipMask,
     frame.centerY + s * frame.halfSpan * (1 - spanPinch),
-    Math.max(wavePoint[2] * 0.16, bodyArch * (1 - 0.48 * capBand), capArch, tuckedLip),
+    lerpNumber(domeHeight, tuckedLip, clampUnit(0.82 * centralLipMask)),
   ]
 }
 
