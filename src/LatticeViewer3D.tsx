@@ -300,9 +300,9 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const surfaceGeometry = useMemo(() => buildReadableWaveSurfaceGeometry(model), [model])
   const wireGeometry = useMemo(() => buildReadableWaveWireGeometry(model, view), [model, view])
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
-  const surfaceOpacity = view === 'side' ? 0.62 : view === 'front' ? 0.72 : view === 'top' ? 0.18 : 0.66
-  const wireOpacity = view === 'side' ? 0.24 : view === 'front' ? 0.28 : view === 'top' ? 0.28 : 0.24
-  const outlineOpacity = view === 'side' ? 0.42 : view === 'front' ? 0.36 : view === 'top' ? 0.08 : 0.16
+  const surfaceOpacity = view === 'side' ? 0.62 : view === 'front' ? 0.72 : view === 'top' ? 0.14 : 0.66
+  const wireOpacity = view === 'side' ? 0.24 : view === 'front' ? 0.28 : view === 'top' ? 0.14 : 0.24
+  const outlineOpacity = view === 'side' ? 0.42 : view === 'front' ? 0.3 : view === 'top' ? 0.02 : 0.16
 
   return (
     <group renderOrder={-2}>
@@ -358,8 +358,8 @@ function buildReadableWaveWireGeometry(model: LatticeModel, view: CameraViewRequ
   const pushSegment = (a: Vec3, b: Vec3) => {
     positions.push(...a, ...b)
   }
-  const spanLineStep = 2
-  const profileLineStep = view === 'side' ? 4 : 3
+  const spanLineStep = view === 'top' ? 1 : 2
+  const profileLineStep = view === 'top' ? 2 : view === 'side' ? 4 : 3
 
   for (let vIndex = 0; vIndex <= readableWaveVSegments; vIndex += spanLineStep) {
     const s = -1 + (vIndex / readableWaveVSegments) * 2
@@ -505,9 +505,10 @@ function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3
   const curledZ = frame.height * (profilePoint.z / frame.profile.maxZ)
   const centerX = lerpNumber(moundX, curledX, curlBlend)
   const centerZ = lerpNumber(moundZ, curledZ, curlBlend) * growth
+  const planFoldBlend = Math.pow(envelope, 0.52)
   const curlShoulder = smoothStep(0.44, 0.72, t) * (1 - smoothStep(0.88, 1, t))
-  const lipTip = smoothStep(0.76, 1, t)
-  const curlPinch = frame.progress * foldBlend * (0.09 * curlShoulder + 0.42 * lipTip)
+  const lipTip = smoothStep(0.7, 1, t)
+  const curlPinch = Math.min(0.96, frame.progress * planFoldBlend * (0.05 * curlShoulder + 1.08 * lipTip))
   const yPinch = s * frame.halfSpan * curlPinch
 
   return [
@@ -1020,16 +1021,16 @@ function StraightEdgeSegments({
     return (
       <>
         <lineSegments geometry={geometries.spanFlat} renderOrder={0}>
-          <lineBasicMaterial color="#312f2a" transparent opacity={readableSurfaceMode ? 0.001 : 0.01} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#312f2a" transparent opacity={readableSurfaceMode ? 0.0004 : 0.01} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileFlat} renderOrder={1}>
-          <lineBasicMaterial color="#26241f" transparent opacity={readableSurfaceMode ? 0.002 : 0.025} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#26241f" transparent opacity={readableSurfaceMode ? 0.0008 : 0.025} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.spanActive} renderOrder={2}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.0018 : 0.045} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.0008 : 0.045} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileActive} renderOrder={3}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.006 : 0.18} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.0025 : 0.18} depthTest={false} depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -1089,10 +1090,10 @@ function StraightEdgeSegments({
     return (
       <>
         <lineSegments geometry={geometries.topPlan} renderOrder={0}>
-          <lineBasicMaterial color="#343631" transparent opacity={readableSurfaceMode ? 0.006 : 0.3} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#343631" transparent opacity={readableSurfaceMode ? 0.0005 : 0.3} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.topFold} renderOrder={1}>
-          <lineBasicMaterial color="#343631" transparent opacity={readableSurfaceMode ? 0.0006 : 0.006} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#343631" transparent opacity={readableSurfaceMode ? 0.0003 : 0.006} depthTest depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -1399,9 +1400,7 @@ function positionCamera(
   selected?: SelectedElement,
 ): void {
   const surfaceReferenceOnly = !selected && readableSurfaceReferenceOnly(model)
-  const bounds = surfaceReferenceOnly && view === 'top'
-    ? model.bounds
-    : surfaceReferenceOnly && view !== 'front'
+  const bounds = surfaceReferenceOnly && view !== 'front'
     ? activeReadableWaveBounds(model)
     : !selected && view === 'side'
     ? activeSideProfileBounds(model)
