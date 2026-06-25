@@ -301,9 +301,9 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const wireGeometry = useMemo(() => buildReadableWaveWireGeometry(model, view), [model, view])
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
   const throatGeometry = useMemo(() => view === 'isometric' ? buildReadableWaveThroatGeometry(model) : null, [model, view])
-  const surfaceOpacity = view === 'side' ? 0.28 : view === 'front' ? 0.72 : view === 'top' ? 0.1 : 0.48
-  const wireOpacity = view === 'side' ? 0.16 : view === 'front' ? 0.21 : view === 'top' ? 0.22 : 0.22
-  const outlineOpacity = view === 'side' ? 0.14 : view === 'front' ? 0.1 : view === 'top' ? 0.035 : 0.085
+  const surfaceOpacity = view === 'side' ? 0.28 : view === 'front' ? 0.72 : view === 'top' ? 0.1 : 0.62
+  const wireOpacity = view === 'side' ? 0.16 : view === 'front' ? 0.21 : view === 'top' ? 0.22 : 0.18
+  const outlineOpacity = view === 'side' ? 0.14 : view === 'front' ? 0.1 : view === 'top' ? 0.035 : 0.028
 
   return (
     <group renderOrder={-2}>
@@ -322,7 +322,7 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
       </lineSegments>
       {throatGeometry && (
         <lineSegments geometry={throatGeometry} renderOrder={1}>
-          <lineBasicMaterial color="#7b766f" transparent opacity={0.16} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#7b766f" transparent opacity={0.028} depthTest={false} depthWrite={false} />
         </lineSegments>
       )}
     </group>
@@ -550,11 +550,11 @@ function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3
   const capLocalization = frame.progress * smoothStep(0.44, 0.82, t)
   const shoulderFoldBlend = lerpNumber(baseFoldBlend, Math.pow(envelope, 2.45), capLocalization * curlShoulder * 0.68)
   const terminalLocalization = frame.progress * lipTip
-  const foldBlend = lerpNumber(shoulderFoldBlend, Math.pow(envelope, 2.35), terminalLocalization * 0.58)
-  const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.24), Math.pow(envelope, 2.15), terminalLocalization * 0.62)
+  const foldBlend = lerpNumber(shoulderFoldBlend, Math.pow(envelope, 2.68), terminalLocalization * 0.64)
+  const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.22), Math.pow(envelope, 2.72), terminalLocalization * 0.72)
   const crestLiftBlend = lerpNumber(liftBlend, Math.pow(envelope, 3.1), capLocalization * curlShoulder * 0.7)
   const lipLiftBlend = lerpNumber(crestLiftBlend, terminalLipEnvelope, frame.progress * lipBody * 0.42)
-  const curlPinch = Math.min(0.28, frame.progress * planFoldBlend * (0.05 * curlShoulder + 0.24 * lipTip))
+  const curlPinch = Math.min(0.22, frame.progress * planFoldBlend * (0.035 * curlShoulder + 0.17 * lipTip))
   const yPinch = s * frame.halfSpan * curlPinch
 
   return [
@@ -1530,7 +1530,7 @@ function positionCamera(
     : view === 'front'
       ? new THREE.Vector3(target.x + distance, target.y, target.z)
     : view === 'isometric'
-        ? new THREE.Vector3(target.x + distance * 0.58, target.y - distance * 0.76, target.z + distance * 0.34)
+        ? new THREE.Vector3(target.x + distance * 0.6, target.y - distance * 0.7, target.z + distance * 0.5)
       : new THREE.Vector3(target.x + distance * 0.82, target.y - distance * 0.92, target.z + distance * 0.78)
 
   camera.position.copy(position)

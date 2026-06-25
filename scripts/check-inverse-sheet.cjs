@@ -1297,12 +1297,12 @@ function summarizeReadableSurfaceRenderContract() {
     ['side view keeps a readable pale wire grid', "view === 'side' ? 0.16"],
     ['side wire rows are thinned so the throat does not become a dark tunnel cluster', "view === 'side' ? 6"],
     ['side outline stays visible through the curl', "depthTest={view !== 'side'}"],
-    ['terminal lip lift stays bounded while broadening the readable curl', 'const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.24), Math.pow(envelope, 2.15), terminalLocalization * 0.62)'],
+    ['terminal lip lift stays center-localized without side-wall cover', 'const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.22), Math.pow(envelope, 2.72), terminalLocalization * 0.72)'],
     ['readable reference lateral envelope stays localized below a full-width tube', 'return Math.pow(Math.cos(absolute * Math.PI * 0.5), 2.18)'],
-    ['terminal curl pinch stays bounded', 'Math.min(0.28, frame.progress * planFoldBlend * (0.05 * curlShoulder + 0.24 * lipTip))'],
-    ['isometric camera lowers enough to expose the throat', 'new THREE.Vector3(target.x + distance * 0.58, target.y - distance * 0.76, target.z + distance * 0.34)'],
+    ['terminal curl pinch stays bounded below side-wall cover', 'Math.min(0.22, frame.progress * planFoldBlend * (0.035 * curlShoulder + 0.17 * lipTip))'],
+    ['isometric camera stays high enough for full-sheet read while exposing the curl', 'new THREE.Vector3(target.x + distance * 0.6, target.y - distance * 0.7, target.z + distance * 0.5)'],
     ['isometric view isolates the center throat trace', 'buildReadableWaveThroatGeometry(model)'],
-    ['center throat trace is not depth-tested away', 'depthTest={false} depthWrite={false}'],
+    ['center throat trace stays pale enough to avoid a debug tube cue', 'transparent opacity={0.028} depthTest={false} depthWrite={false}'],
     ['readable profile uses the current source curl family', '0.035,0.02;0.075,0.07;0.118,0.17'],
   ]
   const requiredFrontFragments = [
