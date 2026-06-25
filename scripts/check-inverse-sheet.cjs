@@ -42,6 +42,7 @@ const {
 } = require(path.join(outDir, 'latticeGeometry.js'))
 const { buildRigidCellMechanism, rigidCellMechanismStats } = require(path.join(outDir, 'rigidCellMechanism.js'))
 const inverseSheetTabSource = fs.readFileSync(path.join(root, 'src', 'InverseSheetTab.tsx'), 'utf8')
+const latticeViewerSource = fs.readFileSync(path.join(root, 'src', 'LatticeViewer3D.tsx'), 'utf8')
 
 const DEFAULT_SHEET_ROWS = 44
 const DEFAULT_SHEET_COLUMNS = 112
@@ -62,6 +63,7 @@ const SOURCE_BREAKING_WAVE_TRACE = '0,0;0.035,0.02;0.075,0.07;0.118,0.17;0.17,0.
 const failures = [...runInverseSheetSanityChecks()]
 const startupUrlParamCoverage = summarizeStartupUrlParamCoverage()
 const startupDisplayContract = summarizeStartupDisplayContract()
+const readableSurfaceRenderContract = summarizeReadableSurfaceRenderContract()
 const generatedMode = { profileMode: 'generated' }
 const breakingLipConfig = {
   ...generatedMode,
@@ -453,6 +455,10 @@ if (!startupDisplayContract.ok) {
   failures.push(`startup display contract should default to clean surface-first rendering with URL gates for cells/connectors: ${startupDisplayContract.failures.join('; ')}`)
 }
 
+if (!readableSurfaceRenderContract.ok) {
+  failures.push(`readable surface renderer should keep top-view square-sheet projection separate from side/isometric views: ${readableSurfaceRenderContract.failures.join('; ')}`)
+}
+
 if (mechanism.maxConnectorEndpointGap > 0.0001) {
   failures.push('inverse-sheet arms should terminate directly at shared connector points')
 }
@@ -491,6 +497,7 @@ if (mechanism.maxCenterShift > 2.25) {
 const report = {
   startupUrlParamCoverage,
   startupDisplayContract,
+  readableSurfaceRenderContract,
   flat0,
   flat1,
   flatContributionPair,
@@ -1259,6 +1266,35 @@ function summarizeStartupDisplayContract() {
     missingUrlGates,
     failures,
   }
+}
+
+function summarizeReadableSurfaceRenderContract() {
+  const requiredFragments = [
+    ['component passes active view', '<ReadableWaveSurface model={model} view={view} />'],
+    ['surface geometry is keyed by view', 'buildReadableWaveSurfaceGeometry(model, view)'],
+    ['geometry builder accepts view', "function buildReadableWaveSurfaceGeometry(model: LatticeModel, view: CameraViewRequest['view'])"],
+    ['top view keeps its own display projection', "function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number): Vec3"],
+    ['non-top views use the readable side/isometric point', "if (view !== 'top') return readableWavePoint(frame, t, s)"],
+    ['top view uses the plan point', 'return readableWaveTopPlanPoint(frame, t, s)'],
+  ]
+  const missingFragments = requiredFragments.filter(([, fragment]) => !latticeViewerSource.includes(fragment))
+  const displayPointUses = countSourceOccurrences(latticeViewerSource, 'readableWaveDisplayPoint(frame, view')
+  const failures = [
+    ...missingFragments.map(([label]) => `${label} missing`),
+    ...(displayPointUses < 5 ? [`readableWaveDisplayPoint used ${displayPointUses} times, expected at least 5`] : []),
+  ]
+
+  return {
+    ok: failures.length === 0,
+    checkedFragments: requiredFragments.map(([label]) => label),
+    missingFragments,
+    displayPointUses,
+    failures,
+  }
+}
+
+function countSourceOccurrences(source, needle) {
+  return source.split(needle).length - 1
 }
 
 function summarizeLipSharpnessPair(bluntModel, sharpModel) {
