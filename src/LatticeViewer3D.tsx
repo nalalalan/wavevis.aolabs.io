@@ -290,7 +290,7 @@ type ReadableWaveFrame = {
 const readableWaveUSegments = 104
 const readableWaveVSegments = 54
 const readableReferenceProfilePoints =
-  '0,0;0.06,0.006;0.14,0.03;0.24,0.12;0.35,0.32;0.47,0.58;0.59,0.8;0.71,0.94;0.82,0.97;0.91,0.89;0.975,0.71;1,0.55;0.972,0.43;0.925,0.395;0.875,0.455;0.835,0.565;0.79,0.61;0.75,0.54;0.742,0.4;0.785,0.245;0.875,0.115;0.965,0.035;1,0'
+  '0,0;0.055,0.008;0.13,0.035;0.22,0.12;0.32,0.31;0.43,0.56;0.55,0.78;0.67,0.94;0.78,1;0.875,0.94;0.945,0.78;0.985,0.58;0.965,0.46;0.91,0.38;0.84,0.38;0.785,0.46;0.745,0.58;0.715,0.62;0.69,0.54;0.67,0.42;0.7,0.26;0.79,0.12;0.9,0.045;1,0'
 
 function readableSurfaceReferenceOnly(model: LatticeModel): boolean {
   return model.config.showSurface && !model.config.showHeatmap && !model.config.showNodes
@@ -300,9 +300,9 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const surfaceGeometry = useMemo(() => buildReadableWaveSurfaceGeometry(model), [model])
   const wireGeometry = useMemo(() => buildReadableWaveWireGeometry(model, view), [model, view])
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
-  const surfaceOpacity = view === 'side' ? 0.34 : view === 'front' ? 0.66 : view === 'top' ? 0.14 : 0.54
-  const wireOpacity = view === 'side' ? 0.38 : view === 'front' ? 0.42 : view === 'top' ? 0.4 : 0.4
-  const outlineOpacity = view === 'side' ? 0.78 : view === 'front' ? 0.56 : view === 'top' ? 0.12 : 0.26
+  const surfaceOpacity = view === 'side' ? 0.62 : view === 'front' ? 0.72 : view === 'top' ? 0.18 : 0.66
+  const wireOpacity = view === 'side' ? 0.24 : view === 'front' ? 0.28 : view === 'top' ? 0.28 : 0.24
+  const outlineOpacity = view === 'side' ? 0.42 : view === 'front' ? 0.36 : view === 'top' ? 0.08 : 0.16
 
   return (
     <group renderOrder={-2}>
@@ -358,8 +358,8 @@ function buildReadableWaveWireGeometry(model: LatticeModel, view: CameraViewRequ
   const pushSegment = (a: Vec3, b: Vec3) => {
     positions.push(...a, ...b)
   }
-  const spanLineStep = view === 'side' ? 4 : 3
-  const profileLineStep = view === 'side' ? 12 : 4
+  const spanLineStep = 2
+  const profileLineStep = view === 'side' ? 4 : 3
 
   for (let vIndex = 0; vIndex <= readableWaveVSegments; vIndex += spanLineStep) {
     const s = -1 + (vIndex / readableWaveVSegments) * 2
@@ -506,8 +506,8 @@ function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3
   const centerX = lerpNumber(moundX, curledX, curlBlend)
   const centerZ = lerpNumber(moundZ, curledZ, curlBlend) * growth
   const curlShoulder = smoothStep(0.44, 0.72, t) * (1 - smoothStep(0.88, 1, t))
-  const curlReturn = smoothStep(0.68, 0.98, t)
-  const curlPinch = frame.progress * foldBlend * (0.72 * curlShoulder + 0.22 * curlReturn)
+  const lipTip = smoothStep(0.76, 1, t)
+  const curlPinch = frame.progress * foldBlend * (0.09 * curlShoulder + 0.42 * lipTip)
   const yPinch = s * frame.halfSpan * curlPinch
 
   return [
@@ -859,6 +859,7 @@ function StraightEdgeSegments({
 }) {
   const splitSideEdges = scope.sideView
   const splitIsometricEdges = scope.isometricView
+  const readableSurfaceMode = readableSurfaceReferenceOnly(model)
   const geometries = useMemo(() => {
     const buildGeometry = (edges: LatticeEdge[]) => {
       const positions = new Float32Array(edges.length * 4 * 3)
@@ -1019,16 +1020,16 @@ function StraightEdgeSegments({
     return (
       <>
         <lineSegments geometry={geometries.spanFlat} renderOrder={0}>
-          <lineBasicMaterial color="#312f2a" transparent opacity={0.01} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#312f2a" transparent opacity={readableSurfaceMode ? 0.001 : 0.01} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileFlat} renderOrder={1}>
-          <lineBasicMaterial color="#26241f" transparent opacity={0.025} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#26241f" transparent opacity={readableSurfaceMode ? 0.002 : 0.025} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.spanActive} renderOrder={2}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.045} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.0018 : 0.045} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileActive} renderOrder={3}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.18} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.006 : 0.18} depthTest={false} depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -1047,25 +1048,25 @@ function StraightEdgeSegments({
     return (
       <>
         <lineSegments geometry={geometries.spanFlat} renderOrder={0}>
-          <lineBasicMaterial color="#5b5851" transparent opacity={0.003} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#5b5851" transparent opacity={readableSurfaceMode ? 0.0004 : 0.003} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileFlat} renderOrder={1}>
-          <lineBasicMaterial color="#3d3a34" transparent opacity={0.005} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#3d3a34" transparent opacity={readableSurfaceMode ? 0.0007 : 0.005} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.spanSoftActive} renderOrder={2}>
-          <lineBasicMaterial color="#4f4d47" transparent opacity={0.001} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#4f4d47" transparent opacity={readableSurfaceMode ? 0.0002 : 0.001} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileSoftActive} renderOrder={3}>
-          <lineBasicMaterial color="#34322d" transparent opacity={0.0015} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#34322d" transparent opacity={readableSurfaceMode ? 0.0003 : 0.0015} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.spanActive} renderOrder={4}>
-          <lineBasicMaterial color="#22221f" transparent opacity={0.006} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#22221f" transparent opacity={readableSurfaceMode ? 0.0005 : 0.006} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileActive} renderOrder={5}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.014} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.001 : 0.014} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileRimActive} renderOrder={6}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.04} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.003 : 0.04} depthTest={false} depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -1088,10 +1089,10 @@ function StraightEdgeSegments({
     return (
       <>
         <lineSegments geometry={geometries.topPlan} renderOrder={0}>
-          <lineBasicMaterial color="#343631" transparent opacity={0.3} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#343631" transparent opacity={readableSurfaceMode ? 0.006 : 0.3} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.topFold} renderOrder={1}>
-          <lineBasicMaterial color="#343631" transparent opacity={0.006} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#343631" transparent opacity={readableSurfaceMode ? 0.0006 : 0.006} depthTest depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -1398,7 +1399,9 @@ function positionCamera(
   selected?: SelectedElement,
 ): void {
   const surfaceReferenceOnly = !selected && readableSurfaceReferenceOnly(model)
-  const bounds = surfaceReferenceOnly && view !== 'front'
+  const bounds = surfaceReferenceOnly && view === 'top'
+    ? model.bounds
+    : surfaceReferenceOnly && view !== 'front'
     ? activeReadableWaveBounds(model)
     : !selected && view === 'side'
     ? activeSideProfileBounds(model)
