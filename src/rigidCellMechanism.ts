@@ -17,6 +17,10 @@ export type RigidCellMechanismStats = {
   maxLegLengthSpread: number
   maxPairLengthSpread: number
   maxOppositeColinearErrorDeg: number
+  maxCellOppositePairLengthSpread: number
+  maxCellOppositeColinearErrorDeg: number
+  maxCellOppositeCenterResidual: number
+  checkedCellOppositePairCount: number
   maxOrthogonalityErrorDeg: number
   maxConnectorPathBendDeg: number
   maxExpectedArmCountResidual: number
@@ -123,6 +127,10 @@ export function rigidCellMechanismStats(model: LatticeModel): RigidCellMechanism
   let maxLegLengthSpread = 0
   let maxPairLengthSpread = 0
   let maxOppositeColinearErrorDeg = 0
+  let maxCellOppositePairLengthSpread = 0
+  let maxCellOppositeColinearErrorDeg = 0
+  let maxCellOppositeCenterResidual = 0
+  let checkedCellOppositePairCount = 0
   let maxOrthogonalityErrorDeg = 0
   let maxExpectedArmCountResidual = 0
   let minInteriorConnectedArmCount = Infinity
@@ -149,6 +157,27 @@ export function rigidCellMechanismStats(model: LatticeModel): RigidCellMechanism
     if (connectedLengths.length >= 2) {
       maxLegLengthSpread = Math.max(maxLegLengthSpread, Math.max(...connectedLengths) - Math.min(...connectedLengths))
     }
+
+    const measureOppositePair = (negativeEndpoint: Vec3, positiveEndpoint: Vec3) => {
+      const negativeLeg = subtractVec(negativeEndpoint, frame.center)
+      const positiveLeg = subtractVec(positiveEndpoint, frame.center)
+      maxCellOppositePairLengthSpread = Math.max(
+        maxCellOppositePairLengthSpread,
+        Math.abs(lengthVec(negativeLeg) - lengthVec(positiveLeg)),
+      )
+      maxCellOppositeColinearErrorDeg = Math.max(
+        maxCellOppositeColinearErrorDeg,
+        angleDeg(positiveLeg, scaleVec(negativeLeg, -1)),
+      )
+      maxCellOppositeCenterResidual = Math.max(
+        maxCellOppositeCenterResidual,
+        distanceVec(scaleVec(addVec(negativeEndpoint, positiveEndpoint), 0.5), frame.center),
+      )
+      checkedCellOppositePairCount += 1
+    }
+
+    if (eastEndpoint && westEndpoint) measureOppositePair(westEndpoint, eastEndpoint)
+    if (northEndpoint && southEndpoint) measureOppositePair(southEndpoint, northEndpoint)
 
     if (eastEndpoint && westEndpoint && northEndpoint && southEndpoint) {
       const visualXAxis = subtractVec(eastEndpoint, westEndpoint)
@@ -199,6 +228,10 @@ export function rigidCellMechanismStats(model: LatticeModel): RigidCellMechanism
     maxLegLengthSpread,
     maxPairLengthSpread,
     maxOppositeColinearErrorDeg,
+    maxCellOppositePairLengthSpread,
+    maxCellOppositeColinearErrorDeg,
+    maxCellOppositeCenterResidual,
+    checkedCellOppositePairCount,
     maxOrthogonalityErrorDeg,
     maxConnectorPathBendDeg,
     maxExpectedArmCountResidual,
@@ -265,15 +298,78 @@ function buildPairwiseOppositeConnectorMap(
 ): Map<string, Vec3> {
   const connectorByEdgeId = new Map<string, Vec3>()
 
+  for (let row = 0; row < model.config.rows; row += 1) {
+    const centers = Array.from({ length: model.config.columns }, (_value, col) =>
+      frameByNodeId.get(nodeId(row, col))?.center)
+    const edgeIds = Array.from({ length: Math.max(model.config.columns - 1, 0) }, (_value, col) =>
+      `e-h-${row}-${col}`)
+    addSolvedOppositePairChain(connectorByEdgeId, centers, edgeIds)
+  }
+
+  for (let col = 0; col < model.config.columns; col += 1) {
+    const centers = Array.from({ length: model.config.rows }, (_value, row) =>
+      frameByNodeId.get(nodeId(row, col))?.center)
+    const edgeIds = Array.from({ length: Math.max(model.config.rows - 1, 0) }, (_value, row) =>
+      `e-v-${row}-${col}`)
+    addSolvedOppositePairChain(connectorByEdgeId, centers, edgeIds)
+  }
+
   model.edges.forEach((edge) => {
+    if (connectorByEdgeId.has(edge.id)) return
     const frameA = frameByNodeId.get(edge.nodeA)
     const frameB = frameByNodeId.get(edge.nodeB)
     if (!frameA || !frameB) return
-
     connectorByEdgeId.set(edge.id, scaleVec(addVec(frameA.center, frameB.center), 0.5))
   })
 
   return connectorByEdgeId
+}
+
+function addSolvedOppositePairChain(
+  connectorByEdgeId: Map<string, Vec3>,
+  maybeCenters: Array<Vec3 | undefined>,
+  edgeIds: string[],
+): void {
+  if (!edgeIds.length) return
+  if (maybeCenters.some((center) => !center)) {
+    edgeIds.forEach((edgeId, index) => {
+      const before = maybeCenters[index]
+      const after = maybeCenters[index + 1]
+      if (!before || !after) return
+      connectorByEdgeId.set(edgeId, scaleVec(addVec(before, after), 0.5))
+    })
+    return
+  }
+
+  const centers = maybeCenters as Vec3[]
+  solveOppositePairConnectors(centers).forEach((connector, index) => {
+    const edgeId = edgeIds[index]
+    if (!edgeId) return
+    connectorByEdgeId.set(edgeId, connector)
+  })
+}
+
+function solveOppositePairConnectors(centers: Vec3[]): Vec3[] {
+  const connectorCount = Math.max(centers.length - 1, 0)
+  if (connectorCount <= 0) return []
+  if (connectorCount === 1) return [scaleVec(addVec(centers[0], centers[1]), 0.5)]
+
+  const signs: number[] = [1]
+  const offsets: Vec3[] = [[0, 0, 0]]
+
+  for (let connectorIndex = 1; connectorIndex < connectorCount; connectorIndex += 1) {
+    signs[connectorIndex] = -signs[connectorIndex - 1]
+    offsets[connectorIndex] = subtractVec(scaleVec(centers[connectorIndex], 2), offsets[connectorIndex - 1])
+  }
+
+  let freeSum: Vec3 = [0, 0, 0]
+  for (let connectorIndex = 0; connectorIndex < connectorCount; connectorIndex += 1) {
+    const midpointTarget = scaleVec(addVec(centers[connectorIndex], centers[connectorIndex + 1]), 0.5)
+    freeSum = addVec(freeSum, scaleVec(subtractVec(midpointTarget, offsets[connectorIndex]), signs[connectorIndex]))
+  }
+
+  const free = scaleVec(freeSum, 1 / connectorCount)
+  return offsets.map((offset, index) => addVec(offset, scaleVec(free, signs[index])))
 }
 
 function applyConnectedArmEndpoints(

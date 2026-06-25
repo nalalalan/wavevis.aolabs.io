@@ -19,6 +19,7 @@ import type {
 } from './inverseSheetTypes'
 import { colorForQuad, legendForMode } from './metricVisuals'
 import { canvasResizeObserver } from './resizeObserverPolyfill'
+import { buildRigidCellMechanism } from './rigidCellMechanism'
 
 const inverseLinkageColor = '#111111'
 const inverseCellBodyColor = '#2f3130'
@@ -255,7 +256,7 @@ function LatticeModelGroup({
             radius={edgePickRadius}
             onEdgePick={onEdgePick}
           />
-          <StraightEdgeSegments nodes={nodeById} scope={renderScope} />
+          <StraightEdgeSegments model={model} nodes={nodeById} scope={renderScope} />
         </>
       )}
       {view === 'isometric' && model.config.showHeatmap && (
@@ -292,15 +293,15 @@ const readableReferenceProfilePoints =
   '0,0;0.06,0.006;0.14,0.03;0.24,0.12;0.35,0.32;0.47,0.58;0.59,0.8;0.71,0.94;0.82,0.97;0.91,0.89;0.975,0.71;1,0.55;0.972,0.43;0.925,0.395;0.875,0.455;0.835,0.565;0.79,0.61;0.75,0.54;0.742,0.4;0.785,0.245;0.875,0.115;0.965,0.035;1,0'
 
 function readableSurfaceReferenceOnly(model: LatticeModel): boolean {
-  return model.config.showSurface && !model.config.showHeatmap && !model.config.showNodes && !model.config.showEdges
+  return model.config.showSurface && !model.config.showHeatmap && !model.config.showNodes
 }
 
 function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: CameraViewRequest['view'] }) {
   const surfaceGeometry = useMemo(() => buildReadableWaveSurfaceGeometry(model), [model])
   const wireGeometry = useMemo(() => buildReadableWaveWireGeometry(model, view), [model, view])
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
-  const surfaceOpacity = view === 'side' ? 0.52 : view === 'front' ? 0.66 : view === 'top' ? 0.14 : 0.54
-  const wireOpacity = view === 'side' ? 0.28 : view === 'front' ? 0.42 : view === 'top' ? 0.4 : 0.4
+  const surfaceOpacity = view === 'side' ? 0.34 : view === 'front' ? 0.66 : view === 'top' ? 0.14 : 0.54
+  const wireOpacity = view === 'side' ? 0.38 : view === 'front' ? 0.42 : view === 'top' ? 0.4 : 0.4
   const outlineOpacity = view === 'side' ? 0.78 : view === 'front' ? 0.56 : view === 'top' ? 0.12 : 0.26
 
   return (
@@ -848,9 +849,11 @@ function NodeInstances({
 }
 
 function StraightEdgeSegments({
+  model,
   nodes,
   scope,
 }: {
+  model: LatticeModel
   nodes: Map<string, LatticeNode>
   scope: NodeEdgeRenderScope
 }) {
@@ -858,17 +861,32 @@ function StraightEdgeSegments({
   const splitIsometricEdges = scope.isometricView
   const geometries = useMemo(() => {
     const buildGeometry = (edges: LatticeEdge[]) => {
-      const positions = new Float32Array(edges.length * 2 * 3)
-      edges.forEach((edge, index) => {
-        writeVec(positions, index * 6, nodes.get(edge.nodeA)?.currentPosition ?? [0, 0, 0])
-        writeVec(positions, index * 6 + 3, nodes.get(edge.nodeB)?.currentPosition ?? [0, 0, 0])
+      const positions = new Float32Array(edges.length * 4 * 3)
+      let segmentIndex = 0
+
+      edges.forEach((edge) => {
+        const frameA = mechanism.frameByNodeId.get(edge.nodeA)
+        const frameB = mechanism.frameByNodeId.get(edge.nodeB)
+        const connector = mechanism.connectorByEdgeId.get(edge.id)
+        if (!frameA || !frameB || !connector) return
+
+        writeVec(positions, segmentIndex * 6, frameA.center)
+        writeVec(positions, segmentIndex * 6 + 3, connector)
+        segmentIndex += 1
+        writeVec(positions, segmentIndex * 6, frameB.center)
+        writeVec(positions, segmentIndex * 6 + 3, connector)
+        segmentIndex += 1
       })
 
       const nextGeometry = new THREE.BufferGeometry()
-      nextGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+      nextGeometry.setAttribute('position', new THREE.BufferAttribute(
+        segmentIndex === edges.length * 2 ? positions : positions.slice(0, segmentIndex * 6),
+        3,
+      ))
       return nextGeometry
     }
 
+    const mechanism = buildRigidCellMechanism(model)
     const nodeValues = [...nodes.values()]
     const profileEdges = scope.edges.filter((edge) => edge.orientation === 'horizontal')
     const spanEdges = scope.edges.filter((edge) => edge.orientation === 'vertical')
@@ -995,22 +1013,22 @@ function StraightEdgeSegments({
       topPlan: null,
       topFold: null,
     }
-  }, [nodes, scope.edges, scope.topView, splitIsometricEdges, splitSideEdges])
+  }, [model, nodes, scope.edges, scope.topView, splitIsometricEdges, splitSideEdges])
 
   if (splitIsometricEdges && geometries.profileActive && geometries.profileFlat && geometries.spanActive && geometries.spanFlat) {
     return (
       <>
         <lineSegments geometry={geometries.spanFlat} renderOrder={0}>
-          <lineBasicMaterial color="#312f2a" transparent opacity={0.018} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#312f2a" transparent opacity={0.01} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileFlat} renderOrder={1}>
-          <lineBasicMaterial color="#26241f" transparent opacity={0.05} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#26241f" transparent opacity={0.025} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.spanActive} renderOrder={2}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.1} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.045} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileActive} renderOrder={3}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.68} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.18} depthTest={false} depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -1029,25 +1047,25 @@ function StraightEdgeSegments({
     return (
       <>
         <lineSegments geometry={geometries.spanFlat} renderOrder={0}>
-          <lineBasicMaterial color="#5b5851" transparent opacity={0.004} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#5b5851" transparent opacity={0.003} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileFlat} renderOrder={1}>
-          <lineBasicMaterial color="#3d3a34" transparent opacity={0.006} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#3d3a34" transparent opacity={0.005} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.spanSoftActive} renderOrder={2}>
-          <lineBasicMaterial color="#4f4d47" transparent opacity={0.0015} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#4f4d47" transparent opacity={0.001} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileSoftActive} renderOrder={3}>
-          <lineBasicMaterial color="#34322d" transparent opacity={0.002} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#34322d" transparent opacity={0.0015} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.spanActive} renderOrder={4}>
-          <lineBasicMaterial color="#22221f" transparent opacity={0.01} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#22221f" transparent opacity={0.006} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileActive} renderOrder={5}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.012} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.014} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileRimActive} renderOrder={6}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.035} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={0.04} depthTest={false} depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -1171,18 +1189,23 @@ function SelectedHighlight({
   nodeById: Map<string, LatticeNode>
   view: CameraViewRequest['view']
 }) {
+  const mechanism = useMemo(() => buildRigidCellMechanism(model), [model])
   if (!selected) return null
   const sideLikeView = view === 'side' || view === 'isometric' || view === 'front'
 
   if (selected.kind === 'edge') {
     const edge = model.edges.find((candidate) => candidate.id === selected.id)
     if (sideLikeView && edge?.orientation !== 'horizontal') return null
-    const nodeA = edge ? nodeById.get(edge.nodeA) : undefined
-    const nodeB = edge ? nodeById.get(edge.nodeB) : undefined
-    if (!edge || !nodeA || !nodeB) return null
+    const frameA = edge ? mechanism.frameByNodeId.get(edge.nodeA) : undefined
+    const frameB = edge ? mechanism.frameByNodeId.get(edge.nodeB) : undefined
+    const connector = edge ? mechanism.connectorByEdgeId.get(edge.id) : undefined
+    if (!edge || !frameA || !frameB || !connector) return null
 
     return (
-      <TubeSegment start={nodeA.currentPosition} end={nodeB.currentPosition} radius={0.04} color="#f5d84b" />
+      <group>
+        <TubeSegment start={frameA.center} end={connector} radius={0.04} color="#f5d84b" />
+        <TubeSegment start={frameB.center} end={connector} radius={0.04} color="#f5d84b" />
+      </group>
     )
   }
 

@@ -35,7 +35,7 @@ execFileSync(
 )
 
 const { buildInverseSheetModel, getInverseSheetUsableRanges, runInverseSheetSanityChecks } = require(path.join(outDir, 'latticeGeometry.js'))
-const { rigidCellMechanismStats } = require(path.join(outDir, 'rigidCellMechanism.js'))
+const { buildRigidCellMechanism, rigidCellMechanismStats } = require(path.join(outDir, 'rigidCellMechanism.js'))
 const inverseSheetTabSource = fs.readFileSync(path.join(root, 'src', 'InverseSheetTab.tsx'), 'utf8')
 
 const DEFAULT_SHEET_ROWS = 44
@@ -452,22 +452,22 @@ if (mechanism.maxExpectedArmCountResidual !== 0 || mechanism.minInteriorConnecte
 }
 
 if (
-  sideRenderDirectLines.renderedDepthEdgeCount !== sideRenderDirectLines.expectedDepthEdgeCount ||
-  sideRenderDirectLines.renderedEdgeCount <= 0 ||
+  sideRenderDirectLines.renderedDepthArmSegmentCount !== sideRenderDirectLines.expectedDepthArmSegmentCount ||
+  sideRenderDirectLines.renderedArmSegmentCount <= 0 ||
   sideRenderDirectLines.renderedNodeCount !== sideRenderDirectLines.expectedNodeCount ||
-  sideRenderDirectLines.renderedEdgeCount !== sideRenderDirectLines.expectedFullRectEdgeCount ||
+  sideRenderDirectLines.renderedArmSegmentCount !== sideRenderDirectLines.expectedFullRectArmSegmentCount ||
   sideRenderDirectLines.maxRenderedNeighborDegreeResidual !== 0 ||
   sideRenderDirectLines.minRenderedInteriorDegree < 4
 ) {
-  failures.push('side view should show the full node array with direct rectangular linkages, not a profile-only debug view or hidden span legs')
+  failures.push('side view should show the full node array with direct rigid-cell arm linkages, not a profile-only debug view or hidden span legs')
 }
 
-if (mechanism.maxPairLengthSpread > 0.005) {
-  failures.push('opposite arms within each inverse-sheet pair should stay nearly equal length')
+if (mechanism.maxCellOppositePairLengthSpread > 0.0001) {
+  failures.push('opposite arms within each inverse-sheet cell should stay equal length')
 }
 
-if (mechanism.maxOppositeColinearErrorDeg > 0.25) {
-  failures.push('opposite arms within each inverse-sheet pair should stay visually collinear')
+if (mechanism.maxCellOppositeColinearErrorDeg > 0.01 || mechanism.maxCellOppositeCenterResidual > 0.0001) {
+  failures.push('opposite arms within each inverse-sheet cell should stay collinear through the cell center')
 }
 
 if (mechanism.maxArmSurfaceLeak > 3.6) {
@@ -504,6 +504,10 @@ const report = {
     maxLegLengthSpread: round(mechanism.maxLegLengthSpread),
     maxPairLengthSpread: round(mechanism.maxPairLengthSpread),
     maxOppositeColinearErrorDeg: round(mechanism.maxOppositeColinearErrorDeg),
+    maxCellOppositePairLengthSpread: round(mechanism.maxCellOppositePairLengthSpread),
+    maxCellOppositeColinearErrorDeg: round(mechanism.maxCellOppositeColinearErrorDeg),
+    maxCellOppositeCenterResidual: round(mechanism.maxCellOppositeCenterResidual),
+    checkedCellOppositePairCount: mechanism.checkedCellOppositePairCount,
     maxOrthogonalityErrorDeg: round(mechanism.maxOrthogonalityErrorDeg),
     maxConnectorPathBendDeg: round(mechanism.maxConnectorPathBendDeg),
     maxExpectedArmCountResidual: round(mechanism.maxExpectedArmCountResidual),
@@ -2083,6 +2087,21 @@ function summarizeExtremeShape(model) {
 
 function summarizeSideRenderDirectLines(model) {
   const renderedEdges = model.edges
+  const mechanism = buildRigidCellMechanism(model)
+  const renderedArmSegmentCount = renderedEdges.reduce((sum, edge) => {
+    const frameA = mechanism.frameByNodeId.get(edge.nodeA)
+    const frameB = mechanism.frameByNodeId.get(edge.nodeB)
+    const connector = mechanism.connectorByEdgeId.get(edge.id)
+    return sum + (frameA && frameB && connector ? 2 : 0)
+  }, 0)
+  const renderedDepthArmSegmentCount = renderedEdges
+    .filter((edge) => edge.orientation === 'vertical')
+    .reduce((sum, edge) => {
+      const frameA = mechanism.frameByNodeId.get(edge.nodeA)
+      const frameB = mechanism.frameByNodeId.get(edge.nodeB)
+      const connector = mechanism.connectorByEdgeId.get(edge.id)
+      return sum + (frameA && frameB && connector ? 2 : 0)
+    }, 0)
   const degreeByNodeId = new Map(model.nodes.map((node) => [node.id, 0]))
 
   renderedEdges.forEach((edge) => {
@@ -2107,14 +2126,19 @@ function summarizeSideRenderDirectLines(model) {
   })
   const expectedHorizontalEdgeCount = model.config.rows * Math.max(model.config.columns - 1, 0)
   const expectedDepthEdgeCount = Math.max(model.config.rows - 1, 0) * model.config.columns
+  const expectedFullRectEdgeCount = expectedHorizontalEdgeCount + expectedDepthEdgeCount
 
   return {
     renderedNodeCount: model.nodes.length,
     expectedNodeCount: model.config.rows * model.config.columns,
     renderedEdgeCount: renderedEdges.length,
-    expectedFullRectEdgeCount: expectedHorizontalEdgeCount + expectedDepthEdgeCount,
+    expectedFullRectEdgeCount,
+    renderedArmSegmentCount,
+    expectedFullRectArmSegmentCount: expectedFullRectEdgeCount * 2,
     renderedDepthEdgeCount: model.edges.filter((edge) => edge.orientation === 'vertical' && renderedEdges.includes(edge)).length,
     expectedDepthEdgeCount,
+    renderedDepthArmSegmentCount,
+    expectedDepthArmSegmentCount: expectedDepthEdgeCount * 2,
     renderedDegreeSum,
     expectedNeighborDegreeSum,
     maxRenderedNeighborDegreeResidual,
