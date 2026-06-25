@@ -300,14 +300,14 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const surfaceGeometry = useMemo(() => buildReadableWaveSurfaceGeometry(model, view), [model, view])
   const wireGeometry = useMemo(() => buildReadableWaveWireGeometry(model, view), [model, view])
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
-  const surfaceOpacity = view === 'side' ? 0.62 : view === 'front' ? 0.72 : view === 'top' ? 0.08 : 0.66
-  const wireOpacity = view === 'side' ? 0.24 : view === 'front' ? 0.28 : view === 'top' ? 0.18 : 0.24
-  const outlineOpacity = view === 'side' ? 0.42 : view === 'front' ? 0.3 : view === 'top' ? 0.02 : 0.16
+  const surfaceOpacity = view === 'side' ? 0.62 : view === 'front' ? 0.78 : view === 'top' ? 0.08 : 0.66
+  const wireOpacity = view === 'side' ? 0.24 : view === 'front' ? 0.12 : view === 'top' ? 0.18 : 0.24
+  const outlineOpacity = view === 'side' ? 0.42 : view === 'front' ? 0.03 : view === 'top' ? 0.02 : 0.16
 
   return (
     <group renderOrder={-2}>
       <mesh geometry={surfaceGeometry} renderOrder={-2}>
-        <meshBasicMaterial color="#fbfaf6" side={THREE.DoubleSide} transparent opacity={surfaceOpacity} depthWrite={false} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
+        <meshBasicMaterial color="#fbfaf6" side={THREE.DoubleSide} transparent opacity={surfaceOpacity} depthWrite={view === 'front'} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
       </mesh>
       <lineSegments geometry={wireGeometry} renderOrder={-1}>
         <lineBasicMaterial color="#b8b3ab" transparent opacity={wireOpacity} depthTest depthWrite={false} />
@@ -358,8 +358,8 @@ function buildReadableWaveWireGeometry(model: LatticeModel, view: CameraViewRequ
   const pushSegment = (a: Vec3, b: Vec3) => {
     positions.push(...a, ...b)
   }
-  const spanLineStep = view === 'top' ? 1 : 2
-  const profileLineStep = view === 'top' ? 3 : view === 'side' ? 4 : 3
+  const spanLineStep = view === 'top' ? 1 : view === 'front' ? 3 : 2
+  const profileLineStep = view === 'top' ? 3 : view === 'side' ? 4 : view === 'front' ? 8 : 3
 
   for (let vIndex = 0; vIndex <= readableWaveVSegments; vIndex += spanLineStep) {
     const s = -1 + (vIndex / readableWaveVSegments) * 2
@@ -403,8 +403,8 @@ function buildReadableWaveOutlineGeometry(model: LatticeModel, view: CameraViewR
   if (view === 'side') {
     pushPolyline(sampleOuterSideProfileLine(frame, samples))
   } else if (view === 'front') {
-    ;[0.54, 0.66, 0.76, 0.86, 0.94, 1].forEach((t) => pushPolyline(sampleSpanLine(t)))
-    ;[-0.72, -0.42, -0.18, 0, 0.18, 0.42, 0.72].forEach((s) => pushPolyline(sampleProfileLine(s)))
+    ;[0.56, 0.76, 0.9, 1].forEach((t) => pushPolyline(sampleSpanLine(t)))
+    ;[-0.72, -0.36, 0, 0.36, 0.72].forEach((s) => pushPolyline(sampleProfileLine(s)))
   } else if (view === 'top') {
     ;[-0.72, -0.42, -0.18, 0, 0.18, 0.42, 0.72].forEach((s) =>
       pushPolyline(sampleProfileLine(s)),
@@ -528,8 +528,30 @@ function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3
 }
 
 function readableWaveDisplayPoint(frame: ReadableWaveFrame, view: CameraViewRequest['view'], t: number, s: number): Vec3 {
-  if (view !== 'top') return readableWavePoint(frame, t, s)
-  return readableWaveTopPlanPoint(frame, t, s)
+  if (view === 'top') return readableWaveTopPlanPoint(frame, t, s)
+  if (view === 'front') return readableWaveFrontPoint(frame, t, s)
+  return readableWavePoint(frame, t, s)
+}
+
+function readableWaveFrontPoint(frame: ReadableWaveFrame, t: number, s: number): Vec3 {
+  const wavePoint = readableWavePoint(frame, t, s)
+  const envelope = readableLateralEnvelope(s)
+  const bodyBand = smoothStep(0.04, 0.56, t) * (1 - smoothStep(0.94, 1, t))
+  const bodyArch = frame.height * 0.68 *
+    (Math.sin(Math.PI * clampUnit(t * 0.9 + 0.03)) ** 1.04) *
+    Math.pow(envelope, 1.06) *
+    bodyBand
+  const capBand = smoothStep(0.58, 0.76, t) * (1 - smoothStep(0.92, 1, t))
+  const lipReturnBand = smoothStep(0.78, 1, t)
+  const capArch = frame.height * (0.02 + 0.9 * Math.pow(envelope, 0.68)) * capBand
+  const tuckedLip = frame.height * (0.03 + 0.42 * Math.pow(envelope, 1.08)) * lipReturnBand
+  const spanPinch = clampUnit(0.38 * capBand + 0.28 * lipReturnBand * Math.pow(envelope, 0.82))
+
+  return [
+    wavePoint[0],
+    frame.centerY + s * frame.halfSpan * (1 - spanPinch),
+    Math.max(wavePoint[2] * 0.24, bodyArch * (1 - 0.42 * capBand), capArch, tuckedLip),
+  ]
 }
 
 function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number): Vec3 {
@@ -1431,7 +1453,9 @@ function positionCamera(
   selected?: SelectedElement,
 ): void {
   const surfaceReferenceOnly = !selected && readableSurfaceReferenceOnly(model)
-  const bounds = surfaceReferenceOnly && view !== 'front'
+  const bounds = surfaceReferenceOnly && view === 'front'
+    ? activeReadableWaveBounds(model, 'front')
+    : surfaceReferenceOnly
     ? activeReadableWaveBounds(model)
     : !selected && view === 'side'
     ? activeSideProfileBounds(model)
@@ -1480,7 +1504,7 @@ function positionCamera(
   controls?.update()
 }
 
-function activeReadableWaveBounds(model: LatticeModel): LatticeBounds {
+function activeReadableWaveBounds(model: LatticeModel, view: CameraViewRequest['view'] = 'isometric'): LatticeBounds {
   const frame = readableWaveFrame(model)
   const points: Vec3[] = []
   const uSamples = 56
@@ -1489,7 +1513,7 @@ function activeReadableWaveBounds(model: LatticeModel): LatticeBounds {
   for (let uIndex = 0; uIndex <= uSamples; uIndex += 1) {
     const t = uIndex / uSamples
     for (let vIndex = 0; vIndex <= vSamples; vIndex += 1) {
-      points.push(readableWavePoint(frame, t, -1 + (vIndex / vSamples) * 2))
+      points.push(readableWaveDisplayPoint(frame, view, t, -1 + (vIndex / vSamples) * 2))
     }
   }
 

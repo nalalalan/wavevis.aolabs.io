@@ -1274,8 +1274,17 @@ function summarizeReadableSurfaceRenderContract() {
     ['surface geometry is keyed by view', 'buildReadableWaveSurfaceGeometry(model, view)'],
     ['geometry builder accepts view', "function buildReadableWaveSurfaceGeometry(model: LatticeModel, view: CameraViewRequest['view'])"],
     ['top view keeps its own display projection', "function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number): Vec3"],
-    ['non-top views use the readable side/isometric point', "if (view !== 'top') return readableWavePoint(frame, t, s)"],
+    ['front view keeps its own display projection', "function readableWaveFrontPoint(frame: ReadableWaveFrame, t: number, s: number): Vec3"],
+    ['top view branches before side/isometric fallback', "if (view === 'top') return readableWaveTopPlanPoint(frame, t, s)"],
+    ['front view branches before side/isometric fallback', "if (view === 'front') return readableWaveFrontPoint(frame, t, s)"],
     ['top view uses the plan point', 'return readableWaveTopPlanPoint(frame, t, s)'],
+    ['front view uses the front point', 'return readableWaveFrontPoint(frame, t, s)'],
+    ['side and isometric views use the readable 3D point', 'return readableWavePoint(frame, t, s)'],
+    ['front camera fits the front readable projection', "activeReadableWaveBounds(model, 'front')"],
+    ['readable bounds sample the display projection', 'readableWaveDisplayPoint(frame, view, t'],
+    ['front view reduces lengthwise wire density', "view === 'front' ? 3"],
+    ['front view reduces spanwise wire density', "view === 'front' ? 8"],
+    ['front view keeps only a faint outline trace', "view === 'front' ? 0.03"],
   ]
   const missingFragments = requiredFragments.filter(([, fragment]) => !latticeViewerSource.includes(fragment))
   const displayPointUses = countSourceOccurrences(latticeViewerSource, 'readableWaveDisplayPoint(frame, view')
