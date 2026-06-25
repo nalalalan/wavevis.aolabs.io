@@ -310,7 +310,7 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
         {view === 'front' ? (
           <meshStandardMaterial color="#ffffff" emissive="#fbfaf6" emissiveIntensity={0.52} roughness={0.92} metalness={0} side={THREE.DoubleSide} transparent opacity={0.38} depthWrite polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
         ) : (
-          <meshBasicMaterial color="#fbfaf6" side={THREE.DoubleSide} transparent opacity={surfaceOpacity} depthWrite={view === 'isometric'} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
+          <meshBasicMaterial color="#fbfaf6" side={THREE.DoubleSide} transparent opacity={surfaceOpacity} depthWrite={view === 'isometric' || view === 'side'} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
         )}
       </mesh>
       <lineSegments geometry={wireGeometry} renderOrder={-1}>
@@ -401,11 +401,14 @@ function buildReadableWaveOutlineGeometry(model: LatticeModel, view: CameraViewR
   const samples = 128
   const sampleProfileLine = (s: number) =>
     Array.from({ length: samples + 1 }, (_, index) => readableWaveDisplayPoint(frame, view, index / samples, s))
+  const sampleProfileRange = (s: number, start: number, end: number, count = 72) =>
+    Array.from({ length: count + 1 }, (_, index) => readableWaveDisplayPoint(frame, view, lerpNumber(start, end, index / count), s))
   const sampleSpanLine = (t: number) =>
     Array.from({ length: 65 }, (_, index) => readableWaveDisplayPoint(frame, view, t, -1 + (index / 64) * 2))
 
   if (view === 'side') {
     pushPolyline(sampleOuterSideProfileLine(frame, samples))
+    pushPolyline(sampleProfileRange(0, 0.66, 0.96))
   } else if (view === 'front') {
     ;[0.58, 0.72, 0.86, 0.94].forEach((t) => pushPolyline(sampleSpanLine(t)))
     ;[-0.72, -0.36, 0, 0.36, 0.72].forEach((s) => pushPolyline(sampleProfileLine(s)))
@@ -419,6 +422,7 @@ function buildReadableWaveOutlineGeometry(model: LatticeModel, view: CameraViewR
   } else {
     ;[-0.72, -0.42, -0.18, 0, 0.18, 0.42, 0.72].forEach((s) => pushPolyline(sampleProfileLine(s)))
     ;[0, 0.66, 0.78].forEach((t) => pushPolyline(sampleSpanLine(t)))
+    pushPolyline(sampleProfileRange(0, 0.66, 0.96))
   }
 
   const geometry = new THREE.BufferGeometry()
@@ -448,8 +452,8 @@ function sampleOuterSideProfileLine(frame: ReadableWaveFrame, samples: number): 
 function readableWaveFrame(model: LatticeModel): ReadableWaveFrame {
   const profile = buildReadableWaveProfile(readableReferenceProfilePoints)
   const sideBounds = activeSideProfileBounds(model)
-  const height = Math.max(model.summary.maxHeight * 1.52, model.config.height * Math.max(model.config.profileScale, 1.12), model.config.spacing * 14)
-  const waveWidth = Math.min(sideBounds.span[0] * 0.82, height * 2.18)
+  const height = Math.max(model.summary.maxHeight * 1.28, model.config.height * Math.max(model.config.profileScale, 1.04), model.config.spacing * 12)
+  const waveWidth = Math.min(sideBounds.span[0] * 0.88, height * 2.72)
   const minX = sideBounds.center[0] - waveWidth * 0.48
   const maxX = sideBounds.center[0] + waveWidth * 0.52
   const visualHalfSpan = waveWidth * 0.5
@@ -520,10 +524,13 @@ function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3
   const curlShoulder = smoothStep(0.44, 0.72, t) * (1 - smoothStep(0.88, 1, t))
   const lipTip = smoothStep(0.7, 1, t)
   const lipBody = smoothStep(0.62, 0.94, t)
+  const capLocalization = frame.progress * smoothStep(0.44, 0.82, t)
+  const shoulderFoldBlend = lerpNumber(baseFoldBlend, Math.pow(envelope, 1.96), capLocalization * curlShoulder * 0.68)
   const terminalLocalization = frame.progress * lipTip
-  const foldBlend = lerpNumber(baseFoldBlend, Math.pow(envelope, 1.68), terminalLocalization * 0.72)
+  const foldBlend = lerpNumber(shoulderFoldBlend, Math.pow(envelope, 2.3), terminalLocalization * 0.78)
   const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.12), Math.pow(envelope, 2.16), terminalLocalization * 0.82)
-  const lipLiftBlend = lerpNumber(liftBlend, terminalLipEnvelope, frame.progress * lipBody * 0.34)
+  const crestLiftBlend = lerpNumber(liftBlend, Math.pow(envelope, 3.2), capLocalization * curlShoulder * 0.78)
+  const lipLiftBlend = lerpNumber(crestLiftBlend, terminalLipEnvelope, frame.progress * lipBody * 0.42)
   const curlPinch = Math.min(0.28, frame.progress * planFoldBlend * (0.05 * curlShoulder + 0.24 * lipTip))
   const yPinch = s * frame.halfSpan * curlPinch
 

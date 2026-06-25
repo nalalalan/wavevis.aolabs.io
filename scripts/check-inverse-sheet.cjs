@@ -1291,7 +1291,7 @@ function summarizeReadableSurfaceRenderContract() {
     ['front view keeps dense but pale spanwise wire density', "view === 'front' ? 4"],
     ['front view keeps a softened outline trace', "view === 'front' ? 0.1"],
     ['front view depth-tests the grid against the readable lip', 'depthTest depthWrite={false}'],
-    ['isometric surface depth hides back-wall tunnel bleed without flattening the side throat', "depthWrite={view === 'isometric'}"],
+    ['side/isometric surface depth hides back-wall tunnel bleed without flattening the throat', "depthWrite={view === 'isometric' || view === 'side'}"],
     ['front outline avoids a heavy terminal contour stack', '[0.58, 0.72, 0.86, 0.94]'],
     ['side view keeps a lighter continuous surface skin', "view === 'side' ? 0.28"],
     ['side view keeps a readable pale wire grid', "view === 'side' ? 0.16"],
