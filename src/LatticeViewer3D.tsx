@@ -1,6 +1,6 @@
 import { Billboard, OrbitControls, PerspectiveCamera, Text } from '@react-three/drei'
 import { Canvas, useThree } from '@react-three/fiber'
-import { Suspense, useLayoutEffect, useMemo, useRef } from 'react'
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import CanvasSizeGuard from './CanvasSizeGuard'
@@ -43,6 +43,7 @@ type LatticeViewer3DProps = {
 export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequest, focusRequest, onEdgePick }: LatticeViewer3DProps) {
   void pickedEdges
   const referenceProjectionVisible = false
+  const surfaceReferenceOnly = readableSurfaceReferenceOnly(model)
 
   return (
     <section className="scene-shell inverse-scene" aria-label="Inverse Sheet 3D lattice view" style={{ position: 'relative' }}>
@@ -55,8 +56,8 @@ export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequ
         <Suspense fallback={null}>
           <LatticeModelGroup model={model} selected={selected} view={viewRequest.view} onEdgePick={onEdgePick} />
         </Suspense>
-        {viewRequest.view === 'top' && <SceneGrid bounds={model.bounds} />}
-        {viewRequest.view === 'top' && (
+        {viewRequest.view === 'top' && !surfaceReferenceOnly && <SceneGrid bounds={model.bounds} />}
+        {viewRequest.view === 'top' && !surfaceReferenceOnly && (
           <Suspense fallback={null}>
             <AxisLabels bounds={model.bounds} />
           </Suspense>
@@ -288,7 +289,11 @@ type ReadableWaveFrame = {
 const readableWaveUSegments = 104
 const readableWaveVSegments = 54
 const readableReferenceProfilePoints =
-  '0,0;0.075,0.012;0.16,0.055;0.26,0.18;0.37,0.42;0.49,0.67;0.61,0.86;0.71,0.97;0.81,0.96;0.905,0.81;0.978,0.58;1,0.39;0.992,0.235;0.962,0.13;0.988,0.115'
+  '0,0;0.06,0.006;0.14,0.03;0.24,0.12;0.35,0.32;0.47,0.58;0.59,0.8;0.71,0.94;0.82,0.97;0.91,0.89;0.975,0.71;1,0.55;0.972,0.43;0.925,0.395;0.875,0.455;0.835,0.565;0.79,0.61;0.75,0.54;0.742,0.4;0.785,0.245;0.875,0.115;0.965,0.035;1,0'
+
+function readableSurfaceReferenceOnly(model: LatticeModel): boolean {
+  return model.config.showSurface && !model.config.showHeatmap && !model.config.showNodes && !model.config.showEdges
+}
 
 function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: CameraViewRequest['view'] }) {
   const surfaceGeometry = useMemo(() => buildReadableWaveSurfaceGeometry(model), [model])
@@ -435,13 +440,14 @@ function readableWaveFrame(model: LatticeModel): ReadableWaveFrame {
   const waveWidth = Math.min(sideBounds.span[0] * 0.82, height * 2.18)
   const minX = sideBounds.center[0] - waveWidth * 0.48
   const maxX = sideBounds.center[0] + waveWidth * 0.52
+  const visualHalfSpan = waveWidth * 0.5
 
   return {
     profile,
     minX,
     maxX,
     centerY: model.bounds.center[1],
-    halfSpan: Math.max(model.bounds.span[1] * 0.5, model.config.spacing * 22),
+    halfSpan: visualHalfSpan,
     height,
     progress: clampUnit(model.config.morph),
   }
@@ -484,37 +490,28 @@ function parseReadableWaveProfilePoints(source: string): ReadableWaveProfilePoin
 function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3 {
   const waveWidth = frame.maxX - frame.minX
   const envelope = readableLateralEnvelope(s)
-  const foldBlend = Math.pow(envelope, 0.78)
-  const liftBlend = Math.max(0.16, Math.pow(envelope, 0.56))
+  const foldBlend = Math.pow(envelope, 0.82)
+  const liftBlend = Math.pow(envelope, 0.5)
   const growth = Math.sin(frame.progress * Math.PI * 0.5)
   const curlBlend = smoothStep(0.22, 1, frame.progress)
   const profilePoint = sampleReadableWaveProfile(frame.profile, t)
   const baseX = lerpNumber(frame.minX, frame.maxX, t)
+  const baseY = frame.centerY + s * frame.halfSpan
   const moundLift = Math.sin(Math.PI * t) ** 1.18
   const moundX = baseX - waveWidth * 0.035 * moundLift
   const moundZ = frame.height * 0.72 * moundLift
   const curledX = frame.minX + waveWidth * profilePoint.x
   const curledZ = frame.height * (profilePoint.z / frame.profile.maxZ)
-  let centerX = lerpNumber(moundX, curledX, curlBlend)
-  let centerZ = lerpNumber(moundZ, curledZ, curlBlend) * growth
-  const throatCurl = frame.progress *
-    smoothStep(0.72, 0.9, t) *
-    (1 - smoothStep(0.965, 1, t)) *
-    Math.pow(Math.max(envelope, 0.08), 0.18)
-  centerX -= waveWidth * 0.14 * throatCurl
-  centerZ = Math.max(0, centerZ - frame.height * 0.055 * throatCurl)
-  const normalizedHeight = clampUnit(centerZ / Math.max(frame.height, 0.000001))
-  const curlFootprint = smoothStep(0.46, 0.84, t)
-  const throatPull = frame.progress * (0.13 * normalizedHeight ** 0.68 + 0.4 * curlFootprint)
-  const terminalTipTaper = frame.progress * smoothStep(0.54, 1, t)
-  const spanScale = Math.max(
-    0.035,
-    (1 - throatPull * (0.48 + 0.52 * Math.pow(envelope, 0.42))) * (1 - terminalTipTaper * 0.9),
-  )
+  const centerX = lerpNumber(moundX, curledX, curlBlend)
+  const centerZ = lerpNumber(moundZ, curledZ, curlBlend) * growth
+  const curlShoulder = smoothStep(0.44, 0.72, t) * (1 - smoothStep(0.88, 1, t))
+  const curlReturn = smoothStep(0.68, 0.98, t)
+  const curlPinch = frame.progress * foldBlend * (0.72 * curlShoulder + 0.22 * curlReturn)
+  const yPinch = s * frame.halfSpan * curlPinch
 
   return [
     lerpNumber(baseX, centerX, foldBlend),
-    frame.centerY + s * frame.halfSpan * spanScale,
+    baseY - yPinch,
     Math.max(0, centerZ * liftBlend),
   ]
 }
@@ -1344,6 +1341,24 @@ function CameraRig({
     positionCamera(camera, controlsRef.current, modelRef.current, viewRequest.view, selected)
   }, [focusRequest.selected, focusRequest.version, size.height, size.width, viewRequest.view])
 
+  useEffect(() => {
+    let innerFrame = 0
+    const outerFrame = window.requestAnimationFrame(() => {
+      innerFrame = window.requestAnimationFrame(() => {
+        const camera = cameraRef.current
+        if (!camera) return
+
+        camera.aspect = Math.max(size.width / Math.max(size.height, 1), 0.2)
+        positionCamera(camera, controlsRef.current, modelRef.current, viewRequest.view, focusRequest.selected ?? undefined)
+      })
+    })
+
+    return () => {
+      window.cancelAnimationFrame(outerFrame)
+      if (innerFrame) window.cancelAnimationFrame(innerFrame)
+    }
+  }, [focusRequest.selected, focusRequest.version, size.height, size.width, viewRequest.version, viewRequest.view])
+
   return (
     <>
       <PerspectiveCamera ref={cameraRef} makeDefault up={[0, 0, 1]} fov={42} />
@@ -1359,7 +1374,10 @@ function positionCamera(
   view: CameraViewRequest['view'],
   selected?: SelectedElement,
 ): void {
-  const bounds = !selected && view === 'side'
+  const surfaceReferenceOnly = !selected && readableSurfaceReferenceOnly(model)
+  const bounds = surfaceReferenceOnly && view !== 'front'
+    ? activeReadableWaveBounds(model)
+    : !selected && view === 'side'
     ? activeSideProfileBounds(model)
     : !selected && view === 'front'
       ? activeFrontCurlBounds(model)
@@ -1404,6 +1422,49 @@ function positionCamera(
 
   controls?.target.copy(target)
   controls?.update()
+}
+
+function activeReadableWaveBounds(model: LatticeModel): LatticeBounds {
+  const frame = readableWaveFrame(model)
+  const points: Vec3[] = []
+  const uSamples = 56
+  const vSamples = 32
+
+  for (let uIndex = 0; uIndex <= uSamples; uIndex += 1) {
+    const t = uIndex / uSamples
+    for (let vIndex = 0; vIndex <= vSamples; vIndex += 1) {
+      points.push(readableWavePoint(frame, t, -1 + (vIndex / vSamples) * 2))
+    }
+  }
+
+  if (points.length < 2) return model.bounds
+
+  const minX = Math.min(...points.map((point) => point[0]))
+  const maxX = Math.max(...points.map((point) => point[0]))
+  const minY = Math.min(...points.map((point) => point[1]))
+  const maxY = Math.max(...points.map((point) => point[1]))
+  const minZ = Math.min(...points.map((point) => point[2]), 0)
+  const maxZ = Math.max(...points.map((point) => point[2]))
+  const spanX = Math.max(maxX - minX, model.config.spacing * 6)
+  const spanY = Math.max(maxY - minY, model.config.spacing * 6)
+  const spanZ = Math.max(maxZ - minZ, model.config.spacing * 4)
+  const padX = Math.max(model.config.spacing * 1.2, spanX * 0.055)
+  const padY = Math.max(model.config.spacing * 1.2, spanY * 0.055)
+  const padZ = Math.max(model.config.spacing * 0.8, spanZ * 0.1)
+  const min: Vec3 = [minX - padX, minY - padY, Math.min(0, minZ - padZ * 0.2)]
+  const max: Vec3 = [maxX + padX, maxY + padY, maxZ + padZ]
+  const center: Vec3 = [
+    (min[0] + max[0]) * 0.5,
+    (min[1] + max[1]) * 0.5,
+    (min[2] + max[2]) * 0.5,
+  ]
+
+  return {
+    min,
+    max,
+    center,
+    span: [max[0] - min[0], max[1] - min[1], max[2] - min[2]],
+  }
 }
 
 function activeIsometricCurlBounds(model: LatticeModel): LatticeBounds {
