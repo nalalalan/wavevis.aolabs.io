@@ -300,9 +300,9 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const surfaceGeometry = useMemo(() => buildReadableWaveSurfaceGeometry(model, view), [model, view])
   const wireGeometry = useMemo(() => buildReadableWaveWireGeometry(model, view), [model, view])
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
-  const surfaceOpacity = view === 'side' ? 0.62 : view === 'front' ? 0.78 : view === 'top' ? 0.08 : 0.66
-  const wireOpacity = view === 'side' ? 0.24 : view === 'front' ? 0.12 : view === 'top' ? 0.18 : 0.24
-  const outlineOpacity = view === 'side' ? 0.42 : view === 'front' ? 0.03 : view === 'top' ? 0.02 : 0.16
+  const surfaceOpacity = view === 'side' ? 0.62 : view === 'front' ? 0.72 : view === 'top' ? 0.08 : 0.66
+  const wireOpacity = view === 'side' ? 0.24 : view === 'front' ? 0.16 : view === 'top' ? 0.18 : 0.24
+  const outlineOpacity = view === 'side' ? 0.42 : view === 'front' ? 0.06 : view === 'top' ? 0.02 : 0.16
 
   return (
     <group renderOrder={-2}>
@@ -535,22 +535,23 @@ function readableWaveDisplayPoint(frame: ReadableWaveFrame, view: CameraViewRequ
 
 function readableWaveFrontPoint(frame: ReadableWaveFrame, t: number, s: number): Vec3 {
   const wavePoint = readableWavePoint(frame, t, s)
+  const frontDepthCenter = (frame.minX + frame.maxX) * 0.5
   const envelope = readableLateralEnvelope(s)
   const bodyBand = smoothStep(0.04, 0.56, t) * (1 - smoothStep(0.94, 1, t))
   const bodyArch = frame.height * 0.68 *
     (Math.sin(Math.PI * clampUnit(t * 0.9 + 0.03)) ** 1.04) *
     Math.pow(envelope, 1.06) *
     bodyBand
-  const capBand = smoothStep(0.58, 0.76, t) * (1 - smoothStep(0.92, 1, t))
-  const lipReturnBand = smoothStep(0.78, 1, t)
-  const capArch = frame.height * (0.02 + 0.9 * Math.pow(envelope, 0.68)) * capBand
-  const tuckedLip = frame.height * (0.03 + 0.42 * Math.pow(envelope, 1.08)) * lipReturnBand
-  const spanPinch = clampUnit(0.38 * capBand + 0.28 * lipReturnBand * Math.pow(envelope, 0.82))
+  const capBand = smoothStep(0.54, 0.72, t) * (1 - smoothStep(0.92, 1, t))
+  const lipReturnBand = smoothStep(0.76, 0.88, t) * (1 - smoothStep(0.94, 1, t))
+  const capArch = frame.height * 0.78 * Math.pow(envelope, 0.64) * capBand
+  const tuckedLip = frame.height * 0.24 * Math.pow(envelope, 1.22) * lipReturnBand
+  const spanPinch = clampUnit(0.44 * capBand + 0.18 * lipReturnBand * Math.pow(envelope, 0.82))
 
   return [
-    wavePoint[0],
+    lerpNumber(frontDepthCenter, wavePoint[0], 0.14),
     frame.centerY + s * frame.halfSpan * (1 - spanPinch),
-    Math.max(wavePoint[2] * 0.24, bodyArch * (1 - 0.42 * capBand), capArch, tuckedLip),
+    Math.max(wavePoint[2] * 0.16, bodyArch * (1 - 0.48 * capBand), capArch, tuckedLip),
   ]
 }
 

@@ -1269,6 +1269,11 @@ function summarizeStartupDisplayContract() {
 }
 
 function summarizeReadableSurfaceRenderContract() {
+  const frontProjectionStart = latticeViewerSource.indexOf('function readableWaveFrontPoint')
+  const frontProjectionEnd = latticeViewerSource.indexOf('function readableWaveTopPlanPoint')
+  const frontProjectionSource = frontProjectionStart >= 0 && frontProjectionEnd > frontProjectionStart
+    ? latticeViewerSource.slice(frontProjectionStart, frontProjectionEnd)
+    : ''
   const requiredFragments = [
     ['component passes active view', '<ReadableWaveSurface model={model} view={view} />'],
     ['surface geometry is keyed by view', 'buildReadableWaveSurfaceGeometry(model, view)'],
@@ -1284,18 +1289,32 @@ function summarizeReadableSurfaceRenderContract() {
     ['readable bounds sample the display projection', 'readableWaveDisplayPoint(frame, view, t'],
     ['front view reduces lengthwise wire density', "view === 'front' ? 3"],
     ['front view reduces spanwise wire density', "view === 'front' ? 8"],
-    ['front view keeps only a faint outline trace', "view === 'front' ? 0.03"],
+    ['front view keeps a moderated outline trace', "view === 'front' ? 0.06"],
+  ]
+  const requiredFrontFragments = [
+    ['front projection derives depth center from frame bounds', 'const frontDepthCenter = (frame.minX + frame.maxX) * 0.5'],
+    ['front projection compresses depth instead of stacking full side geometry', 'lerpNumber(frontDepthCenter, wavePoint[0], 0.14)'],
+    ['front terminal lip is bounded before the terminal edge', 'smoothStep(0.76, 0.88, t) * (1 - smoothStep(0.94, 1, t))'],
   ]
   const forbiddenFragments = [
     ['front projection uses nonexistent frame.length', 'frame.length'],
     ['front projection uses nonexistent frame.centerX', 'frame.centerX'],
   ]
+  const forbiddenFrontFragments = [
+    ['front cap raises outer span with a constant offset', '0.02 +'],
+    ['front lip raises outer span with a constant offset', '0.03 +'],
+    ['front cap pinch returns to tower-like width', '0.58 * capBand'],
+  ]
   const missingFragments = requiredFragments.filter(([, fragment]) => !latticeViewerSource.includes(fragment))
-  const presentForbiddenFragments = forbiddenFragments.filter(([, fragment]) => latticeViewerSource.includes(fragment))
+  const missingFrontFragments = requiredFrontFragments.filter(([, fragment]) => !frontProjectionSource.includes(fragment))
+  const presentForbiddenFragments = forbiddenFragments.filter(([, fragment]) => frontProjectionSource.includes(fragment))
+  const presentForbiddenFrontFragments = forbiddenFrontFragments.filter(([, fragment]) => frontProjectionSource.includes(fragment))
   const displayPointUses = countSourceOccurrences(latticeViewerSource, 'readableWaveDisplayPoint(frame, view')
   const failures = [
     ...missingFragments.map(([label]) => `${label} missing`),
+    ...missingFrontFragments.map(([label]) => `${label} missing`),
     ...presentForbiddenFragments.map(([label]) => label),
+    ...presentForbiddenFrontFragments.map(([label]) => label),
     ...(displayPointUses < 5 ? [`readableWaveDisplayPoint used ${displayPointUses} times, expected at least 5`] : []),
   ]
 
@@ -1303,7 +1322,10 @@ function summarizeReadableSurfaceRenderContract() {
     ok: failures.length === 0,
     checkedFragments: requiredFragments.map(([label]) => label),
     missingFragments,
+    checkedFrontFragments: requiredFrontFragments.map(([label]) => label),
+    missingFrontFragments,
     forbiddenFragments: presentForbiddenFragments,
+    forbiddenFrontFragments: presentForbiddenFrontFragments,
     displayPointUses,
     failures,
   }
