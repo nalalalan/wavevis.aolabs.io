@@ -301,19 +301,23 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const wireGeometry = useMemo(() => buildReadableWaveWireGeometry(model, view), [model, view])
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
   const surfaceOpacity = view === 'side' ? 0.62 : view === 'front' ? 0.72 : view === 'top' ? 0.08 : 0.66
-  const wireOpacity = view === 'side' ? 0.24 : view === 'front' ? 0.16 : view === 'top' ? 0.18 : 0.24
-  const outlineOpacity = view === 'side' ? 0.42 : view === 'front' ? 0.12 : view === 'top' ? 0.02 : 0.16
+  const wireOpacity = view === 'side' ? 0.24 : view === 'front' ? 0.21 : view === 'top' ? 0.18 : 0.24
+  const outlineOpacity = view === 'side' ? 0.42 : view === 'front' ? 0.1 : view === 'top' ? 0.02 : 0.16
 
   return (
     <group renderOrder={-2}>
       <mesh geometry={surfaceGeometry} renderOrder={-2}>
-        <meshBasicMaterial color="#fbfaf6" side={THREE.DoubleSide} transparent opacity={surfaceOpacity} depthWrite={view === 'front'} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
+        {view === 'front' ? (
+          <meshStandardMaterial color="#ffffff" emissive="#fbfaf6" emissiveIntensity={0.52} roughness={0.92} metalness={0} side={THREE.DoubleSide} transparent opacity={0.38} depthWrite polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
+        ) : (
+          <meshBasicMaterial color="#fbfaf6" side={THREE.DoubleSide} transparent opacity={surfaceOpacity} depthWrite={false} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
+        )}
       </mesh>
       <lineSegments geometry={wireGeometry} renderOrder={-1}>
-        <lineBasicMaterial color="#b8b3ab" transparent opacity={wireOpacity} depthTest={view !== 'front'} depthWrite={false} />
+        <lineBasicMaterial color="#b8b3ab" transparent opacity={wireOpacity} depthTest depthWrite={false} />
       </lineSegments>
       <lineSegments geometry={outlineGeometry} renderOrder={0}>
-        <lineBasicMaterial color="#77726a" transparent opacity={outlineOpacity} depthTest={view !== 'front'} depthWrite={false} />
+        <lineBasicMaterial color="#77726a" transparent opacity={outlineOpacity} depthTest depthWrite={false} />
       </lineSegments>
     </group>
   )
@@ -359,7 +363,7 @@ function buildReadableWaveWireGeometry(model: LatticeModel, view: CameraViewRequ
     positions.push(...a, ...b)
   }
   const spanLineStep = view === 'top' ? 1 : view === 'front' ? 2 : 2
-  const profileLineStep = view === 'top' ? 3 : view === 'side' ? 4 : view === 'front' ? 5 : 3
+  const profileLineStep = view === 'top' ? 3 : view === 'side' ? 4 : view === 'front' ? 4 : 3
 
   for (let vIndex = 0; vIndex <= readableWaveVSegments; vIndex += spanLineStep) {
     const s = -1 + (vIndex / readableWaveVSegments) * 2
@@ -403,7 +407,7 @@ function buildReadableWaveOutlineGeometry(model: LatticeModel, view: CameraViewR
   if (view === 'side') {
     pushPolyline(sampleOuterSideProfileLine(frame, samples))
   } else if (view === 'front') {
-    ;[0.56, 0.76, 0.84, 0.88, 0.9, 0.92, 0.94, 1].forEach((t) => pushPolyline(sampleSpanLine(t)))
+    ;[0.58, 0.72, 0.86, 0.94].forEach((t) => pushPolyline(sampleSpanLine(t)))
     ;[-0.72, -0.36, 0, 0.36, 0.72].forEach((s) => pushPolyline(sampleProfileLine(s)))
   } else if (view === 'top') {
     ;[-0.72, -0.42, -0.18, 0, 0.18, 0.42, 0.72].forEach((s) =>
@@ -543,23 +547,24 @@ function readableWaveFrontPoint(frame: ReadableWaveFrame, t: number, s: number):
     (Math.sin(Math.PI * clampUnit(t * 0.9 + 0.03)) ** 1.04) *
     Math.pow(envelope, 0.92) *
     bodyBand
-  const capBand = smoothStep(0.54, 0.72, t) * (1 - smoothStep(0.92, 1, t))
-  const lipReturnBand = smoothStep(0.76, 0.88, t) * (1 - smoothStep(0.94, 1, t))
-  const centralLipMask = lipReturnBand * Math.pow(envelope, 0.78)
-  const bodyPinch = 0.32 * bodyBand * Math.pow(envelope, 0.36)
-  const capArch = frame.height * 0.94 * Math.pow(envelope, 0.42) * capBand
-  const tuckedLip = frame.height * (0.6 - 0.18 * Math.pow(envelope, 0.5))
-  const domeHeight = Math.max(wavePoint[2] * 0.16, bodyArch * (1 - 0.44 * capBand), capArch)
+  const capBand = smoothStep(0.5, 0.68, t) * (1 - smoothStep(0.93, 1, t))
+  const lipReturnBand = smoothStep(0.78, 0.9, t) * (1 - smoothStep(0.95, 1, t))
+  const centralLipMask = lipReturnBand * Math.pow(envelope, 0.9)
+  const bodyPinch = 0.26 * bodyBand * Math.pow(envelope, 0.4)
+  const capShoulder = Math.pow(envelope, 0.32) * capBand
+  const capArch = frame.height * 0.92 * capShoulder
+  const tuckedLip = frame.height * (0.58 - 0.19 * Math.pow(envelope, 0.58))
+  const domeHeight = Math.max(wavePoint[2] * 0.16, bodyArch * (1 - 0.34 * capBand), capArch)
   const spanPinch = clampUnit(
     bodyPinch +
-    0.34 * capBand * Math.pow(envelope, 0.28) +
-    0.3 * centralLipMask,
+    0.24 * capBand * Math.pow(envelope, 0.34) +
+    0.18 * centralLipMask,
   )
 
   return [
-    lerpNumber(frontDepthCenter, wavePoint[0], 0.12) + waveWidth * 0.12 * centralLipMask,
+    lerpNumber(frontDepthCenter, wavePoint[0], 0.07) + waveWidth * 0.32 * centralLipMask,
     frame.centerY + s * frame.halfSpan * (1 - spanPinch),
-    lerpNumber(domeHeight, tuckedLip, clampUnit(0.82 * centralLipMask)),
+    lerpNumber(domeHeight, tuckedLip, clampUnit(0.84 * centralLipMask)),
   ]
 }
 
