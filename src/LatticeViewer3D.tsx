@@ -301,8 +301,8 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const wireGeometry = useMemo(() => buildReadableWaveWireGeometry(model, view), [model, view])
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
   const surfaceOpacity = view === 'side' ? 0.62 : view === 'front' ? 0.72 : view === 'top' ? 0.08 : 0.66
-  const wireOpacity = view === 'side' ? 0.24 : view === 'front' ? 0.18 : view === 'top' ? 0.18 : 0.24
-  const outlineOpacity = view === 'side' ? 0.42 : view === 'front' ? 0.22 : view === 'top' ? 0.02 : 0.16
+  const wireOpacity = view === 'side' ? 0.24 : view === 'front' ? 0.16 : view === 'top' ? 0.18 : 0.24
+  const outlineOpacity = view === 'side' ? 0.42 : view === 'front' ? 0.16 : view === 'top' ? 0.02 : 0.16
 
   return (
     <group renderOrder={-2}>
@@ -358,8 +358,8 @@ function buildReadableWaveWireGeometry(model: LatticeModel, view: CameraViewRequ
   const pushSegment = (a: Vec3, b: Vec3) => {
     positions.push(...a, ...b)
   }
-  const spanLineStep = view === 'top' ? 1 : view === 'front' ? 3 : 2
-  const profileLineStep = view === 'top' ? 3 : view === 'side' ? 4 : view === 'front' ? 8 : 3
+  const spanLineStep = view === 'top' ? 1 : view === 'front' ? 2 : 2
+  const profileLineStep = view === 'top' ? 3 : view === 'side' ? 4 : view === 'front' ? 5 : 3
 
   for (let vIndex = 0; vIndex <= readableWaveVSegments; vIndex += spanLineStep) {
     const s = -1 + (vIndex / readableWaveVSegments) * 2

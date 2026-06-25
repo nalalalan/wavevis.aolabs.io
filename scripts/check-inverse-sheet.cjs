@@ -1287,9 +1287,9 @@ function summarizeReadableSurfaceRenderContract() {
     ['side and isometric views use the readable 3D point', 'return readableWavePoint(frame, t, s)'],
     ['front camera fits the front readable projection', "activeReadableWaveBounds(model, 'front')"],
     ['readable bounds sample the display projection', 'readableWaveDisplayPoint(frame, view, t'],
-    ['front view reduces lengthwise wire density', "view === 'front' ? 3"],
-    ['front view reduces spanwise wire density', "view === 'front' ? 8"],
-    ['front view keeps a moderated outline trace', "view === 'front' ? 0.22"],
+    ['front view keeps dense but pale lengthwise wire density', "view === 'front' ? 2"],
+    ['front view keeps dense but pale spanwise wire density', "view === 'front' ? 5"],
+    ['front view keeps a softened outline trace', "view === 'front' ? 0.16"],
     ['front view exposes wire through the readable lip', "depthTest={view !== 'front'}"],
     ['front outline includes continuous terminal lip contour samples', '[0.56, 0.76, 0.84, 0.88, 0.9, 0.92, 0.94, 1]'],
   ]
