@@ -290,7 +290,7 @@ type ReadableWaveFrame = {
 const readableWaveUSegments = 104
 const readableWaveVSegments = 54
 const readableReferenceProfilePoints =
-  '0,0;0.055,0.008;0.13,0.035;0.22,0.12;0.32,0.31;0.43,0.56;0.55,0.78;0.67,0.94;0.78,1;0.875,0.94;0.945,0.78;0.985,0.58;0.965,0.46;0.91,0.38;0.84,0.38;0.785,0.46;0.745,0.58;0.715,0.62;0.69,0.54;0.67,0.42;0.7,0.26;0.79,0.12;0.9,0.045;1,0'
+  '0,0;0.06,0.006;0.14,0.03;0.24,0.12;0.36,0.35;0.48,0.64;0.6,0.86;0.69,1;0.76,0.98;0.825,0.86;0.87,0.68;0.878,0.52;0.852,0.42;0.815,0.35;0.78,0.34;0.758,0.39;0.75,0.47;0.756,0.45;0.77,0.32;0.815,0.19;0.88,0.09;0.95,0.035;1,0'
 
 function readableSurfaceReferenceOnly(model: LatticeModel): boolean {
   return model.config.showSurface && !model.config.showHeatmap && !model.config.showNodes
@@ -301,8 +301,8 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const wireGeometry = useMemo(() => buildReadableWaveWireGeometry(model, view), [model, view])
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
   const surfaceOpacity = view === 'side' ? 0.5 : view === 'front' ? 0.72 : view === 'top' ? 0.08 : 0.66
-  const wireOpacity = view === 'side' ? 0.18 : view === 'front' ? 0.21 : view === 'top' ? 0.18 : 0.24
-  const outlineOpacity = view === 'side' ? 0.18 : view === 'front' ? 0.1 : view === 'top' ? 0.02 : 0.16
+  const wireOpacity = view === 'side' ? 0.12 : view === 'front' ? 0.21 : view === 'top' ? 0.18 : 0.18
+  const outlineOpacity = view === 'side' ? 0.13 : view === 'front' ? 0.1 : view === 'top' ? 0.02 : 0.13
 
   return (
     <group renderOrder={-2}>
@@ -522,7 +522,8 @@ function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3
   const lipBody = smoothStep(0.62, 0.94, t)
   const terminalLocalization = frame.progress * lipTip
   const foldBlend = lerpNumber(baseFoldBlend, Math.pow(envelope, 1.35), terminalLocalization * 0.68)
-  const lipLiftBlend = lerpNumber(liftBlend, Math.pow(envelope, 0.92), frame.progress * lipBody * 0.26)
+  const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 0.92), Math.pow(envelope, 1.74), terminalLocalization * 0.78)
+  const lipLiftBlend = lerpNumber(liftBlend, terminalLipEnvelope, frame.progress * lipBody * 0.34)
   const curlPinch = Math.min(0.28, frame.progress * planFoldBlend * (0.05 * curlShoulder + 0.24 * lipTip))
   const yPinch = s * frame.halfSpan * curlPinch
 
