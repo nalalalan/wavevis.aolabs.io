@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "check:geometry": "node scripts/check-geometry-invariants.cjs && node scripts/check-inverse-sheet.cjs",
-    "deploy": "npm run build && gh-pages -d dist -b gh-pages",
+    "deploy": "npm run build && gh-pages -d dist -b gh-pages -t",
     "lint": "eslint .",
     "preview": "vite preview"
   },
