@@ -290,7 +290,7 @@ type ReadableWaveFrame = {
 const readableWaveUSegments = 104
 const readableWaveVSegments = 54
 const readableReferenceProfilePoints =
-  '0,0;0.035,0.018;0.08,0.07;0.13,0.17;0.188,0.322;0.265,0.528;0.36,0.724;0.468,0.882;0.565,0.972;0.63,0.992;0.688,0.95;0.742,0.854;0.79,0.706;0.826,0.556;0.842,0.428;0.812,0.338;0.752,0.312;0.688,0.356;0.626,0.46;0.582,0.542;0.558,0.494;0.576,0.36;0.638,0.222;0.732,0.118;0.842,0.055;0.938,0.018;1,0'
+  '0,0;0.035,0.018;0.08,0.07;0.13,0.17;0.188,0.322;0.265,0.528;0.36,0.724;0.468,0.882;0.565,0.972;0.63,0.992;0.688,0.95;0.742,0.854;0.79,0.706;0.826,0.556;0.842,0.428;0.814,0.336;0.758,0.31;0.696,0.35;0.64,0.44;0.61,0.5;0.598,0.43;0.622,0.3;0.684,0.18;0.778,0.085;0.888,0.035;0.965,0.014;1,0'
 
 function readableSurfaceReferenceOnly(model: LatticeModel): boolean {
   return model.config.showSurface && !model.config.showHeatmap && !model.config.showNodes
@@ -301,7 +301,7 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const wireGeometry = useMemo(() => buildReadableWaveWireGeometry(model, view), [model, view])
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
   const throatGeometry = useMemo(() => view === 'isometric' ? buildReadableWaveThroatGeometry(model) : null, [model, view])
-  const surfaceOpacity = view === 'side' ? 0.2 : view === 'front' ? 0.72 : view === 'top' ? 0.18 : 0.42
+  const surfaceOpacity = view === 'side' ? 0.2 : view === 'front' ? 0.72 : view === 'top' ? 0.18 : 0.48
   const wireOpacity = view === 'side' ? 0.34 : view === 'front' ? 0.21 : view === 'top' ? 0.34 : 0.18
   const outlineOpacity = view === 'side' ? 0.16 : view === 'front' ? 0.1 : view === 'top' ? 0.045 : 0.022
 
@@ -311,7 +311,7 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
         {view === 'front' ? (
           <meshStandardMaterial color="#ffffff" emissive="#fbfaf6" emissiveIntensity={0.52} roughness={0.92} metalness={0} side={THREE.DoubleSide} transparent opacity={0.38} depthWrite polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
         ) : (
-          <meshBasicMaterial color="#fbfaf6" side={THREE.DoubleSide} transparent opacity={surfaceOpacity} depthWrite={view === 'side'} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
+          <meshBasicMaterial color="#fbfaf6" side={THREE.DoubleSide} transparent opacity={surfaceOpacity} depthWrite={view === 'side' || view === 'isometric'} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
         )}
       </mesh>
       <lineSegments geometry={wireGeometry} renderOrder={-1}>
@@ -584,9 +584,9 @@ function readableWaveSidePoint(frame: ReadableWaveFrame, t: number, s: number): 
   const openThroat = frame.progress * center
 
   return [
-    point[0] + waveWidth * openThroat * (0.04 * lipFace + 0.092 * lowerLip - 0.026 * throat),
+    point[0] + waveWidth * openThroat * (0.084 * lipFace - 0.018 * lowerLip - 0.035 * throat),
     point[1],
-    Math.max(0, point[2] + frame.height * openThroat * (0.072 * throat - 0.04 * lowerLip)),
+    Math.max(0, point[2] + frame.height * openThroat * (0.088 * throat - 0.072 * lowerLip)),
   ]
 }
 
@@ -601,9 +601,9 @@ function readableWaveIsometricPoint(frame: ReadableWaveFrame, t: number, s: numb
   const openThroat = frame.progress * center
 
   return [
-    point[0] + waveWidth * openThroat * (0.058 * lipFace + 0.088 * lowerLip - 0.026 * throat),
-    point[1] - s * frame.halfSpan * openThroat * 0.038 * lowerLip,
-    Math.max(0, point[2] + frame.height * openThroat * (0.096 * throat - 0.09 * lowerLip)),
+    point[0] + waveWidth * openThroat * (0.096 * lipFace - 0.026 * lowerLip - 0.035 * throat),
+    point[1] - s * frame.halfSpan * openThroat * 0.048 * lowerLip,
+    Math.max(0, point[2] + frame.height * openThroat * (0.112 * throat - 0.118 * lowerLip)),
   ]
 }
 
@@ -667,7 +667,7 @@ function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number
 
 function readableLateralEnvelope(s: number): number {
   const absolute = clampUnit(Math.abs(s))
-  return Math.pow(Math.cos(absolute * Math.PI * 0.5), 2.95)
+  return Math.pow(Math.cos(absolute * Math.PI * 0.5), 2.18)
 }
 
 function sampleReadableWaveProfile(profile: ReadableWaveFrame['profile'], t: number): ReadableWaveProfilePoint {
