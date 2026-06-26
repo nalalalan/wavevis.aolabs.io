@@ -1310,7 +1310,7 @@ function summarizeReadableSurfaceRenderContract() {
     ['top projection broadens the readable footprint before the terminal edge', 'const bodyPush = waveWidth * ('],
     ['top projection gates terminal deformation before the square sheet edge', 'const terminalRegion = smoothStep(0.62, 0.9, t) * (1 - smoothStep(0.96, 0.995, t))'],
     ['top projection keeps terminal pinch below the triangular-fan branch', '0.132 * terminalRegion * Math.pow(envelope, 1.08)'],
-    ['isometric camera balances full-sheet read with a side-biased open-curl view', 'new THREE.Vector3(target.x + distance * 0.34, target.y - distance * 0.86, target.z + distance * 0.44)'],
+    ['isometric camera balances full-sheet read with the accepted open-curl view', 'new THREE.Vector3(target.x + distance * 0.42, target.y - distance * 0.78, target.z + distance * 0.48)'],
     ['3D-only lower lip moves forward and down without changing side/top surfaces', 'point[0] + waveWidth * openThroat * (0.058 * lipFace + 0.032 * lowerLip - 0.026 * throat)'],
     ['3D-only throat lift keeps the opening readable without a fake shadow patch', 'point[2] + frame.height * openThroat * (0.07 * throat - 0.15 * lowerLip)'],
     ['isometric view isolates the center throat trace', 'buildReadableWaveThroatGeometry(model)'],

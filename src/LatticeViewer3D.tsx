@@ -1559,7 +1559,7 @@ function positionCamera(
     : view === 'front'
       ? new THREE.Vector3(target.x + distance, target.y, target.z)
     : view === 'isometric'
-        ? new THREE.Vector3(target.x + distance * 0.34, target.y - distance * 0.86, target.z + distance * 0.44)
+        ? new THREE.Vector3(target.x + distance * 0.42, target.y - distance * 0.78, target.z + distance * 0.48)
       : new THREE.Vector3(target.x + distance * 0.82, target.y - distance * 0.92, target.z + distance * 0.78)
 
   camera.position.copy(position)
