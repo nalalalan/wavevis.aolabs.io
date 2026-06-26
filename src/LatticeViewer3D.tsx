@@ -290,7 +290,7 @@ type ReadableWaveFrame = {
 const readableWaveUSegments = 104
 const readableWaveVSegments = 54
 const readableReferenceProfilePoints =
-  '0,0;0.035,0.018;0.08,0.07;0.13,0.17;0.188,0.322;0.265,0.528;0.36,0.724;0.468,0.882;0.565,0.972;0.63,0.992;0.684,0.948;0.726,0.848;0.758,0.694;0.758,0.548;0.724,0.438;0.666,0.402;0.606,0.444;0.566,0.522;0.536,0.56;0.512,0.506;0.522,0.392;0.58,0.256;0.672,0.142;0.784,0.076;0.895,0.034;0.972,0.012;1,0'
+  '0,0;0.035,0.018;0.08,0.07;0.13,0.17;0.188,0.322;0.265,0.528;0.36,0.724;0.468,0.882;0.565,0.972;0.63,0.992;0.688,0.95;0.735,0.838;0.775,0.672;0.786,0.524;0.758,0.418;0.7,0.374;0.638,0.408;0.59,0.49;0.562,0.542;0.54,0.498;0.552,0.382;0.606,0.248;0.696,0.136;0.806,0.07;0.91,0.032;0.977,0.011;1,0'
 
 function readableSurfaceReferenceOnly(model: LatticeModel): boolean {
   return model.config.showSurface && !model.config.showHeatmap && !model.config.showNodes
@@ -551,11 +551,11 @@ function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3
   const shoulderFoldBlend = lerpNumber(baseFoldBlend, Math.pow(envelope, 2.45), capLocalization * curlShoulder * 0.68)
   const terminalLocalization = frame.progress * lipTip
   const foldBlend = lerpNumber(shoulderFoldBlend, Math.pow(envelope, 2.85), terminalLocalization * 0.82)
-  const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.22), Math.pow(envelope, 8.4), terminalLocalization * 0.98)
+  const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.22), Math.pow(envelope, 7.2), terminalLocalization * 0.92)
   const crestLiftBlend = lerpNumber(liftBlend, Math.pow(envelope, 3.85), capLocalization * curlShoulder * 0.7)
   const lipLiftBlend = lerpNumber(crestLiftBlend, terminalLipEnvelope, frame.progress * lipBody * 0.82)
   const pinchEnvelope = Math.pow(envelope, 0.42)
-  const curlPinch = Math.min(0.54, frame.progress * pinchEnvelope * (0.06 * curlShoulder + 0.46 * lipTip))
+  const curlPinch = Math.min(0.5, frame.progress * pinchEnvelope * (0.06 * curlShoulder + 0.38 * lipTip))
   const yPinch = s * frame.halfSpan * curlPinch
 
   return [
@@ -583,9 +583,9 @@ function readableWaveIsometricPoint(frame: ReadableWaveFrame, t: number, s: numb
   const openThroat = frame.progress * center
 
   return [
-    point[0] + waveWidth * openThroat * (0.064 * lipFace + 0.052 * lowerLip - 0.032 * throat),
-    point[1] - s * frame.halfSpan * openThroat * 0.066 * lowerLip,
-    Math.max(0, point[2] + frame.height * openThroat * (0.082 * throat - 0.205 * lowerLip)),
+    point[0] + waveWidth * openThroat * (0.058 * lipFace + 0.032 * lowerLip - 0.026 * throat),
+    point[1] - s * frame.halfSpan * openThroat * 0.038 * lowerLip,
+    Math.max(0, point[2] + frame.height * openThroat * (0.07 * throat - 0.15 * lowerLip)),
   ]
 }
 
