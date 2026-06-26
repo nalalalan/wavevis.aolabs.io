@@ -407,14 +407,11 @@ function buildReadableWaveOutlineGeometry(model: LatticeModel, view: CameraViewR
   const samples = 128
   const sampleProfileLine = (s: number) =>
     Array.from({ length: samples + 1 }, (_, index) => readableWaveDisplayPoint(frame, view, index / samples, s))
-  const sampleProfileRange = (s: number, start: number, end: number, count = 72) =>
-    Array.from({ length: count + 1 }, (_, index) => readableWaveDisplayPoint(frame, view, lerpNumber(start, end, index / count), s))
   const sampleSpanLine = (t: number) =>
     Array.from({ length: 65 }, (_, index) => readableWaveDisplayPoint(frame, view, t, -1 + (index / 64) * 2))
 
   if (view === 'side') {
     pushPolyline(sampleOuterSideProfileLine(frame, samples))
-    pushPolyline(sampleProfileRange(0, 0.72, 0.88, 48))
   } else if (view === 'front') {
     ;[0.58, 0.72, 0.86, 0.94].forEach((t) => pushPolyline(sampleSpanLine(t)))
     ;[-0.72, -0.36, 0, 0.36, 0.72].forEach((s) => pushPolyline(sampleProfileLine(s)))

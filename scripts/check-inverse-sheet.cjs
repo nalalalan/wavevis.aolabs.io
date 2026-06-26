@@ -1299,7 +1299,7 @@ function summarizeReadableSurfaceRenderContract() {
     ['isometric surface keeps enough skin to read as one smooth sheet', "view === 'top' ? 0.18 : 0.42"],
     ['isometric wire grid stays visible without returning to a dark tunnel', "view === 'top' ? 0.34 : 0.22"],
     ['side wire rows are thinned so the throat does not become a dark tunnel cluster', "view === 'side' ? 6"],
-    ['side guide avoids the long false-cavity centerline loop', 'sampleProfileRange(0, 0.72, 0.88, 48)'],
+    ['side view keeps only the outer contour as its extra side outline', "if (view === 'side') {\n    pushPolyline(sampleOuterSideProfileLine(frame, samples))\n  } else if (view === 'front')"],
     ['side outline stays visible through the curl', "depthTest={view !== 'side'}"],
     ['readable reference span stays narrower than the earlier thick cap branch', 'const visualHalfSpan = waveWidth * 0.31'],
     ['terminal lip lift stays center-localized without side-wall cover', 'const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.22), Math.pow(envelope, 8.4), terminalLocalization * 0.98)'],
@@ -1333,6 +1333,7 @@ function summarizeReadableSurfaceRenderContract() {
     ['front projection uses nonexistent frame.length', 'frame.length'],
     ['front projection uses nonexistent frame.centerX', 'frame.centerX'],
     ['side guide returns to the long false-cavity centerline loop', 'sampleProfileRange(0, 0.66, 0.96)'],
+    ['side view reintroduces the standalone inner guide line', 'sampleProfileRange(0, 0.72, 0.88, 48)'],
   ]
   const forbiddenFrontFragments = [
     ['front cap raises outer span with a constant offset', '0.02 +'],
@@ -1345,7 +1346,7 @@ function summarizeReadableSurfaceRenderContract() {
   ]
   const missingFragments = requiredFragments.filter(([, fragment]) => !latticeViewerSource.includes(fragment))
   const missingFrontFragments = requiredFrontFragments.filter(([, fragment]) => !frontProjectionSource.includes(fragment))
-  const presentForbiddenFragments = forbiddenFragments.filter(([, fragment]) => frontProjectionSource.includes(fragment))
+  const presentForbiddenFragments = forbiddenFragments.filter(([, fragment]) => latticeViewerSource.includes(fragment))
   const presentForbiddenFrontFragments = forbiddenFrontFragments.filter(([, fragment]) => frontProjectionSource.includes(fragment))
   const displayPointUses = countSourceOccurrences(latticeViewerSource, 'readableWaveDisplayPoint(frame, view')
   const failures = [
