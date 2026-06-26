@@ -290,7 +290,7 @@ type ReadableWaveFrame = {
 const readableWaveUSegments = 104
 const readableWaveVSegments = 54
 const readableReferenceProfilePoints =
-  '0,0;0.035,0.018;0.08,0.07;0.13,0.17;0.188,0.322;0.265,0.528;0.36,0.724;0.468,0.882;0.565,0.972;0.63,0.992;0.688,0.95;0.735,0.838;0.775,0.672;0.786,0.524;0.758,0.418;0.7,0.374;0.638,0.408;0.59,0.49;0.562,0.542;0.54,0.498;0.552,0.382;0.606,0.248;0.696,0.136;0.806,0.07;0.91,0.032;0.977,0.011;1,0'
+  '0,0;0.035,0.018;0.08,0.07;0.13,0.17;0.188,0.322;0.265,0.528;0.36,0.724;0.468,0.882;0.565,0.972;0.63,0.992;0.688,0.95;0.742,0.854;0.79,0.706;0.826,0.556;0.842,0.428;0.812,0.338;0.752,0.312;0.688,0.356;0.626,0.46;0.582,0.542;0.558,0.494;0.576,0.36;0.638,0.222;0.732,0.118;0.842,0.055;0.938,0.018;1,0'
 
 function readableSurfaceReferenceOnly(model: LatticeModel): boolean {
   return model.config.showSurface && !model.config.showHeatmap && !model.config.showNodes
@@ -302,7 +302,7 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
   const throatGeometry = useMemo(() => view === 'isometric' ? buildReadableWaveThroatGeometry(model) : null, [model, view])
   const surfaceOpacity = view === 'side' ? 0.2 : view === 'front' ? 0.72 : view === 'top' ? 0.18 : 0.42
-  const wireOpacity = view === 'side' ? 0.34 : view === 'front' ? 0.21 : view === 'top' ? 0.34 : 0.22
+  const wireOpacity = view === 'side' ? 0.34 : view === 'front' ? 0.21 : view === 'top' ? 0.34 : 0.18
   const outlineOpacity = view === 'side' ? 0.16 : view === 'front' ? 0.1 : view === 'top' ? 0.045 : 0.022
 
   return (
@@ -368,8 +368,8 @@ function buildReadableWaveWireGeometry(model: LatticeModel, view: CameraViewRequ
   const pushSegment = (a: Vec3, b: Vec3) => {
     positions.push(...a, ...b)
   }
-  const spanLineStep = view === 'top' ? 1 : view === 'side' ? 6 : view === 'front' ? 2 : 3
-  const profileLineStep = view === 'top' ? 3 : view === 'side' ? 5 : view === 'front' ? 4 : 5
+  const spanLineStep = view === 'top' ? 1 : view === 'side' ? 6 : view === 'front' ? 2 : 4
+  const profileLineStep = view === 'top' ? 3 : view === 'side' ? 5 : view === 'front' ? 4 : 6
 
   for (let vIndex = 0; vIndex <= readableWaveVSegments; vIndex += spanLineStep) {
     const s = -1 + (vIndex / readableWaveVSegments) * 2
@@ -584,9 +584,9 @@ function readableWaveSidePoint(frame: ReadableWaveFrame, t: number, s: number): 
   const openThroat = frame.progress * center
 
   return [
-    point[0] + waveWidth * openThroat * (0.04 * lipFace + 0.04 * lowerLip - 0.026 * throat),
+    point[0] + waveWidth * openThroat * (0.04 * lipFace + 0.092 * lowerLip - 0.026 * throat),
     point[1],
-    Math.max(0, point[2] + frame.height * openThroat * (0.05 * throat - 0.076 * lowerLip)),
+    Math.max(0, point[2] + frame.height * openThroat * (0.072 * throat - 0.04 * lowerLip)),
   ]
 }
 
@@ -601,9 +601,9 @@ function readableWaveIsometricPoint(frame: ReadableWaveFrame, t: number, s: numb
   const openThroat = frame.progress * center
 
   return [
-    point[0] + waveWidth * openThroat * (0.058 * lipFace + 0.032 * lowerLip - 0.026 * throat),
+    point[0] + waveWidth * openThroat * (0.058 * lipFace + 0.088 * lowerLip - 0.026 * throat),
     point[1] - s * frame.halfSpan * openThroat * 0.038 * lowerLip,
-    Math.max(0, point[2] + frame.height * openThroat * (0.07 * throat - 0.15 * lowerLip)),
+    Math.max(0, point[2] + frame.height * openThroat * (0.096 * throat - 0.09 * lowerLip)),
   ]
 }
 
@@ -650,14 +650,14 @@ function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number
   const roundedTip = terminalRegion * Math.pow(envelope, 1.48)
   const bodyPush = waveWidth * (
     0.045 * bodyRegion * Math.pow(envelope, 0.72) +
-    0.074 * curlRegion * Math.pow(envelope, 1.02) +
-    0.048 * roundedTip
+    0.104 * curlRegion * Math.pow(envelope, 1.02) +
+    0.066 * roundedTip
   )
   const planPinch = clampUnit(
     0.062 * bodyRegion * Math.pow(envelope, 0.62) +
-    0.132 * terminalRegion * Math.pow(envelope, 1.08),
+    0.158 * terminalRegion * Math.pow(envelope, 1.08),
   )
-  const xBlend = clampUnit(0.034 * bodyRegion * Math.pow(envelope, 1.02) + 0.064 * terminalRegion * Math.pow(interior, 1.26))
+  const xBlend = clampUnit(0.034 * bodyRegion * Math.pow(envelope, 1.02) + 0.092 * terminalRegion * Math.pow(interior, 1.26))
   return [
     lerpNumber(baseX + bodyPush, wavePoint[0], xBlend),
     frame.centerY + s * frame.halfSpan * (1 - planPinch),
