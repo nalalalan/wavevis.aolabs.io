@@ -290,7 +290,7 @@ type ReadableWaveFrame = {
 const readableWaveUSegments = 104
 const readableWaveVSegments = 54
 const readableReferenceProfilePoints =
-  '0,0;0.035,0.018;0.08,0.07;0.13,0.17;0.188,0.322;0.265,0.528;0.36,0.724;0.468,0.874;0.565,0.958;0.654,0.982;0.718,0.938;0.756,0.85;0.782,0.724;0.776,0.592;0.746,0.492;0.694,0.438;0.636,0.442;0.588,0.492;0.54,0.532;0.506,0.514;0.49,0.456;0.506,0.346;0.566,0.238;0.66,0.138;0.772,0.076;0.895,0.032;0.972,0.012;1,0'
+  '0,0;0.035,0.018;0.08,0.07;0.13,0.17;0.188,0.322;0.265,0.528;0.36,0.724;0.468,0.874;0.565,0.958;0.636,0.986;0.704,0.948;0.758,0.858;0.792,0.72;0.798,0.582;0.764,0.47;0.704,0.428;0.642,0.456;0.588,0.522;0.536,0.558;0.504,0.512;0.502,0.402;0.56,0.268;0.66,0.146;0.772,0.08;0.895,0.034;0.972,0.012;1,0'
 
 function readableSurfaceReferenceOnly(model: LatticeModel): boolean {
   return model.config.showSurface && !model.config.showHeatmap && !model.config.showNodes
@@ -301,8 +301,8 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const wireGeometry = useMemo(() => buildReadableWaveWireGeometry(model, view), [model, view])
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
   const throatGeometry = useMemo(() => view === 'isometric' ? buildReadableWaveThroatGeometry(model) : null, [model, view])
-  const surfaceOpacity = view === 'side' ? 0.2 : view === 'front' ? 0.72 : view === 'top' ? 0.14 : 0.34
-  const wireOpacity = view === 'side' ? 0.34 : view === 'front' ? 0.21 : view === 'top' ? 0.28 : 0.115
+  const surfaceOpacity = view === 'side' ? 0.2 : view === 'front' ? 0.72 : view === 'top' ? 0.14 : 0.44
+  const wireOpacity = view === 'side' ? 0.34 : view === 'front' ? 0.21 : view === 'top' ? 0.28 : 0.155
   const outlineOpacity = view === 'side' ? 0.16 : view === 'front' ? 0.1 : view === 'top' ? 0.045 : 0.022
 
   return (
@@ -571,7 +571,25 @@ function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3
 function readableWaveDisplayPoint(frame: ReadableWaveFrame, view: CameraViewRequest['view'], t: number, s: number): Vec3 {
   if (view === 'top') return readableWaveTopPlanPoint(frame, t, s)
   if (view === 'front') return readableWaveFrontPoint(frame, t, s)
+  if (view === 'isometric') return readableWaveIsometricPoint(frame, t, s)
   return readableWavePoint(frame, t, s)
+}
+
+function readableWaveIsometricPoint(frame: ReadableWaveFrame, t: number, s: number): Vec3 {
+  const point = readableWavePoint(frame, t, s)
+  const waveWidth = frame.maxX - frame.minX
+  const envelope = readableLateralEnvelope(s)
+  const center = Math.pow(envelope, 1.48)
+  const lipFace = smoothStep(0.62, 0.8, t) * (1 - smoothStep(0.92, 0.985, t))
+  const lowerLip = smoothStep(0.7, 0.88, t) * (1 - smoothStep(0.94, 0.995, t))
+  const throat = smoothStep(0.52, 0.66, t) * (1 - smoothStep(0.78, 0.9, t))
+  const openThroat = frame.progress * center
+
+  return [
+    point[0] + waveWidth * openThroat * (0.058 * lipFace + 0.042 * lowerLip - 0.026 * throat),
+    point[1] - s * frame.halfSpan * openThroat * 0.052 * lowerLip,
+    Math.max(0, point[2] + frame.height * openThroat * (0.064 * throat - 0.17 * lowerLip)),
+  ]
 }
 
 function readableWaveFrontPoint(frame: ReadableWaveFrame, t: number, s: number): Vec3 {
