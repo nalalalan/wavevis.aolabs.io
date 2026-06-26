@@ -569,7 +569,25 @@ function readableWaveDisplayPoint(frame: ReadableWaveFrame, view: CameraViewRequ
   if (view === 'top') return readableWaveTopPlanPoint(frame, t, s)
   if (view === 'front') return readableWaveFrontPoint(frame, t, s)
   if (view === 'isometric') return readableWaveIsometricPoint(frame, t, s)
+  if (view === 'side') return readableWaveSidePoint(frame, t, s)
   return readableWavePoint(frame, t, s)
+}
+
+function readableWaveSidePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3 {
+  const point = readableWavePoint(frame, t, s)
+  const waveWidth = frame.maxX - frame.minX
+  const envelope = readableLateralEnvelope(s)
+  const center = Math.pow(envelope, 1.52)
+  const lipFace = smoothStep(0.62, 0.8, t) * (1 - smoothStep(0.92, 0.985, t))
+  const lowerLip = smoothStep(0.7, 0.88, t) * (1 - smoothStep(0.94, 0.995, t))
+  const throat = smoothStep(0.52, 0.66, t) * (1 - smoothStep(0.78, 0.9, t))
+  const openThroat = frame.progress * center
+
+  return [
+    point[0] + waveWidth * openThroat * (0.04 * lipFace + 0.04 * lowerLip - 0.026 * throat),
+    point[1],
+    Math.max(0, point[2] + frame.height * openThroat * (0.05 * throat - 0.076 * lowerLip)),
+  ]
 }
 
 function readableWaveIsometricPoint(frame: ReadableWaveFrame, t: number, s: number): Vec3 {
