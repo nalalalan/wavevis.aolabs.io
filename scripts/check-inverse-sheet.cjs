@@ -1302,7 +1302,7 @@ function summarizeReadableSurfaceRenderContract() {
     ['off-center spans do not carry the full curled return path', 'const lateralCurlBlend = curlBlend * Math.pow(envelope, 1.45)'],
     ['readable reference lateral envelope stays localized below a full-width tube', 'return Math.pow(Math.cos(absolute * Math.PI * 0.5), 2.85)'],
     ['terminal curl pinch stays below the knot-forming branch', 'Math.min(0.34, frame.progress * pinchEnvelope * (0.045 * curlShoulder + 0.3 * lipTip))'],
-    ['isometric camera balances full-sheet read with a side-biased open-curl view', 'new THREE.Vector3(target.x + distance * 0.38, target.y - distance * 0.84, target.z + distance * 0.48)'],
+    ['isometric camera balances full-sheet read with a side-biased open-curl view', 'new THREE.Vector3(target.x + distance * 0.3, target.y - distance * 0.87, target.z + distance * 0.44)'],
     ['isometric view isolates the center throat trace', 'buildReadableWaveThroatGeometry(model)'],
     ['center throat trace stays pale enough to avoid a debug tube cue', 'transparent opacity={0.024} depthTest={false} depthWrite={false}'],
     ['isometric throat helper stays centerline-only after rib overlay rejection', 'readableWavePoint(frame, lerpNumber(0.58, 0.94, index / samples), 0)'],
