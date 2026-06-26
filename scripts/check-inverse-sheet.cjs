@@ -1302,6 +1302,9 @@ function summarizeReadableSurfaceRenderContract() {
     ['off-center spans do not carry the full curled return path', 'const lateralCurlBlend = curlBlend * Math.pow(envelope, 1.45)'],
     ['readable reference lateral envelope stays localized below a full-width tube', 'return Math.pow(Math.cos(absolute * Math.PI * 0.5), 2.85)'],
     ['terminal curl pinch stays below the knot-forming branch', 'Math.min(0.34, frame.progress * pinchEnvelope * (0.045 * curlShoulder + 0.3 * lipTip))'],
+    ['top projection broadens the readable footprint before the terminal edge', 'const bodyPush = waveWidth * ('],
+    ['top projection gates terminal deformation before the square sheet edge', 'const terminalRegion = smoothStep(0.68, 0.96, t) * (1 - smoothStep(0.985, 1, t))'],
+    ['top projection keeps terminal pinch below the triangular-fan branch', '0.22 * terminalRegion * Math.pow(envelope, 0.92)'],
     ['isometric camera balances full-sheet read with a side-biased open-curl view', 'new THREE.Vector3(target.x + distance * 0.3, target.y - distance * 0.87, target.z + distance * 0.44)'],
     ['isometric view isolates the center throat trace', 'buildReadableWaveThroatGeometry(model)'],
     ['center throat trace stays pale enough to avoid a debug tube cue', 'transparent opacity={0.024} depthTest={false} depthWrite={false}'],
@@ -1314,6 +1317,8 @@ function summarizeReadableSurfaceRenderContract() {
     ['front terminal lip is bounded before the terminal edge', 'smoothStep(0.78, 0.9, t) * (1 - smoothStep(0.95, 1, t))'],
     ['front terminal lip is pulled toward the viewer', 'waveWidth * 0.32 * centralLipMask'],
     ['front terminal lip lowers through the center instead of making one dome', 'lerpNumber(domeHeight, tuckedLip, clampUnit(0.84 * centralLipMask))'],
+    ['front view keeps the projection dome lower than the rejected pointed mound', 'const bodyArch = frame.height * 0.78'],
+    ['front cap arch stays lower after the pointed-mound reduction', 'const capArch = frame.height * 0.82 * capShoulder'],
     ['front lifted body pinches inward while the base stays wide', 'const bodyPinch = 0.26 * bodyBand * Math.pow(envelope, 0.4)'],
     ['front terminal lip keeps rounded width instead of collapsing to a centerline', '0.18 * centralLipMask'],
   ]

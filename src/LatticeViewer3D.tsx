@@ -580,16 +580,16 @@ function readableWaveFrontPoint(frame: ReadableWaveFrame, t: number, s: number):
   const frontDepthCenter = (frame.minX + frame.maxX) * 0.5
   const envelope = readableLateralEnvelope(s)
   const bodyBand = smoothStep(0.04, 0.56, t) * (1 - smoothStep(0.94, 1, t))
-  const bodyArch = frame.height * 0.82 *
+  const bodyArch = frame.height * 0.78 *
     (Math.sin(Math.PI * clampUnit(t * 0.9 + 0.03)) ** 1.04) *
-    Math.pow(envelope, 0.92) *
+    Math.pow(envelope, 0.72) *
     bodyBand
   const capBand = smoothStep(0.5, 0.68, t) * (1 - smoothStep(0.93, 1, t))
   const lipReturnBand = smoothStep(0.78, 0.9, t) * (1 - smoothStep(0.95, 1, t))
   const centralLipMask = lipReturnBand * Math.pow(envelope, 0.9)
   const bodyPinch = 0.26 * bodyBand * Math.pow(envelope, 0.4)
-  const capShoulder = Math.pow(envelope, 0.32) * capBand
-  const capArch = frame.height * 0.92 * capShoulder
+  const capShoulder = Math.pow(envelope, 0.24) * capBand
+  const capArch = frame.height * 0.82 * capShoulder
   const tuckedLip = frame.height * (0.58 - 0.19 * Math.pow(envelope, 0.58))
   const domeHeight = Math.max(wavePoint[2] * 0.16, bodyArch * (1 - 0.34 * capBand), capArch)
   const spanPinch = clampUnit(
@@ -607,15 +607,26 @@ function readableWaveFrontPoint(frame: ReadableWaveFrame, t: number, s: number):
 
 function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number): Vec3 {
   const wavePoint = readableWavePoint(frame, t, s)
+  const waveWidth = frame.maxX - frame.minX
   const baseX = lerpNumber(frame.minX, frame.maxX, t)
   const envelope = readableLateralEnvelope(s)
-  const interior = Math.pow(envelope, 0.42)
-  const curlRegion = smoothStep(0.2, 0.98, t)
-  const terminalRegion = smoothStep(0.62, 0.98, t)
-  const planPinch = clampUnit(0.13 * curlRegion * interior + 0.32 * terminalRegion * Math.pow(envelope, 1.04))
-  const xBlend = clampUnit(0.07 * curlRegion * Math.pow(envelope, 1.02) + 0.3 * terminalRegion * interior)
+  const interior = Math.pow(envelope, 0.5)
+  const bodyRegion = smoothStep(0.1, 0.74, t) * (1 - smoothStep(0.98, 1, t))
+  const curlRegion = smoothStep(0.42, 0.9, t) * (1 - smoothStep(0.98, 1, t))
+  const terminalRegion = smoothStep(0.68, 0.96, t) * (1 - smoothStep(0.985, 1, t))
+  const roundedTip = terminalRegion * Math.pow(envelope, 1.28)
+  const bodyPush = waveWidth * (
+    0.06 * bodyRegion * Math.pow(envelope, 0.58) +
+    0.095 * curlRegion * Math.pow(envelope, 0.8) +
+    0.075 * roundedTip
+  )
+  const planPinch = clampUnit(
+    0.09 * bodyRegion * Math.pow(envelope, 0.4) +
+    0.22 * terminalRegion * Math.pow(envelope, 0.92),
+  )
+  const xBlend = clampUnit(0.045 * bodyRegion * Math.pow(envelope, 0.86) + 0.1 * terminalRegion * interior)
   return [
-    lerpNumber(baseX, wavePoint[0], xBlend),
+    lerpNumber(baseX + bodyPush, wavePoint[0], xBlend),
     frame.centerY + s * frame.halfSpan * (1 - planPinch),
     wavePoint[2] * 0.04,
   ]
