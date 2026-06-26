@@ -614,10 +614,8 @@ function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number
   const terminalRegion = smoothStep(0.62, 0.98, t)
   const planPinch = clampUnit(0.13 * curlRegion * interior + 0.32 * terminalRegion * Math.pow(envelope, 1.04))
   const xBlend = clampUnit(0.07 * curlRegion * Math.pow(envelope, 1.02) + 0.3 * terminalRegion * interior)
-  const terminalSetback = (frame.maxX - frame.minX) * 0.11 * smoothStep(0.76, 1, t) * Math.pow(envelope, 0.86)
-
   return [
-    lerpNumber(baseX, wavePoint[0], xBlend) - terminalSetback,
+    lerpNumber(baseX, wavePoint[0], xBlend),
     frame.centerY + s * frame.halfSpan * (1 - planPinch),
     wavePoint[2] * 0.04,
   ]
