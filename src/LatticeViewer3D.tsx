@@ -290,7 +290,7 @@ type ReadableWaveFrame = {
 const readableWaveUSegments = 104
 const readableWaveVSegments = 54
 const readableReferenceProfilePoints =
-  '0,0;0.035,0.018;0.08,0.07;0.13,0.17;0.188,0.322;0.265,0.528;0.36,0.724;0.468,0.882;0.565,0.972;0.63,0.992;0.688,0.95;0.742,0.854;0.79,0.706;0.826,0.556;0.842,0.428;0.814,0.336;0.758,0.31;0.696,0.35;0.64,0.44;0.61,0.5;0.598,0.43;0.622,0.3;0.684,0.18;0.778,0.085;0.888,0.035;0.965,0.014;1,0'
+  '0,0;0.045,0.014;0.11,0.06;0.18,0.15;0.255,0.31;0.34,0.53;0.44,0.74;0.55,0.91;0.645,1;0.72,0.97;0.785,0.87;0.835,0.74;0.875,0.61;0.872,0.515;0.835,0.45;0.785,0.46;0.746,0.54;0.735,0.66;0.742,0.74;0.724,0.62;0.71,0.45;0.735,0.285;0.805,0.16;0.9,0.065;0.972,0.012;1,0'
 
 function readableSurfaceReferenceOnly(model: LatticeModel): boolean {
   return model.config.showSurface && !model.config.showHeatmap && !model.config.showNodes
@@ -301,8 +301,8 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const wireGeometry = useMemo(() => buildReadableWaveWireGeometry(model, view), [model, view])
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
   const throatGeometry = useMemo(() => view === 'isometric' ? buildReadableWaveThroatGeometry(model) : null, [model, view])
-  const surfaceOpacity = view === 'side' ? 0.2 : view === 'front' ? 0.72 : view === 'top' ? 0.18 : 0.48
-  const wireOpacity = view === 'side' ? 0.34 : view === 'front' ? 0.21 : view === 'top' ? 0.34 : 0.18
+  const surfaceOpacity = view === 'side' ? 0.2 : view === 'front' ? 0.72 : view === 'top' ? 0.18 : 0.34
+  const wireOpacity = view === 'side' ? 0.34 : view === 'front' ? 0.21 : view === 'top' ? 0.34 : 0.26
   const outlineOpacity = view === 'side' ? 0.16 : view === 'front' ? 0.1 : view === 'top' ? 0.045 : 0.022
 
   return (
@@ -533,7 +533,7 @@ function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3
   const growth = Math.sin(frame.progress * Math.PI * 0.5)
   const curlBlend = smoothStep(0.22, 1, frame.progress)
   const profilePoint = sampleReadableWaveProfile(frame.profile, t)
-  const lateralCurlBlend = curlBlend * Math.pow(envelope, 1.72)
+  const lateralCurlBlend = curlBlend * Math.pow(envelope, 0.45)
   const baseX = lerpNumber(frame.minX, frame.maxX, t)
   const baseY = frame.centerY + s * frame.halfSpan
   const moundLift = Math.sin(Math.PI * t) ** 1.18
@@ -542,7 +542,7 @@ function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3
   const curledX = frame.minX + waveWidth * profilePoint.x
   const curledZ = frame.height * (profilePoint.z / frame.profile.maxZ)
   const centerX = lerpNumber(moundX, curledX, lateralCurlBlend)
-  const offCenterCurlRelief = smoothStep(0.36, 0.92, t) * frame.progress * (1 - Math.pow(envelope, 0.32)) * 1.62
+  const offCenterCurlRelief = smoothStep(0.36, 0.92, t) * frame.progress * (1 - Math.pow(envelope, 0.32)) * 0.75
   const centerZ = lerpNumber(moundZ, curledZ, lateralCurlBlend) * growth * (1 - offCenterCurlRelief)
   const curlShoulder = smoothStep(0.44, 0.72, t) * (1 - smoothStep(0.88, 1, t))
   const lipTip = smoothStep(0.7, 1, t)
@@ -586,7 +586,7 @@ function readableWaveSidePoint(frame: ReadableWaveFrame, t: number, s: number): 
   return [
     point[0] + waveWidth * openThroat * (0.084 * lipFace - 0.018 * lowerLip - 0.035 * throat),
     point[1],
-    Math.max(0, point[2] + frame.height * openThroat * (0.088 * throat - 0.072 * lowerLip)),
+    Math.max(0, point[2] + frame.height * openThroat * (0.088 * throat - 0.052 * lowerLip)),
   ]
 }
 
@@ -599,11 +599,12 @@ function readableWaveIsometricPoint(frame: ReadableWaveFrame, t: number, s: numb
   const lowerLip = smoothStep(0.7, 0.88, t) * (1 - smoothStep(0.94, 0.995, t))
   const throat = smoothStep(0.52, 0.66, t) * (1 - smoothStep(0.78, 0.9, t))
   const openThroat = frame.progress * center
+  const facePinch = smoothStep(0.6, 0.82, t) * (1 - smoothStep(0.93, 0.995, t)) * Math.pow(envelope, 0.36)
 
   return [
     point[0] + waveWidth * openThroat * (0.096 * lipFace - 0.026 * lowerLip - 0.035 * throat),
-    point[1] - s * frame.halfSpan * openThroat * 0.048 * lowerLip,
-    Math.max(0, point[2] + frame.height * openThroat * (0.112 * throat - 0.118 * lowerLip)),
+    point[1] - s * frame.halfSpan * openThroat * (0.048 * lowerLip + 0.42 * facePinch),
+    Math.max(0, point[2] + frame.height * openThroat * (0.112 * throat - 0.084 * lowerLip - 0.032 * facePinch)),
   ]
 }
 
