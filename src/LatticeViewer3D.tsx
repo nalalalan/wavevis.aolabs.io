@@ -1333,7 +1333,7 @@ function StraightEdgeSegments({
     return (
       <>
         <lineSegments geometry={geometries.topPlan} renderOrder={0}>
-          <lineBasicMaterial color="#252722" transparent opacity={readableSurfaceMode ? 0.105 : 0.36} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#252722" transparent opacity={readableSurfaceMode ? 0.062 : 0.36} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.topFold} renderOrder={1}>
           <lineBasicMaterial color="#343631" transparent opacity={readableSurfaceMode ? 0.035 : 0.07} depthTest depthWrite={false} />
@@ -1382,13 +1382,13 @@ function XCellConnectorJoints({
   if (jointPositions.length <= 0) return null
 
   const haloSize = readableSurfaceMode
-    ? scope.topView ? 1.74 : scope.sideView ? 2.58 : 2.5
+    ? scope.topView ? 1.28 : scope.sideView ? 2.58 : 2.5
     : scope.topView ? 2.4 : scope.sideView ? 2.44 : 2.36
   const coreSize = readableSurfaceMode
-    ? scope.topView ? 0.86 : scope.sideView ? 1.32 : 1.28
+    ? scope.topView ? 0.62 : scope.sideView ? 1.32 : 1.28
     : scope.topView ? 1.25 : scope.sideView ? 1.28 : 1.22
   const coreOpacity = readableSurfaceMode
-    ? scope.topView ? 0.3 : scope.sideView ? 0.56 : 0.54
+    ? scope.topView ? 0.18 : scope.sideView ? 0.56 : 0.54
     : scope.topView ? 0.86 : scope.sideView ? 0.76 : 0.74
 
   return (
@@ -1397,7 +1397,7 @@ function XCellConnectorJoints({
         <pointsMaterial
           color="#f7f3ed"
           transparent
-          opacity={readableSurfaceMode ? (scope.topView ? 0.16 : scope.sideView ? 0.34 : 0.32) : scope.topView ? 0.48 : 0.48}
+          opacity={readableSurfaceMode ? (scope.topView ? 0.08 : scope.sideView ? 0.34 : 0.32) : scope.topView ? 0.48 : 0.48}
           size={haloSize}
           sizeAttenuation={false}
           depthTest={!scope.topView}
@@ -1446,10 +1446,10 @@ function XCellCenterPivots({
   if (pivotPositions.length <= 0) return null
 
   const size = readableSurfaceMode
-    ? scope.topView ? 0.56 : scope.sideView ? 0.78 : 0.82
+    ? scope.topView ? 0.42 : scope.sideView ? 0.78 : 0.82
     : scope.topView ? 0.92 : scope.sideView ? 0.84 : 0.84
   const opacity = readableSurfaceMode
-    ? scope.topView ? 0.16 : scope.sideView ? 0.26 : 0.28
+    ? scope.topView ? 0.08 : scope.sideView ? 0.26 : 0.28
     : scope.topView ? 0.55 : scope.sideView ? 0.42 : 0.42
 
   return (
