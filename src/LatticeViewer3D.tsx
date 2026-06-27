@@ -733,21 +733,22 @@ function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number
   const bodyRegion = smoothStep(0.08, 0.64, t) * (1 - smoothStep(0.92, 1, t))
   const shoulderLobe = Math.exp(-Math.pow((t - 0.62) / 0.28, 2)) * (1 - smoothStep(0.9, 1, t))
   const terminalNose = Math.exp(-Math.pow((t - 0.82) / 0.16, 2)) * (1 - smoothStep(0.94, 1, t))
-  const teardropLobe = (0.58 * shoulderLobe + 0.42 * terminalNose) * Math.pow(envelope, 1.18)
-  const shoulderRound = shoulderLobe * Math.pow(envelope, 0.58) * (1 - Math.pow(envelope, 2.05))
+  const teardropLobe = shoulderLobe * Math.pow(envelope, 1.02)
+  const shoulderRound = shoulderLobe * Math.pow(envelope, 0.48) * (1 - Math.pow(envelope, 2.25))
   const edgeReturn = smoothStep(0.7, 0.96, t)
   const bodyPush = waveWidth * (
     0.024 * bodyRegion * Math.pow(envelope, 1.06) +
-    0.19 * teardropLobe +
-    0.074 * shoulderRound
+    0.118 * teardropLobe +
+    0.058 * shoulderRound
   ) * (1 - 0.92 * edgeReturn)
   const terminalInset = waveWidth * (
-    0.022 * terminalNose * Math.pow(envelope, 2.2) *
+    0.004 * terminalNose * Math.pow(envelope, 2.2) *
     smoothStep(0.74, 0.94, t)
   )
+  const terminalPlanRelease = smoothStep(0.66, 0.94, t)
   const planPinch = clampUnit(
-    0.022 * bodyRegion * Math.pow(envelope, 1.02) +
-    0.14 * teardropLobe,
+    0.014 * bodyRegion * Math.pow(envelope, 1.02) +
+    0.024 * teardropLobe * (1 - 0.78 * terminalPlanRelease),
   )
   const planX = baseX + bodyPush - terminalInset
   const planY = frame.centerY + s * planHalfSpan * (1 - planPinch)
@@ -1333,10 +1334,10 @@ function StraightEdgeSegments({
     return (
       <>
         <lineSegments geometry={geometries.topPlan} renderOrder={0}>
-          <lineBasicMaterial color="#252722" transparent opacity={readableSurfaceMode ? 0.062 : 0.36} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#252722" transparent opacity={readableSurfaceMode ? 0.048 : 0.36} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.topFold} renderOrder={1}>
-          <lineBasicMaterial color="#343631" transparent opacity={readableSurfaceMode ? 0.035 : 0.07} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#343631" transparent opacity={readableSurfaceMode ? 0.026 : 0.07} depthTest depthWrite={false} />
         </lineSegments>
       </>
     )
