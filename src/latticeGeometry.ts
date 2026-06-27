@@ -89,7 +89,7 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   showSurface: true,
   showRestGhost: false,
   showNodes: false,
-  showEdges: false,
+  showEdges: true,
   showLabels: false,
   showHeatmap: false,
   colorMode: 'edgeStrain',

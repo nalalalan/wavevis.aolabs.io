@@ -20,6 +20,7 @@ import type {
 import { colorForQuad, legendForMode } from './metricVisuals'
 import { canvasResizeObserver } from './resizeObserverPolyfill'
 import { buildRigidCellMechanism } from './rigidCellMechanism'
+import { buildConnectedXCellMechanism, type ConnectedXCellFrame } from './xCellMechanism'
 
 const inverseLinkageColor = '#111111'
 const inverseCellBodyColor = '#2f3130'
@@ -256,7 +257,9 @@ function LatticeModelGroup({
             radius={edgePickRadius}
             onEdgePick={onEdgePick}
           />
-          <StraightEdgeSegments model={model} nodes={nodeById} scope={renderScope} />
+          <StraightEdgeSegments model={model} nodes={nodeById} scope={renderScope} view={view} />
+          <XCellCenterPivots model={model} scope={renderScope} view={view} />
+          <XCellConnectorJoints model={model} scope={renderScope} view={view} />
         </>
       )}
       {view === 'isometric' && model.config.showHeatmap && (
@@ -296,18 +299,23 @@ type ReadableWaveFrame = {
 const readableWaveUSegments = 104
 const readableWaveVSegments = 54
 const readableReferenceProfilePoints =
-  '0,0;0.045,0.014;0.11,0.06;0.18,0.15;0.255,0.31;0.34,0.53;0.44,0.74;0.55,0.91;0.645,1;0.72,0.97;0.785,0.87;0.835,0.74;0.875,0.61;0.872,0.515;0.835,0.45;0.785,0.46;0.746,0.54;0.735,0.66;0.742,0.74;0.724,0.62;0.71,0.45;0.735,0.285;0.805,0.16;0.9,0.065;0.972,0.012;1,0'
+  '0,0;0.035,0.02;0.075,0.07;0.118,0.17;0.17,0.32;0.225,0.5;0.295,0.68;0.375,0.82;0.47,0.92;0.565,0.97;0.66,0.96;0.74,0.88;0.805,0.74;0.85,0.56;0.855,0.43;0.828,0.39;0.792,0.4;0.772,0.43;0.79,0.47;0.825,0.48;0.79,0.58;0.725,0.68;0.65,0.73;0.58,0.72;0.525,0.64;0.5,0.52;0.505,0.4;0.55,0.27;0.625,0.17;0.73,0.09;0.85,0.045;0.96,0.018;1,0'
 const readableIsometricProfilePoints =
   '0,0;0.035,0.018;0.08,0.07;0.13,0.17;0.188,0.322;0.265,0.528;0.36,0.724;0.468,0.874;0.565,0.958;0.654,0.982;0.718,0.938;0.756,0.85;0.782,0.724;0.776,0.592;0.746,0.492;0.694,0.438;0.636,0.442;0.588,0.492;0.54,0.532;0.506,0.514;0.49,0.456;0.506,0.346;0.566,0.238;0.66,0.138;0.772,0.076;0.895,0.032;0.972,0.012;1,0'
 
 function readableSurfaceReferenceOnly(model: LatticeModel): boolean {
-  return model.config.showSurface && !model.config.showHeatmap && !model.config.showNodes
+  return model.config.showSurface && readableWaveReferenceDisplay(model)
+}
+
+function readableWaveReferenceDisplay(model: LatticeModel): boolean {
+  return !model.config.showHeatmap && !model.config.showNodes
 }
 
 function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: CameraViewRequest['view'] }) {
   const surfaceGeometry = useMemo(() => buildReadableWaveSurfaceGeometry(model, view), [model, view])
   const wireGeometry = useMemo(() => buildReadableWaveWireGeometry(model, view), [model, view])
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
+  const sideThroatGeometry = useMemo(() => view === 'side' ? buildReadableWaveSideThroatGeometry(model) : null, [model, view])
   const throatGeometry = useMemo(() => view === 'isometric' ? buildReadableWaveThroatGeometry(model) : null, [model, view])
   const surfaceOpacity = view === 'side' ? 0.2 : view === 'front' ? 0.72 : view === 'top' ? 0.18 : 0.28
   const wireOpacity = view === 'side' ? 0.34 : view === 'front' ? 0.21 : view === 'top' ? 0.34 : 0.26
@@ -330,6 +338,11 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
       <lineSegments geometry={outlineGeometry} renderOrder={0}>
         <lineBasicMaterial color={view === 'side' ? '#9d978f' : '#77726a'} transparent opacity={outlineOpacity} depthTest={view !== 'side'} depthWrite={false} />
       </lineSegments>
+      {sideThroatGeometry && (
+        <lineSegments geometry={sideThroatGeometry} renderOrder={1}>
+          <lineBasicMaterial color="#6f6a63" transparent opacity={0.22} depthTest={false} depthWrite={false} />
+        </lineSegments>
+      )}
       {throatGeometry && (
         <lineSegments geometry={throatGeometry} renderOrder={1}>
           <lineBasicMaterial color="#7b766f" transparent opacity={0} depthTest={false} depthWrite={false} />
@@ -384,9 +397,12 @@ function buildReadableWaveWireGeometry(model: LatticeModel, view: CameraViewRequ
   for (let vIndex = 0; vIndex <= readableWaveVSegments; vIndex += spanLineStep) {
     const s = -1 + (vIndex / readableWaveVSegments) * 2
     for (let uIndex = 0; uIndex < readableWaveUSegments; uIndex += 1) {
+      const t0 = uIndex / readableWaveUSegments
+      const t1 = (uIndex + 1) / readableWaveUSegments
+      if (view === 'side' && Math.abs(s) > 0.16 && t0 > 0.58 && t1 < 0.9) continue
       pushSegment(
-        readableWaveDisplayPoint(frame, view, uIndex / readableWaveUSegments, s),
-        readableWaveDisplayPoint(frame, view, (uIndex + 1) / readableWaveUSegments, s),
+        readableWaveDisplayPoint(frame, view, t0, s),
+        readableWaveDisplayPoint(frame, view, t1, s),
       )
     }
   }
@@ -457,6 +473,23 @@ function buildReadableWaveThroatGeometry(model: LatticeModel): THREE.BufferGeome
   )
 
   pushPolyline(points)
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3))
+  return geometry
+}
+
+function buildReadableWaveSideThroatGeometry(model: LatticeModel): THREE.BufferGeometry {
+  const frame = readableWaveFrame(model)
+  const positions: number[] = []
+  const samples = 72
+  const points = Array.from({ length: samples + 1 }, (_value, index) =>
+    readableWaveSidePoint(frame, lerpNumber(0.58, 0.98, index / samples), 0),
+  )
+
+  for (let index = 0; index < points.length - 1; index += 1) {
+    positions.push(...points[index], ...points[index + 1])
+  }
 
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3))
@@ -586,21 +619,26 @@ function readableWaveDisplayPoint(frame: ReadableWaveFrame, view: CameraViewRequ
   return readableWavePoint(frame, t, s)
 }
 
+function buildReadableWaveXCellCenterOverrides(model: LatticeModel, view: CameraViewRequest['view']): Map<string, Vec3> {
+  const frame = readableWaveFrame(model)
+  const rowDenominator = Math.max(model.config.rows - 1, 1)
+  const columnDenominator = Math.max(model.config.columns - 1, 1)
+
+  return new Map(model.nodes.map((node) => [
+    node.id,
+    readableWaveDisplayPoint(
+      frame,
+      view,
+      node.col / columnDenominator,
+      -1 + (node.row / rowDenominator) * 2,
+    ),
+  ] as const))
+}
+
 function readableWaveSidePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3 {
   const point = readableWavePoint(frame, t, s)
-  const waveWidth = frame.maxX - frame.minX
-  const envelope = readableLateralEnvelope(s)
-  const center = Math.pow(envelope, 1.52)
-  const lipFace = smoothStep(0.62, 0.8, t) * (1 - smoothStep(0.92, 0.985, t))
-  const lowerLip = smoothStep(0.7, 0.88, t) * (1 - smoothStep(0.94, 0.995, t))
-  const throat = smoothStep(0.52, 0.66, t) * (1 - smoothStep(0.78, 0.9, t))
-  const openThroat = frame.progress * center
 
-  return [
-    point[0] + waveWidth * openThroat * (0.084 * lipFace - 0.018 * lowerLip - 0.035 * throat),
-    point[1],
-    Math.max(0, point[2] + frame.height * openThroat * (0.088 * throat - 0.052 * lowerLip)),
-  ]
+  return point
 }
 
 function readableWaveIsometricPoint(frame: ReadableWaveFrame, t: number, s: number): Vec3 {
@@ -687,36 +725,36 @@ function readableWaveFrontPoint(frame: ReadableWaveFrame, t: number, s: number):
 function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number): Vec3 {
   const wavePoint = readableWavePoint(frame, t, s)
   const waveWidth = frame.maxX - frame.minX
+  const planMaxX = frame.maxX + waveWidth * 0.16
+  const planWidth = planMaxX - frame.minX
+  const planHalfSpan = planWidth * 0.5
   const baseX = lerpNumber(frame.minX, frame.maxX, t)
   const envelope = readableLateralEnvelope(s)
-  const interior = Math.pow(envelope, 0.5)
-  const bodyRegion = smoothStep(0.1, 0.74, t) * (1 - smoothStep(0.98, 1, t))
-  const curlRegion = smoothStep(0.38, 0.82, t) * (1 - smoothStep(0.93, 0.995, t))
-  const terminalRegion = smoothStep(0.62, 0.9, t) * (1 - smoothStep(0.96, 0.995, t))
-  const terminalNose = smoothStep(0.74, 0.9, t) * (1 - smoothStep(0.94, 0.995, t))
-  const roundedTip = terminalRegion * Math.pow(envelope, 0.78)
-  const shoulderRound = terminalNose * Math.pow(envelope, 0.38) * (1 - Math.pow(envelope, 2.7))
-  const noseFlatten = waveWidth * 0.012 * terminalNose * Math.pow(envelope, 2.08)
+  const bodyRegion = smoothStep(0.08, 0.64, t) * (1 - smoothStep(0.92, 1, t))
+  const shoulderLobe = Math.exp(-Math.pow((t - 0.62) / 0.28, 2)) * (1 - smoothStep(0.9, 1, t))
+  const terminalNose = Math.exp(-Math.pow((t - 0.82) / 0.16, 2)) * (1 - smoothStep(0.94, 1, t))
+  const teardropLobe = (0.58 * shoulderLobe + 0.42 * terminalNose) * Math.pow(envelope, 1.18)
+  const shoulderRound = shoulderLobe * Math.pow(envelope, 0.58) * (1 - Math.pow(envelope, 2.05))
+  const edgeReturn = smoothStep(0.7, 0.96, t)
   const bodyPush = waveWidth * (
-    0.045 * bodyRegion * Math.pow(envelope, 0.72) +
-    0.104 * curlRegion * Math.pow(envelope, 1.02) +
-    0.05 * roundedTip +
-    0.044 * shoulderRound
+    0.024 * bodyRegion * Math.pow(envelope, 1.06) +
+    0.19 * teardropLobe +
+    0.074 * shoulderRound
+  ) * (1 - 0.92 * edgeReturn)
+  const terminalInset = waveWidth * (
+    0.042 * terminalNose * Math.pow(envelope, 2.2) *
+    smoothStep(0.74, 0.94, t)
   )
   const planPinch = clampUnit(
-    0.062 * bodyRegion * Math.pow(envelope, 0.62) +
-    0.108 * terminalRegion * Math.pow(envelope, 1.2) -
-    0.048 * terminalNose * Math.pow(envelope, 1.52),
+    0.022 * bodyRegion * Math.pow(envelope, 1.02) +
+    0.17 * teardropLobe,
   )
-  const xBlend = clampUnit(
-    0.034 * bodyRegion * Math.pow(envelope, 1.02) +
-    0.056 * terminalRegion * Math.pow(interior, 1.38) -
-    0.018 * terminalNose * Math.pow(envelope, 1.7),
-  )
+  const planX = baseX + bodyPush - terminalInset
+  const planY = frame.centerY + s * planHalfSpan * (1 - planPinch)
   return [
-    lerpNumber(baseX + bodyPush, wavePoint[0], xBlend) - noseFlatten,
-    frame.centerY + s * frame.halfSpan * (1 - planPinch),
-    wavePoint[2] * 0.04,
+    planX,
+    planY,
+    wavePoint[2] * 0.025,
   ]
 }
 
@@ -1055,58 +1093,88 @@ function StraightEdgeSegments({
   model,
   nodes,
   scope,
+  view,
 }: {
   model: LatticeModel
   nodes: Map<string, LatticeNode>
   scope: NodeEdgeRenderScope
+  view: CameraViewRequest['view']
 }) {
   const splitSideEdges = scope.sideView
   const splitIsometricEdges = scope.isometricView
   const readableSurfaceMode = readableSurfaceReferenceOnly(model)
+  const readableReferenceMode = readableWaveReferenceDisplay(model)
   const geometries = useMemo(() => {
-    const buildGeometry = (edges: LatticeEdge[]) => {
-      const positions = new Float32Array(edges.length * 4 * 3)
+    const nodeValues = [...nodes.values()]
+    const centerOverrides = readableReferenceMode ? buildReadableWaveXCellCenterOverrides(model, view) : undefined
+    const mechanism = buildConnectedXCellMechanism(model, centerOverrides)
+    const buildXCellGeometry = (frames: ConnectedXCellFrame[]) => {
+      const positions = new Float32Array(frames.length * 4 * 3)
       let segmentIndex = 0
 
-      edges.forEach((edge) => {
-        const frameA = mechanism.frameByNodeId.get(edge.nodeA)
-        const frameB = mechanism.frameByNodeId.get(edge.nodeB)
-        const connector = mechanism.connectorByEdgeId.get(edge.id)
-        if (!frameA || !frameB || !connector) return
+      frames.forEach((frame) => {
+        const { ne, sw, nw, se } = frame.endpoints
 
-        writeVec(positions, segmentIndex * 6, frameA.center)
-        writeVec(positions, segmentIndex * 6 + 3, connector)
-        segmentIndex += 1
-        writeVec(positions, segmentIndex * 6, frameB.center)
-        writeVec(positions, segmentIndex * 6 + 3, connector)
-        segmentIndex += 1
+        if (sw && ne) {
+          writeVec(positions, segmentIndex * 6, sw)
+          writeVec(positions, segmentIndex * 6 + 3, ne)
+          segmentIndex += 1
+        }
+        if (se && nw) {
+          writeVec(positions, segmentIndex * 6, se)
+          writeVec(positions, segmentIndex * 6 + 3, nw)
+          segmentIndex += 1
+        }
       })
 
       const nextGeometry = new THREE.BufferGeometry()
       nextGeometry.setAttribute('position', new THREE.BufferAttribute(
-        segmentIndex === edges.length * 2 ? positions : positions.slice(0, segmentIndex * 6),
+        segmentIndex === frames.length * 2 ? positions : positions.slice(0, segmentIndex * 6),
         3,
       ))
       return nextGeometry
     }
 
-    const mechanism = buildRigidCellMechanism(model)
-    const nodeValues = [...nodes.values()]
-    const profileEdges = scope.edges.filter((edge) => edge.orientation === 'horizontal')
-    const spanEdges = scope.edges.filter((edge) => edge.orientation === 'vertical')
-
     if (scope.topView) {
+      if (readableReferenceMode) {
+        const maxRow = Math.max(...nodeValues.map((node) => node.row), 1)
+        const maxCol = Math.max(...nodeValues.map((node) => node.col), 1)
+        const terminalStackFrame = (frame: ConnectedXCellFrame) => {
+          const node = nodes.get(frame.nodeId)
+          if (!node) return false
+          const u = node.col / maxCol
+          const lateral = Math.abs((node.row / maxRow) * 2 - 1)
+          return u >= 0.76 && lateral <= 0.82
+        }
+        const terminalFrames = mechanism.frames.filter(terminalStackFrame)
+        const terminalIds = new Set(terminalFrames.map((frame) => frame.nodeId))
+
+        return {
+          all: null,
+          profile: null,
+          span: null,
+          profileActive: null,
+          profileFlat: null,
+          profileRimActive: null,
+          profileSoftActive: null,
+          spanActive: null,
+          spanFlat: null,
+          spanSoftActive: null,
+          topPlan: buildXCellGeometry(mechanism.frames.filter((frame) => !terminalIds.has(frame.nodeId))),
+          topFold: buildXCellGeometry(terminalFrames),
+        }
+      }
+
       const maxHeight = Math.max(...nodeValues.map((node) => node.currentPosition[2]), 0.000001)
-      const foldedTopEdge = (edge: LatticeEdge) => {
-        const a = nodes.get(edge.nodeA)
-        const b = nodes.get(edge.nodeB)
-        if (!a || !b) return false
-        const maxZ = Math.max(a.currentPosition[2], b.currentPosition[2])
-        const maxPlanDisplacement = Math.max(planarDistance(a.currentPosition, a.restPosition), planarDistance(b.currentPosition, b.restPosition))
+      const foldedTopFrame = (frame: ConnectedXCellFrame) => {
+        const node = nodes.get(frame.nodeId)
+        if (!node) return false
+        const maxZ = frame.center[2]
+        const maxPlanDisplacement = planarDistance(node.currentPosition, node.restPosition)
         return maxZ >= maxHeight * 0.1 || maxPlanDisplacement >= maxHeight * 0.44
       }
-      const foldedEdges = scope.edges.filter(foldedTopEdge)
-      const foldedIds = new Set(foldedEdges.map((edge) => edge.id))
+      const foldedFrames = mechanism.frames.filter(foldedTopFrame)
+      const foldedIds = new Set(foldedFrames.map((frame) => frame.nodeId))
 
       return {
         all: null,
@@ -1119,16 +1187,16 @@ function StraightEdgeSegments({
         spanActive: null,
         spanFlat: null,
         spanSoftActive: null,
-        topPlan: buildGeometry(scope.edges.filter((edge) => !foldedIds.has(edge.id))),
-        topFold: buildGeometry(foldedEdges),
+        topPlan: buildXCellGeometry(mechanism.frames.filter((frame) => !foldedIds.has(frame.nodeId))),
+        topFold: buildXCellGeometry(foldedFrames),
       }
     }
 
     if (!(splitSideEdges || splitIsometricEdges)) {
       return {
-        all: null,
-        profile: buildGeometry(profileEdges),
-        span: buildGeometry(spanEdges),
+        all: buildXCellGeometry(mechanism.frames),
+        profile: null,
+        span: null,
         profileActive: null,
         profileFlat: null,
         profileRimActive: null,
@@ -1148,29 +1216,21 @@ function StraightEdgeSegments({
     const maxCol = Math.max(...nodeValues.map((node) => node.col), 0)
     const centerRow = maxRow * 0.5
     const focusHalfRows = Math.max(0.85, Math.min(1.7, nodeValues.length > 0 ? Math.sqrt(nodeValues.length) * 0.016 : 0.85))
-    const sideEdgeActive = (edge: LatticeEdge) => {
-      const a = nodes.get(edge.nodeA)
-      const b = nodes.get(edge.nodeB)
-      if (!a || !b) return false
-      const maxZ = Math.max(a.currentPosition[2], b.currentPosition[2])
-      const maxDisplacement = Math.max(
-        distanceVec(a.currentPosition, a.restPosition),
-        distanceVec(b.currentPosition, b.restPosition),
-      )
+    const sideFrameActive = (frame: ConnectedXCellFrame) => {
+      const node = nodes.get(frame.nodeId)
+      if (!node) return false
+      const maxZ = frame.center[2]
+      const maxDisplacement = distanceVec(node.currentPosition, node.restPosition)
       const lifted = maxZ >= activeThreshold
       const displacedNearCurl = maxDisplacement >= displacementThreshold && maxZ >= activeThreshold
       return lifted || displacedNearCurl
     }
-    const sideTerminalTangle = (edge: LatticeEdge) => {
-      const a = nodes.get(edge.nodeA)
-      const b = nodes.get(edge.nodeB)
-      if (!a || !b) return false
-      const maxZ = Math.max(a.currentPosition[2], b.currentPosition[2])
-      const meanCol = (a.col + b.col) * 0.5
-      const maxDisplacement = Math.max(
-        distanceVec(a.currentPosition, a.restPosition),
-        distanceVec(b.currentPosition, b.restPosition),
-      )
+    const sideTerminalTangle = (frame: ConnectedXCellFrame) => {
+      const node = nodes.get(frame.nodeId)
+      if (!node) return false
+      const maxZ = frame.center[2]
+      const meanCol = node.col
+      const maxDisplacement = distanceVec(node.currentPosition, node.restPosition)
       return (
         meanCol >= maxCol * 0.42 &&
         maxZ >= maxHeight * 0.018 &&
@@ -1178,61 +1238,54 @@ function StraightEdgeSegments({
         maxDisplacement >= displacementThreshold * 0.72
       )
     }
-    const sideProfileRim = (edge: LatticeEdge) => {
-      const a = nodes.get(edge.nodeA)
-      const b = nodes.get(edge.nodeB)
-      if (!a || !b || maxRow <= 0) return false
-      const normalizedRow = ((a.row + b.row) * 0.5) / maxRow
+    const frameProfileRim = (frame: ConnectedXCellFrame) => {
+      const node = nodes.get(frame.nodeId)
+      if (!node || maxRow <= 0) return false
+      const normalizedRow = node.row / maxRow
       return normalizedRow <= 0.07 || normalizedRow >= 0.93
     }
-    const isometricProfileFocus = (edge: LatticeEdge) => {
-      const a = nodes.get(edge.nodeA)
-      const b = nodes.get(edge.nodeB)
-      if (!a || !b) return false
-      return Math.abs((a.row + b.row) * 0.5 - centerRow) <= focusHalfRows
-    }
-
-    const sideActiveProfileEdges = profileEdges.filter(sideEdgeActive)
-    const sideSoftProfileEdges = sideActiveProfileEdges.filter(sideTerminalTangle)
-    const sideRimProfileEdges = sideActiveProfileEdges.filter((edge) => !sideTerminalTangle(edge) && sideProfileRim(edge))
-    const sideInteriorProfileEdges = sideActiveProfileEdges.filter((edge) => !sideTerminalTangle(edge) && !sideProfileRim(edge))
-    const sideActiveSpanEdges = spanEdges.filter(sideEdgeActive)
-    const sideSoftSpanEdges = sideActiveSpanEdges.filter(sideTerminalTangle)
-    const sideReadableSpanEdges = sideActiveSpanEdges.filter((edge) => !sideTerminalTangle(edge))
-    const isometricActiveProfileEdges = profileEdges.filter((edge) => sideEdgeActive(edge) && isometricProfileFocus(edge))
+    const sideActiveXFrames = mechanism.frames.filter(sideFrameActive)
+    const sideSoftXFrames = sideActiveXFrames.filter(sideTerminalTangle)
+    const sideRimXFrames = sideActiveXFrames.filter((frame) => !sideTerminalTangle(frame) && frameProfileRim(frame))
+    const sideInteriorXFrames = sideActiveXFrames.filter((frame) => !sideTerminalTangle(frame) && !frameProfileRim(frame))
+    const sideFlatXFrames = mechanism.frames.filter((frame) => !sideFrameActive(frame))
+    const isometricActiveXFrames = mechanism.frames.filter((frame) => {
+      const node = nodes.get(frame.nodeId)
+      return node ? sideFrameActive(frame) && Math.abs(node.row - centerRow) <= focusHalfRows + 0.5 : false
+    })
+    const isometricActiveIds = new Set(isometricActiveXFrames.map((frame) => frame.nodeId))
+    const isometricFlatXFrames = mechanism.frames.filter((frame) => !isometricActiveIds.has(frame.nodeId))
 
     return {
       all: null,
       profile: null,
       span: null,
-      profileActive: buildGeometry(splitSideEdges ? sideInteriorProfileEdges : isometricActiveProfileEdges),
-      profileFlat: buildGeometry(splitSideEdges
-        ? profileEdges.filter((edge) => !sideEdgeActive(edge))
-        : profileEdges.filter((edge) => !(sideEdgeActive(edge) && isometricProfileFocus(edge)))),
-      profileRimActive: splitSideEdges ? buildGeometry(sideRimProfileEdges) : null,
-      profileSoftActive: splitSideEdges ? buildGeometry(sideSoftProfileEdges) : null,
-      spanActive: buildGeometry(splitSideEdges ? sideReadableSpanEdges : spanEdges.filter(sideEdgeActive)),
-      spanFlat: buildGeometry(spanEdges.filter((edge) => !sideEdgeActive(edge))),
-      spanSoftActive: splitSideEdges ? buildGeometry(sideSoftSpanEdges) : null,
+      profileActive: buildXCellGeometry(splitSideEdges ? sideInteriorXFrames : isometricActiveXFrames),
+      profileFlat: buildXCellGeometry(splitSideEdges ? sideFlatXFrames : isometricFlatXFrames),
+      profileRimActive: splitSideEdges ? buildXCellGeometry(sideRimXFrames) : null,
+      profileSoftActive: splitSideEdges ? buildXCellGeometry(sideSoftXFrames) : null,
+      spanActive: buildXCellGeometry([]),
+      spanFlat: buildXCellGeometry([]),
+      spanSoftActive: splitSideEdges ? buildXCellGeometry([]) : null,
       topPlan: null,
       topFold: null,
     }
-  }, [model, nodes, scope.edges, scope.topView, splitIsometricEdges, splitSideEdges])
+  }, [model, nodes, readableReferenceMode, scope.edges, scope.topView, splitIsometricEdges, splitSideEdges, view])
 
   if (splitIsometricEdges && geometries.profileActive && geometries.profileFlat && geometries.spanActive && geometries.spanFlat) {
     return (
       <>
         <lineSegments geometry={geometries.spanFlat} renderOrder={0}>
-          <lineBasicMaterial color="#312f2a" transparent opacity={readableSurfaceMode ? 0.0004 : 0.018} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#312f2a" transparent opacity={readableSurfaceMode ? 0.01 : 0.018} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileFlat} renderOrder={1}>
-          <lineBasicMaterial color="#26241f" transparent opacity={readableSurfaceMode ? 0.0008 : 0.03} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#26241f" transparent opacity={readableSurfaceMode ? 0.02 : 0.052} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.spanActive} renderOrder={2}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.0008 : 0.052} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.022 : 0.052} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileActive} renderOrder={3}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.0025 : 0.095} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.074 : 0.18} depthTest={false} depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -1251,25 +1304,25 @@ function StraightEdgeSegments({
     return (
       <>
         <lineSegments geometry={geometries.spanFlat} renderOrder={0}>
-          <lineBasicMaterial color="#5b5851" transparent opacity={readableSurfaceMode ? 0.0004 : 0.003} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#5b5851" transparent opacity={readableSurfaceMode ? 0.006 : 0.003} depthTest={readableSurfaceMode} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileFlat} renderOrder={1}>
-          <lineBasicMaterial color="#3d3a34" transparent opacity={readableSurfaceMode ? 0.0007 : 0.005} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#3d3a34" transparent opacity={readableSurfaceMode ? 0.018 : 0.045} depthTest={readableSurfaceMode} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.spanSoftActive} renderOrder={2}>
-          <lineBasicMaterial color="#4f4d47" transparent opacity={readableSurfaceMode ? 0.0002 : 0.001} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#4f4d47" transparent opacity={readableSurfaceMode ? 0.004 : 0.001} depthTest={readableSurfaceMode} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileSoftActive} renderOrder={3}>
-          <lineBasicMaterial color="#34322d" transparent opacity={readableSurfaceMode ? 0.0003 : 0.0015} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#34322d" transparent opacity={readableSurfaceMode ? 0.012 : 0.058} depthTest={readableSurfaceMode} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.spanActive} renderOrder={4}>
-          <lineBasicMaterial color="#22221f" transparent opacity={readableSurfaceMode ? 0.0005 : 0.006} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#22221f" transparent opacity={readableSurfaceMode ? 0.009 : 0.006} depthTest={readableSurfaceMode} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileActive} renderOrder={5}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.001 : 0.014} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.072 : 0.17} depthTest={readableSurfaceMode} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileRimActive} renderOrder={6}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.003 : 0.04} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.054 : 0.105} depthTest={readableSurfaceMode} depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -1292,10 +1345,10 @@ function StraightEdgeSegments({
     return (
       <>
         <lineSegments geometry={geometries.topPlan} renderOrder={0}>
-          <lineBasicMaterial color="#343631" transparent opacity={readableSurfaceMode ? 0.0005 : 0.2} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#252722" transparent opacity={readableSurfaceMode ? 0.26 : 0.36} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.topFold} renderOrder={1}>
-          <lineBasicMaterial color="#343631" transparent opacity={readableSurfaceMode ? 0.0003 : 0.05} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#343631" transparent opacity={readableSurfaceMode ? 0.035 : 0.07} depthTest depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -1311,6 +1364,118 @@ function StraightEdgeSegments({
         depthWrite
       />
     </lineSegments>
+  )
+}
+
+function XCellConnectorJoints({
+  model,
+  scope,
+  view,
+}: {
+  model: LatticeModel
+  scope: NodeEdgeRenderScope
+  view: CameraViewRequest['view']
+}) {
+  const readableReferenceMode = readableWaveReferenceDisplay(model)
+  const readableSurfaceMode = readableSurfaceReferenceOnly(model)
+  const jointPositions = useMemo(() => {
+    const centerOverrides = readableReferenceMode ? buildReadableWaveXCellCenterOverrides(model, view) : undefined
+    const mechanism = buildConnectedXCellMechanism(model, centerOverrides)
+    return [...mechanism.connectorByDiagonalId.values()]
+  }, [model, readableReferenceMode, view])
+  const geometry = useMemo(() => {
+    const positions = new Float32Array(jointPositions.length * 3)
+    jointPositions.forEach((position, index) => writeVec(positions, index * 3, position))
+    const nextGeometry = new THREE.BufferGeometry()
+    nextGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    return nextGeometry
+  }, [jointPositions])
+
+  if (jointPositions.length <= 0) return null
+
+  const haloSize = readableSurfaceMode
+    ? scope.topView ? 3 : scope.sideView ? 2.58 : 2.5
+    : scope.topView ? 2.4 : scope.sideView ? 2.44 : 2.36
+  const coreSize = readableSurfaceMode
+    ? scope.topView ? 1.62 : scope.sideView ? 1.32 : 1.28
+    : scope.topView ? 1.25 : scope.sideView ? 1.28 : 1.22
+  const coreOpacity = readableSurfaceMode
+    ? scope.topView ? 0.92 : scope.sideView ? 0.56 : 0.54
+    : scope.topView ? 0.86 : scope.sideView ? 0.76 : 0.74
+
+  return (
+    <>
+      <points geometry={geometry} renderOrder={19}>
+        <pointsMaterial
+          color="#f7f3ed"
+          transparent
+          opacity={readableSurfaceMode ? (scope.topView ? 0.6 : scope.sideView ? 0.34 : 0.32) : scope.topView ? 0.48 : 0.48}
+          size={haloSize}
+          sizeAttenuation={false}
+          depthTest={!scope.topView}
+          depthWrite={false}
+        />
+      </points>
+      <points geometry={geometry} renderOrder={20}>
+        <pointsMaterial
+          color="#151712"
+          transparent
+          opacity={coreOpacity}
+          size={coreSize}
+          sizeAttenuation={false}
+          depthTest={!scope.topView}
+          depthWrite={false}
+        />
+      </points>
+    </>
+  )
+}
+
+function XCellCenterPivots({
+  model,
+  scope,
+  view,
+}: {
+  model: LatticeModel
+  scope: NodeEdgeRenderScope
+  view: CameraViewRequest['view']
+}) {
+  const readableReferenceMode = readableWaveReferenceDisplay(model)
+  const readableSurfaceMode = readableSurfaceReferenceOnly(model)
+  const pivotPositions = useMemo(() => {
+    const centerOverrides = readableReferenceMode ? buildReadableWaveXCellCenterOverrides(model, view) : undefined
+    const mechanism = buildConnectedXCellMechanism(model, centerOverrides)
+    return mechanism.frames.map((frame) => frame.center)
+  }, [model, readableReferenceMode, view])
+  const geometry = useMemo(() => {
+    const positions = new Float32Array(pivotPositions.length * 3)
+    pivotPositions.forEach((position, index) => writeVec(positions, index * 3, position))
+    const nextGeometry = new THREE.BufferGeometry()
+    nextGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    return nextGeometry
+  }, [pivotPositions])
+
+  if (pivotPositions.length <= 0) return null
+
+  const size = readableSurfaceMode
+    ? scope.topView ? 1.02 : scope.sideView ? 0.78 : 0.82
+    : scope.topView ? 0.92 : scope.sideView ? 0.84 : 0.84
+  const opacity = readableSurfaceMode
+    ? scope.topView ? 0.58 : scope.sideView ? 0.26 : 0.28
+    : scope.topView ? 0.55 : scope.sideView ? 0.42 : 0.42
+
+  return (
+    <points geometry={geometry} renderOrder={18}>
+      <pointsMaterial
+        color="#34342f"
+        transparent
+        opacity={opacity}
+        size={size}
+        sizeAttenuation={false}
+        depthTest={!scope.topView}
+        depthWrite={false}
+      />
+    </points>
   )
 }
 
@@ -1601,11 +1766,11 @@ function positionCamera(
   view: CameraViewRequest['view'],
   selected?: SelectedElement,
 ): void {
-  const surfaceReferenceOnly = !selected && readableSurfaceReferenceOnly(model)
-  const bounds = surfaceReferenceOnly && view === 'front'
+  const readableReferenceBounds = !selected && readableWaveReferenceDisplay(model) && (model.config.showSurface || model.config.showEdges)
+  const bounds = readableReferenceBounds && view === 'front'
     ? activeReadableWaveBounds(model, 'front')
-    : surfaceReferenceOnly
-    ? activeReadableWaveBounds(model)
+    : readableReferenceBounds
+    ? activeReadableWaveBounds(model, view)
     : !selected && view === 'side'
     ? activeSideProfileBounds(model)
     : !selected && view === 'front'

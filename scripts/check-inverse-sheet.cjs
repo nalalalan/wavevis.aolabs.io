@@ -17,6 +17,7 @@ execFileSync(
     'src/inverseSheetTypes.ts',
     'src/latticeGeometry.ts',
     'src/rigidCellMechanism.ts',
+    'src/xCellMechanism.ts',
     '--outDir',
     path.relative(root, outDir),
     '--module',
@@ -41,6 +42,7 @@ const {
   runInverseSheetSanityChecks,
 } = require(path.join(outDir, 'latticeGeometry.js'))
 const { buildRigidCellMechanism, rigidCellMechanismStats } = require(path.join(outDir, 'rigidCellMechanism.js'))
+const { buildConnectedXCellMechanism, connectedXCellMechanismStats } = require(path.join(outDir, 'xCellMechanism.js'))
 const inverseSheetTabSource = fs.readFileSync(path.join(root, 'src', 'InverseSheetTab.tsx'), 'utf8')
 const latticeViewerSource = fs.readFileSync(path.join(root, 'src', 'LatticeViewer3D.tsx'), 'utf8')
 
@@ -94,7 +96,8 @@ const lipSharpnessPair = summarizeLipSharpnessPair(bluntLipModel, sharpLipModel)
 const sharpWalls = summarizeWallSmoothness(buildInverseSheetModel({ ...generatedMode, smoothing: 1, wallSmoothness: 0, flatContribution: 0 }))
 const roundWalls = summarizeWallSmoothness(buildInverseSheetModel({ ...generatedMode, smoothing: 1, wallSmoothness: 1, flatContribution: 0 }))
 const mechanism = rigidCellMechanismStats(buildInverseSheetModel({ ...generatedMode }))
-const sideRenderDirectLines = summarizeSideRenderDirectLines(buildInverseSheetModel())
+const xMechanism = connectedXCellMechanismStats(buildInverseSheetModel({ ...generatedMode }))
+const xRenderDirectLines = summarizeXCellRenderDirectLines(buildInverseSheetModel())
 const wallSmoothnessExtreme = summarizeExtremeShape(buildInverseSheetModel({
   ...generatedMode,
   height: 14.75,
@@ -452,7 +455,7 @@ if (!startupUrlParamCoverage.ok) {
 }
 
 if (!startupDisplayContract.ok) {
-  failures.push(`startup display contract should default to clean surface-first rendering with URL gates for cells/connectors: ${startupDisplayContract.failures.join('; ')}`)
+  failures.push(`startup display contract should default to surface plus connected X mechanism with URL gates for cells/connectors: ${startupDisplayContract.failures.join('; ')}`)
 }
 
 if (!readableSurfaceRenderContract.ok) {
@@ -468,22 +471,31 @@ if (mechanism.maxExpectedArmCountResidual !== 0 || mechanism.minInteriorConnecte
 }
 
 if (
-  sideRenderDirectLines.renderedDepthArmSegmentCount !== sideRenderDirectLines.expectedDepthArmSegmentCount ||
-  sideRenderDirectLines.renderedArmSegmentCount <= 0 ||
-  sideRenderDirectLines.renderedNodeCount !== sideRenderDirectLines.expectedNodeCount ||
-  sideRenderDirectLines.renderedArmSegmentCount !== sideRenderDirectLines.expectedFullRectArmSegmentCount ||
-  sideRenderDirectLines.maxRenderedNeighborDegreeResidual !== 0 ||
-  sideRenderDirectLines.minRenderedInteriorDegree < 4
+  xRenderDirectLines.renderedXSegmentCount !== xRenderDirectLines.expectedInteriorXSegmentCount ||
+  xRenderDirectLines.renderedCenterPivotCount !== xRenderDirectLines.expectedNodeCount ||
+  xRenderDirectLines.renderedJointCount !== xRenderDirectLines.expectedDiagonalConnectorCount ||
+  xRenderDirectLines.minInteriorConnectedPairCount < 2 ||
+  xMechanism.maxConnectorEndpointGap > 0.0001 ||
+  xMechanism.minSharedConnectorUseCount !== 2 ||
+  xMechanism.maxSharedConnectorUseCount !== 2 ||
+  !xRenderDirectLines.sourceUsesCenterPivotJoints ||
+  !xRenderDirectLines.sourceUsesSharedConnectorJoints ||
+  !xRenderDirectLines.sourceUsesStraightLineSegments ||
+  !xRenderDirectLines.sourceUsesConnectedXMechanism
 ) {
-  failures.push('side view should show the full node array with direct rigid-cell arm linkages, not a profile-only debug view or hidden span legs')
+  failures.push('visible mechanism should render connected straight X cells, center pivot joints, and shared connector joints between adjacent X cells')
 }
 
-if (mechanism.maxCellOppositePairLengthSpread > 0.0001) {
-  failures.push('opposite arms within each inverse-sheet cell should stay equal length')
+if (xMechanism.maxOppositePairLengthSpread > 0.0001) {
+  failures.push('each straight X line should be bisected by its cell center; the two different X diagonals do not need equal total length')
 }
 
-if (mechanism.maxCellOppositeColinearErrorDeg > 0.01 || mechanism.maxCellOppositeCenterResidual > 0.0001) {
-  failures.push('opposite arms within each inverse-sheet cell should stay collinear through the cell center')
+if (xMechanism.maxOppositeColinearErrorDeg > 0.01 || xMechanism.maxOppositeCenterResidual > 0.0001) {
+  failures.push('each straight X line should stay collinear through the cell center')
+}
+
+if (xMechanism.maxCenterSurfaceResidual > 1.15) {
+  failures.push('connected X-cell display centers should stay close to the sampled wave surface instead of becoming a detached fake mechanism')
 }
 
 if (mechanism.maxArmSurfaceLeak > 3.6) {
@@ -536,7 +548,22 @@ const report = {
     maxArmSurfaceLeak: round(mechanism.maxArmSurfaceLeak),
     maxCenterShift: round(mechanism.maxCenterShift),
   },
-  sideRenderDirectLines,
+  xMechanism: {
+    maxOppositePairLengthSpread: round(xMechanism.maxOppositePairLengthSpread),
+    maxOppositeColinearErrorDeg: round(xMechanism.maxOppositeColinearErrorDeg),
+    maxOppositeCenterResidual: round(xMechanism.maxOppositeCenterResidual),
+    checkedOppositePairCount: xMechanism.checkedOppositePairCount,
+    maxConnectorEndpointGap: round(xMechanism.maxConnectorEndpointGap),
+    minSharedConnectorUseCount: xMechanism.minSharedConnectorUseCount,
+    maxSharedConnectorUseCount: xMechanism.maxSharedConnectorUseCount,
+    sharedConnectorCount: xMechanism.sharedConnectorCount,
+    maxCenterSurfaceResidual: round(xMechanism.maxCenterSurfaceResidual),
+    renderedXSegmentCount: xMechanism.renderedXSegmentCount,
+    expectedInteriorXSegmentCount: xRenderDirectLines.expectedInteriorXSegmentCount,
+    expectedDiagonalConnectorCount: xMechanism.expectedDiagonalConnectorCount,
+    minInteriorConnectedPairCount: xMechanism.minInteriorConnectedPairCount,
+  },
+  xRenderDirectLines,
   extremeControls: {
     wallSmoothness1: wallSmoothnessExtreme,
     lipSharpness1: lipSharpnessExtreme,
@@ -1236,7 +1263,7 @@ function summarizeStartupDisplayContract() {
     showSurface: true,
     showRestGhost: false,
     showNodes: false,
-    showEdges: false,
+    showEdges: true,
     showHeatmap: false,
   }
   const urlAliases = [
@@ -1289,6 +1316,8 @@ function summarizeReadableSurfaceRenderContract() {
     ['side-display projection is explicit rather than a profile-only debug view', "function readableWaveSidePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3"],
     ['front camera fits the front readable projection', "activeReadableWaveBounds(model, 'front')"],
     ['readable bounds sample the display projection', 'readableWaveDisplayPoint(frame, view, t'],
+    ['readable reference X-only views use readable display bounds', 'const readableReferenceBounds = !selected && readableWaveReferenceDisplay(model) && (model.config.showSurface || model.config.showEdges)'],
+    ['readable reference camera bounds stay view-specific', 'activeReadableWaveBounds(model, view)'],
     ['front view keeps dense but pale lengthwise wire density', "view === 'front' ? 2"],
     ['front view keeps dense but pale spanwise wire density', "view === 'front' ? 4"],
     ['front view keeps a softened outline trace', "view === 'front' ? 0.1"],
@@ -1307,8 +1336,7 @@ function summarizeReadableSurfaceRenderContract() {
     ['side projected throat profile lines stay omitted so the throat does not read as a support wall', "if (view === 'side' && t > 0.61 && t < 0.87) continue"],
     ['side view keeps only the outer contour as its extra side outline', "if (view === 'side') {\n    pushPolyline(sampleOuterSideProfileLine(frame, samples))\n  } else if (view === 'front')"],
     ['side outline stays visible through the curl', "depthTest={view !== 'side'}"],
-    ['side lower lip tucks under the forward face without a wall-cut branch', 'point[0] + waveWidth * openThroat * (0.084 * lipFace - 0.018 * lowerLip - 0.035 * throat)'],
-    ['side throat lift keeps the lower lip from becoming a floor-hitting support branch', 'point[2] + frame.height * openThroat * (0.088 * throat - 0.052 * lowerLip)'],
+    ['side projection preserves the accepted raw curl profile after wall-branch rejection', 'const point = readableWavePoint(frame, t, s)\n\n  return point'],
     ['readable reference span stays narrower than the earlier thick cap branch', 'const visualHalfSpan = waveWidth * 0.31'],
     ['terminal lip lift stays localized with the accepted narrower-hook lateral spread', 'const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.22), Math.pow(envelope, 7.2), terminalLocalization * 0.92)'],
     ['off-center spans stay localized enough to avoid a full-width tube while preserving the sheet read', 'const lateralCurlBlend = curlBlend * Math.pow(envelope, 1.45)'],
@@ -1316,11 +1344,17 @@ function summarizeReadableSurfaceRenderContract() {
     ['readable reference lateral envelope broadens the curl without becoming a full-width tube', 'return Math.pow(Math.cos(absolute * Math.PI * 0.5), 2.18)'],
     ['terminal curl pinch stays below the knot-forming branch', 'Math.min(0.66, frame.progress * pinchEnvelope * (0.04 * curlShoulder + 0.54 * lipTip))'],
     ['top projection broadens the readable footprint before the terminal edge', 'const bodyPush = waveWidth * ('],
-    ['top projection gates terminal deformation before the square sheet edge', 'const terminalRegion = smoothStep(0.62, 0.9, t) * (1 - smoothStep(0.96, 0.995, t))'],
-    ['top projection rounds the terminal nose before the square sheet edge', 'const terminalNose = smoothStep(0.74, 0.9, t) * (1 - smoothStep(0.94, 0.995, t))'],
-    ['top projection broadens the terminal shoulders instead of making a pointed fan', 'const shoulderRound = terminalNose * Math.pow(envelope, 0.38) * (1 - Math.pow(envelope, 2.7))'],
-    ['top projection gently flattens the center apex so the terminal footprint stays rounded', 'const noseFlatten = waveWidth * 0.012 * terminalNose * Math.pow(envelope, 2.08)'],
-    ['top projection keeps terminal pinch below the triangular-fan branch', '0.108 * terminalRegion * Math.pow(envelope, 1.2)'],
+    ['top projection extends the plan sheet past the terminal deformation', 'const planMaxX = frame.maxX + waveWidth * 0.16'],
+    ['top projection keeps the rounded lobe inside the original sheet width', 'const baseX = lerpNumber(frame.minX, frame.maxX, t)'],
+    ['top projection uses one shoulder lobe rather than stacked terminal bands', 'const shoulderLobe = Math.exp(-Math.pow((t - 0.62) / 0.28, 2)) * (1 - smoothStep(0.9, 1, t))'],
+    ['top projection rounds the terminal nose before the square sheet edge', 'const terminalNose = Math.exp(-Math.pow((t - 0.82) / 0.16, 2)) * (1 - smoothStep(0.94, 1, t))'],
+    ['top projection combines shoulder and nose into one localized teardrop lobe', 'const teardropLobe = (0.58 * shoulderLobe + 0.42 * terminalNose) * Math.pow(envelope, 1.18)'],
+    ['top projection rounds the terminal shoulders without making a full-height side bulge', 'const shoulderRound = shoulderLobe * Math.pow(envelope, 0.58) * (1 - Math.pow(envelope, 2.05))'],
+    ['top projection returns the lobe before it becomes the outer right boundary', 'const edgeReturn = smoothStep(0.7, 0.96, t)'],
+    ['top projection pushes a rounded center lobe instead of a flat terminal band', '0.19 * teardropLobe'],
+    ['top projection scales down the push near the terminal edge', ') * (1 - 0.92 * edgeReturn)'],
+    ['top projection avoids a hard terminal clamp that stacks rows into a stripe', 'planX,'],
+    ['top projection keeps terminal pinch below the triangular-fan branch', '0.17 * teardropLobe'],
     ['isometric camera balances full-sheet read with the accepted open-curl view', 'new THREE.Vector3(target.x + distance * 0.58, target.y - distance * 0.58, target.z + distance * 0.34)'],
     ['isometric camera keeps the curl inspectable without cropping the mechanism sheet', "view === 'isometric' ? 1.24"],
     ['3D-only curl path advances the center lip without changing side/top surfaces', 'const profileT = clampUnit(t + lipAdvance)'],
@@ -1339,8 +1373,8 @@ function summarizeReadableSurfaceRenderContract() {
     ['isometric view isolates the center throat trace', 'buildReadableWaveThroatGeometry(model)'],
     ['center throat trace stays removed so the barrel read comes from the sheet grid', 'transparent opacity={0} depthTest={false} depthWrite={false}'],
     ['isometric throat helper stays centerline-only after rib overlay rejection', 'readableWavePoint(frame, lerpNumber(0.58, 0.94, index / samples), 0)'],
-    ['readable profile follows the June 24 reference-trace curl family', '0.645,1;0.72,0.97;0.785,0.87;0.835,0.74;0.875,0.61'],
-    ['readable profile keeps the rounded inner loop and smooth lower return', '0.835,0.45;0.785,0.46;0.746,0.54;0.735,0.66;0.742,0.74'],
+    ['readable profile follows the June 24 reference-trace curl family', '0.66,0.96;0.74,0.88;0.805,0.74;0.85,0.56;0.855,0.43'],
+    ['readable profile keeps the rounded inner loop and smooth lower return', '0.828,0.39;0.792,0.4;0.772,0.43;0.79,0.47;0.825,0.48'],
   ]
   const requiredFrontFragments = [
     ['front projection derives depth center from frame bounds', 'const frontDepthCenter = (frame.minX + frame.maxX) * 0.5'],
@@ -2267,6 +2301,60 @@ function summarizeExtremeShape(model) {
       maxConnectorPathBendDeg: round(mechanismStats.maxConnectorPathBendDeg),
       maxConnectorEndpointGap: round(mechanismStats.maxConnectorEndpointGap),
     },
+  }
+}
+
+function summarizeXCellRenderDirectLines(model) {
+  const stats = connectedXCellMechanismStats(model)
+  const mechanism = buildConnectedXCellMechanism(model)
+  const expectedInteriorNodeCount = Math.max(model.config.rows - 2, 0) * Math.max(model.config.columns - 2, 0)
+  const expectedInteriorXSegmentCount = expectedInteriorNodeCount * 2
+  const sourceUsesConnectedXMechanism =
+    latticeViewerSource.includes("import { buildConnectedXCellMechanism, type ConnectedXCellFrame } from './xCellMechanism'") &&
+    latticeViewerSource.includes('const readableReferenceMode = readableWaveReferenceDisplay(model)') &&
+    latticeViewerSource.includes('const centerOverrides = readableReferenceMode ? buildReadableWaveXCellCenterOverrides(model, view) : undefined') &&
+    latticeViewerSource.includes('if (scope.topView) {\n      if (readableReferenceMode)') &&
+    latticeViewerSource.includes('const mechanism = buildConnectedXCellMechanism(model, centerOverrides)')
+  const straightSegmentFragments = [
+    'writeVec(positions, segmentIndex * 6, sw)',
+    'writeVec(positions, segmentIndex * 6 + 3, ne)',
+    'writeVec(positions, segmentIndex * 6, se)',
+    'writeVec(positions, segmentIndex * 6 + 3, nw)',
+  ]
+  const sourceUsesStraightLineSegments = straightSegmentFragments.every((fragment) => latticeViewerSource.includes(fragment))
+  const sourceUsesSharedConnectorJoints =
+    latticeViewerSource.includes('<XCellConnectorJoints model={model} scope={renderScope} view={view} />') &&
+    latticeViewerSource.includes('function XCellConnectorJoints') &&
+    latticeViewerSource.includes('return [...mechanism.connectorByDiagonalId.values()]') &&
+    latticeViewerSource.includes('<points geometry={geometry} renderOrder={19}>') &&
+    latticeViewerSource.includes('<points geometry={geometry} renderOrder={20}>') &&
+    latticeViewerSource.includes('color="#f7f3ed"') &&
+    latticeViewerSource.includes('color="#151712"') &&
+    latticeViewerSource.includes('depthTest={!scope.topView}') &&
+    latticeViewerSource.includes('depthWrite={false}')
+  const sourceUsesCenterPivotJoints =
+    latticeViewerSource.includes('<XCellCenterPivots model={model} scope={renderScope} view={view} />') &&
+    latticeViewerSource.includes('function XCellCenterPivots') &&
+    latticeViewerSource.includes('return mechanism.frames.map((frame) => frame.center)') &&
+    latticeViewerSource.includes('<points geometry={geometry} renderOrder={18}>') &&
+    latticeViewerSource.includes('color="#34342f"') &&
+    latticeViewerSource.includes('depthTest={!scope.topView}') &&
+    latticeViewerSource.includes('depthWrite={false}')
+
+  return {
+    renderedNodeCount: model.nodes.length,
+    expectedNodeCount: model.config.rows * model.config.columns,
+    expectedInteriorNodeCount,
+    renderedXSegmentCount: stats.renderedXSegmentCount,
+    expectedInteriorXSegmentCount,
+    renderedCenterPivotCount: mechanism.frames.length,
+    renderedJointCount: mechanism.connectorByDiagonalId.size,
+    expectedDiagonalConnectorCount: stats.expectedDiagonalConnectorCount,
+    minInteriorConnectedPairCount: stats.minInteriorConnectedPairCount,
+    sourceUsesConnectedXMechanism,
+    sourceUsesStraightLineSegments,
+    sourceUsesSharedConnectorJoints,
+    sourceUsesCenterPivotJoints,
   }
 }
 
