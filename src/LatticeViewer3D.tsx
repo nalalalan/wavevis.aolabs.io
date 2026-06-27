@@ -742,12 +742,12 @@ function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number
     0.074 * shoulderRound
   ) * (1 - 0.92 * edgeReturn)
   const terminalInset = waveWidth * (
-    0.042 * terminalNose * Math.pow(envelope, 2.2) *
+    0.022 * terminalNose * Math.pow(envelope, 2.2) *
     smoothStep(0.74, 0.94, t)
   )
   const planPinch = clampUnit(
     0.022 * bodyRegion * Math.pow(envelope, 1.02) +
-    0.17 * teardropLobe,
+    0.14 * teardropLobe,
   )
   const planX = baseX + bodyPush - terminalInset
   const planY = frame.centerY + s * planHalfSpan * (1 - planPinch)
@@ -1137,18 +1137,6 @@ function StraightEdgeSegments({
 
     if (scope.topView) {
       if (readableReferenceMode) {
-        const maxRow = Math.max(...nodeValues.map((node) => node.row), 1)
-        const maxCol = Math.max(...nodeValues.map((node) => node.col), 1)
-        const terminalStackFrame = (frame: ConnectedXCellFrame) => {
-          const node = nodes.get(frame.nodeId)
-          if (!node) return false
-          const u = node.col / maxCol
-          const lateral = Math.abs((node.row / maxRow) * 2 - 1)
-          return u >= 0.76 && lateral <= 0.82
-        }
-        const terminalFrames = mechanism.frames.filter(terminalStackFrame)
-        const terminalIds = new Set(terminalFrames.map((frame) => frame.nodeId))
-
         return {
           all: null,
           profile: null,
@@ -1160,8 +1148,8 @@ function StraightEdgeSegments({
           spanActive: null,
           spanFlat: null,
           spanSoftActive: null,
-          topPlan: buildXCellGeometry(mechanism.frames.filter((frame) => !terminalIds.has(frame.nodeId))),
-          topFold: buildXCellGeometry(terminalFrames),
+          topPlan: buildXCellGeometry(mechanism.frames),
+          topFold: buildXCellGeometry([]),
         }
       }
 
@@ -1345,7 +1333,7 @@ function StraightEdgeSegments({
     return (
       <>
         <lineSegments geometry={geometries.topPlan} renderOrder={0}>
-          <lineBasicMaterial color="#252722" transparent opacity={readableSurfaceMode ? 0.26 : 0.36} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#252722" transparent opacity={readableSurfaceMode ? 0.105 : 0.36} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.topFold} renderOrder={1}>
           <lineBasicMaterial color="#343631" transparent opacity={readableSurfaceMode ? 0.035 : 0.07} depthTest depthWrite={false} />
@@ -1394,13 +1382,13 @@ function XCellConnectorJoints({
   if (jointPositions.length <= 0) return null
 
   const haloSize = readableSurfaceMode
-    ? scope.topView ? 3 : scope.sideView ? 2.58 : 2.5
+    ? scope.topView ? 1.74 : scope.sideView ? 2.58 : 2.5
     : scope.topView ? 2.4 : scope.sideView ? 2.44 : 2.36
   const coreSize = readableSurfaceMode
-    ? scope.topView ? 1.62 : scope.sideView ? 1.32 : 1.28
+    ? scope.topView ? 0.86 : scope.sideView ? 1.32 : 1.28
     : scope.topView ? 1.25 : scope.sideView ? 1.28 : 1.22
   const coreOpacity = readableSurfaceMode
-    ? scope.topView ? 0.92 : scope.sideView ? 0.56 : 0.54
+    ? scope.topView ? 0.3 : scope.sideView ? 0.56 : 0.54
     : scope.topView ? 0.86 : scope.sideView ? 0.76 : 0.74
 
   return (
@@ -1409,7 +1397,7 @@ function XCellConnectorJoints({
         <pointsMaterial
           color="#f7f3ed"
           transparent
-          opacity={readableSurfaceMode ? (scope.topView ? 0.6 : scope.sideView ? 0.34 : 0.32) : scope.topView ? 0.48 : 0.48}
+          opacity={readableSurfaceMode ? (scope.topView ? 0.16 : scope.sideView ? 0.34 : 0.32) : scope.topView ? 0.48 : 0.48}
           size={haloSize}
           sizeAttenuation={false}
           depthTest={!scope.topView}
@@ -1458,10 +1446,10 @@ function XCellCenterPivots({
   if (pivotPositions.length <= 0) return null
 
   const size = readableSurfaceMode
-    ? scope.topView ? 1.02 : scope.sideView ? 0.78 : 0.82
+    ? scope.topView ? 0.56 : scope.sideView ? 0.78 : 0.82
     : scope.topView ? 0.92 : scope.sideView ? 0.84 : 0.84
   const opacity = readableSurfaceMode
-    ? scope.topView ? 0.58 : scope.sideView ? 0.26 : 0.28
+    ? scope.topView ? 0.16 : scope.sideView ? 0.26 : 0.28
     : scope.topView ? 0.55 : scope.sideView ? 0.42 : 0.42
 
   return (

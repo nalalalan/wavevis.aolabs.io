@@ -1354,7 +1354,9 @@ function summarizeReadableSurfaceRenderContract() {
     ['top projection pushes a rounded center lobe instead of a flat terminal band', '0.19 * teardropLobe'],
     ['top projection scales down the push near the terminal edge', ') * (1 - 0.92 * edgeReturn)'],
     ['top projection avoids a hard terminal clamp that stacks rows into a stripe', 'planX,'],
-    ['top projection keeps terminal pinch below the triangular-fan branch', '0.17 * teardropLobe'],
+    ['top projection keeps terminal pinch below the triangular-fan branch', '0.14 * teardropLobe'],
+    ['top X overlay keeps one continuous frame layer instead of a terminal stripe split', 'topPlan: buildXCellGeometry(mechanism.frames),'],
+    ['top X overlay keeps the old terminal split disabled', 'topFold: buildXCellGeometry([]),'],
     ['isometric camera balances full-sheet read with the accepted open-curl view', 'new THREE.Vector3(target.x + distance * 0.58, target.y - distance * 0.58, target.z + distance * 0.34)'],
     ['isometric camera keeps the curl inspectable without cropping the mechanism sheet', "view === 'isometric' ? 1.24"],
     ['3D-only curl path advances the center lip without changing side/top surfaces', 'const profileT = clampUnit(t + lipAdvance)'],
@@ -1392,6 +1394,7 @@ function summarizeReadableSurfaceRenderContract() {
     ['front projection uses nonexistent frame.centerX', 'frame.centerX'],
     ['side guide returns to the long false-cavity centerline loop', 'sampleProfileRange(0, 0.66, 0.96)'],
     ['side view reintroduces the standalone inner guide line', 'sampleProfileRange(0, 0.72, 0.88, 48)'],
+    ['top view reintroduces the terminal stripe split', 'terminalStackFrame'],
   ]
   const forbiddenFrontFragments = [
     ['front cap raises outer span with a constant offset', '0.02 +'],
