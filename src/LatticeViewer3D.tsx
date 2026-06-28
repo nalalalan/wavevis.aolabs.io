@@ -1406,17 +1406,17 @@ function XCellSharedJointArms({
     [model.config.columns, model.config.rows],
   )
   const opacity = readableSurfaceMode
-    ? scope.topView ? 0.032 : scope.sideView ? 0.072 : 0.068
+    ? scope.topView ? 0.052 : scope.sideView ? 0.09 : 0.084
     : scope.topView ? 0.34 : scope.sideView ? 0.34 : 0.31
   const depthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
   const rodRadius = Math.max(
     model.config.spacing * (readableSurfaceMode
-      ? scope.topView ? 0.0055 : scope.sideView ? 0.014 : 0.012
+      ? scope.topView ? 0.0072 : scope.sideView ? 0.0155 : 0.0142
       : scope.topView ? 0.012 : scope.sideView ? 0.012 : 0.011),
     scope.sideView ? 0.009 : 0.007,
   )
   const rodOpacity = readableSurfaceMode
-    ? scope.topView ? 0.012 : scope.sideView ? 0.066 : 0.062
+    ? scope.topView ? 0.022 : scope.sideView ? 0.078 : 0.074
     : scope.topView ? 0.28 : scope.sideView ? 0.28 : 0.24
   const mechanismInk = readableSurfaceMode ? '#5f5b54' : '#161713'
   const rodMaterial = useMemo(() => new THREE.MeshBasicMaterial({
@@ -1498,23 +1498,23 @@ function XCellConnectorJoints({
   }, [jointPositions])
 
   const haloSize = readableSurfaceMode
-    ? scope.topView ? 3.4 : scope.sideView ? 5.9 : 5.55
+    ? scope.topView ? 4.25 : scope.sideView ? 6.35 : 5.95
     : scope.topView ? 5.6 : scope.sideView ? 4.4 : 4.1
   const coreSize = readableSurfaceMode
-    ? scope.topView ? 1.18 : scope.sideView ? 3.2 : 3
+    ? scope.topView ? 1.82 : scope.sideView ? 3.45 : 3.24
     : scope.topView ? 3.1 : scope.sideView ? 2.45 : 2.28
   const coreOpacity = readableSurfaceMode
-    ? scope.topView ? 0.22 : scope.sideView ? 0.68 : 0.62
+    ? scope.topView ? 0.48 : scope.sideView ? 0.74 : 0.7
     : scope.topView ? 0.96 : scope.sideView ? 0.88 : 0.86
   const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
   const pinRadius = Math.max(
     model.config.spacing * (readableSurfaceMode
-      ? scope.topView ? 0.018 : scope.sideView ? 0.046 : 0.044
+      ? scope.topView ? 0.027 : scope.sideView ? 0.05 : 0.048
       : scope.topView ? 0.046 : scope.sideView ? 0.038 : 0.035),
     readableSurfaceMode && scope.sideView ? 0.022 : scope.topView ? 0.016 : 0.016,
   )
   const pinOpacity = readableSurfaceMode
-    ? scope.topView ? 0.12 : scope.sideView ? 0.56 : 0.52
+    ? scope.topView ? 0.26 : scope.sideView ? 0.62 : 0.58
     : scope.topView ? 0.82 : scope.sideView ? 0.76 : 0.72
   const pinInk = readableSurfaceMode ? '#5a554f' : '#10120e'
   const jointCoreInk = readableSurfaceMode ? '#5f5b54' : '#151712'
@@ -1548,7 +1548,7 @@ function XCellConnectorJoints({
         <pointsMaterial
           color="#f7f3ed"
           transparent
-          opacity={readableSurfaceMode ? (scope.topView ? 0.08 : scope.sideView ? 0.54 : 0.48) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}
+          opacity={readableSurfaceMode ? (scope.topView ? 0.22 : scope.sideView ? 0.58 : 0.54) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}
           size={haloSize}
           sizeAttenuation={false}
           depthTest={jointDepthTest}

@@ -1341,10 +1341,10 @@ function summarizeReadableSurfaceRenderContract() {
     ['side throat helper stays faint enough not to draw a separate cavity outline', 'opacity={0.02} depthTest={false} depthWrite={false}'],
     ['isometric full X bars stay subordinate to the smooth readable surface', 'opacity={readableSurfaceMode ? 0.018 : 0.18}'],
     ['side full X bars stay subordinate to the smooth readable throat', 'opacity={readableSurfaceMode ? 0.018 : 0.17}'],
-    ['surface shared X arms stay visible without overpowering side or isometric views', '? scope.topView ? 0.032 : scope.sideView ? 0.072 : 0.068'],
-    ['surface shared X rods stay visible without turning the curl into a black cavity', '? scope.topView ? 0.012 : scope.sideView ? 0.066 : 0.062'],
-    ['surface shared X joint pins stay visible without turning the curl into a black cavity', '? scope.topView ? 0.22 : scope.sideView ? 0.68 : 0.62'],
-    ['top surface shared joints stay lighter than the X-only proof so the footprint does not turn into a terminal stripe', 'opacity={readableSurfaceMode ? (scope.topView ? 0.08 : scope.sideView ? 0.54 : 0.48) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}'],
+    ['surface shared X arms stay visible enough to read endpoint-to-endpoint cell linkage', '? scope.topView ? 0.052 : scope.sideView ? 0.09 : 0.084'],
+    ['surface shared X rods stay visible without turning the curl into a black cavity', '? scope.topView ? 0.022 : scope.sideView ? 0.078 : 0.074'],
+    ['surface shared X joint pins stay visible as shared endpoints between adjacent X cells', '? scope.topView ? 0.48 : scope.sideView ? 0.74 : 0.7'],
+    ['top surface shared joint halos stay visible without becoming the X-only proof layer', 'opacity={readableSurfaceMode ? (scope.topView ? 0.22 : scope.sideView ? 0.58 : 0.54) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}'],
     ['side outline stays visible through the curl', "depthTest={view !== 'side'}"],
     ['side projection preserves the accepted raw curl profile after wall-branch rejection', 'const point = readableWavePoint(frame, t, s)\n\n  return point'],
     ['readable reference span stays narrower than the earlier thick cap branch', 'const visualHalfSpan = waveWidth * 0.31'],
@@ -2384,9 +2384,9 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('<points geometry={geometry} renderOrder={20}>') &&
     latticeViewerSource.includes('color="#f7f3ed"') &&
     latticeViewerSource.includes('color={jointCoreInk}') &&
-    latticeViewerSource.includes('? scope.topView ? 3.4 : scope.sideView ? 5.9 : 5.55') &&
-    latticeViewerSource.includes('? scope.topView ? 1.18 : scope.sideView ? 3.2 : 3') &&
-    latticeViewerSource.includes('? scope.topView ? 0.22 : scope.sideView ? 0.68 : 0.62') &&
+    latticeViewerSource.includes('? scope.topView ? 4.25 : scope.sideView ? 6.35 : 5.95') &&
+    latticeViewerSource.includes('? scope.topView ? 1.82 : scope.sideView ? 3.45 : 3.24') &&
+    latticeViewerSource.includes('? scope.topView ? 0.48 : scope.sideView ? 0.74 : 0.7') &&
     latticeViewerSource.includes('const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView') &&
     latticeViewerSource.includes('depthTest={jointDepthTest}') &&
     latticeViewerSource.includes('depthWrite={false}')
