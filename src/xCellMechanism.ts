@@ -26,6 +26,8 @@ export type ConnectedXCellMechanismStats = {
   minSharedConnectorUseCount: number
   maxSharedConnectorUseCount: number
   sharedConnectorCount: number
+  minInteriorLegCount: number
+  maxInteriorLegCount: number
   maxCenterSurfaceResidual: number
   renderedXSegmentCount: number
   expectedDiagonalConnectorCount: number
@@ -107,6 +109,8 @@ export function connectedXCellMechanismStats(model: LatticeModel, centerOverride
   let maxOppositeCenterResidual = 0
   let checkedOppositePairCount = 0
   let minInteriorConnectedPairCount = Infinity
+  let minInteriorLegCount = Infinity
+  let maxInteriorLegCount = 0
   let maxCenterSurfaceResidual = 0
   let maxConnectorEndpointGap = 0
   let minSharedConnectorUseCount = Infinity
@@ -145,6 +149,9 @@ export function connectedXCellMechanismStats(model: LatticeModel, centerOverride
 
     const [row, col] = parseNodeRowColumn(frame.nodeId)
     if (row > 0 && row < model.config.rows - 1 && col > 0 && col < model.config.columns - 1) {
+      const legCount = (['ne', 'sw', 'nw', 'se'] as const).filter((direction) => Boolean(frame.endpoints[direction])).length
+      minInteriorLegCount = Math.min(minInteriorLegCount, legCount)
+      maxInteriorLegCount = Math.max(maxInteriorLegCount, legCount)
       minInteriorConnectedPairCount = Math.min(minInteriorConnectedPairCount, connectedPairCount)
     }
   })
@@ -175,6 +182,8 @@ export function connectedXCellMechanismStats(model: LatticeModel, centerOverride
     minSharedConnectorUseCount: Number.isFinite(minSharedConnectorUseCount) ? minSharedConnectorUseCount : 0,
     maxSharedConnectorUseCount,
     sharedConnectorCount: mechanism.connectorByDiagonalId.size,
+    minInteriorLegCount: Number.isFinite(minInteriorLegCount) ? minInteriorLegCount : 0,
+    maxInteriorLegCount,
     maxCenterSurfaceResidual,
     renderedXSegmentCount: checkedOppositePairCount,
     expectedDiagonalConnectorCount: 2 * Math.max(model.config.rows - 1, 0) * Math.max(model.config.columns - 1, 0),

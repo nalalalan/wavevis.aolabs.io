@@ -1120,27 +1120,24 @@ function StraightEdgeSegments({
     const centerOverrides = readableReferenceMode ? buildReadableWaveXCellCenterOverrides(model, view) : undefined
     const mechanism = buildConnectedXCellMechanism(model, centerOverrides)
     const buildXCellGeometry = (frames: ConnectedXCellFrame[]) => {
-      const positions = new Float32Array(frames.length * 4 * 3)
+      const positions = new Float32Array(frames.length * 8 * 3)
       let segmentIndex = 0
 
       frames.forEach((frame) => {
         const { ne, sw, nw, se } = frame.endpoints
+        const endpoints = [ne, sw, nw, se]
 
-        if (sw && ne) {
-          writeVec(positions, segmentIndex * 6, sw)
-          writeVec(positions, segmentIndex * 6 + 3, ne)
+        endpoints.forEach((endpoint) => {
+          if (!endpoint) return
+          writeVec(positions, segmentIndex * 6, frame.center)
+          writeVec(positions, segmentIndex * 6 + 3, endpoint)
           segmentIndex += 1
-        }
-        if (se && nw) {
-          writeVec(positions, segmentIndex * 6, se)
-          writeVec(positions, segmentIndex * 6 + 3, nw)
-          segmentIndex += 1
-        }
+        })
       })
 
       const nextGeometry = new THREE.BufferGeometry()
       nextGeometry.setAttribute('position', new THREE.BufferAttribute(
-        segmentIndex === frames.length * 2 ? positions : positions.slice(0, segmentIndex * 6),
+        segmentIndex === frames.length * 4 ? positions : positions.slice(0, segmentIndex * 6),
         3,
       ))
       return nextGeometry

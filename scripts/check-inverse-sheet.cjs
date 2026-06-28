@@ -474,10 +474,13 @@ if (mechanism.maxExpectedArmCountResidual !== 0 || mechanism.minInteriorConnecte
 
 if (
   xRenderDirectLines.renderedXSegmentCount !== xRenderDirectLines.expectedInteriorXSegmentCount ||
+  xRenderDirectLines.renderedXLegSegmentCount !== xRenderDirectLines.expectedXLegSegmentCount ||
   xRenderDirectLines.renderedSharedJointArmCount !== xRenderDirectLines.expectedSharedJointArmCount ||
   xRenderDirectLines.renderedCenterPivotCount !== xRenderDirectLines.expectedNodeCount ||
   xRenderDirectLines.renderedJointCount !== xRenderDirectLines.expectedDiagonalConnectorCount ||
   xRenderDirectLines.minInteriorConnectedPairCount < 2 ||
+  xRenderDirectLines.minInteriorLegCount !== 4 ||
+  xRenderDirectLines.maxInteriorLegCount !== 4 ||
   xMechanism.maxConnectorEndpointGap > 0.0001 ||
   xMechanism.minSharedConnectorUseCount !== 2 ||
   xMechanism.maxSharedConnectorUseCount !== 2 ||
@@ -489,10 +492,10 @@ if (
   !xRenderDirectLines.sourceUsesSharedConnectorArms ||
   !xRenderDirectLines.sourceUsesSharedConnectorJoints ||
   !xRenderDirectLines.sourceUsesSharedConnectorRods ||
-  !xRenderDirectLines.sourceUsesStraightLineSegments ||
+  !xRenderDirectLines.sourceRendersOneCenterFourLegs ||
   !xRenderDirectLines.sourceUsesConnectedXMechanism
 ) {
-  failures.push('visible mechanism should render connected straight X cells, center pivot joints, and shared connector joints between adjacent X cells')
+  failures.push('visible mechanism should render one-center four-leg X cells plus shared two-cell connector joints between adjacent X cells')
 }
 
 if (xMechanism.maxOppositePairLengthSpread > 0.0001) {
@@ -570,6 +573,8 @@ const report = {
     minSharedConnectorUseCount: xMechanism.minSharedConnectorUseCount,
     maxSharedConnectorUseCount: xMechanism.maxSharedConnectorUseCount,
     sharedConnectorCount: xMechanism.sharedConnectorCount,
+    minInteriorLegCount: xMechanism.minInteriorLegCount,
+    maxInteriorLegCount: xMechanism.maxInteriorLegCount,
     maxCenterSurfaceResidual: round(xMechanism.maxCenterSurfaceResidual),
     renderedXSegmentCount: xMechanism.renderedXSegmentCount,
     expectedInteriorXSegmentCount: xRenderDirectLines.expectedInteriorXSegmentCount,
@@ -1358,9 +1363,9 @@ function summarizeReadableSurfaceRenderContract() {
     ['side projected throat profile lines stay omitted so the throat does not read as a support wall', "if (view === 'side' && t > 0.61 && t < 0.87) continue"],
     ['side view keeps only the outer contour as its extra side outline', "if (view === 'side') {\n    pushPolyline(sampleOuterSideProfileLine(frame, samples))\n  } else if (view === 'front')"],
     ['side throat helper stays faint enough not to draw a separate cavity outline', 'opacity={0.02} depthTest={false} depthWrite={false}'],
-    ['isometric full X bars stay subordinate to the smooth readable surface', 'opacity={readableSurfaceMode ? 0.018 : 0.18}'],
-    ['side full X bars stay subordinate to the smooth readable throat', 'opacity={readableSurfaceMode ? 0.018 : 0.17}'],
-    ['surface shared X arms stay visible enough to read endpoint-to-endpoint cell linkage without making top a stripe', '? scope.topView ? 0.032 : scope.sideView ? 0.09 : 0.084'],
+    ['isometric four-leg X cells stay subordinate to the smooth readable surface', 'opacity={readableSurfaceMode ? 0.018 : 0.18}'],
+    ['side four-leg X cells stay subordinate to the smooth readable throat', 'opacity={readableSurfaceMode ? 0.018 : 0.17}'],
+    ['surface shared X arms stay visible enough to read one-center four-leg cells without making top a stripe', '? scope.topView ? 0.032 : scope.sideView ? 0.09 : 0.084'],
     ['surface shared X rods stay visible without turning the curl or top terminal into a black cavity', '? scope.topView ? 0.012 : scope.sideView ? 0.078 : 0.074'],
     ['surface shared X joint pins stay visible as shared endpoints between adjacent X cells without forming a top wall', '? scope.topView ? 0.24 : scope.sideView ? 0.74 : 0.7'],
     ['top surface shared joint halos stay visible without becoming the X-only proof layer', 'opacity={readableSurfaceMode ? (scope.topView ? 0.1 : scope.sideView ? 0.58 : 0.54) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}'],
@@ -2359,6 +2364,8 @@ function summarizeXCellRenderDirectLines(model) {
   const mechanism = buildConnectedXCellMechanism(model)
   const expectedInteriorNodeCount = Math.max(model.config.rows - 2, 0) * Math.max(model.config.columns - 2, 0)
   const expectedInteriorXSegmentCount = expectedInteriorNodeCount * 2
+  const renderedXLegSegmentCount = [...mechanism.connectorUsesByDiagonalId.values()].reduce((sum, uses) => sum + uses.length, 0)
+  const expectedXLegSegmentCount = mechanism.connectorByDiagonalId.size * 2
   const renderedSharedJointArmCount = [...mechanism.connectorUsesByDiagonalId.values()].reduce((sum, uses) => sum + uses.length, 0)
   const sourceUsesConnectedXMechanism =
     latticeViewerSource.includes("import { buildConnectedXCellMechanism, type ConnectedXCellFrame } from './xCellMechanism'") &&
@@ -2366,13 +2373,14 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('const centerOverrides = readableReferenceMode ? buildReadableWaveXCellCenterOverrides(model, view) : undefined') &&
     latticeViewerSource.includes('if (scope.topView) {\n      if (readableReferenceMode)') &&
     latticeViewerSource.includes('const mechanism = buildConnectedXCellMechanism(model, centerOverrides)')
-  const straightSegmentFragments = [
-    'writeVec(positions, segmentIndex * 6, sw)',
-    'writeVec(positions, segmentIndex * 6 + 3, ne)',
-    'writeVec(positions, segmentIndex * 6, se)',
-    'writeVec(positions, segmentIndex * 6 + 3, nw)',
+  const oneCenterFourLegFragments = [
+    'const positions = new Float32Array(frames.length * 8 * 3)',
+    'const endpoints = [ne, sw, nw, se]',
+    'writeVec(positions, segmentIndex * 6, frame.center)',
+    'writeVec(positions, segmentIndex * 6 + 3, endpoint)',
+    'segmentIndex === frames.length * 4 ? positions : positions.slice(0, segmentIndex * 6)',
   ]
-  const sourceUsesStraightLineSegments = straightSegmentFragments.every((fragment) => latticeViewerSource.includes(fragment))
+  const sourceRendersOneCenterFourLegs = oneCenterFourLegFragments.every((fragment) => latticeViewerSource.includes(fragment))
   const sourceUsesSharedConnectorArms =
     latticeViewerSource.includes('<XCellSharedJointArms model={model} scope={renderScope} view={view} />') &&
     latticeViewerSource.includes('function XCellSharedJointArms') &&
@@ -2436,14 +2444,18 @@ function summarizeXCellRenderDirectLines(model) {
     expectedInteriorNodeCount,
     renderedXSegmentCount: stats.renderedXSegmentCount,
     expectedInteriorXSegmentCount,
+    renderedXLegSegmentCount,
+    expectedXLegSegmentCount,
     renderedSharedJointArmCount,
     expectedSharedJointArmCount: mechanism.connectorByDiagonalId.size * 2,
     renderedCenterPivotCount: mechanism.frames.length,
     renderedJointCount: mechanism.connectorByDiagonalId.size,
     expectedDiagonalConnectorCount: stats.expectedDiagonalConnectorCount,
     minInteriorConnectedPairCount: stats.minInteriorConnectedPairCount,
+    minInteriorLegCount: stats.minInteriorLegCount,
+    maxInteriorLegCount: stats.maxInteriorLegCount,
     sourceUsesConnectedXMechanism,
-    sourceUsesStraightLineSegments,
+    sourceRendersOneCenterFourLegs,
     sourceUsesSharedConnectorArms,
     sourceUsesSharedConnectorRods,
     sourceUsesSharedConnectorJoints,
