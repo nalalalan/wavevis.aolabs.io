@@ -258,6 +258,7 @@ function LatticeModelGroup({
             onEdgePick={onEdgePick}
           />
           <StraightEdgeSegments model={model} nodes={nodeById} scope={renderScope} view={view} />
+          <XCellSharedJointArms model={model} scope={renderScope} view={view} />
           <XCellCenterPivots model={model} scope={renderScope} view={view} />
           <XCellConnectorJoints model={model} scope={renderScope} view={view} />
         </>
@@ -1358,6 +1359,59 @@ function StraightEdgeSegments({
   )
 }
 
+function XCellSharedJointArms({
+  model,
+  scope,
+  view,
+}: {
+  model: LatticeModel
+  scope: NodeEdgeRenderScope
+  view: CameraViewRequest['view']
+}) {
+  const readableReferenceMode = readableWaveReferenceDisplay(model)
+  const readableSurfaceMode = readableSurfaceReferenceOnly(model)
+  const geometry = useMemo(() => {
+    const centerOverrides = readableReferenceMode ? buildReadableWaveXCellCenterOverrides(model, view) : undefined
+    const mechanism = buildConnectedXCellMechanism(model, centerOverrides)
+    const positions: number[] = []
+
+    mechanism.connectorUsesByDiagonalId.forEach((uses, diagonalId) => {
+      const connector = mechanism.connectorByDiagonalId.get(diagonalId)
+      if (!connector || uses.length !== 2) return
+
+      uses.forEach((use) => {
+        const frame = mechanism.frameByNodeId.get(use.nodeId)
+        if (!frame) return
+        positions.push(...frame.center, ...connector)
+      })
+    })
+
+    const nextGeometry = new THREE.BufferGeometry()
+    nextGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3))
+    return nextGeometry
+  }, [model, readableReferenceMode, view])
+  const positionCount = geometry.getAttribute('position')?.count ?? 0
+
+  if (positionCount <= 1) return null
+
+  const opacity = readableSurfaceMode
+    ? scope.topView ? 0.04 : scope.sideView ? 0.055 : 0.064
+    : scope.topView ? 0.28 : scope.sideView ? 0.24 : 0.22
+  const depthTest = readableSurfaceMode ? false : !scope.topView
+
+  return (
+    <lineSegments geometry={geometry} renderOrder={17}>
+      <lineBasicMaterial
+        color="#151712"
+        transparent
+        opacity={opacity}
+        depthTest={depthTest}
+        depthWrite={false}
+      />
+    </lineSegments>
+  )
+}
+
 function XCellConnectorJoints({
   model,
   scope,
@@ -1385,15 +1439,15 @@ function XCellConnectorJoints({
   if (jointPositions.length <= 0) return null
 
   const haloSize = readableSurfaceMode
-    ? scope.topView ? 2.05 : scope.sideView ? 3.15 : 2.65
+    ? scope.topView ? 2.2 : scope.sideView ? 3.15 : 2.82
     : scope.topView ? 2.4 : scope.sideView ? 2.44 : 2.36
   const coreSize = readableSurfaceMode
-    ? scope.topView ? 1.12 : scope.sideView ? 1.85 : 1.45
+    ? scope.topView ? 1.24 : scope.sideView ? 1.86 : 1.68
     : scope.topView ? 1.25 : scope.sideView ? 1.28 : 1.22
   const coreOpacity = readableSurfaceMode
-    ? scope.topView ? 0.48 : scope.sideView ? 0.78 : 0.58
+    ? scope.topView ? 0.5 : scope.sideView ? 0.68 : 0.62
     : scope.topView ? 0.86 : scope.sideView ? 0.76 : 0.74
-  const jointDepthTest = readableSurfaceMode ? scope.isometricView : !scope.topView
+  const jointDepthTest = readableSurfaceMode ? false : !scope.topView
 
   return (
     <>

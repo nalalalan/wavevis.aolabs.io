@@ -472,6 +472,7 @@ if (mechanism.maxExpectedArmCountResidual !== 0 || mechanism.minInteriorConnecte
 
 if (
   xRenderDirectLines.renderedXSegmentCount !== xRenderDirectLines.expectedInteriorXSegmentCount ||
+  xRenderDirectLines.renderedSharedJointArmCount !== xRenderDirectLines.expectedSharedJointArmCount ||
   xRenderDirectLines.renderedCenterPivotCount !== xRenderDirectLines.expectedNodeCount ||
   xRenderDirectLines.renderedJointCount !== xRenderDirectLines.expectedDiagonalConnectorCount ||
   xRenderDirectLines.minInteriorConnectedPairCount < 2 ||
@@ -479,6 +480,7 @@ if (
   xMechanism.minSharedConnectorUseCount !== 2 ||
   xMechanism.maxSharedConnectorUseCount !== 2 ||
   !xRenderDirectLines.sourceUsesCenterPivotJoints ||
+  !xRenderDirectLines.sourceUsesSharedConnectorArms ||
   !xRenderDirectLines.sourceUsesSharedConnectorJoints ||
   !xRenderDirectLines.sourceUsesStraightLineSegments ||
   !xRenderDirectLines.sourceUsesConnectedXMechanism
@@ -2318,6 +2320,7 @@ function summarizeXCellRenderDirectLines(model) {
   const mechanism = buildConnectedXCellMechanism(model)
   const expectedInteriorNodeCount = Math.max(model.config.rows - 2, 0) * Math.max(model.config.columns - 2, 0)
   const expectedInteriorXSegmentCount = expectedInteriorNodeCount * 2
+  const renderedSharedJointArmCount = [...mechanism.connectorUsesByDiagonalId.values()].reduce((sum, uses) => sum + uses.length, 0)
   const sourceUsesConnectedXMechanism =
     latticeViewerSource.includes("import { buildConnectedXCellMechanism, type ConnectedXCellFrame } from './xCellMechanism'") &&
     latticeViewerSource.includes('const readableReferenceMode = readableWaveReferenceDisplay(model)') &&
@@ -2331,6 +2334,16 @@ function summarizeXCellRenderDirectLines(model) {
     'writeVec(positions, segmentIndex * 6 + 3, nw)',
   ]
   const sourceUsesStraightLineSegments = straightSegmentFragments.every((fragment) => latticeViewerSource.includes(fragment))
+  const sourceUsesSharedConnectorArms =
+    latticeViewerSource.includes('<XCellSharedJointArms model={model} scope={renderScope} view={view} />') &&
+    latticeViewerSource.includes('function XCellSharedJointArms') &&
+    latticeViewerSource.includes('mechanism.connectorUsesByDiagonalId.forEach((uses, diagonalId) => {') &&
+    latticeViewerSource.includes('const connector = mechanism.connectorByDiagonalId.get(diagonalId)') &&
+    latticeViewerSource.includes('if (!connector || uses.length !== 2) return') &&
+    latticeViewerSource.includes('const frame = mechanism.frameByNodeId.get(use.nodeId)') &&
+    latticeViewerSource.includes('positions.push(...frame.center, ...connector)') &&
+    latticeViewerSource.includes('<lineSegments geometry={geometry} renderOrder={17}>') &&
+    latticeViewerSource.includes('const depthTest = readableSurfaceMode ? false : !scope.topView')
   const sourceUsesSharedConnectorJoints =
     latticeViewerSource.includes('<XCellConnectorJoints model={model} scope={renderScope} view={view} />') &&
     latticeViewerSource.includes('function XCellConnectorJoints') &&
@@ -2339,10 +2352,10 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('<points geometry={geometry} renderOrder={20}>') &&
     latticeViewerSource.includes('color="#f7f3ed"') &&
     latticeViewerSource.includes('color="#151712"') &&
-    latticeViewerSource.includes('? scope.topView ? 2.05 : scope.sideView ? 3.15 : 2.65') &&
-    latticeViewerSource.includes('? scope.topView ? 1.12 : scope.sideView ? 1.85 : 1.45') &&
-    latticeViewerSource.includes('? scope.topView ? 0.48 : scope.sideView ? 0.78 : 0.58') &&
-    latticeViewerSource.includes('const jointDepthTest = readableSurfaceMode ? scope.isometricView : !scope.topView') &&
+    latticeViewerSource.includes('? scope.topView ? 2.2 : scope.sideView ? 3.15 : 2.82') &&
+    latticeViewerSource.includes('? scope.topView ? 1.24 : scope.sideView ? 1.86 : 1.68') &&
+    latticeViewerSource.includes('? scope.topView ? 0.5 : scope.sideView ? 0.68 : 0.62') &&
+    latticeViewerSource.includes('const jointDepthTest = readableSurfaceMode ? false : !scope.topView') &&
     latticeViewerSource.includes('depthTest={jointDepthTest}') &&
     latticeViewerSource.includes('depthWrite={false}')
   const sourceUsesCenterPivotJoints =
@@ -2360,12 +2373,15 @@ function summarizeXCellRenderDirectLines(model) {
     expectedInteriorNodeCount,
     renderedXSegmentCount: stats.renderedXSegmentCount,
     expectedInteriorXSegmentCount,
+    renderedSharedJointArmCount,
+    expectedSharedJointArmCount: mechanism.connectorByDiagonalId.size * 2,
     renderedCenterPivotCount: mechanism.frames.length,
     renderedJointCount: mechanism.connectorByDiagonalId.size,
     expectedDiagonalConnectorCount: stats.expectedDiagonalConnectorCount,
     minInteriorConnectedPairCount: stats.minInteriorConnectedPairCount,
     sourceUsesConnectedXMechanism,
     sourceUsesStraightLineSegments,
+    sourceUsesSharedConnectorArms,
     sourceUsesSharedConnectorJoints,
     sourceUsesCenterPivotJoints,
   }
