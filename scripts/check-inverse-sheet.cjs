@@ -1338,7 +1338,13 @@ function summarizeReadableSurfaceRenderContract() {
     ['side wire rows are thinned so the throat does not become a dark tunnel cluster', "view === 'side' ? 6"],
     ['side projected throat profile lines stay omitted so the throat does not read as a support wall', "if (view === 'side' && t > 0.61 && t < 0.87) continue"],
     ['side view keeps only the outer contour as its extra side outline', "if (view === 'side') {\n    pushPolyline(sampleOuterSideProfileLine(frame, samples))\n  } else if (view === 'front')"],
-    ['side throat helper stays faint enough not to draw a separate cavity outline', 'opacity={0.06} depthTest={false} depthWrite={false}'],
+    ['side throat helper stays faint enough not to draw a separate cavity outline', 'opacity={0.02} depthTest={false} depthWrite={false}'],
+    ['isometric full X bars stay subordinate to the smooth readable surface', 'opacity={readableSurfaceMode ? 0.028 : 0.18}'],
+    ['side full X bars stay subordinate to the smooth readable throat', 'opacity={readableSurfaceMode ? 0.026 : 0.17}'],
+    ['surface shared X arms stay visible without overpowering side or isometric views', '? scope.topView ? 0.08 : scope.sideView ? 0.09 : 0.085'],
+    ['surface shared X rods stay visible without turning the curl into a black cavity', '? scope.topView ? 0.035 : scope.sideView ? 0.09 : 0.085'],
+    ['surface shared X joint pins stay visible without turning the curl into a black cavity', '? scope.topView ? 0.58 : scope.sideView ? 0.82 : 0.74'],
+    ['top surface shared joints stay lighter than the X-only proof so the footprint does not turn into a terminal stripe', 'opacity={readableSurfaceMode ? (scope.topView ? 0.28 : scope.sideView ? 0.74 : 0.6) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}'],
     ['side outline stays visible through the curl', "depthTest={view !== 'side'}"],
     ['side projection preserves the accepted raw curl profile after wall-branch rejection', 'const point = readableWavePoint(frame, t, s)\n\n  return point'],
     ['readable reference span stays narrower than the earlier thick cap branch', 'const visualHalfSpan = waveWidth * 0.31'],
@@ -2372,9 +2378,9 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('<points geometry={geometry} renderOrder={20}>') &&
     latticeViewerSource.includes('color="#f7f3ed"') &&
     latticeViewerSource.includes('color="#151712"') &&
-    latticeViewerSource.includes('? scope.topView ? 5.2 : scope.sideView ? 5.8 : 5.4') &&
-    latticeViewerSource.includes('? scope.topView ? 2.72 : scope.sideView ? 3.35 : 3.05') &&
-    latticeViewerSource.includes('? scope.topView ? 0.92 : scope.sideView ? 0.94 : 0.92') &&
+    latticeViewerSource.includes('? scope.topView ? 4.6 : scope.sideView ? 6.4 : 6') &&
+    latticeViewerSource.includes('? scope.topView ? 1.9 : scope.sideView ? 3.85 : 3.55') &&
+    latticeViewerSource.includes('? scope.topView ? 0.58 : scope.sideView ? 0.82 : 0.74') &&
     latticeViewerSource.includes('const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView') &&
     latticeViewerSource.includes('depthTest={jointDepthTest}') &&
     latticeViewerSource.includes('depthWrite={false}')
