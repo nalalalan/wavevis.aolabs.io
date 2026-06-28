@@ -318,9 +318,9 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
   const sideThroatGeometry = useMemo(() => view === 'side' ? buildReadableWaveSideThroatGeometry(model) : null, [model, view])
   const throatGeometry = useMemo(() => view === 'isometric' ? buildReadableWaveThroatGeometry(model) : null, [model, view])
-  const surfaceOpacity = view === 'side' ? 0.2 : view === 'front' ? 0.72 : view === 'top' ? 0.18 : 0.28
-  const wireOpacity = view === 'side' ? 0.22 : view === 'front' ? 0.21 : view === 'top' ? 0.34 : 0.26
-  const outlineOpacity = view === 'side' ? 0.16 : view === 'front' ? 0.1 : view === 'top' ? 0.045 : 0.03
+  const surfaceOpacity = view === 'side' ? 0.2 : view === 'front' ? 0.72 : view === 'top' ? 0.18 : 0.36
+  const wireOpacity = view === 'side' ? 0.22 : view === 'front' ? 0.21 : view === 'top' ? 0.34 : 0.16
+  const outlineOpacity = view === 'side' ? 0.16 : view === 'front' ? 0.1 : view === 'top' ? 0.045 : 0.025
 
   return (
     <group renderOrder={-2}>
@@ -392,8 +392,8 @@ function buildReadableWaveWireGeometry(model: LatticeModel, view: CameraViewRequ
   const pushSegment = (a: Vec3, b: Vec3) => {
     positions.push(...a, ...b)
   }
-  const spanLineStep = view === 'top' ? 1 : view === 'side' ? 6 : view === 'front' ? 2 : 2
-  const profileLineStep = view === 'top' ? 3 : view === 'side' ? 5 : view === 'front' ? 4 : 3
+  const spanLineStep = view === 'top' ? 1 : view === 'side' ? 6 : view === 'front' ? 2 : 3
+  const profileLineStep = view === 'top' ? 3 : view === 'side' ? 5 : view === 'front' ? 4 : 4
 
   for (let vIndex = 0; vIndex <= readableWaveVSegments; vIndex += spanLineStep) {
     const s = -1 + (vIndex / readableWaveVSegments) * 2
@@ -685,7 +685,7 @@ function readableWaveIsometricPoint(frame: ReadableWaveFrame, t: number, s: numb
     (1 - Math.pow(envelope, 0.9)) *
     0.1
   return [
-    displayPoint[0] + waveWidth * openThroat * (0.15 * lipFace - 0.252 * lowerLip - 0.064 * throat - 0.026 * facePinch) - waveWidth * terminalTipTaper,
+    displayPoint[0] + waveWidth * openThroat * (0.15 * lipFace - 0.22 * lowerLip - 0.064 * throat - 0.026 * facePinch) - waveWidth * terminalTipTaper,
     displayPoint[1],
     Math.max(0, focusedZ + frame.height * openThroat * (0.154 * throat - 0.282 * lowerLip - 0.068 * facePinch)),
   ]
@@ -1279,7 +1279,7 @@ function StraightEdgeSegments({
           <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.01 : 0.052} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileActive} renderOrder={3}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.028 : 0.18} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.018 : 0.18} depthTest={false} depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -1313,10 +1313,10 @@ function StraightEdgeSegments({
           <lineBasicMaterial color="#22221f" transparent opacity={readableSurfaceMode ? 0.009 : 0.006} depthTest={readableSurfaceMode} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileActive} renderOrder={5}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.026 : 0.17} depthTest={readableSurfaceMode} depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.018 : 0.17} depthTest={readableSurfaceMode} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileRimActive} renderOrder={6}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.022 : 0.105} depthTest={readableSurfaceMode} depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.016 : 0.105} depthTest={readableSurfaceMode} depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -1404,7 +1404,7 @@ function XCellSharedJointArms({
     [model.config.columns, model.config.rows],
   )
   const opacity = readableSurfaceMode
-    ? scope.topView ? 0.08 : scope.sideView ? 0.09 : 0.085
+    ? scope.topView ? 0.056 : scope.sideView ? 0.072 : 0.068
     : scope.topView ? 0.34 : scope.sideView ? 0.34 : 0.31
   const depthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
   const rodRadius = Math.max(
@@ -1414,15 +1414,16 @@ function XCellSharedJointArms({
     scope.sideView ? 0.009 : 0.007,
   )
   const rodOpacity = readableSurfaceMode
-    ? scope.topView ? 0.035 : scope.sideView ? 0.09 : 0.085
+    ? scope.topView ? 0.024 : scope.sideView ? 0.066 : 0.062
     : scope.topView ? 0.28 : scope.sideView ? 0.28 : 0.24
+  const mechanismInk = readableSurfaceMode ? '#5f5b54' : '#161713'
   const rodMaterial = useMemo(() => new THREE.MeshBasicMaterial({
-    color: '#161713',
+    color: mechanismInk,
     transparent: true,
     opacity: rodOpacity,
     depthTest,
     depthWrite: false,
-  }), [depthTest, rodOpacity])
+  }), [depthTest, mechanismInk, rodOpacity])
 
   useLayoutEffect(() => {
     if (!rodRef.current) return
@@ -1457,7 +1458,7 @@ function XCellSharedJointArms({
       <instancedMesh ref={rodRef} args={[rodGeometry, rodMaterial, armCount]} renderOrder={16} frustumCulled={false} />
       <lineSegments geometry={geometry} renderOrder={17}>
         <lineBasicMaterial
-          color="#151712"
+          color={readableSurfaceMode ? '#5f5b54' : '#151712'}
           transparent
           opacity={opacity}
           depthTest={depthTest}
@@ -1495,31 +1496,33 @@ function XCellConnectorJoints({
   }, [jointPositions])
 
   const haloSize = readableSurfaceMode
-    ? scope.topView ? 4.6 : scope.sideView ? 6.4 : 6
+    ? scope.topView ? 4.1 : scope.sideView ? 5.9 : 5.55
     : scope.topView ? 5.6 : scope.sideView ? 4.4 : 4.1
   const coreSize = readableSurfaceMode
-    ? scope.topView ? 1.9 : scope.sideView ? 3.85 : 3.55
+    ? scope.topView ? 1.55 : scope.sideView ? 3.2 : 3
     : scope.topView ? 3.1 : scope.sideView ? 2.45 : 2.28
   const coreOpacity = readableSurfaceMode
-    ? scope.topView ? 0.58 : scope.sideView ? 0.82 : 0.74
+    ? scope.topView ? 0.38 : scope.sideView ? 0.68 : 0.62
     : scope.topView ? 0.96 : scope.sideView ? 0.88 : 0.86
   const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
   const pinRadius = Math.max(
     model.config.spacing * (readableSurfaceMode
-      ? scope.topView ? 0.026 : scope.sideView ? 0.058 : 0.052
+      ? scope.topView ? 0.024 : scope.sideView ? 0.046 : 0.044
       : scope.topView ? 0.046 : scope.sideView ? 0.038 : 0.035),
-    readableSurfaceMode && scope.sideView ? 0.022 : scope.topView ? 0.019 : 0.016,
+    readableSurfaceMode && scope.sideView ? 0.022 : scope.topView ? 0.016 : 0.016,
   )
   const pinOpacity = readableSurfaceMode
-    ? scope.topView ? 0.32 : scope.sideView ? 0.68 : 0.6
+    ? scope.topView ? 0.22 : scope.sideView ? 0.56 : 0.52
     : scope.topView ? 0.82 : scope.sideView ? 0.76 : 0.72
+  const pinInk = readableSurfaceMode ? '#5a554f' : '#10120e'
+  const jointCoreInk = readableSurfaceMode ? '#5f5b54' : '#151712'
   const pinMaterial = useMemo(() => new THREE.MeshBasicMaterial({
-    color: '#10120e',
+    color: pinInk,
     transparent: true,
     opacity: pinOpacity,
     depthTest: jointDepthTest,
     depthWrite: false,
-  }), [jointDepthTest, pinOpacity])
+  }), [jointDepthTest, pinInk, pinOpacity])
 
   useLayoutEffect(() => {
     if (!pinRef.current) return
@@ -1543,7 +1546,7 @@ function XCellConnectorJoints({
         <pointsMaterial
           color="#f7f3ed"
           transparent
-          opacity={readableSurfaceMode ? (scope.topView ? 0.28 : scope.sideView ? 0.74 : 0.6) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}
+          opacity={readableSurfaceMode ? (scope.topView ? 0.16 : scope.sideView ? 0.54 : 0.48) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}
           size={haloSize}
           sizeAttenuation={false}
           depthTest={jointDepthTest}
@@ -1552,7 +1555,7 @@ function XCellConnectorJoints({
       </points>
       <points geometry={geometry} renderOrder={20}>
         <pointsMaterial
-          color="#151712"
+          color={jointCoreInk}
           transparent
           opacity={coreOpacity}
           size={coreSize}
@@ -1595,7 +1598,7 @@ function XCellCenterPivots({
     ? scope.topView ? 0.68 : scope.sideView ? 1.14 : 1.12
     : scope.topView ? 1.1 : scope.sideView ? 1.08 : 1.02
   const opacity = readableSurfaceMode
-    ? scope.topView ? 0.06 : scope.sideView ? 0.18 : 0.16
+    ? scope.topView ? 0.035 : scope.sideView ? 0.13 : 0.12
     : scope.topView ? 0.6 : scope.sideView ? 0.55 : 0.5
   const pivotDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
 
