@@ -734,6 +734,7 @@ function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number
   const shoulderLobe = Math.exp(-Math.pow((t - 0.58) / 0.3, 2)) * (1 - smoothStep(0.9, 1, t))
   const terminalNose = Math.exp(-Math.pow((t - 0.78) / 0.2, 2)) * (1 - smoothStep(0.94, 1, t))
   const teardropLobe = shoulderLobe * Math.pow(envelope, 1.16)
+  const terminalCenterNose = terminalNose * Math.pow(envelope, 0.92) * smoothStep(0.68, 0.9, t)
   const shoulderRound = shoulderLobe * Math.pow(envelope, 0.54) * (1 - Math.pow(envelope, 2.1))
   const terminalRound = terminalNose * Math.pow(envelope, 0.58) * (1 - Math.pow(envelope, 1.75))
   const edgeReturn = smoothStep(0.78, 0.98, t)
@@ -741,20 +742,21 @@ function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number
   const bodyPush = waveWidth * (
     0.012 * bodyRegion * Math.pow(envelope, 1.08) +
     0.052 * teardropLobe +
-    0.05 * shoulderRound +
-    0.122 * terminalRound
+    0.032 * shoulderRound +
+    0.02 * terminalRound +
+    0.102 * terminalCenterNose
   ) * (1 - 0.68 * edgeReturn)
   const terminalInset = waveWidth * (
-    0.066 * terminalCenterRelief
+    0.006 * terminalCenterRelief
   )
   const terminalPlanRelease = smoothStep(0.66, 0.94, t)
-  const terminalWidthRound = 0.62 * terminalRound * (1 - 0.22 * edgeReturn)
+  const terminalWidthRound = 0.12 * terminalRound * (1 - 0.12 * edgeReturn)
   const planPinch = clampUnit(
     0.004 * bodyRegion * Math.pow(envelope, 1.02) +
     0.004 * teardropLobe * (1 - 0.68 * terminalPlanRelease),
   )
   const planX = baseX + bodyPush - terminalInset
-  const planY = frame.centerY + s * planHalfSpan * (1 - planPinch + 0.1 * terminalRound) + s * planHalfSpan * terminalWidthRound
+  const planY = frame.centerY + s * planHalfSpan * (1 - planPinch + 0.02 * terminalRound) + s * planHalfSpan * terminalWidthRound
   return [
     planX,
     planY,
