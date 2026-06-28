@@ -88,7 +88,7 @@ export default function InverseSheetTab({ activeTab, onTabChange, resizeHandle }
             <a className="ao-home-mark" href="https://aolabs.io/" aria-label="aolabs.io">
               <img src="https://aolabs.io/marks/ao-ink.svg?v=20260516-suite-bloom" alt="" />
             </a>
-            <img className="app-mark" src="./favicon.svg?v=20260611-transparent-mark" alt="" aria-hidden="true" />
+            <img className="app-mark" src="./favicon.svg?v=20260628-meshed-wave" alt="" aria-hidden="true" />
             <h1>wavevis.aolabs.io</h1>
           </div>
           <p>inverse deformation sheet</p>
