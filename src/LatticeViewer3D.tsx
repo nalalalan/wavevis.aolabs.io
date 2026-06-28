@@ -663,7 +663,7 @@ function readableWaveIsometricPoint(frame: ReadableWaveFrame, t: number, s: numb
     smoothStep(0.5, 0.82, t) *
     (1 - smoothStep(0.92, 0.995, t)) *
     Math.pow(envelope, 2.24) *
-    0.92
+    0.45
   const displayPoint: Vec3 = [
     lerpNumber(point[0], frame.minX + waveWidth * roundedProfilePoint.x, roundedLipBlend),
     point[1],
@@ -745,16 +745,16 @@ function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number
     0.122 * terminalRound
   ) * (1 - 0.68 * edgeReturn)
   const terminalInset = waveWidth * (
-    0.032 * terminalCenterRelief
+    0.066 * terminalCenterRelief
   )
   const terminalPlanRelease = smoothStep(0.66, 0.94, t)
-  const terminalWidthRound = 0.46 * terminalRound * (1 - 0.3 * edgeReturn)
+  const terminalWidthRound = 0.62 * terminalRound * (1 - 0.22 * edgeReturn)
   const planPinch = clampUnit(
     0.004 * bodyRegion * Math.pow(envelope, 1.02) +
     0.004 * teardropLobe * (1 - 0.68 * terminalPlanRelease),
   )
   const planX = baseX + bodyPush - terminalInset
-  const planY = frame.centerY + s * planHalfSpan * (1 - planPinch + 0.07 * terminalRound) + s * planHalfSpan * terminalWidthRound
+  const planY = frame.centerY + s * planHalfSpan * (1 - planPinch + 0.1 * terminalRound) + s * planHalfSpan * terminalWidthRound
   return [
     planX,
     planY,
