@@ -648,7 +648,7 @@ function readableWaveIsometricPoint(frame: ReadableWaveFrame, t: number, s: numb
     smoothStep(0.46, 0.82, t) *
     (1 - smoothStep(0.92, 0.995, t)) *
     Math.pow(envelope, 1.32) *
-    0.055
+    0.068
   const profileT = clampUnit(t + lipAdvance)
   const point = readableWavePoint(frame, profileT, s)
   const center = Math.pow(envelope, 2.22)
@@ -685,9 +685,9 @@ function readableWaveIsometricPoint(frame: ReadableWaveFrame, t: number, s: numb
     0.1
 
   return [
-    displayPoint[0] + waveWidth * openThroat * (0.15 * lipFace - 0.22 * lowerLip - 0.064 * throat - 0.026 * facePinch) - waveWidth * terminalTipTaper,
+    displayPoint[0] + waveWidth * openThroat * (0.15 * lipFace - 0.252 * lowerLip - 0.064 * throat - 0.026 * facePinch) - waveWidth * terminalTipTaper,
     displayPoint[1],
-    Math.max(0, focusedZ + frame.height * openThroat * (0.142 * throat - 0.25 * lowerLip - 0.068 * facePinch)),
+    Math.max(0, focusedZ + frame.height * openThroat * (0.154 * throat - 0.282 * lowerLip - 0.068 * facePinch)),
   ]
 }
 
@@ -1383,13 +1383,13 @@ function XCellConnectorJoints({
   if (jointPositions.length <= 0) return null
 
   const haloSize = readableSurfaceMode
-    ? scope.topView ? 1.62 : scope.sideView ? 2.58 : 2.5
+    ? scope.topView ? 2.05 : scope.sideView ? 3.15 : 3.05
     : scope.topView ? 2.4 : scope.sideView ? 2.44 : 2.36
   const coreSize = readableSurfaceMode
-    ? scope.topView ? 0.82 : scope.sideView ? 1.32 : 1.28
+    ? scope.topView ? 1.12 : scope.sideView ? 1.85 : 1.78
     : scope.topView ? 1.25 : scope.sideView ? 1.28 : 1.22
   const coreOpacity = readableSurfaceMode
-    ? scope.topView ? 0.32 : scope.sideView ? 0.56 : 0.54
+    ? scope.topView ? 0.48 : scope.sideView ? 0.78 : 0.76
     : scope.topView ? 0.86 : scope.sideView ? 0.76 : 0.74
 
   return (
@@ -1398,10 +1398,10 @@ function XCellConnectorJoints({
         <pointsMaterial
           color="#f7f3ed"
           transparent
-          opacity={readableSurfaceMode ? (scope.topView ? 0.14 : scope.sideView ? 0.34 : 0.32) : scope.topView ? 0.48 : 0.48}
+          opacity={readableSurfaceMode ? (scope.topView ? 0.22 : scope.sideView ? 0.46 : 0.44) : scope.topView ? 0.48 : 0.48}
           size={haloSize}
           sizeAttenuation={false}
-          depthTest={!scope.topView}
+          depthTest={readableSurfaceMode ? false : !scope.topView}
           depthWrite={false}
         />
       </points>
@@ -1412,7 +1412,7 @@ function XCellConnectorJoints({
           opacity={coreOpacity}
           size={coreSize}
           sizeAttenuation={false}
-          depthTest={!scope.topView}
+          depthTest={readableSurfaceMode ? false : !scope.topView}
           depthWrite={false}
         />
       </points>

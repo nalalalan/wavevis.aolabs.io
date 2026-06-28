@@ -1365,14 +1365,16 @@ function summarizeReadableSurfaceRenderContract() {
     ['3D-only lower-lip band stays narrow enough to avoid an underside wall', 'const lowerLip = smoothStep(0.7, 0.88, t) * (1 - smoothStep(0.94, 0.995, t))'],
     ['3D-only center localization stays narrow enough to protect the square sheet perimeter', 'const center = Math.pow(envelope, 2.22)'],
     ['3D-only rounded lip blend stays localized instead of becoming a full-width tunnel', 'Math.pow(envelope, 2.24)'],
+    ['3D-only rounded lip blend stays below the skirt-forming full-span branch', '0.92'],
     ['3D-only rounded profile height stays localized to the center curl', 'Math.pow(envelope, 4.45)'],
     ['3D-only lateral height focus reduces full-width tube read without changing front/top surfaces', 'const lateralHeightFocus = lerpNumber(0.22, 1, Math.pow(envelope, 1.28))'],
     ['3D-only lateral height focus stays bounded before the terminal edge', 'smoothStep(0.24, 0.78, t)'],
     ['3D-only terminal side taper stays bounded so the lip does not become a full-width tube cap', 'const terminalTipTaper = frame.progress *'],
     ['3D-only terminal taper only affects off-center terminal spans', '(1 - Math.pow(envelope, 0.9))'],
-    ['3D-only lower lip tucks under the forward face without changing front/top surfaces', 'displayPoint[0] + waveWidth * openThroat * (0.15 * lipFace - 0.22 * lowerLip - 0.064 * throat - 0.026 * facePinch) - waveWidth * terminalTipTaper'],
+    ['3D-only center lip advance stays bounded but stronger than the blunt-cap branch', '0.068'],
+    ['3D-only lower lip tucks under the forward face without changing front/top surfaces', 'displayPoint[0] + waveWidth * openThroat * (0.15 * lipFace - 0.252 * lowerLip - 0.064 * throat - 0.026 * facePinch) - waveWidth * terminalTipTaper'],
     ['3D-only side pinch stays removed so the lip does not collapse into a closed cap', 'displayPoint[1],'],
-    ['3D-only throat lift keeps the opening readable without a fake shadow patch', 'focusedZ + frame.height * openThroat * (0.142 * throat - 0.25 * lowerLip - 0.068 * facePinch)'],
+    ['3D-only throat lift keeps the opening readable without a fake shadow patch', 'focusedZ + frame.height * openThroat * (0.154 * throat - 0.282 * lowerLip - 0.068 * facePinch)'],
     ['isometric view isolates the center throat trace', 'buildReadableWaveThroatGeometry(model)'],
     ['center throat trace stays removed so the barrel read comes from the sheet grid', 'transparent opacity={0} depthTest={false} depthWrite={false}'],
     ['isometric throat helper stays centerline-only after rib overlay rejection', 'readableWavePoint(frame, lerpNumber(0.58, 0.94, index / samples), 0)'],
@@ -2334,7 +2336,10 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('<points geometry={geometry} renderOrder={20}>') &&
     latticeViewerSource.includes('color="#f7f3ed"') &&
     latticeViewerSource.includes('color="#151712"') &&
-    latticeViewerSource.includes('depthTest={!scope.topView}') &&
+    latticeViewerSource.includes('? scope.topView ? 2.05 : scope.sideView ? 3.15 : 3.05') &&
+    latticeViewerSource.includes('? scope.topView ? 1.12 : scope.sideView ? 1.85 : 1.78') &&
+    latticeViewerSource.includes('? scope.topView ? 0.48 : scope.sideView ? 0.78 : 0.76') &&
+    latticeViewerSource.includes('depthTest={readableSurfaceMode ? false : !scope.topView}') &&
     latticeViewerSource.includes('depthWrite={false}')
   const sourceUsesCenterPivotJoints =
     latticeViewerSource.includes('<XCellCenterPivots model={model} scope={renderScope} view={view} />') &&
