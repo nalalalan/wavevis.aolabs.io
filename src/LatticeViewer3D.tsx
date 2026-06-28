@@ -319,7 +319,7 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const sideThroatGeometry = useMemo(() => view === 'side' ? buildReadableWaveSideThroatGeometry(model) : null, [model, view])
   const throatGeometry = useMemo(() => view === 'isometric' ? buildReadableWaveThroatGeometry(model) : null, [model, view])
   const surfaceOpacity = view === 'side' ? 0.2 : view === 'front' ? 0.72 : view === 'top' ? 0.18 : 0.28
-  const wireOpacity = view === 'side' ? 0.34 : view === 'front' ? 0.21 : view === 'top' ? 0.34 : 0.26
+  const wireOpacity = view === 'side' ? 0.22 : view === 'front' ? 0.21 : view === 'top' ? 0.34 : 0.26
   const outlineOpacity = view === 'side' ? 0.16 : view === 'front' ? 0.1 : view === 'top' ? 0.045 : 0.03
 
   return (
@@ -341,7 +341,7 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
       </lineSegments>
       {sideThroatGeometry && (
         <lineSegments geometry={sideThroatGeometry} renderOrder={1}>
-          <lineBasicMaterial color="#6f6a63" transparent opacity={0.22} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#6f6a63" transparent opacity={0.06} depthTest={false} depthWrite={false} />
         </lineSegments>
       )}
       {throatGeometry && (
