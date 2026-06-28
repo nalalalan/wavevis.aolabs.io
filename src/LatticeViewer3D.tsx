@@ -1396,8 +1396,8 @@ function XCellSharedJointArms({
   if (positionCount <= 1) return null
 
   const opacity = readableSurfaceMode
-    ? scope.topView ? 0.04 : scope.sideView ? 0.055 : 0.064
-    : scope.topView ? 0.28 : scope.sideView ? 0.24 : 0.22
+    ? scope.topView ? 0.07 : scope.sideView ? 0.1 : 0.11
+    : scope.topView ? 0.34 : scope.sideView ? 0.34 : 0.31
   const depthTest = readableSurfaceMode ? false : !scope.topView
 
   return (
@@ -1440,14 +1440,14 @@ function XCellConnectorJoints({
   if (jointPositions.length <= 0) return null
 
   const haloSize = readableSurfaceMode
-    ? scope.topView ? 2.2 : scope.sideView ? 3.15 : 2.82
-    : scope.topView ? 2.4 : scope.sideView ? 2.44 : 2.36
+    ? scope.topView ? 2.9 : scope.sideView ? 4.4 : 3.8
+    : scope.topView ? 3 : scope.sideView ? 3.1 : 2.85
   const coreSize = readableSurfaceMode
-    ? scope.topView ? 1.24 : scope.sideView ? 1.86 : 1.68
-    : scope.topView ? 1.25 : scope.sideView ? 1.28 : 1.22
+    ? scope.topView ? 1.55 : scope.sideView ? 2.45 : 2.2
+    : scope.topView ? 1.7 : scope.sideView ? 1.75 : 1.6
   const coreOpacity = readableSurfaceMode
-    ? scope.topView ? 0.5 : scope.sideView ? 0.68 : 0.62
-    : scope.topView ? 0.86 : scope.sideView ? 0.76 : 0.74
+    ? scope.topView ? 0.68 : scope.sideView ? 0.9 : 0.86
+    : scope.topView ? 0.92 : scope.sideView ? 0.86 : 0.84
   const jointDepthTest = readableSurfaceMode ? false : !scope.topView
 
   return (
@@ -1456,7 +1456,7 @@ function XCellConnectorJoints({
         <pointsMaterial
           color="#f7f3ed"
           transparent
-          opacity={readableSurfaceMode ? (scope.topView ? 0.22 : scope.sideView ? 0.46 : 0.3) : scope.topView ? 0.48 : 0.48}
+          opacity={readableSurfaceMode ? (scope.topView ? 0.32 : scope.sideView ? 0.62 : 0.46) : scope.topView ? 0.56 : scope.sideView ? 0.54 : 0.5}
           size={haloSize}
           sizeAttenuation={false}
           depthTest={jointDepthTest}
@@ -1505,11 +1505,12 @@ function XCellCenterPivots({
   if (pivotPositions.length <= 0) return null
 
   const size = readableSurfaceMode
-    ? scope.topView ? 0.38 : scope.sideView ? 0.78 : 0.82
-    : scope.topView ? 0.92 : scope.sideView ? 0.84 : 0.84
+    ? scope.topView ? 0.68 : scope.sideView ? 1.14 : 1.12
+    : scope.topView ? 1.1 : scope.sideView ? 1.08 : 1.02
   const opacity = readableSurfaceMode
-    ? scope.topView ? 0.06 : scope.sideView ? 0.26 : 0.28
-    : scope.topView ? 0.55 : scope.sideView ? 0.42 : 0.42
+    ? scope.topView ? 0.12 : scope.sideView ? 0.42 : 0.45
+    : scope.topView ? 0.6 : scope.sideView ? 0.55 : 0.5
+  const pivotDepthTest = readableSurfaceMode ? false : !scope.topView
 
   return (
     <points geometry={geometry} renderOrder={18}>
@@ -1519,7 +1520,7 @@ function XCellCenterPivots({
         opacity={opacity}
         size={size}
         sizeAttenuation={false}
-        depthTest={!scope.topView}
+        depthTest={pivotDepthTest}
         depthWrite={false}
       />
     </points>

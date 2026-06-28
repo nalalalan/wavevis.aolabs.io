@@ -2352,9 +2352,9 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('<points geometry={geometry} renderOrder={20}>') &&
     latticeViewerSource.includes('color="#f7f3ed"') &&
     latticeViewerSource.includes('color="#151712"') &&
-    latticeViewerSource.includes('? scope.topView ? 2.2 : scope.sideView ? 3.15 : 2.82') &&
-    latticeViewerSource.includes('? scope.topView ? 1.24 : scope.sideView ? 1.86 : 1.68') &&
-    latticeViewerSource.includes('? scope.topView ? 0.5 : scope.sideView ? 0.68 : 0.62') &&
+    latticeViewerSource.includes('? scope.topView ? 2.9 : scope.sideView ? 4.4 : 3.8') &&
+    latticeViewerSource.includes('? scope.topView ? 1.55 : scope.sideView ? 2.45 : 2.2') &&
+    latticeViewerSource.includes('? scope.topView ? 0.68 : scope.sideView ? 0.9 : 0.86') &&
     latticeViewerSource.includes('const jointDepthTest = readableSurfaceMode ? false : !scope.topView') &&
     latticeViewerSource.includes('depthTest={jointDepthTest}') &&
     latticeViewerSource.includes('depthWrite={false}')
@@ -2364,7 +2364,8 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('return mechanism.frames.map((frame) => frame.center)') &&
     latticeViewerSource.includes('<points geometry={geometry} renderOrder={18}>') &&
     latticeViewerSource.includes('color="#34342f"') &&
-    latticeViewerSource.includes('depthTest={!scope.topView}') &&
+    latticeViewerSource.includes('const pivotDepthTest = readableSurfaceMode ? false : !scope.topView') &&
+    latticeViewerSource.includes('depthTest={pivotDepthTest}') &&
     latticeViewerSource.includes('depthWrite={false}')
 
   return {
