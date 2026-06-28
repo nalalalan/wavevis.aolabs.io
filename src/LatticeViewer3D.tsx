@@ -302,7 +302,7 @@ const readableWaveVSegments = 54
 const readableReferenceProfilePoints =
   '0,0;0.035,0.02;0.075,0.07;0.118,0.17;0.17,0.32;0.225,0.5;0.295,0.68;0.375,0.82;0.47,0.92;0.565,0.97;0.66,0.96;0.74,0.88;0.805,0.74;0.85,0.56;0.855,0.43;0.828,0.39;0.792,0.4;0.772,0.43;0.79,0.47;0.825,0.48;0.79,0.58;0.725,0.68;0.65,0.73;0.58,0.72;0.525,0.64;0.5,0.52;0.505,0.4;0.55,0.27;0.625,0.17;0.73,0.09;0.85,0.045;0.96,0.018;1,0'
 const readableIsometricProfilePoints =
-  '0,0;0.035,0.018;0.08,0.07;0.13,0.17;0.188,0.322;0.265,0.528;0.36,0.724;0.468,0.874;0.565,0.958;0.654,0.982;0.718,0.938;0.756,0.85;0.782,0.724;0.776,0.592;0.746,0.492;0.694,0.438;0.636,0.442;0.588,0.492;0.54,0.532;0.506,0.514;0.49,0.456;0.506,0.346;0.566,0.238;0.66,0.138;0.772,0.076;0.895,0.032;0.972,0.012;1,0'
+  '0,0;0.035,0.018;0.08,0.07;0.13,0.17;0.188,0.322;0.265,0.528;0.36,0.724;0.468,0.874;0.565,0.958;0.654,0.982;0.718,0.938;0.756,0.85;0.782,0.724;0.776,0.592;0.746,0.492;0.694,0.438;0.636,0.442;0.588,0.492;0.56,0.522;0.558,0.466;0.586,0.36;0.65,0.238;0.746,0.138;0.852,0.072;0.93,0.028;0.976,0.01;1,0'
 
 function readableSurfaceReferenceOnly(model: LatticeModel): boolean {
   return model.config.showSurface && readableWaveReferenceDisplay(model)
@@ -684,7 +684,6 @@ function readableWaveIsometricPoint(frame: ReadableWaveFrame, t: number, s: numb
     (1 - smoothStep(0.96, 0.995, t)) *
     (1 - Math.pow(envelope, 0.9)) *
     0.1
-
   return [
     displayPoint[0] + waveWidth * openThroat * (0.15 * lipFace - 0.252 * lowerLip - 0.064 * throat - 0.026 * facePinch) - waveWidth * terminalTipTaper,
     displayPoint[1],
@@ -736,26 +735,26 @@ function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number
   const terminalNose = Math.exp(-Math.pow((t - 0.78) / 0.2, 2)) * (1 - smoothStep(0.94, 1, t))
   const teardropLobe = shoulderLobe * Math.pow(envelope, 1.16)
   const shoulderRound = shoulderLobe * Math.pow(envelope, 0.54) * (1 - Math.pow(envelope, 2.1))
-  const terminalRound = terminalNose * Math.pow(envelope, 0.68) * (1 - Math.pow(envelope, 2.2))
+  const terminalRound = terminalNose * Math.pow(envelope, 0.58) * (1 - Math.pow(envelope, 1.75))
   const edgeReturn = smoothStep(0.78, 0.98, t)
+  const terminalCenterRelief = terminalNose * Math.pow(envelope, 1.82) * smoothStep(0.74, 0.92, t)
   const bodyPush = waveWidth * (
     0.012 * bodyRegion * Math.pow(envelope, 1.08) +
-    0.075 * teardropLobe +
-    0.038 * shoulderRound +
-    0.052 * terminalRound
-  ) * (1 - 0.55 * edgeReturn)
+    0.052 * teardropLobe +
+    0.05 * shoulderRound +
+    0.122 * terminalRound
+  ) * (1 - 0.68 * edgeReturn)
   const terminalInset = waveWidth * (
-    0.004 * terminalNose * Math.pow(envelope, 1.8) *
-    smoothStep(0.78, 0.94, t)
+    0.032 * terminalCenterRelief
   )
   const terminalPlanRelease = smoothStep(0.66, 0.94, t)
-  const terminalWidthRound = 0.18 * terminalRound * (1 - 0.24 * edgeReturn)
+  const terminalWidthRound = 0.46 * terminalRound * (1 - 0.3 * edgeReturn)
   const planPinch = clampUnit(
     0.004 * bodyRegion * Math.pow(envelope, 1.02) +
-    0.006 * teardropLobe * (1 - 0.55 * terminalPlanRelease),
+    0.004 * teardropLobe * (1 - 0.68 * terminalPlanRelease),
   )
   const planX = baseX + bodyPush - terminalInset
-  const planY = frame.centerY + s * planHalfSpan * (1 - planPinch + 0.028 * terminalRound) + s * planHalfSpan * terminalWidthRound
+  const planY = frame.centerY + s * planHalfSpan * (1 - planPinch + 0.07 * terminalRound) + s * planHalfSpan * terminalWidthRound
   return [
     planX,
     planY,
@@ -1398,7 +1397,7 @@ function XCellSharedJointArms({
   const opacity = readableSurfaceMode
     ? scope.topView ? 0.07 : scope.sideView ? 0.1 : 0.11
     : scope.topView ? 0.34 : scope.sideView ? 0.34 : 0.31
-  const depthTest = readableSurfaceMode ? false : !scope.topView
+  const depthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
 
   return (
     <lineSegments geometry={geometry} renderOrder={17}>
@@ -1424,11 +1423,13 @@ function XCellConnectorJoints({
 }) {
   const readableReferenceMode = readableWaveReferenceDisplay(model)
   const readableSurfaceMode = readableSurfaceReferenceOnly(model)
+  const pinRef = useRef<THREE.InstancedMesh>(null)
   const jointPositions = useMemo(() => {
     const centerOverrides = readableReferenceMode ? buildReadableWaveXCellCenterOverrides(model, view) : undefined
     const mechanism = buildConnectedXCellMechanism(model, centerOverrides)
     return [...mechanism.connectorByDiagonalId.values()]
   }, [model, readableReferenceMode, view])
+  const pinGeometry = useMemo(() => new THREE.SphereGeometry(1, 7, 5), [])
   const geometry = useMemo(() => {
     const positions = new Float32Array(jointPositions.length * 3)
     jointPositions.forEach((position, index) => writeVec(positions, index * 3, position))
@@ -1437,26 +1438,56 @@ function XCellConnectorJoints({
     return nextGeometry
   }, [jointPositions])
 
-  if (jointPositions.length <= 0) return null
-
   const haloSize = readableSurfaceMode
-    ? scope.topView ? 2.9 : scope.sideView ? 4.4 : 3.8
-    : scope.topView ? 3 : scope.sideView ? 3.1 : 2.85
+    ? scope.topView ? 4.8 : scope.sideView ? 4.4 : 4.1
+    : scope.topView ? 4.6 : scope.sideView ? 3.4 : 3.15
   const coreSize = readableSurfaceMode
-    ? scope.topView ? 1.55 : scope.sideView ? 2.45 : 2.2
-    : scope.topView ? 1.7 : scope.sideView ? 1.75 : 1.6
+    ? scope.topView ? 2.5 : scope.sideView ? 2.45 : 2.35
+    : scope.topView ? 2.55 : scope.sideView ? 1.95 : 1.82
   const coreOpacity = readableSurfaceMode
-    ? scope.topView ? 0.68 : scope.sideView ? 0.9 : 0.86
-    : scope.topView ? 0.92 : scope.sideView ? 0.86 : 0.84
-  const jointDepthTest = readableSurfaceMode ? false : !scope.topView
+    ? scope.topView ? 0.86 : scope.sideView ? 0.9 : 0.88
+    : scope.topView ? 0.96 : scope.sideView ? 0.88 : 0.86
+  const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
+  const pinRadius = Math.max(
+    model.config.spacing * (readableSurfaceMode
+      ? scope.topView ? 0.038 : scope.sideView ? 0.038 : 0.034
+      : scope.topView ? 0.038 : scope.sideView ? 0.031 : 0.029),
+    readableSurfaceMode && scope.sideView ? 0.017 : scope.topView ? 0.016 : 0.013,
+  )
+  const pinOpacity = readableSurfaceMode
+    ? scope.topView ? 0.74 : scope.sideView ? 0.78 : 0.74
+    : scope.topView ? 0.82 : scope.sideView ? 0.76 : 0.72
+  const pinMaterial = useMemo(() => new THREE.MeshBasicMaterial({
+    color: '#10120e',
+    transparent: true,
+    opacity: pinOpacity,
+    depthTest: jointDepthTest,
+    depthWrite: false,
+  }), [jointDepthTest, pinOpacity])
+
+  useLayoutEffect(() => {
+    if (!pinRef.current) return
+
+    const dummy = new THREE.Object3D()
+    jointPositions.forEach((position, index) => {
+      dummy.position.copy(new THREE.Vector3(...position))
+      dummy.scale.setScalar(pinRadius)
+      dummy.updateMatrix()
+      pinRef.current?.setMatrixAt(index, dummy.matrix)
+    })
+    pinRef.current.instanceMatrix.needsUpdate = true
+  }, [jointPositions, pinRadius])
+
+  if (jointPositions.length <= 0) return null
 
   return (
     <>
+      <instancedMesh ref={pinRef} args={[pinGeometry, pinMaterial, jointPositions.length]} renderOrder={21} />
       <points geometry={geometry} renderOrder={19}>
         <pointsMaterial
           color="#f7f3ed"
           transparent
-          opacity={readableSurfaceMode ? (scope.topView ? 0.32 : scope.sideView ? 0.62 : 0.46) : scope.topView ? 0.56 : scope.sideView ? 0.54 : 0.5}
+          opacity={readableSurfaceMode ? (scope.topView ? 0.62 : scope.sideView ? 0.74 : 0.6) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}
           size={haloSize}
           sizeAttenuation={false}
           depthTest={jointDepthTest}
@@ -1510,7 +1541,7 @@ function XCellCenterPivots({
   const opacity = readableSurfaceMode
     ? scope.topView ? 0.12 : scope.sideView ? 0.42 : 0.45
     : scope.topView ? 0.6 : scope.sideView ? 0.55 : 0.5
-  const pivotDepthTest = readableSurfaceMode ? false : !scope.topView
+  const pivotDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
 
   return (
     <points geometry={geometry} renderOrder={18}>

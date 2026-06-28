@@ -1351,16 +1351,17 @@ function summarizeReadableSurfaceRenderContract() {
     ['top projection uses one shoulder lobe rather than stacked terminal bands', 'const shoulderLobe = Math.exp(-Math.pow((t - 0.58) / 0.3, 2)) * (1 - smoothStep(0.9, 1, t))'],
     ['top projection rounds the terminal nose before the square sheet edge', 'const terminalNose = Math.exp(-Math.pow((t - 0.78) / 0.2, 2)) * (1 - smoothStep(0.94, 1, t))'],
     ['top projection uses the shoulder lobe as the readable top footprint instead of a pointed terminal nose', 'const teardropLobe = shoulderLobe * Math.pow(envelope, 1.16)'],
-    ['top projection adds an off-center rounded terminal shoulder instead of a vertical seam', 'const terminalRound = terminalNose * Math.pow(envelope, 0.68) * (1 - Math.pow(envelope, 2.2))'],
+    ['top projection adds an off-center rounded terminal shoulder instead of a vertical seam', 'const terminalRound = terminalNose * Math.pow(envelope, 0.58) * (1 - Math.pow(envelope, 1.75))'],
     ['top projection rounds the terminal shoulders without making a full-height side bulge', 'const shoulderRound = shoulderLobe * Math.pow(envelope, 0.54) * (1 - Math.pow(envelope, 2.1))'],
     ['top projection returns the lobe before it becomes the outer right boundary', 'const edgeReturn = smoothStep(0.78, 0.98, t)'],
-    ['top projection keeps the plan push broad enough to show the mound but below the stripe-forming branch', '0.075 * teardropLobe'],
-    ['top projection keeps terminal push rounded without stacking rows into a wall', '0.052 * terminalRound'],
-    ['top projection scales down the push near the terminal edge', ') * (1 - 0.55 * edgeReturn)'],
+    ['top projection keeps the centerline push reduced so the terminal footprint is not pointed', 'const terminalCenterRelief = terminalNose * Math.pow(envelope, 1.82) * smoothStep(0.74, 0.92, t)'],
+    ['top projection keeps the plan push broad enough to show the mound but below the stripe-forming branch', '0.052 * teardropLobe'],
+    ['top projection keeps terminal push rounded without stacking rows into a wall', '0.122 * terminalRound'],
+    ['top projection scales down the push near the terminal edge', ') * (1 - 0.68 * edgeReturn)'],
     ['top projection avoids a hard terminal clamp that stacks rows into a stripe', 'planX,'],
     ['top projection releases terminal pinch so the top footprint stays rounded', 'const terminalPlanRelease = smoothStep(0.66, 0.94, t)'],
-    ['top projection keeps terminal pinch below the triangular-fan branch', '0.006 * teardropLobe * (1 - 0.55 * terminalPlanRelease)'],
-    ['top projection lets terminal shoulders round in y without collapsing rows', 's * planHalfSpan * (1 - planPinch + 0.028 * terminalRound)'],
+    ['top projection keeps terminal pinch below the triangular-fan branch', '0.004 * teardropLobe * (1 - 0.68 * terminalPlanRelease)'],
+    ['top projection lets terminal shoulders round in y without collapsing rows', 's * planHalfSpan * (1 - planPinch + 0.07 * terminalRound)'],
     ['top X overlay keeps one continuous frame layer instead of a terminal stripe split', 'topPlan: buildXCellGeometry(mechanism.frames),'],
     ['top X overlay keeps the old terminal split disabled', 'topFold: buildXCellGeometry([]),'],
     ['isometric camera balances full-sheet read with the accepted open-curl view', 'new THREE.Vector3(target.x + distance * 0.58, target.y - distance * 0.58, target.z + distance * 0.34)'],
@@ -2343,19 +2344,24 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('const frame = mechanism.frameByNodeId.get(use.nodeId)') &&
     latticeViewerSource.includes('positions.push(...frame.center, ...connector)') &&
     latticeViewerSource.includes('<lineSegments geometry={geometry} renderOrder={17}>') &&
-    latticeViewerSource.includes('const depthTest = readableSurfaceMode ? false : !scope.topView')
+    latticeViewerSource.includes('const depthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView')
   const sourceUsesSharedConnectorJoints =
     latticeViewerSource.includes('<XCellConnectorJoints model={model} scope={renderScope} view={view} />') &&
     latticeViewerSource.includes('function XCellConnectorJoints') &&
     latticeViewerSource.includes('return [...mechanism.connectorByDiagonalId.values()]') &&
+    latticeViewerSource.includes('const pinRef = useRef<THREE.InstancedMesh>(null)') &&
+    latticeViewerSource.includes('const pinGeometry = useMemo(() => new THREE.SphereGeometry(1, 7, 5), [])') &&
+    latticeViewerSource.includes("color: '#10120e'") &&
+    latticeViewerSource.includes('pinRef.current?.setMatrixAt(index, dummy.matrix)') &&
+    latticeViewerSource.includes('<instancedMesh ref={pinRef} args={[pinGeometry, pinMaterial, jointPositions.length]} renderOrder={21} />') &&
     latticeViewerSource.includes('<points geometry={geometry} renderOrder={19}>') &&
     latticeViewerSource.includes('<points geometry={geometry} renderOrder={20}>') &&
     latticeViewerSource.includes('color="#f7f3ed"') &&
     latticeViewerSource.includes('color="#151712"') &&
-    latticeViewerSource.includes('? scope.topView ? 2.9 : scope.sideView ? 4.4 : 3.8') &&
-    latticeViewerSource.includes('? scope.topView ? 1.55 : scope.sideView ? 2.45 : 2.2') &&
-    latticeViewerSource.includes('? scope.topView ? 0.68 : scope.sideView ? 0.9 : 0.86') &&
-    latticeViewerSource.includes('const jointDepthTest = readableSurfaceMode ? false : !scope.topView') &&
+    latticeViewerSource.includes('? scope.topView ? 4.8 : scope.sideView ? 4.4 : 4.1') &&
+    latticeViewerSource.includes('? scope.topView ? 2.5 : scope.sideView ? 2.45 : 2.35') &&
+    latticeViewerSource.includes('? scope.topView ? 0.86 : scope.sideView ? 0.9 : 0.88') &&
+    latticeViewerSource.includes('const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView') &&
     latticeViewerSource.includes('depthTest={jointDepthTest}') &&
     latticeViewerSource.includes('depthWrite={false}')
   const sourceUsesCenterPivotJoints =
@@ -2364,7 +2370,7 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('return mechanism.frames.map((frame) => frame.center)') &&
     latticeViewerSource.includes('<points geometry={geometry} renderOrder={18}>') &&
     latticeViewerSource.includes('color="#34342f"') &&
-    latticeViewerSource.includes('const pivotDepthTest = readableSurfaceMode ? false : !scope.topView') &&
+    latticeViewerSource.includes('const pivotDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView') &&
     latticeViewerSource.includes('depthTest={pivotDepthTest}') &&
     latticeViewerSource.includes('depthWrite={false}')
 
