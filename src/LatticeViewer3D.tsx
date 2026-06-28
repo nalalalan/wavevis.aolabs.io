@@ -742,21 +742,23 @@ function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number
   const bodyPush = waveWidth * (
     0.012 * bodyRegion * Math.pow(envelope, 1.08) +
     0.052 * teardropLobe +
-    0.032 * shoulderRound +
-    0.02 * terminalRound +
-    0.102 * terminalCenterNose
-  ) * (1 - 0.68 * edgeReturn)
+    0.034 * shoulderRound +
+    0.032 * terminalRound +
+    0.046 * terminalCenterNose
+  ) * (1 - 0.7 * edgeReturn)
   const terminalInset = waveWidth * (
-    0.006 * terminalCenterRelief
+    0.018 * terminalCenterRelief
   )
   const terminalPlanRelease = smoothStep(0.66, 0.94, t)
-  const terminalWidthRound = 0.12 * terminalRound * (1 - 0.12 * edgeReturn)
+  const terminalWidthRound = 0.085 * terminalRound * (1 - 0.12 * edgeReturn)
+  const terminalPlanPinch = 0.003 * terminalNose * Math.pow(envelope, 0.9) * (1 - 0.25 * edgeReturn)
   const planPinch = clampUnit(
     0.004 * bodyRegion * Math.pow(envelope, 1.02) +
-    0.004 * teardropLobe * (1 - 0.68 * terminalPlanRelease),
+    0.004 * teardropLobe * (1 - 0.68 * terminalPlanRelease) +
+    terminalPlanPinch,
   )
   const planX = baseX + bodyPush - terminalInset
-  const planY = frame.centerY + s * planHalfSpan * (1 - planPinch + 0.02 * terminalRound) + s * planHalfSpan * terminalWidthRound
+  const planY = frame.centerY + s * planHalfSpan * (1 - planPinch + 0.016 * terminalRound) + s * planHalfSpan * terminalWidthRound
   return [
     planX,
     planY,
@@ -1339,7 +1341,7 @@ function StraightEdgeSegments({
     return (
       <>
         <lineSegments geometry={geometries.topPlan} renderOrder={0}>
-          <lineBasicMaterial color="#252722" transparent opacity={readableSurfaceMode ? 0.048 : 0.36} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#252722" transparent opacity={readableSurfaceMode ? 0.02 : 0.36} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.topFold} renderOrder={1}>
           <lineBasicMaterial color="#343631" transparent opacity={readableSurfaceMode ? 0.026 : 0.07} depthTest depthWrite={false} />
@@ -1404,7 +1406,7 @@ function XCellSharedJointArms({
     [model.config.columns, model.config.rows],
   )
   const opacity = readableSurfaceMode
-    ? scope.topView ? 0.056 : scope.sideView ? 0.072 : 0.068
+    ? scope.topView ? 0.032 : scope.sideView ? 0.072 : 0.068
     : scope.topView ? 0.34 : scope.sideView ? 0.34 : 0.31
   const depthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
   const rodRadius = Math.max(
@@ -1414,7 +1416,7 @@ function XCellSharedJointArms({
     scope.sideView ? 0.009 : 0.007,
   )
   const rodOpacity = readableSurfaceMode
-    ? scope.topView ? 0.024 : scope.sideView ? 0.066 : 0.062
+    ? scope.topView ? 0.012 : scope.sideView ? 0.066 : 0.062
     : scope.topView ? 0.28 : scope.sideView ? 0.28 : 0.24
   const mechanismInk = readableSurfaceMode ? '#5f5b54' : '#161713'
   const rodMaterial = useMemo(() => new THREE.MeshBasicMaterial({
@@ -1496,23 +1498,23 @@ function XCellConnectorJoints({
   }, [jointPositions])
 
   const haloSize = readableSurfaceMode
-    ? scope.topView ? 4.1 : scope.sideView ? 5.9 : 5.55
+    ? scope.topView ? 3.4 : scope.sideView ? 5.9 : 5.55
     : scope.topView ? 5.6 : scope.sideView ? 4.4 : 4.1
   const coreSize = readableSurfaceMode
-    ? scope.topView ? 1.55 : scope.sideView ? 3.2 : 3
+    ? scope.topView ? 1.18 : scope.sideView ? 3.2 : 3
     : scope.topView ? 3.1 : scope.sideView ? 2.45 : 2.28
   const coreOpacity = readableSurfaceMode
-    ? scope.topView ? 0.38 : scope.sideView ? 0.68 : 0.62
+    ? scope.topView ? 0.22 : scope.sideView ? 0.68 : 0.62
     : scope.topView ? 0.96 : scope.sideView ? 0.88 : 0.86
   const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
   const pinRadius = Math.max(
     model.config.spacing * (readableSurfaceMode
-      ? scope.topView ? 0.024 : scope.sideView ? 0.046 : 0.044
+      ? scope.topView ? 0.018 : scope.sideView ? 0.046 : 0.044
       : scope.topView ? 0.046 : scope.sideView ? 0.038 : 0.035),
     readableSurfaceMode && scope.sideView ? 0.022 : scope.topView ? 0.016 : 0.016,
   )
   const pinOpacity = readableSurfaceMode
-    ? scope.topView ? 0.22 : scope.sideView ? 0.56 : 0.52
+    ? scope.topView ? 0.12 : scope.sideView ? 0.56 : 0.52
     : scope.topView ? 0.82 : scope.sideView ? 0.76 : 0.72
   const pinInk = readableSurfaceMode ? '#5a554f' : '#10120e'
   const jointCoreInk = readableSurfaceMode ? '#5f5b54' : '#151712'
@@ -1546,7 +1548,7 @@ function XCellConnectorJoints({
         <pointsMaterial
           color="#f7f3ed"
           transparent
-          opacity={readableSurfaceMode ? (scope.topView ? 0.16 : scope.sideView ? 0.54 : 0.48) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}
+          opacity={readableSurfaceMode ? (scope.topView ? 0.08 : scope.sideView ? 0.54 : 0.48) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}
           size={haloSize}
           sizeAttenuation={false}
           depthTest={jointDepthTest}
@@ -1598,7 +1600,7 @@ function XCellCenterPivots({
     ? scope.topView ? 0.68 : scope.sideView ? 1.14 : 1.12
     : scope.topView ? 1.1 : scope.sideView ? 1.08 : 1.02
   const opacity = readableSurfaceMode
-    ? scope.topView ? 0.035 : scope.sideView ? 0.13 : 0.12
+    ? scope.topView ? 0.018 : scope.sideView ? 0.13 : 0.12
     : scope.topView ? 0.6 : scope.sideView ? 0.55 : 0.5
   const pivotDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
 

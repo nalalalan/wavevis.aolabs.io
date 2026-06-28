@@ -1341,10 +1341,10 @@ function summarizeReadableSurfaceRenderContract() {
     ['side throat helper stays faint enough not to draw a separate cavity outline', 'opacity={0.02} depthTest={false} depthWrite={false}'],
     ['isometric full X bars stay subordinate to the smooth readable surface', 'opacity={readableSurfaceMode ? 0.018 : 0.18}'],
     ['side full X bars stay subordinate to the smooth readable throat', 'opacity={readableSurfaceMode ? 0.018 : 0.17}'],
-    ['surface shared X arms stay visible without overpowering side or isometric views', '? scope.topView ? 0.056 : scope.sideView ? 0.072 : 0.068'],
-    ['surface shared X rods stay visible without turning the curl into a black cavity', '? scope.topView ? 0.024 : scope.sideView ? 0.066 : 0.062'],
-    ['surface shared X joint pins stay visible without turning the curl into a black cavity', '? scope.topView ? 0.38 : scope.sideView ? 0.68 : 0.62'],
-    ['top surface shared joints stay lighter than the X-only proof so the footprint does not turn into a terminal stripe', 'opacity={readableSurfaceMode ? (scope.topView ? 0.16 : scope.sideView ? 0.54 : 0.48) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}'],
+    ['surface shared X arms stay visible without overpowering side or isometric views', '? scope.topView ? 0.032 : scope.sideView ? 0.072 : 0.068'],
+    ['surface shared X rods stay visible without turning the curl into a black cavity', '? scope.topView ? 0.012 : scope.sideView ? 0.066 : 0.062'],
+    ['surface shared X joint pins stay visible without turning the curl into a black cavity', '? scope.topView ? 0.22 : scope.sideView ? 0.68 : 0.62'],
+    ['top surface shared joints stay lighter than the X-only proof so the footprint does not turn into a terminal stripe', 'opacity={readableSurfaceMode ? (scope.topView ? 0.08 : scope.sideView ? 0.54 : 0.48) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}'],
     ['side outline stays visible through the curl', "depthTest={view !== 'side'}"],
     ['side projection preserves the accepted raw curl profile after wall-branch rejection', 'const point = readableWavePoint(frame, t, s)\n\n  return point'],
     ['readable reference span stays narrower than the earlier thick cap branch', 'const visualHalfSpan = waveWidth * 0.31'],
@@ -1365,17 +1365,20 @@ function summarizeReadableSurfaceRenderContract() {
     ['top projection returns the lobe before it becomes the outer right boundary', 'const edgeReturn = smoothStep(0.78, 0.98, t)'],
     ['top projection keeps the centerline push reduced so the terminal footprint is not pointed', 'const terminalCenterRelief = terminalNose * Math.pow(envelope, 1.82) * smoothStep(0.74, 0.92, t)'],
     ['top projection keeps the plan push broad enough to show the mound but below the stripe-forming branch', '0.052 * teardropLobe'],
-    ['top projection keeps off-center terminal push below the wall-forming branch', '0.02 * terminalRound'],
-    ['top projection gives the terminal a center-led rounded nose', '0.102 * terminalCenterNose'],
-    ['top projection scales down the push near the terminal edge', ') * (1 - 0.68 * edgeReturn)'],
-    ['top projection pulls the terminal centerline back only enough to avoid a sharp point', '0.006 * terminalCenterRelief'],
+    ['top projection keeps shoulder rounding narrow enough to avoid a full-height terminal fan', '0.034 * shoulderRound'],
+    ['top projection keeps off-center terminal rounding narrow enough to avoid a full-height terminal fan', '0.032 * terminalRound'],
+    ['top projection keeps the center-led terminal nose below the pointed-footprint branch', '0.046 * terminalCenterNose'],
+    ['top projection scales down the push before it reaches the terminal edge without stacking rows', ') * (1 - 0.7 * edgeReturn)'],
+    ['top projection pulls the terminal centerline back only enough to round the plan footprint without clamping rows', '0.018 * terminalCenterRelief'],
     ['top projection avoids a hard terminal clamp that stacks rows into a stripe', 'planX,'],
     ['top projection releases terminal pinch so the top footprint stays rounded', 'const terminalPlanRelease = smoothStep(0.66, 0.94, t)'],
-    ['top projection widens terminal shoulders without creating a full-width side wall', 'const terminalWidthRound = 0.12 * terminalRound * (1 - 0.12 * edgeReturn)'],
+    ['top projection keeps terminal shoulder widening narrow so the top view does not form a vertical fan', 'const terminalWidthRound = 0.085 * terminalRound * (1 - 0.12 * edgeReturn)'],
+    ['top projection adds a bounded terminal pinch so the footprint rounds inward instead of widening into a stripe', 'const terminalPlanPinch = 0.003 * terminalNose * Math.pow(envelope, 0.9) * (1 - 0.25 * edgeReturn)'],
     ['top projection keeps terminal pinch below the triangular-fan branch', '0.004 * teardropLobe * (1 - 0.68 * terminalPlanRelease)'],
-    ['top projection lets terminal shoulders round in y without collapsing rows', 's * planHalfSpan * (1 - planPinch + 0.02 * terminalRound)'],
+    ['top projection lets terminal shoulders round in y without collapsing rows', 's * planHalfSpan * (1 - planPinch + 0.016 * terminalRound)'],
     ['top X overlay keeps one continuous frame layer instead of a terminal stripe split', 'topPlan: buildXCellGeometry(mechanism.frames),'],
     ['top X overlay keeps the old terminal split disabled', 'topFold: buildXCellGeometry([]),'],
+    ['top readable X bars stay pale enough not to turn the rounded footprint into a terminal stripe', 'opacity={readableSurfaceMode ? 0.02 : 0.36}'],
     ['isometric camera balances full-sheet read with the accepted open-curl view', 'new THREE.Vector3(target.x + distance * 0.58, target.y - distance * 0.58, target.z + distance * 0.34)'],
     ['isometric camera keeps the curl inspectable without cropping the mechanism sheet', "view === 'isometric' ? 1.24"],
     ['3D-only curl path advances the center lip without changing side/top surfaces', 'const profileT = clampUnit(t + lipAdvance)'],
@@ -2381,9 +2384,9 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('<points geometry={geometry} renderOrder={20}>') &&
     latticeViewerSource.includes('color="#f7f3ed"') &&
     latticeViewerSource.includes('color={jointCoreInk}') &&
-    latticeViewerSource.includes('? scope.topView ? 4.1 : scope.sideView ? 5.9 : 5.55') &&
-    latticeViewerSource.includes('? scope.topView ? 1.55 : scope.sideView ? 3.2 : 3') &&
-    latticeViewerSource.includes('? scope.topView ? 0.38 : scope.sideView ? 0.68 : 0.62') &&
+    latticeViewerSource.includes('? scope.topView ? 3.4 : scope.sideView ? 5.9 : 5.55') &&
+    latticeViewerSource.includes('? scope.topView ? 1.18 : scope.sideView ? 3.2 : 3') &&
+    latticeViewerSource.includes('? scope.topView ? 0.22 : scope.sideView ? 0.68 : 0.62') &&
     latticeViewerSource.includes('const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView') &&
     latticeViewerSource.includes('depthTest={jointDepthTest}') &&
     latticeViewerSource.includes('depthWrite={false}')
