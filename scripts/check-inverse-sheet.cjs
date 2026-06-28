@@ -1344,18 +1344,21 @@ function summarizeReadableSurfaceRenderContract() {
     ['readable reference lateral envelope broadens the curl without becoming a full-width tube', 'return Math.pow(Math.cos(absolute * Math.PI * 0.5), 2.18)'],
     ['terminal curl pinch stays below the knot-forming branch', 'Math.min(0.66, frame.progress * pinchEnvelope * (0.04 * curlShoulder + 0.54 * lipTip))'],
     ['top projection broadens the readable footprint before the terminal edge', 'const bodyPush = waveWidth * ('],
-    ['top projection extends the plan sheet past the terminal deformation', 'const planMaxX = frame.maxX + waveWidth * 0.16'],
+    ['top projection keeps the plan sheet extension small enough to avoid a terminal wall', 'const planMaxX = frame.maxX + waveWidth * 0.1'],
     ['top projection keeps the rounded lobe inside the original sheet width', 'const baseX = lerpNumber(frame.minX, frame.maxX, t)'],
-    ['top projection uses one shoulder lobe rather than stacked terminal bands', 'const shoulderLobe = Math.exp(-Math.pow((t - 0.62) / 0.28, 2)) * (1 - smoothStep(0.9, 1, t))'],
-    ['top projection rounds the terminal nose before the square sheet edge', 'const terminalNose = Math.exp(-Math.pow((t - 0.82) / 0.16, 2)) * (1 - smoothStep(0.94, 1, t))'],
-    ['top projection uses the shoulder lobe as the readable top footprint instead of a pointed terminal nose', 'const teardropLobe = shoulderLobe * Math.pow(envelope, 1.02)'],
-    ['top projection rounds the terminal shoulders without making a full-height side bulge', 'const shoulderRound = shoulderLobe * Math.pow(envelope, 0.48) * (1 - Math.pow(envelope, 2.25))'],
-    ['top projection returns the lobe before it becomes the outer right boundary', 'const edgeReturn = smoothStep(0.7, 0.96, t)'],
-    ['top projection keeps the plan push broad enough to show the mound but below the stripe-forming branch', '0.118 * teardropLobe'],
-    ['top projection scales down the push near the terminal edge', ') * (1 - 0.92 * edgeReturn)'],
+    ['top projection uses one shoulder lobe rather than stacked terminal bands', 'const shoulderLobe = Math.exp(-Math.pow((t - 0.58) / 0.3, 2)) * (1 - smoothStep(0.9, 1, t))'],
+    ['top projection rounds the terminal nose before the square sheet edge', 'const terminalNose = Math.exp(-Math.pow((t - 0.78) / 0.2, 2)) * (1 - smoothStep(0.94, 1, t))'],
+    ['top projection uses the shoulder lobe as the readable top footprint instead of a pointed terminal nose', 'const teardropLobe = shoulderLobe * Math.pow(envelope, 1.16)'],
+    ['top projection adds an off-center rounded terminal shoulder instead of a vertical seam', 'const terminalRound = terminalNose * Math.pow(envelope, 0.68) * (1 - Math.pow(envelope, 2.2))'],
+    ['top projection rounds the terminal shoulders without making a full-height side bulge', 'const shoulderRound = shoulderLobe * Math.pow(envelope, 0.54) * (1 - Math.pow(envelope, 2.1))'],
+    ['top projection returns the lobe before it becomes the outer right boundary', 'const edgeReturn = smoothStep(0.78, 0.98, t)'],
+    ['top projection keeps the plan push broad enough to show the mound but below the stripe-forming branch', '0.075 * teardropLobe'],
+    ['top projection keeps terminal push rounded without stacking rows into a wall', '0.052 * terminalRound'],
+    ['top projection scales down the push near the terminal edge', ') * (1 - 0.55 * edgeReturn)'],
     ['top projection avoids a hard terminal clamp that stacks rows into a stripe', 'planX,'],
     ['top projection releases terminal pinch so the top footprint stays rounded', 'const terminalPlanRelease = smoothStep(0.66, 0.94, t)'],
-    ['top projection keeps terminal pinch below the triangular-fan branch', '0.024 * teardropLobe * (1 - 0.78 * terminalPlanRelease)'],
+    ['top projection keeps terminal pinch below the triangular-fan branch', '0.006 * teardropLobe * (1 - 0.55 * terminalPlanRelease)'],
+    ['top projection lets terminal shoulders round in y without collapsing rows', 's * planHalfSpan * (1 - planPinch + 0.028 * terminalRound)'],
     ['top X overlay keeps one continuous frame layer instead of a terminal stripe split', 'topPlan: buildXCellGeometry(mechanism.frames),'],
     ['top X overlay keeps the old terminal split disabled', 'topFold: buildXCellGeometry([]),'],
     ['isometric camera balances full-sheet read with the accepted open-curl view', 'new THREE.Vector3(target.x + distance * 0.58, target.y - distance * 0.58, target.z + distance * 0.34)'],
@@ -2336,10 +2339,11 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('<points geometry={geometry} renderOrder={20}>') &&
     latticeViewerSource.includes('color="#f7f3ed"') &&
     latticeViewerSource.includes('color="#151712"') &&
-    latticeViewerSource.includes('? scope.topView ? 2.05 : scope.sideView ? 3.15 : 3.05') &&
-    latticeViewerSource.includes('? scope.topView ? 1.12 : scope.sideView ? 1.85 : 1.78') &&
-    latticeViewerSource.includes('? scope.topView ? 0.48 : scope.sideView ? 0.78 : 0.76') &&
-    latticeViewerSource.includes('depthTest={readableSurfaceMode ? false : !scope.topView}') &&
+    latticeViewerSource.includes('? scope.topView ? 2.05 : scope.sideView ? 3.15 : 2.65') &&
+    latticeViewerSource.includes('? scope.topView ? 1.12 : scope.sideView ? 1.85 : 1.45') &&
+    latticeViewerSource.includes('? scope.topView ? 0.48 : scope.sideView ? 0.78 : 0.58') &&
+    latticeViewerSource.includes('const jointDepthTest = readableSurfaceMode ? scope.isometricView : !scope.topView') &&
+    latticeViewerSource.includes('depthTest={jointDepthTest}') &&
     latticeViewerSource.includes('depthWrite={false}')
   const sourceUsesCenterPivotJoints =
     latticeViewerSource.includes('<XCellCenterPivots model={model} scope={renderScope} view={view} />') &&

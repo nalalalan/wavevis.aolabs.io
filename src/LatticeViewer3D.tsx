@@ -725,33 +725,35 @@ function readableWaveFrontPoint(frame: ReadableWaveFrame, t: number, s: number):
 function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number): Vec3 {
   const wavePoint = readableWavePoint(frame, t, s)
   const waveWidth = frame.maxX - frame.minX
-  const planMaxX = frame.maxX + waveWidth * 0.16
+  const planMaxX = frame.maxX + waveWidth * 0.1
   const planWidth = planMaxX - frame.minX
   const planHalfSpan = planWidth * 0.5
   const baseX = lerpNumber(frame.minX, frame.maxX, t)
   const envelope = readableLateralEnvelope(s)
-  const bodyRegion = smoothStep(0.08, 0.64, t) * (1 - smoothStep(0.92, 1, t))
-  const shoulderLobe = Math.exp(-Math.pow((t - 0.62) / 0.28, 2)) * (1 - smoothStep(0.9, 1, t))
-  const terminalNose = Math.exp(-Math.pow((t - 0.82) / 0.16, 2)) * (1 - smoothStep(0.94, 1, t))
-  const teardropLobe = shoulderLobe * Math.pow(envelope, 1.02)
-  const shoulderRound = shoulderLobe * Math.pow(envelope, 0.48) * (1 - Math.pow(envelope, 2.25))
-  const edgeReturn = smoothStep(0.7, 0.96, t)
+  const bodyRegion = smoothStep(0.08, 0.62, t) * (1 - smoothStep(0.9, 1, t))
+  const shoulderLobe = Math.exp(-Math.pow((t - 0.58) / 0.3, 2)) * (1 - smoothStep(0.9, 1, t))
+  const terminalNose = Math.exp(-Math.pow((t - 0.78) / 0.2, 2)) * (1 - smoothStep(0.94, 1, t))
+  const teardropLobe = shoulderLobe * Math.pow(envelope, 1.16)
+  const shoulderRound = shoulderLobe * Math.pow(envelope, 0.54) * (1 - Math.pow(envelope, 2.1))
+  const terminalRound = terminalNose * Math.pow(envelope, 0.68) * (1 - Math.pow(envelope, 2.2))
+  const edgeReturn = smoothStep(0.78, 0.98, t)
   const bodyPush = waveWidth * (
-    0.024 * bodyRegion * Math.pow(envelope, 1.06) +
-    0.118 * teardropLobe +
-    0.058 * shoulderRound
-  ) * (1 - 0.92 * edgeReturn)
+    0.012 * bodyRegion * Math.pow(envelope, 1.08) +
+    0.075 * teardropLobe +
+    0.038 * shoulderRound +
+    0.052 * terminalRound
+  ) * (1 - 0.55 * edgeReturn)
   const terminalInset = waveWidth * (
-    0.004 * terminalNose * Math.pow(envelope, 2.2) *
-    smoothStep(0.74, 0.94, t)
+    0.004 * terminalNose * Math.pow(envelope, 1.8) *
+    smoothStep(0.78, 0.94, t)
   )
   const terminalPlanRelease = smoothStep(0.66, 0.94, t)
   const planPinch = clampUnit(
-    0.014 * bodyRegion * Math.pow(envelope, 1.02) +
-    0.024 * teardropLobe * (1 - 0.78 * terminalPlanRelease),
+    0.004 * bodyRegion * Math.pow(envelope, 1.02) +
+    0.006 * teardropLobe * (1 - 0.55 * terminalPlanRelease),
   )
   const planX = baseX + bodyPush - terminalInset
-  const planY = frame.centerY + s * planHalfSpan * (1 - planPinch)
+  const planY = frame.centerY + s * planHalfSpan * (1 - planPinch + 0.028 * terminalRound)
   return [
     planX,
     planY,
@@ -1383,14 +1385,15 @@ function XCellConnectorJoints({
   if (jointPositions.length <= 0) return null
 
   const haloSize = readableSurfaceMode
-    ? scope.topView ? 2.05 : scope.sideView ? 3.15 : 3.05
+    ? scope.topView ? 2.05 : scope.sideView ? 3.15 : 2.65
     : scope.topView ? 2.4 : scope.sideView ? 2.44 : 2.36
   const coreSize = readableSurfaceMode
-    ? scope.topView ? 1.12 : scope.sideView ? 1.85 : 1.78
+    ? scope.topView ? 1.12 : scope.sideView ? 1.85 : 1.45
     : scope.topView ? 1.25 : scope.sideView ? 1.28 : 1.22
   const coreOpacity = readableSurfaceMode
-    ? scope.topView ? 0.48 : scope.sideView ? 0.78 : 0.76
+    ? scope.topView ? 0.48 : scope.sideView ? 0.78 : 0.58
     : scope.topView ? 0.86 : scope.sideView ? 0.76 : 0.74
+  const jointDepthTest = readableSurfaceMode ? scope.isometricView : !scope.topView
 
   return (
     <>
@@ -1398,10 +1401,10 @@ function XCellConnectorJoints({
         <pointsMaterial
           color="#f7f3ed"
           transparent
-          opacity={readableSurfaceMode ? (scope.topView ? 0.22 : scope.sideView ? 0.46 : 0.44) : scope.topView ? 0.48 : 0.48}
+          opacity={readableSurfaceMode ? (scope.topView ? 0.22 : scope.sideView ? 0.46 : 0.3) : scope.topView ? 0.48 : 0.48}
           size={haloSize}
           sizeAttenuation={false}
-          depthTest={readableSurfaceMode ? false : !scope.topView}
+          depthTest={jointDepthTest}
           depthWrite={false}
         />
       </points>
@@ -1412,7 +1415,7 @@ function XCellConnectorJoints({
           opacity={coreOpacity}
           size={coreSize}
           sizeAttenuation={false}
-          depthTest={readableSurfaceMode ? false : !scope.topView}
+          depthTest={jointDepthTest}
           depthWrite={false}
         />
       </points>
