@@ -749,12 +749,13 @@ function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number
     smoothStep(0.78, 0.94, t)
   )
   const terminalPlanRelease = smoothStep(0.66, 0.94, t)
+  const terminalWidthRound = 0.18 * terminalRound * (1 - 0.24 * edgeReturn)
   const planPinch = clampUnit(
     0.004 * bodyRegion * Math.pow(envelope, 1.02) +
     0.006 * teardropLobe * (1 - 0.55 * terminalPlanRelease),
   )
   const planX = baseX + bodyPush - terminalInset
-  const planY = frame.centerY + s * planHalfSpan * (1 - planPinch + 0.028 * terminalRound)
+  const planY = frame.centerY + s * planHalfSpan * (1 - planPinch + 0.028 * terminalRound) + s * planHalfSpan * terminalWidthRound
   return [
     planX,
     planY,
