@@ -482,6 +482,7 @@ if (
   !xRenderDirectLines.sourceUsesCenterPivotJoints ||
   !xRenderDirectLines.sourceUsesSharedConnectorArms ||
   !xRenderDirectLines.sourceUsesSharedConnectorJoints ||
+  !xRenderDirectLines.sourceUsesSharedConnectorRods ||
   !xRenderDirectLines.sourceUsesStraightLineSegments ||
   !xRenderDirectLines.sourceUsesConnectedXMechanism
 ) {
@@ -2347,6 +2348,14 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('positions.push(...frame.center, ...connector)') &&
     latticeViewerSource.includes('<lineSegments geometry={geometry} renderOrder={17}>') &&
     latticeViewerSource.includes('const depthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView')
+  const sourceUsesSharedConnectorRods =
+    latticeViewerSource.includes('const rodRef = useRef<THREE.InstancedMesh>(null)') &&
+    latticeViewerSource.includes('const armCount = Math.floor(armPositions.length / 6)') &&
+    latticeViewerSource.includes('new THREE.CylinderGeometry(1, 1, 1, model.config.rows > 30 || model.config.columns > 30 ? 5 : 8)') &&
+    latticeViewerSource.includes("color: '#161713'") &&
+    latticeViewerSource.includes('dummy.position.addVectors(start, end).multiplyScalar(0.5)') &&
+    latticeViewerSource.includes('dummy.scale.set(rodRadius, length, rodRadius)') &&
+    latticeViewerSource.includes('<instancedMesh ref={rodRef} args={[rodGeometry, rodMaterial, armCount]} renderOrder={16} frustumCulled={false} />')
   const sourceUsesSharedConnectorJoints =
     latticeViewerSource.includes('<XCellConnectorJoints model={model} scope={renderScope} view={view} />') &&
     latticeViewerSource.includes('function XCellConnectorJoints') &&
@@ -2360,9 +2369,9 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('<points geometry={geometry} renderOrder={20}>') &&
     latticeViewerSource.includes('color="#f7f3ed"') &&
     latticeViewerSource.includes('color="#151712"') &&
-    latticeViewerSource.includes('? scope.topView ? 4.8 : scope.sideView ? 4.4 : 4.1') &&
-    latticeViewerSource.includes('? scope.topView ? 2.5 : scope.sideView ? 2.45 : 2.35') &&
-    latticeViewerSource.includes('? scope.topView ? 0.86 : scope.sideView ? 0.9 : 0.88') &&
+    latticeViewerSource.includes('? scope.topView ? 5.2 : scope.sideView ? 5.8 : 5.4') &&
+    latticeViewerSource.includes('? scope.topView ? 2.72 : scope.sideView ? 3.35 : 3.05') &&
+    latticeViewerSource.includes('? scope.topView ? 0.92 : scope.sideView ? 0.94 : 0.92') &&
     latticeViewerSource.includes('const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView') &&
     latticeViewerSource.includes('depthTest={jointDepthTest}') &&
     latticeViewerSource.includes('depthWrite={false}')
@@ -2391,6 +2400,7 @@ function summarizeXCellRenderDirectLines(model) {
     sourceUsesConnectedXMechanism,
     sourceUsesStraightLineSegments,
     sourceUsesSharedConnectorArms,
+    sourceUsesSharedConnectorRods,
     sourceUsesSharedConnectorJoints,
     sourceUsesCenterPivotJoints,
   }

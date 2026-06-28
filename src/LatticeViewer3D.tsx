@@ -1368,9 +1368,10 @@ function XCellSharedJointArms({
   scope: NodeEdgeRenderScope
   view: CameraViewRequest['view']
 }) {
+  const rodRef = useRef<THREE.InstancedMesh>(null)
   const readableReferenceMode = readableWaveReferenceDisplay(model)
   const readableSurfaceMode = readableSurfaceReferenceOnly(model)
-  const geometry = useMemo(() => {
+  const armPositions = useMemo(() => {
     const centerOverrides = readableReferenceMode ? buildReadableWaveXCellCenterOverrides(model, view) : undefined
     const mechanism = buildConnectedXCellMechanism(model, centerOverrides)
     const positions: number[] = []
@@ -1386,29 +1387,82 @@ function XCellSharedJointArms({
       })
     })
 
-    const nextGeometry = new THREE.BufferGeometry()
-    nextGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3))
-    return nextGeometry
+    return new Float32Array(positions)
   }, [model, readableReferenceMode, view])
+  const geometry = useMemo(() => {
+    const nextGeometry = new THREE.BufferGeometry()
+    nextGeometry.setAttribute('position', new THREE.BufferAttribute(armPositions, 3))
+    return nextGeometry
+  }, [armPositions])
   const positionCount = geometry.getAttribute('position')?.count ?? 0
+  const armCount = Math.floor(armPositions.length / 6)
 
-  if (positionCount <= 1) return null
-
+  const rodGeometry = useMemo(
+    () => new THREE.CylinderGeometry(1, 1, 1, model.config.rows > 30 || model.config.columns > 30 ? 5 : 8),
+    [model.config.columns, model.config.rows],
+  )
   const opacity = readableSurfaceMode
-    ? scope.topView ? 0.07 : scope.sideView ? 0.1 : 0.11
+    ? scope.topView ? 0.16 : scope.sideView ? 0.2 : 0.18
     : scope.topView ? 0.34 : scope.sideView ? 0.34 : 0.31
   const depthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
+  const rodRadius = Math.max(
+    model.config.spacing * (readableSurfaceMode
+      ? scope.topView ? 0.0055 : scope.sideView ? 0.014 : 0.012
+      : scope.topView ? 0.012 : scope.sideView ? 0.012 : 0.011),
+    scope.sideView ? 0.009 : 0.007,
+  )
+  const rodOpacity = readableSurfaceMode
+    ? scope.topView ? 0.08 : scope.sideView ? 0.28 : 0.24
+    : scope.topView ? 0.28 : scope.sideView ? 0.28 : 0.24
+  const rodMaterial = useMemo(() => new THREE.MeshBasicMaterial({
+    color: '#161713',
+    transparent: true,
+    opacity: rodOpacity,
+    depthTest,
+    depthWrite: false,
+  }), [depthTest, rodOpacity])
+
+  useLayoutEffect(() => {
+    if (!rodRef.current) return
+
+    const dummy = new THREE.Object3D()
+    const yAxis = new THREE.Vector3(0, 1, 0)
+    for (let index = 0; index < armCount; index += 1) {
+      const offset = index * 6
+      const start = new THREE.Vector3(armPositions[offset], armPositions[offset + 1], armPositions[offset + 2])
+      const end = new THREE.Vector3(armPositions[offset + 3], armPositions[offset + 4], armPositions[offset + 5])
+      const direction = new THREE.Vector3().subVectors(end, start)
+      const length = direction.length()
+
+      dummy.position.addVectors(start, end).multiplyScalar(0.5)
+      if (length > 0.0001) {
+        dummy.quaternion.setFromUnitVectors(yAxis, direction.normalize())
+        dummy.scale.set(rodRadius, length, rodRadius)
+      } else {
+        dummy.quaternion.identity()
+        dummy.scale.setScalar(0)
+      }
+      dummy.updateMatrix()
+      rodRef.current.setMatrixAt(index, dummy.matrix)
+    }
+    rodRef.current.instanceMatrix.needsUpdate = true
+  }, [armCount, armPositions, rodRadius])
+
+  if (positionCount <= 1 || armCount <= 0) return null
 
   return (
-    <lineSegments geometry={geometry} renderOrder={17}>
-      <lineBasicMaterial
-        color="#151712"
-        transparent
-        opacity={opacity}
-        depthTest={depthTest}
-        depthWrite={false}
-      />
-    </lineSegments>
+    <>
+      <instancedMesh ref={rodRef} args={[rodGeometry, rodMaterial, armCount]} renderOrder={16} frustumCulled={false} />
+      <lineSegments geometry={geometry} renderOrder={17}>
+        <lineBasicMaterial
+          color="#151712"
+          transparent
+          opacity={opacity}
+          depthTest={depthTest}
+          depthWrite={false}
+        />
+      </lineSegments>
+    </>
   )
 }
 
@@ -1439,23 +1493,23 @@ function XCellConnectorJoints({
   }, [jointPositions])
 
   const haloSize = readableSurfaceMode
-    ? scope.topView ? 4.8 : scope.sideView ? 4.4 : 4.1
-    : scope.topView ? 4.6 : scope.sideView ? 3.4 : 3.15
+    ? scope.topView ? 5.2 : scope.sideView ? 5.8 : 5.4
+    : scope.topView ? 5.6 : scope.sideView ? 4.4 : 4.1
   const coreSize = readableSurfaceMode
-    ? scope.topView ? 2.5 : scope.sideView ? 2.45 : 2.35
-    : scope.topView ? 2.55 : scope.sideView ? 1.95 : 1.82
+    ? scope.topView ? 2.72 : scope.sideView ? 3.35 : 3.05
+    : scope.topView ? 3.1 : scope.sideView ? 2.45 : 2.28
   const coreOpacity = readableSurfaceMode
-    ? scope.topView ? 0.86 : scope.sideView ? 0.9 : 0.88
+    ? scope.topView ? 0.92 : scope.sideView ? 0.94 : 0.92
     : scope.topView ? 0.96 : scope.sideView ? 0.88 : 0.86
   const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
   const pinRadius = Math.max(
     model.config.spacing * (readableSurfaceMode
-      ? scope.topView ? 0.038 : scope.sideView ? 0.038 : 0.034
-      : scope.topView ? 0.038 : scope.sideView ? 0.031 : 0.029),
-    readableSurfaceMode && scope.sideView ? 0.017 : scope.topView ? 0.016 : 0.013,
+      ? scope.topView ? 0.04 : scope.sideView ? 0.052 : 0.046
+      : scope.topView ? 0.046 : scope.sideView ? 0.038 : 0.035),
+    readableSurfaceMode && scope.sideView ? 0.022 : scope.topView ? 0.019 : 0.016,
   )
   const pinOpacity = readableSurfaceMode
-    ? scope.topView ? 0.74 : scope.sideView ? 0.78 : 0.74
+    ? scope.topView ? 0.82 : scope.sideView ? 0.86 : 0.82
     : scope.topView ? 0.82 : scope.sideView ? 0.76 : 0.72
   const pinMaterial = useMemo(() => new THREE.MeshBasicMaterial({
     color: '#10120e',
