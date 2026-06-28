@@ -45,6 +45,8 @@ const { buildRigidCellMechanism, rigidCellMechanismStats } = require(path.join(o
 const { buildConnectedXCellMechanism, connectedXCellMechanismStats } = require(path.join(outDir, 'xCellMechanism.js'))
 const inverseSheetTabSource = fs.readFileSync(path.join(root, 'src', 'InverseSheetTab.tsx'), 'utf8')
 const latticeViewerSource = fs.readFileSync(path.join(root, 'src', 'LatticeViewer3D.tsx'), 'utf8')
+const targetShapeControlsSource = fs.readFileSync(path.join(root, 'src', 'TargetShapeControls.tsx'), 'utf8')
+const xCellMechanismSource = fs.readFileSync(path.join(root, 'src', 'xCellMechanism.ts'), 'utf8')
 
 const DEFAULT_SHEET_ROWS = 44
 const DEFAULT_SHEET_COLUMNS = 112
@@ -479,6 +481,10 @@ if (
   xMechanism.maxConnectorEndpointGap > 0.0001 ||
   xMechanism.minSharedConnectorUseCount !== 2 ||
   xMechanism.maxSharedConnectorUseCount !== 2 ||
+  xMechanism.minPhysicalConnectorUseCount !== 2 ||
+  xMechanism.maxPhysicalConnectorUseCount !== 2 ||
+  xMechanism.overOccupiedPhysicalConnectorCount !== 0 ||
+  !xRenderDirectLines.sourceUsesPhysicalConnectorSplit ||
   !xRenderDirectLines.sourceUsesCenterPivotJoints ||
   !xRenderDirectLines.sourceUsesSharedConnectorArms ||
   !xRenderDirectLines.sourceUsesSharedConnectorJoints ||
@@ -557,6 +563,10 @@ const report = {
     maxOppositeCenterResidual: round(xMechanism.maxOppositeCenterResidual),
     checkedOppositePairCount: xMechanism.checkedOppositePairCount,
     maxConnectorEndpointGap: round(xMechanism.maxConnectorEndpointGap),
+    minPhysicalConnectorUseCount: xMechanism.minPhysicalConnectorUseCount,
+    maxPhysicalConnectorUseCount: xMechanism.maxPhysicalConnectorUseCount,
+    overOccupiedPhysicalConnectorCount: xMechanism.overOccupiedPhysicalConnectorCount,
+    physicalConnectorCount: xMechanism.physicalConnectorCount,
     minSharedConnectorUseCount: xMechanism.minSharedConnectorUseCount,
     maxSharedConnectorUseCount: xMechanism.maxSharedConnectorUseCount,
     sharedConnectorCount: xMechanism.sharedConnectorCount,
@@ -1283,9 +1293,15 @@ function summarizeStartupDisplayContract() {
   const missingUrlGates = urlAliases.filter(([param, key]) => (
     !inverseSheetTabSource.includes(`readBooleanConfigParam(search, config, '${param}', '${key}')`)
   ))
+  const expectedVisibleLabels = [
+    ['cell centers', "if (key === 'showNodes') return 'cell centers'"],
+    ['X links', "return 'X links'"],
+  ]
+  const missingVisibleLabels = expectedVisibleLabels.filter(([, fragment]) => !targetShapeControlsSource.includes(fragment))
   const failures = [
     ...defaultMismatches.map(([key, expected]) => `${key} default is ${JSON.stringify(DEFAULT_INVERSE_SHEET_CONFIG[key])}, expected ${JSON.stringify(expected)}`),
     ...missingUrlGates.map(([param, key]) => `${param}->${key} URL gate missing`),
+    ...missingVisibleLabels.map(([label]) => `${label} visible display label missing`),
   ]
 
   return {
@@ -1293,7 +1309,9 @@ function summarizeStartupDisplayContract() {
     defaults: Object.fromEntries(Object.keys(expectedDefaults).map((key) => [key, DEFAULT_INVERSE_SHEET_CONFIG[key]])),
     checkedDefaults: Object.keys(expectedDefaults),
     checkedUrlGates: urlAliases.length,
+    checkedVisibleLabels: expectedVisibleLabels.length,
     missingUrlGates,
+    missingVisibleLabels,
     failures,
   }
 }
@@ -1329,10 +1347,11 @@ function summarizeReadableSurfaceRenderContract() {
     ['front outline avoids a heavy terminal contour stack', '[0.58, 0.72, 0.86, 0.94]'],
     ['side view keeps a lighter continuous surface skin', "view === 'side' ? 0.2"],
     ['side view keeps a readable pale wire grid without darkening the throat into a cavity', "view === 'side' ? 0.22"],
-    ['isometric surface keeps enough skin to read as one smooth sheet while the grid carries the barrel read', "view === 'top' ? 0.18 : 0.36"],
+    ['top surface keeps enough skin for the plan footprint to read without hiding the X array', "view === 'top' ? 0.22 : 0.36"],
     ['isometric surface uses a soft-lit real material rather than a fake throat patch', "view === 'isometric' ? ("],
     ['isometric soft-lit material stays pale enough to preserve the grid and throat', 'emissiveIntensity={0.82} roughness={1} metalness={0}'],
-    ['isometric wire grid stays visible without returning to a dark tunnel', "view === 'top' ? 0.34 : 0.16"],
+    ['top wire grid stays strong enough to carry the cross-section footprint without returning to a dark tunnel', "view === 'top' ? 0.48 : 0.16"],
+    ['top wire grid uses a slightly darker reference-sheet ink instead of relying on a helper contour', "const wireColor = view === 'top' ? '#9d968d' : '#b8b3ab'"],
     ['isometric span lines stay thinned after the throat-knot branch', "view === 'top' ? 1 : view === 'side' ? 6 : view === 'front' ? 2 : 3"],
     ['isometric profile lines stay thinned after the throat-knot branch', "view === 'top' ? 3 : view === 'side' ? 5 : view === 'front' ? 4 : 4"],
     ['side wire rows are thinned so the throat does not become a dark tunnel cluster', "view === 'side' ? 6"],
@@ -1341,10 +1360,10 @@ function summarizeReadableSurfaceRenderContract() {
     ['side throat helper stays faint enough not to draw a separate cavity outline', 'opacity={0.02} depthTest={false} depthWrite={false}'],
     ['isometric full X bars stay subordinate to the smooth readable surface', 'opacity={readableSurfaceMode ? 0.018 : 0.18}'],
     ['side full X bars stay subordinate to the smooth readable throat', 'opacity={readableSurfaceMode ? 0.018 : 0.17}'],
-    ['surface shared X arms stay visible enough to read endpoint-to-endpoint cell linkage', '? scope.topView ? 0.052 : scope.sideView ? 0.09 : 0.084'],
-    ['surface shared X rods stay visible without turning the curl into a black cavity', '? scope.topView ? 0.022 : scope.sideView ? 0.078 : 0.074'],
-    ['surface shared X joint pins stay visible as shared endpoints between adjacent X cells', '? scope.topView ? 0.48 : scope.sideView ? 0.74 : 0.7'],
-    ['top surface shared joint halos stay visible without becoming the X-only proof layer', 'opacity={readableSurfaceMode ? (scope.topView ? 0.22 : scope.sideView ? 0.58 : 0.54) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}'],
+    ['surface shared X arms stay visible enough to read endpoint-to-endpoint cell linkage without making top a stripe', '? scope.topView ? 0.032 : scope.sideView ? 0.09 : 0.084'],
+    ['surface shared X rods stay visible without turning the curl or top terminal into a black cavity', '? scope.topView ? 0.012 : scope.sideView ? 0.078 : 0.074'],
+    ['surface shared X joint pins stay visible as shared endpoints between adjacent X cells without forming a top wall', '? scope.topView ? 0.24 : scope.sideView ? 0.74 : 0.7'],
+    ['top surface shared joint halos stay visible without becoming the X-only proof layer', 'opacity={readableSurfaceMode ? (scope.topView ? 0.1 : scope.sideView ? 0.58 : 0.54) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}'],
     ['side outline stays visible through the curl', "depthTest={view !== 'side'}"],
     ['side projection preserves the accepted raw curl profile after wall-branch rejection', 'const point = readableWavePoint(frame, t, s)\n\n  return point'],
     ['readable reference span stays narrower than the earlier thick cap branch', 'const visualHalfSpan = waveWidth * 0.31'],
@@ -1363,39 +1382,43 @@ function summarizeReadableSurfaceRenderContract() {
     ['top projection adds an off-center rounded terminal shoulder instead of a vertical seam', 'const terminalRound = terminalNose * Math.pow(envelope, 0.58) * (1 - Math.pow(envelope, 1.75))'],
     ['top projection rounds the terminal shoulders without making a full-height side bulge', 'const shoulderRound = shoulderLobe * Math.pow(envelope, 0.54) * (1 - Math.pow(envelope, 2.1))'],
     ['top projection returns the lobe before it becomes the outer right boundary', 'const edgeReturn = smoothStep(0.78, 0.98, t)'],
+    ['top projection adds a mid-height oval cross-section shoulder from the June 28 reference row', 'const midSectionShoulder = midSectionOval * (1 - Math.pow(envelope, 1.62)) * (1 - 0.18 * edgeReturn)'],
     ['top projection keeps the centerline push reduced so the terminal footprint is not pointed', 'const terminalCenterRelief = terminalNose * Math.pow(envelope, 1.82) * smoothStep(0.74, 0.92, t)'],
-    ['top projection keeps the plan push broad enough to show the mound but below the stripe-forming branch', '0.052 * teardropLobe'],
-    ['top projection keeps shoulder rounding narrow enough to avoid a full-height terminal fan', '0.034 * shoulderRound'],
-    ['top projection keeps off-center terminal rounding narrow enough to avoid a full-height terminal fan', '0.032 * terminalRound'],
-    ['top projection keeps the center-led terminal nose below the pointed-footprint branch', '0.046 * terminalCenterNose'],
-    ['top projection scales down the push before it reaches the terminal edge without stacking rows', ') * (1 - 0.7 * edgeReturn)'],
-    ['top projection pulls the terminal centerline back only enough to round the plan footprint without clamping rows', '0.018 * terminalCenterRelief'],
+    ['top projection keeps the retained plan lobe broad enough to show the mound without becoming the stripe-forming branch', '0.068 * teardropLobe'],
+    ['top projection keeps retained shoulder rounding narrow enough to avoid a full-height terminal fan', '0.044 * shoulderRound'],
+    ['top projection keeps off-center terminal rounding narrow enough to avoid a full-height terminal fan', '0.052 * terminalRound'],
+    ['top projection keeps the center-led terminal nose below the pointed-footprint branch', '0.05 * terminalCenterNose'],
+    ['top projection scales down the retained push before it reaches the terminal edge without stacking rows', ') * (1 - 0.7 * edgeReturn)'],
+    ['top projection pulls the terminal centerline back only enough to round the plan footprint without clamping rows', '0.009 * terminalCenterRelief'],
     ['top projection avoids a hard terminal clamp that stacks rows into a stripe', 'planX,'],
     ['top projection releases terminal pinch so the top footprint stays rounded', 'const terminalPlanRelease = smoothStep(0.66, 0.94, t)'],
-    ['top projection keeps terminal shoulder widening narrow so the top view does not form a vertical fan', 'const terminalWidthRound = 0.085 * terminalRound * (1 - 0.12 * edgeReturn)'],
-    ['top projection adds a bounded terminal pinch so the footprint rounds inward instead of widening into a stripe', 'const terminalPlanPinch = 0.003 * terminalNose * Math.pow(envelope, 0.9) * (1 - 0.25 * edgeReturn)'],
-    ['top projection keeps terminal pinch below the triangular-fan branch', '0.004 * teardropLobe * (1 - 0.68 * terminalPlanRelease)'],
-    ['top projection lets terminal shoulders round in y without collapsing rows', 's * planHalfSpan * (1 - planPinch + 0.016 * terminalRound)'],
+    ['top projection keeps terminal shoulder widening narrow so the top view does not form a vertical fan', 'const terminalWidthRound = 0.122 * terminalRound * (1 - 0.12 * edgeReturn)'],
+    ['top projection adds a bounded terminal pinch so the footprint rounds inward instead of widening into a stripe', 'const terminalPlanPinch = 0.0035 * terminalNose * Math.pow(envelope, 0.9) * (1 - 0.25 * edgeReturn)'],
+    ['top projection keeps terminal pinch below the triangular-fan branch', '0.0055 * teardropLobe * (1 - 0.68 * terminalPlanRelease)'],
+    ['top projection lets terminal shoulders round in y without collapsing rows', 's * planHalfSpan * (1 - planPinch + 0.016 * terminalRound + 0.018 * midSectionShoulder)'],
     ['top X overlay keeps one continuous frame layer instead of a terminal stripe split', 'topPlan: buildXCellGeometry(mechanism.frames),'],
     ['top X overlay keeps the old terminal split disabled', 'topFold: buildXCellGeometry([]),'],
-    ['top readable X bars stay pale enough not to turn the rounded footprint into a terminal stripe', 'opacity={readableSurfaceMode ? 0.02 : 0.36}'],
+    ['top readable X bars stay pale enough not to turn the rounded footprint into a terminal stripe', 'opacity={readableSurfaceMode ? 0.012 : 0.36}'],
+    ['top readable shared rods stay pale enough not to darken the terminal into a wall', 'scope.topView ? 0.012 : scope.sideView ? 0.078 : 0.074'],
+    ['top readable connector pins stay small enough not to form a terminal wall while X-only proof remains dark', 'scope.topView ? 1.2 : scope.sideView ? 3.45 : 3.24'],
+    ['top readable connector cores stay pale enough not to form a terminal wall while X-only proof remains dark', 'scope.topView ? 0.24 : scope.sideView ? 0.74 : 0.7'],
     ['isometric camera balances full-sheet read with the accepted open-curl view', 'new THREE.Vector3(target.x + distance * 0.58, target.y - distance * 0.58, target.z + distance * 0.34)'],
     ['isometric camera keeps the curl inspectable without cropping the mechanism sheet', "view === 'isometric' ? 1.24"],
     ['3D-only curl path advances the center lip without changing side/top surfaces', 'const profileT = clampUnit(t + lipAdvance)'],
     ['3D-only rounded curl profile stays isolated to isometric display', 'const roundedProfilePoint = sampleReadableWaveProfile(frame.isometricProfile, profileT)'],
     ['3D-only lower-lip band stays narrow enough to avoid an underside wall', 'const lowerLip = smoothStep(0.7, 0.88, t) * (1 - smoothStep(0.94, 0.995, t))'],
     ['3D-only center localization stays narrow enough to protect the square sheet perimeter', 'const center = Math.pow(envelope, 2.22)'],
-    ['3D-only rounded lip blend stays localized instead of becoming a full-width tunnel', 'Math.pow(envelope, 2.24)'],
+    ['3D-only rounded lip blend stays localized instead of becoming a full-width tunnel', 'Math.pow(envelope, 1.95)'],
     ['3D-only rounded lip blend stays localized so the isometric curl keeps the side-profile opening', '0.45'],
-    ['3D-only rounded profile height stays localized to the center curl', 'Math.pow(envelope, 4.45)'],
-    ['3D-only lateral height focus reduces full-width tube read without changing front/top surfaces', 'const lateralHeightFocus = lerpNumber(0.22, 1, Math.pow(envelope, 1.28))'],
+    ['3D-only rounded profile height stays localized to the center curl', 'Math.pow(envelope, 3.8)'],
+    ['3D-only lateral height focus reduces full-width tube read without changing front/top surfaces', 'const lateralHeightFocus = lerpNumber(0.22, 1, Math.pow(envelope, 1.2))'],
     ['3D-only lateral height focus stays bounded before the terminal edge', 'smoothStep(0.24, 0.78, t)'],
     ['3D-only terminal side taper stays bounded so the lip does not become a full-width tube cap', 'const terminalTipTaper = frame.progress *'],
     ['3D-only terminal taper only affects off-center terminal spans', '(1 - Math.pow(envelope, 0.9))'],
-    ['3D-only center lip advance stays bounded but stronger than the blunt-cap branch', '0.068'],
-    ['3D-only lower lip tucks under the forward face without changing front/top surfaces', 'displayPoint[0] + waveWidth * openThroat * (0.15 * lipFace - 0.22 * lowerLip - 0.064 * throat - 0.026 * facePinch) - waveWidth * terminalTipTaper'],
+    ['3D-only center lip advance stays bounded at the retained open-curl branch', '0.052'],
+    ['3D-only lower lip tucks under the forward face without changing front/top surfaces', 'displayPoint[0] + waveWidth * openThroat * (0.14 * lipFace - 0.3 * lowerLip - 0.088 * throat - 0.024 * facePinch) - waveWidth * terminalTipTaper'],
     ['3D-only side pinch stays removed so the lip does not collapse into a closed cap', 'displayPoint[1],'],
-    ['3D-only throat lift keeps the opening readable without a fake shadow patch', 'focusedZ + frame.height * openThroat * (0.154 * throat - 0.282 * lowerLip - 0.068 * facePinch)'],
+    ['3D-only throat lift keeps the opening readable without a fake shadow patch', 'focusedZ + frame.height * openThroat * (0.11 * throat - 0.44 * lowerLip - 0.08 * facePinch)'],
     ['isometric view isolates the center throat trace', 'buildReadableWaveThroatGeometry(model)'],
     ['center throat trace stays removed so the barrel read comes from the sheet grid', 'transparent opacity={0} depthTest={false} depthWrite={false}'],
     ['isometric throat helper stays centerline-only after rib overlay rejection', 'readableWavePoint(frame, lerpNumber(0.58, 0.94, index / samples), 0)'],
@@ -2384,9 +2407,9 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('<points geometry={geometry} renderOrder={20}>') &&
     latticeViewerSource.includes('color="#f7f3ed"') &&
     latticeViewerSource.includes('color={jointCoreInk}') &&
-    latticeViewerSource.includes('? scope.topView ? 4.25 : scope.sideView ? 6.35 : 5.95') &&
-    latticeViewerSource.includes('? scope.topView ? 1.82 : scope.sideView ? 3.45 : 3.24') &&
-    latticeViewerSource.includes('? scope.topView ? 0.48 : scope.sideView ? 0.74 : 0.7') &&
+    latticeViewerSource.includes('? scope.topView ? 2.8 : scope.sideView ? 6.35 : 5.95') &&
+    latticeViewerSource.includes('? scope.topView ? 1.2 : scope.sideView ? 3.45 : 3.24') &&
+    latticeViewerSource.includes('? scope.topView ? 0.24 : scope.sideView ? 0.74 : 0.7') &&
     latticeViewerSource.includes('const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView') &&
     latticeViewerSource.includes('depthTest={jointDepthTest}') &&
     latticeViewerSource.includes('depthWrite={false}')
@@ -2399,6 +2422,13 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('const pivotDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView') &&
     latticeViewerSource.includes('depthTest={pivotDepthTest}') &&
     latticeViewerSource.includes('depthWrite={false}')
+  const sourceUsesPhysicalConnectorSplit =
+    xCellMechanismSource.includes('const physicalConnector = addVec(connector, connectorFamilySplitOffset(model, family, index))') &&
+    xCellMechanismSource.includes('function connectorFamilySplitOffset(model: LatticeModel, family: DiagonalFamily, connectorIndex: number): Vec3') &&
+    xCellMechanismSource.includes('const amount = model.config.spacing * 0.16 / Math.SQRT2') &&
+    xCellMechanismSource.includes('function physicalConnectorOccupancy(mechanism: ConnectedXCellMechanism)') &&
+    xCellMechanismSource.includes('if (useCount > 2) overOccupiedCount += 1') &&
+    xCellMechanismSource.includes('function physicalConnectorKey(connector: Vec3): string')
 
   return {
     renderedNodeCount: model.nodes.length,
@@ -2418,6 +2448,7 @@ function summarizeXCellRenderDirectLines(model) {
     sourceUsesSharedConnectorRods,
     sourceUsesSharedConnectorJoints,
     sourceUsesCenterPivotJoints,
+    sourceUsesPhysicalConnectorSplit,
   }
 }
 

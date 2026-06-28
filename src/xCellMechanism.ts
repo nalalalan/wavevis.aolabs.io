@@ -19,6 +19,10 @@ export type ConnectedXCellMechanismStats = {
   maxOppositeCenterResidual: number
   checkedOppositePairCount: number
   maxConnectorEndpointGap: number
+  minPhysicalConnectorUseCount: number
+  maxPhysicalConnectorUseCount: number
+  overOccupiedPhysicalConnectorCount: number
+  physicalConnectorCount: number
   minSharedConnectorUseCount: number
   maxSharedConnectorUseCount: number
   sharedConnectorCount: number
@@ -107,6 +111,7 @@ export function connectedXCellMechanismStats(model: LatticeModel, centerOverride
   let maxConnectorEndpointGap = 0
   let minSharedConnectorUseCount = Infinity
   let maxSharedConnectorUseCount = 0
+  const physicalOccupancy = physicalConnectorOccupancy(mechanism)
 
   mechanism.frames.forEach((frame) => {
     const sourceNode = model.nodes.find((node) => node.id === frame.nodeId)
@@ -163,6 +168,10 @@ export function connectedXCellMechanismStats(model: LatticeModel, centerOverride
     maxOppositeCenterResidual,
     checkedOppositePairCount,
     maxConnectorEndpointGap,
+    minPhysicalConnectorUseCount: physicalOccupancy.minUseCount,
+    maxPhysicalConnectorUseCount: physicalOccupancy.maxUseCount,
+    overOccupiedPhysicalConnectorCount: physicalOccupancy.overOccupiedCount,
+    physicalConnectorCount: physicalOccupancy.groupCount,
     minSharedConnectorUseCount: Number.isFinite(minSharedConnectorUseCount) ? minSharedConnectorUseCount : 0,
     maxSharedConnectorUseCount,
     sharedConnectorCount: mechanism.connectorByDiagonalId.size,
@@ -205,18 +214,19 @@ function solveDiagonalFamily(
       const target = nodes[index + 1]
       const diagonalId = diagonalIds[index]
       if (!source || !target || !diagonalId) return
-      connectorByDiagonalId.set(diagonalId, connector)
+      const physicalConnector = addVec(connector, connectorFamilySplitOffset(model, family, index))
+      connectorByDiagonalId.set(diagonalId, physicalConnector)
       const sourceFrame = frameByNodeId.get(source.id)
       const targetFrame = frameByNodeId.get(target.id)
       let useCount = 0
       const uses: ConnectedXCellEndpointUse[] = []
       if (sourceFrame) {
-        sourceFrame.endpoints[family.positive] = connector
+        sourceFrame.endpoints[family.positive] = physicalConnector
         useCount += 1
         uses.push({ nodeId: source.id, direction: family.positive })
       }
       if (targetFrame) {
-        targetFrame.endpoints[family.negative] = connector
+        targetFrame.endpoints[family.negative] = physicalConnector
         useCount += 1
         uses.push({ nodeId: target.id, direction: family.negative })
       }
@@ -224,6 +234,49 @@ function solveDiagonalFamily(
       connectorUsesByDiagonalId.set(diagonalId, uses)
     })
   })
+}
+
+function connectorFamilySplitOffset(model: LatticeModel, family: DiagonalFamily, connectorIndex: number): Vec3 {
+  const sign = connectorIndex % 2 === 0 ? 1 : -1
+  const amount = model.config.spacing * 0.16 / Math.SQRT2
+  return family.positive === 'ne'
+    ? [amount * sign, -amount * sign, 0]
+    : [amount * sign, amount * sign, 0]
+}
+
+function physicalConnectorOccupancy(mechanism: ConnectedXCellMechanism): {
+  minUseCount: number
+  maxUseCount: number
+  overOccupiedCount: number
+  groupCount: number
+} {
+  const groups = new Map<string, number>()
+  mechanism.connectorByDiagonalId.forEach((connector, diagonalId) => {
+    const useCount = mechanism.connectorUseCountByDiagonalId.get(diagonalId) ?? 0
+    const key = physicalConnectorKey(connector)
+    groups.set(key, (groups.get(key) ?? 0) + useCount)
+  })
+
+  let minUseCount = Infinity
+  let maxUseCount = 0
+  let overOccupiedCount = 0
+  groups.forEach((useCount) => {
+    minUseCount = Math.min(minUseCount, useCount)
+    maxUseCount = Math.max(maxUseCount, useCount)
+    if (useCount > 2) overOccupiedCount += 1
+  })
+
+  return {
+    minUseCount: Number.isFinite(minUseCount) ? minUseCount : 0,
+    maxUseCount,
+    overOccupiedCount,
+    groupCount: groups.size,
+  }
+}
+
+function physicalConnectorKey(connector: Vec3): string {
+  const tolerance = 0.0001
+  return connector.map((value) => Math.round(value / tolerance)).join(',')
 }
 
 function buildSmoothedXCellCenters(model: LatticeModel, centerOverrides?: XCellCenterOverrides): Map<string, Vec3> {

@@ -302,7 +302,7 @@ const readableWaveVSegments = 54
 const readableReferenceProfilePoints =
   '0,0;0.035,0.02;0.075,0.07;0.118,0.17;0.17,0.32;0.225,0.5;0.295,0.68;0.375,0.82;0.47,0.92;0.565,0.97;0.66,0.96;0.74,0.88;0.805,0.74;0.85,0.56;0.855,0.43;0.828,0.39;0.792,0.4;0.772,0.43;0.79,0.47;0.825,0.48;0.79,0.58;0.725,0.68;0.65,0.73;0.58,0.72;0.525,0.64;0.5,0.52;0.505,0.4;0.55,0.27;0.625,0.17;0.73,0.09;0.85,0.045;0.96,0.018;1,0'
 const readableIsometricProfilePoints =
-  '0,0;0.035,0.018;0.08,0.07;0.13,0.17;0.188,0.322;0.265,0.528;0.36,0.724;0.468,0.874;0.565,0.958;0.654,0.982;0.718,0.938;0.756,0.85;0.782,0.724;0.776,0.592;0.746,0.492;0.694,0.438;0.636,0.442;0.588,0.492;0.56,0.522;0.558,0.466;0.586,0.36;0.65,0.238;0.746,0.138;0.852,0.072;0.93,0.028;0.976,0.01;1,0'
+  '0,0;0.035,0.018;0.08,0.07;0.13,0.17;0.188,0.322;0.265,0.528;0.36,0.724;0.468,0.874;0.565,0.958;0.636,0.992;0.692,0.94;0.728,0.826;0.744,0.664;0.728,0.508;0.682,0.404;0.62,0.382;0.56,0.432;0.526,0.488;0.528,0.408;0.572,0.282;0.648,0.17;0.756,0.088;0.866,0.044;0.944,0.016;0.986,0.004;1,0'
 
 function readableSurfaceReferenceOnly(model: LatticeModel): boolean {
   return model.config.showSurface && readableWaveReferenceDisplay(model)
@@ -318,9 +318,10 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
   const sideThroatGeometry = useMemo(() => view === 'side' ? buildReadableWaveSideThroatGeometry(model) : null, [model, view])
   const throatGeometry = useMemo(() => view === 'isometric' ? buildReadableWaveThroatGeometry(model) : null, [model, view])
-  const surfaceOpacity = view === 'side' ? 0.2 : view === 'front' ? 0.72 : view === 'top' ? 0.18 : 0.36
-  const wireOpacity = view === 'side' ? 0.22 : view === 'front' ? 0.21 : view === 'top' ? 0.34 : 0.16
-  const outlineOpacity = view === 'side' ? 0.16 : view === 'front' ? 0.1 : view === 'top' ? 0.045 : 0.025
+  const surfaceOpacity = view === 'side' ? 0.2 : view === 'front' ? 0.72 : view === 'top' ? 0.22 : 0.36
+  const wireOpacity = view === 'side' ? 0.22 : view === 'front' ? 0.21 : view === 'top' ? 0.48 : 0.16
+  const wireColor = view === 'top' ? '#9d968d' : '#b8b3ab'
+  const outlineOpacity = view === 'side' ? 0.16 : view === 'front' ? 0.1 : view === 'top' ? 0.075 : 0.025
 
   return (
     <group renderOrder={-2}>
@@ -334,7 +335,7 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
         )}
       </mesh>
       <lineSegments geometry={wireGeometry} renderOrder={-1}>
-        <lineBasicMaterial color="#b8b3ab" transparent opacity={wireOpacity} depthTest depthWrite={false} />
+        <lineBasicMaterial color={wireColor} transparent opacity={wireOpacity} depthTest depthWrite={false} />
       </lineSegments>
       <lineSegments geometry={outlineGeometry} renderOrder={0}>
         <lineBasicMaterial color={view === 'side' ? '#9d978f' : '#77726a'} transparent opacity={outlineOpacity} depthTest={view !== 'side'} depthWrite={false} />
@@ -649,7 +650,7 @@ function readableWaveIsometricPoint(frame: ReadableWaveFrame, t: number, s: numb
     smoothStep(0.46, 0.82, t) *
     (1 - smoothStep(0.92, 0.995, t)) *
     Math.pow(envelope, 1.32) *
-    0.068
+    0.052
   const profileT = clampUnit(t + lipAdvance)
   const point = readableWavePoint(frame, profileT, s)
   const center = Math.pow(envelope, 2.22)
@@ -662,14 +663,14 @@ function readableWaveIsometricPoint(frame: ReadableWaveFrame, t: number, s: numb
   const roundedLipBlend = frame.progress *
     smoothStep(0.5, 0.82, t) *
     (1 - smoothStep(0.92, 0.995, t)) *
-    Math.pow(envelope, 2.24) *
-    0.45
+    Math.pow(envelope, 1.95) *
+    0.44
   const displayPoint: Vec3 = [
     lerpNumber(point[0], frame.minX + waveWidth * roundedProfilePoint.x, roundedLipBlend),
     point[1],
     lerpNumber(
       point[2],
-      frame.height * (roundedProfilePoint.z / frame.isometricProfile.maxZ) * Math.pow(envelope, 4.45),
+      frame.height * (roundedProfilePoint.z / frame.isometricProfile.maxZ) * Math.pow(envelope, 3.8),
       roundedLipBlend,
     ),
   ]
@@ -677,7 +678,7 @@ function readableWaveIsometricPoint(frame: ReadableWaveFrame, t: number, s: numb
     smoothStep(0.24, 0.78, t) *
     (1 - smoothStep(0.93, 0.995, t)) *
     0.9
-  const lateralHeightFocus = lerpNumber(0.22, 1, Math.pow(envelope, 1.28))
+  const lateralHeightFocus = lerpNumber(0.22, 1, Math.pow(envelope, 1.2))
   const focusedZ = lerpNumber(displayPoint[2], displayPoint[2] * lateralHeightFocus, heightFocusBand)
   const terminalTipTaper = frame.progress *
     smoothStep(0.62, 0.9, t) *
@@ -685,9 +686,9 @@ function readableWaveIsometricPoint(frame: ReadableWaveFrame, t: number, s: numb
     (1 - Math.pow(envelope, 0.9)) *
     0.1
   return [
-    displayPoint[0] + waveWidth * openThroat * (0.15 * lipFace - 0.22 * lowerLip - 0.064 * throat - 0.026 * facePinch) - waveWidth * terminalTipTaper,
+    displayPoint[0] + waveWidth * openThroat * (0.14 * lipFace - 0.3 * lowerLip - 0.088 * throat - 0.024 * facePinch) - waveWidth * terminalTipTaper,
     displayPoint[1],
-    Math.max(0, focusedZ + frame.height * openThroat * (0.154 * throat - 0.282 * lowerLip - 0.068 * facePinch)),
+    Math.max(0, focusedZ + frame.height * openThroat * (0.11 * throat - 0.44 * lowerLip - 0.08 * facePinch)),
   ]
 }
 
@@ -738,27 +739,29 @@ function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number
   const shoulderRound = shoulderLobe * Math.pow(envelope, 0.54) * (1 - Math.pow(envelope, 2.1))
   const terminalRound = terminalNose * Math.pow(envelope, 0.58) * (1 - Math.pow(envelope, 1.75))
   const edgeReturn = smoothStep(0.78, 0.98, t)
+  const midSectionOval = Math.exp(-Math.pow((t - 0.78) / 0.31, 2)) * smoothStep(0.22, 0.94, t)
+  const midSectionShoulder = midSectionOval * (1 - Math.pow(envelope, 1.62)) * (1 - 0.18 * edgeReturn)
   const terminalCenterRelief = terminalNose * Math.pow(envelope, 1.82) * smoothStep(0.74, 0.92, t)
   const bodyPush = waveWidth * (
-    0.012 * bodyRegion * Math.pow(envelope, 1.08) +
-    0.052 * teardropLobe +
-    0.034 * shoulderRound +
-    0.032 * terminalRound +
-    0.046 * terminalCenterNose
+    0.005 * bodyRegion * Math.pow(envelope, 1.08) +
+    0.068 * teardropLobe +
+    0.044 * shoulderRound +
+    0.052 * terminalRound +
+    0.05 * terminalCenterNose
   ) * (1 - 0.7 * edgeReturn)
   const terminalInset = waveWidth * (
-    0.018 * terminalCenterRelief
+    0.009 * terminalCenterRelief
   )
   const terminalPlanRelease = smoothStep(0.66, 0.94, t)
-  const terminalWidthRound = 0.085 * terminalRound * (1 - 0.12 * edgeReturn)
-  const terminalPlanPinch = 0.003 * terminalNose * Math.pow(envelope, 0.9) * (1 - 0.25 * edgeReturn)
+  const terminalWidthRound = 0.122 * terminalRound * (1 - 0.12 * edgeReturn)
+  const terminalPlanPinch = 0.0035 * terminalNose * Math.pow(envelope, 0.9) * (1 - 0.25 * edgeReturn)
   const planPinch = clampUnit(
-    0.004 * bodyRegion * Math.pow(envelope, 1.02) +
-    0.004 * teardropLobe * (1 - 0.68 * terminalPlanRelease) +
+    0.005 * bodyRegion * Math.pow(envelope, 1.02) +
+    0.0055 * teardropLobe * (1 - 0.68 * terminalPlanRelease) +
     terminalPlanPinch,
   )
   const planX = baseX + bodyPush - terminalInset
-  const planY = frame.centerY + s * planHalfSpan * (1 - planPinch + 0.016 * terminalRound) + s * planHalfSpan * terminalWidthRound
+  const planY = frame.centerY + s * planHalfSpan * (1 - planPinch + 0.016 * terminalRound + 0.018 * midSectionShoulder) + s * planHalfSpan * terminalWidthRound
   return [
     planX,
     planY,
@@ -1341,10 +1344,10 @@ function StraightEdgeSegments({
     return (
       <>
         <lineSegments geometry={geometries.topPlan} renderOrder={0}>
-          <lineBasicMaterial color="#252722" transparent opacity={readableSurfaceMode ? 0.02 : 0.36} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#252722" transparent opacity={readableSurfaceMode ? 0.012 : 0.36} depthTest depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.topFold} renderOrder={1}>
-          <lineBasicMaterial color="#343631" transparent opacity={readableSurfaceMode ? 0.026 : 0.07} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#343631" transparent opacity={readableSurfaceMode ? 0.014 : 0.07} depthTest depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -1406,17 +1409,17 @@ function XCellSharedJointArms({
     [model.config.columns, model.config.rows],
   )
   const opacity = readableSurfaceMode
-    ? scope.topView ? 0.052 : scope.sideView ? 0.09 : 0.084
+    ? scope.topView ? 0.032 : scope.sideView ? 0.09 : 0.084
     : scope.topView ? 0.34 : scope.sideView ? 0.34 : 0.31
   const depthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
   const rodRadius = Math.max(
     model.config.spacing * (readableSurfaceMode
-      ? scope.topView ? 0.0072 : scope.sideView ? 0.0155 : 0.0142
+      ? scope.topView ? 0.0052 : scope.sideView ? 0.0155 : 0.0142
       : scope.topView ? 0.012 : scope.sideView ? 0.012 : 0.011),
     scope.sideView ? 0.009 : 0.007,
   )
   const rodOpacity = readableSurfaceMode
-    ? scope.topView ? 0.022 : scope.sideView ? 0.078 : 0.074
+    ? scope.topView ? 0.012 : scope.sideView ? 0.078 : 0.074
     : scope.topView ? 0.28 : scope.sideView ? 0.28 : 0.24
   const mechanismInk = readableSurfaceMode ? '#5f5b54' : '#161713'
   const rodMaterial = useMemo(() => new THREE.MeshBasicMaterial({
@@ -1498,13 +1501,13 @@ function XCellConnectorJoints({
   }, [jointPositions])
 
   const haloSize = readableSurfaceMode
-    ? scope.topView ? 4.25 : scope.sideView ? 6.35 : 5.95
+    ? scope.topView ? 2.8 : scope.sideView ? 6.35 : 5.95
     : scope.topView ? 5.6 : scope.sideView ? 4.4 : 4.1
   const coreSize = readableSurfaceMode
-    ? scope.topView ? 1.82 : scope.sideView ? 3.45 : 3.24
+    ? scope.topView ? 1.2 : scope.sideView ? 3.45 : 3.24
     : scope.topView ? 3.1 : scope.sideView ? 2.45 : 2.28
   const coreOpacity = readableSurfaceMode
-    ? scope.topView ? 0.48 : scope.sideView ? 0.74 : 0.7
+    ? scope.topView ? 0.24 : scope.sideView ? 0.74 : 0.7
     : scope.topView ? 0.96 : scope.sideView ? 0.88 : 0.86
   const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
   const pinRadius = Math.max(
@@ -1514,7 +1517,7 @@ function XCellConnectorJoints({
     readableSurfaceMode && scope.sideView ? 0.022 : scope.topView ? 0.016 : 0.016,
   )
   const pinOpacity = readableSurfaceMode
-    ? scope.topView ? 0.26 : scope.sideView ? 0.62 : 0.58
+    ? scope.topView ? 0.14 : scope.sideView ? 0.62 : 0.58
     : scope.topView ? 0.82 : scope.sideView ? 0.76 : 0.72
   const pinInk = readableSurfaceMode ? '#5a554f' : '#10120e'
   const jointCoreInk = readableSurfaceMode ? '#5f5b54' : '#151712'
@@ -1548,7 +1551,7 @@ function XCellConnectorJoints({
         <pointsMaterial
           color="#f7f3ed"
           transparent
-          opacity={readableSurfaceMode ? (scope.topView ? 0.22 : scope.sideView ? 0.58 : 0.54) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}
+          opacity={readableSurfaceMode ? (scope.topView ? 0.1 : scope.sideView ? 0.58 : 0.54) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}
           size={haloSize}
           sizeAttenuation={false}
           depthTest={jointDepthTest}
