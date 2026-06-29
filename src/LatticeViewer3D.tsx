@@ -285,12 +285,6 @@ type ReadableWaveFrame = {
     totalDistance: number
     maxZ: number
   }
-  isometricProfile: {
-    points: ReadableWaveProfilePoint[]
-    distances: number[]
-    totalDistance: number
-    maxZ: number
-  }
   minX: number
   maxX: number
   centerY: number
@@ -302,9 +296,7 @@ type ReadableWaveFrame = {
 const readableWaveUSegments = 104
 const readableWaveVSegments = 54
 const readableReferenceProfilePoints =
-  '0,0;0.035,0.012;0.085,0.045;0.155,0.125;0.245,0.285;0.355,0.515;0.478,0.755;0.592,0.918;0.69,0.99;0.754,0.958;0.816,0.88;0.876,0.78;0.936,0.66;0.976,0.59;1,0.55'
-const readableIsometricProfilePoints =
-  '0,0;0.035,0.014;0.086,0.052;0.158,0.14;0.252,0.315;0.366,0.55;0.492,0.78;0.604,0.93;0.696,0.992;0.758,0.96;0.82,0.884;0.88,0.788;0.938,0.668;0.976,0.598;1,0.56'
+  '0,0;0.04,0.011;0.095,0.045;0.17,0.13;0.275,0.32;0.385,0.58;0.49,0.82;0.58,0.96;0.67,0.995;0.77,0.92;0.86,0.78;0.93,0.64;0.98,0.54;0.96,0.46;0.92,0.37;0.85,0.28;0.77,0.19;0.7,0.1;0.68,0.06;0.69,0.035;0.73,0.018;0.82,0.006;1,0'
 
 function readableSurfaceReferenceOnly(model: LatticeModel): boolean {
   return model.config.showSurface && readableWaveReferenceDisplay(model)
@@ -319,8 +311,6 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const wireGeometry = useMemo(() => buildReadableWaveWireGeometry(model, view), [model, view])
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
   const topHeightShadowGeometry = useMemo(() => view === 'top' ? buildReadableWaveTopHeightShadowGeometry(model) : null, [model, view])
-  const sideThroatGeometry = useMemo(() => view === 'side' ? buildReadableWaveSideThroatGeometry(model) : null, [model, view])
-  const throatGeometry = useMemo(() => view === 'isometric' ? buildReadableWaveThroatGeometry(model) : null, [model, view])
   const surfaceOpacity = view === 'side' ? 0.22 : view === 'front' ? 0.72 : view === 'top' ? 0.26 : 0.36
   const wireOpacity = view === 'side' ? 0.16 : view === 'front' ? 0.21 : view === 'top' ? 0.48 : 0.16
   const wireColor = view === 'top' ? '#9d968d' : '#b8b3ab'
@@ -334,7 +324,7 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
         ) : view === 'isometric' ? (
           <meshStandardMaterial color="#ffffff" emissive="#fbfaf6" emissiveIntensity={0.82} roughness={1} metalness={0} side={THREE.DoubleSide} transparent opacity={surfaceOpacity} depthWrite polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
         ) : view === 'top' ? (
-          <meshStandardMaterial color="#fbfaf6" emissive="#f6f0e7" emissiveIntensity={0.18} roughness={1} metalness={0} side={THREE.DoubleSide} transparent opacity={surfaceOpacity} depthWrite={false} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
+          <meshStandardMaterial color="#fbfaf6" emissive="#f6f0e7" emissiveIntensity={0.18} roughness={1} metalness={0} side={THREE.DoubleSide} transparent opacity={surfaceOpacity} depthWrite polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
         ) : (
           <meshBasicMaterial color="#fbfaf6" side={THREE.DoubleSide} transparent opacity={surfaceOpacity} depthWrite={view === 'side'} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
         )}
@@ -350,16 +340,6 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
       <lineSegments geometry={outlineGeometry} renderOrder={0}>
         <lineBasicMaterial color={view === 'side' ? '#9d978f' : '#77726a'} transparent opacity={outlineOpacity} depthTest={view !== 'side'} depthWrite={false} />
       </lineSegments>
-      {sideThroatGeometry && (
-        <lineSegments geometry={sideThroatGeometry} renderOrder={1}>
-          <lineBasicMaterial color="#6f6a63" transparent opacity={0.02} depthTest={false} depthWrite={false} />
-        </lineSegments>
-      )}
-      {throatGeometry && (
-        <lineSegments geometry={throatGeometry} renderOrder={1}>
-          <lineBasicMaterial color="#7b766f" transparent opacity={0} depthTest={false} depthWrite={false} />
-        </lineSegments>
-      )}
     </group>
   )
 }
@@ -371,7 +351,7 @@ function buildReadableWaveSurfaceGeometry(model: LatticeModel, view: CameraViewR
   const indices: number[] = []
 
   for (let vIndex = 0; vIndex <= readableWaveVSegments; vIndex += 1) {
-    const s = -1 + (vIndex / readableWaveVSegments) * 2
+    const s = readableWaveSpanParameter(view, vIndex / readableWaveVSegments)
     for (let uIndex = 0; uIndex <= readableWaveUSegments; uIndex += 1) {
       const t = uIndex / readableWaveUSegments
       const offset = (vIndex * (readableWaveUSegments + 1) + uIndex) * 3
@@ -407,7 +387,7 @@ function buildReadableWaveWireGeometry(model: LatticeModel, view: CameraViewRequ
   const profileLineStep = view === 'top' ? 1 : view === 'side' ? 5 : view === 'front' ? 4 : 4
 
   for (let vIndex = 0; vIndex <= readableWaveVSegments; vIndex += spanLineStep) {
-    const s = -1 + (vIndex / readableWaveVSegments) * 2
+    const s = readableWaveSpanParameter(view, vIndex / readableWaveVSegments)
     for (let uIndex = 0; uIndex < readableWaveUSegments; uIndex += 1) {
       const t0 = uIndex / readableWaveUSegments
       const t1 = (uIndex + 1) / readableWaveUSegments
@@ -424,8 +404,8 @@ function buildReadableWaveWireGeometry(model: LatticeModel, view: CameraViewRequ
     if (view === 'side' && t > 0.61 && t < 0.87) continue
     for (let vIndex = 0; vIndex < readableWaveVSegments; vIndex += 1) {
       pushSegment(
-        readableWaveDisplayPoint(frame, view, t, -1 + (vIndex / readableWaveVSegments) * 2),
-        readableWaveDisplayPoint(frame, view, t, -1 + ((vIndex + 1) / readableWaveVSegments) * 2),
+        readableWaveDisplayPoint(frame, view, t, readableWaveSpanParameter(view, vIndex / readableWaveVSegments)),
+        readableWaveDisplayPoint(frame, view, t, readableWaveSpanParameter(view, (vIndex + 1) / readableWaveVSegments)),
       )
     }
   }
@@ -433,6 +413,11 @@ function buildReadableWaveWireGeometry(model: LatticeModel, view: CameraViewRequ
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3))
   return geometry
+}
+
+function readableWaveSpanParameter(view: CameraViewRequest['view'], amount: number): number {
+  const centered = -1 + clampUnit(amount) * 2
+  return view === 'side' ? centered * 0.045 : centered
 }
 
 function buildReadableWaveTopHeightShadowGeometry(model: LatticeModel): THREE.BufferGeometry {
@@ -454,7 +439,7 @@ function buildReadableWaveTopHeightShadowGeometry(model: LatticeModel): THREE.Bu
       const terminalBand = smoothStep(0.58, 0.86, t) * (1 - smoothStep(0.97, 1, t))
       const strength = clampUnit((heightRatio - 0.012) / 0.22) * Math.pow(centerEnvelope, 0.68) * Math.max(bodyBand * 1.32, terminalBand * 0.92)
 
-      topPoints.push(readableWaveTopPlanPoint(frame, t, s))
+      topPoints.push(readableWavePoint(frame, t, s))
       shadowStrengths.push(strength)
     }
   }
@@ -526,43 +511,6 @@ function buildReadableWaveOutlineGeometry(model: LatticeModel, view: CameraViewR
   return geometry
 }
 
-function buildReadableWaveThroatGeometry(model: LatticeModel): THREE.BufferGeometry {
-  const frame = readableWaveFrame(model)
-  const positions: number[] = []
-  const pushPolyline = (points: Vec3[]) => {
-    for (let index = 0; index < points.length - 1; index += 1) {
-      positions.push(...points[index], ...points[index + 1])
-    }
-  }
-  const samples = 80
-  const points = Array.from({ length: samples + 1 }, (_, index) =>
-    readableWavePoint(frame, lerpNumber(0.58, 0.94, index / samples), 0),
-  )
-
-  pushPolyline(points)
-
-  const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3))
-  return geometry
-}
-
-function buildReadableWaveSideThroatGeometry(model: LatticeModel): THREE.BufferGeometry {
-  const frame = readableWaveFrame(model)
-  const positions: number[] = []
-  const samples = 72
-  const points = Array.from({ length: samples + 1 }, (_value, index) =>
-    readableWaveSidePoint(frame, lerpNumber(0.58, 0.98, index / samples), 0),
-  )
-
-  for (let index = 0; index < points.length - 1; index += 1) {
-    positions.push(...points[index], ...points[index + 1])
-  }
-
-  const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3))
-  return geometry
-}
-
 function sampleOuterSideProfileLine(frame: ReadableWaveFrame, samples: number): Vec3[] {
   const points = Array.from({ length: samples + 1 }, (_, index) => readableWavePoint(frame, index / samples, 0))
   let crestIndex = 0
@@ -574,7 +522,11 @@ function sampleOuterSideProfileLine(frame: ReadableWaveFrame, samples: number): 
     const previous = points[index - 1][2]
     const current = points[index][2]
     const next = points[index + 1][2]
-    if (current <= previous && current <= next && current < frame.height * 0.34) {
+    const lowSmoothReturn = current < frame.height * 0.11 && current <= previous && next <= current + frame.height * 0.018
+    if (lowSmoothReturn) {
+      return points.slice(0, index + 1)
+    }
+    if (current <= previous && current <= next && current < frame.height * 0.1) {
       return points.slice(0, index + 1)
     }
   }
@@ -584,7 +536,6 @@ function sampleOuterSideProfileLine(frame: ReadableWaveFrame, samples: number): 
 
 function readableWaveFrame(model: LatticeModel): ReadableWaveFrame {
   const profile = buildReadableWaveProfile(readableReferenceProfilePoints)
-  const isometricProfile = buildReadableWaveProfile(readableIsometricProfilePoints)
   const sideBounds = activeSideProfileBounds(model)
   const height = Math.max(model.summary.maxHeight * 1.42, model.config.height * Math.max(model.config.profileScale, 1.14), model.config.spacing * 12.8)
   const waveWidth = Math.min(sideBounds.span[0] * 0.82, height * 2.03)
@@ -594,7 +545,6 @@ function readableWaveFrame(model: LatticeModel): ReadableWaveFrame {
 
   return {
     profile,
-    isometricProfile,
     minX,
     maxX,
     centerY: model.bounds.center[1],
@@ -656,33 +606,43 @@ function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3
   const curledZ = frame.height * (profilePoint.z / frame.profile.maxZ)
   const centerX = lerpNumber(moundX, curledX, lateralCurlBlend)
   const offCenterCurlRelief = smoothStep(0.36, 0.92, t) * frame.progress * (1 - Math.pow(envelope, 0.32)) * 0.75
-  const centerZ = lerpNumber(moundZ, curledZ, lateralCurlBlend) * growth * (1 - offCenterCurlRelief)
+  const longitudinalPerimeterFade = smoothStep(0.04, 0.12, t) * (1 - smoothStep(0.9, 0.965, t))
+  const lateralPerimeterFade = smoothStep(0.04, 0.12, 1 - Math.abs(s))
+  const perimeterHeightFade = longitudinalPerimeterFade * lateralPerimeterFade
+  const perimeterPlanFade = perimeterHeightFade
+  const centerZ = lerpNumber(moundZ, curledZ, lateralCurlBlend) *
+    growth *
+    (1 - offCenterCurlRelief) *
+    perimeterHeightFade
   const curlShoulder = smoothStep(0.44, 0.72, t) * (1 - smoothStep(0.88, 1, t))
   const lipTip = smoothStep(0.7, 1, t)
   const lipBody = smoothStep(0.62, 0.94, t)
   const capLocalization = frame.progress * smoothStep(0.44, 0.82, t)
-  const shoulderFoldBlend = lerpNumber(baseFoldBlend, Math.pow(envelope, 2.45), capLocalization * curlShoulder * 0.68)
+  const shoulderFoldBlend = lerpNumber(baseFoldBlend, Math.pow(envelope, 1.35), capLocalization * curlShoulder * 0.68)
   const terminalLocalization = frame.progress * lipTip
-  const foldBlend = lerpNumber(shoulderFoldBlend, Math.pow(envelope, 2.85), terminalLocalization * 0.82)
+  const foldBlend = lerpNumber(shoulderFoldBlend, Math.pow(envelope, 0.82), terminalLocalization * 0.82)
   const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.22), Math.pow(envelope, 7.2), terminalLocalization * 0.92)
-  const crestLiftBlend = lerpNumber(liftBlend, Math.pow(envelope, 3.85), capLocalization * curlShoulder * 0.7)
+  const crestLiftBlend = lerpNumber(liftBlend, Math.pow(envelope, 2.2), capLocalization * curlShoulder * 0.7)
   const lipLiftBlend = lerpNumber(crestLiftBlend, terminalLipEnvelope, frame.progress * lipBody * 0.82)
   const pinchEnvelope = Math.pow(envelope, 0.42)
-  const curlPinch = Math.min(0.66, frame.progress * pinchEnvelope * (0.04 * curlShoulder + 0.54 * lipTip))
-  const yPinch = s * frame.halfSpan * curlPinch
+  const curlPinch = Math.min(0.18, frame.progress * pinchEnvelope * (0.01 * curlShoulder + 0.095 * lipTip))
+  const yPinch = s * frame.halfSpan * curlPinch * perimeterPlanFade
+  const terminalForwardBulge = waveWidth *
+    frame.progress *
+    smoothStep(0.7, 0.9, t) *
+    (1 - smoothStep(0.96, 1, t)) *
+    Math.pow(envelope, 1.85) *
+    0.055
 
   return [
-    lerpNumber(baseX, centerX, foldBlend),
+    lerpNumber(baseX, centerX, foldBlend) + terminalForwardBulge,
     baseY - yPinch,
     Math.max(0, centerZ * lipLiftBlend),
   ]
 }
 
 function readableWaveDisplayPoint(frame: ReadableWaveFrame, view: CameraViewRequest['view'], t: number, s: number): Vec3 {
-  if (view === 'top') return readableWaveTopPlanPoint(frame, t, s)
-  if (view === 'front') return readableWaveFrontPoint(frame, t, s)
-  if (view === 'isometric') return readableWaveIsometricPoint(frame, t, s)
-  if (view === 'side') return readableWaveSidePoint(frame, t, s)
+  void view
   return readableWavePoint(frame, t, s)
 }
 
@@ -700,158 +660,6 @@ function buildReadableWaveXCellCenterOverrides(model: LatticeModel, view: Camera
       -1 + (node.row / rowDenominator) * 2,
     ),
   ] as const))
-}
-
-function readableWaveSidePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3 {
-  const waveWidth = frame.maxX - frame.minX
-  const point = readableWavePoint(frame, t, 0)
-  const openThroat = frame.progress
-  const lipFace = smoothStep(0.62, 0.82, t) * (1 - smoothStep(0.92, 0.99, t))
-  const roundedUnderside = smoothStep(0.72, 0.91, t) * (1 - smoothStep(0.96, 0.998, t))
-  const throatLift = smoothStep(0.5, 0.7, t) * (1 - smoothStep(0.84, 0.94, t))
-  const throatFill = smoothStep(0.56, 0.78, t) * (1 - smoothStep(0.9, 0.985, t))
-  const terminalSmoothTaper = smoothStep(0.955, 1, t)
-
-  return [
-    point[0] + waveWidth * openThroat * (0.045 * lipFace - 0.006 * roundedUnderside - 0.006 * throatLift + 0.018 * terminalSmoothTaper),
-    point[1] + s * frame.halfSpan * 0.006,
-    Math.max(0, point[2] + frame.height * openThroat * (0.09 * throatLift + 0.085 * throatFill - 0.012 * roundedUnderside + 0.012 * terminalSmoothTaper)),
-  ]
-}
-
-function readableWaveIsometricPoint(frame: ReadableWaveFrame, t: number, s: number): Vec3 {
-  const waveWidth = frame.maxX - frame.minX
-  const envelope = readableLateralEnvelope(s)
-  const lipAdvance = frame.progress *
-    smoothStep(0.46, 0.82, t) *
-    (1 - smoothStep(0.92, 0.995, t)) *
-    Math.pow(envelope, 1.32) *
-    0.052
-  const profileT = clampUnit(t + lipAdvance)
-  const point = readableWavePoint(frame, profileT, s)
-  const center = Math.pow(envelope, 2.22)
-  const lipFace = smoothStep(0.62, 0.8, t) * (1 - smoothStep(0.92, 0.985, t))
-  const lowerLip = smoothStep(0.72, 0.91, t) * (1 - smoothStep(0.96, 0.998, t))
-  const throat = smoothStep(0.5, 0.68, t) * (1 - smoothStep(0.8, 0.92, t))
-  const throatFill = smoothStep(0.56, 0.78, t) * (1 - smoothStep(0.9, 0.985, t)) * Math.pow(envelope, 0.95)
-  const openThroat = frame.progress * center
-  const facePinch = smoothStep(0.6, 0.82, t) * (1 - smoothStep(0.93, 0.995, t)) * Math.pow(envelope, 0.36)
-  const roundedProfilePoint = sampleReadableWaveProfile(frame.isometricProfile, profileT)
-  const roundedLipBlend = frame.progress *
-    smoothStep(0.5, 0.82, t) *
-    (1 - smoothStep(0.92, 0.995, t)) *
-    Math.pow(envelope, 1.95) *
-    0.52
-  const displayPoint: Vec3 = [
-    lerpNumber(point[0], frame.minX + waveWidth * roundedProfilePoint.x, roundedLipBlend),
-    point[1],
-    lerpNumber(
-      point[2],
-      frame.height * (roundedProfilePoint.z / frame.isometricProfile.maxZ) * Math.pow(envelope, 3.8),
-      roundedLipBlend,
-    ),
-  ]
-  const heightFocusBand = frame.progress *
-    smoothStep(0.24, 0.78, t) *
-    (1 - smoothStep(0.93, 0.995, t)) *
-    0.9
-  const lateralHeightFocus = lerpNumber(0.22, 1, Math.pow(envelope, 1.2))
-  const focusedZ = lerpNumber(displayPoint[2], displayPoint[2] * lateralHeightFocus, heightFocusBand)
-  const roundedThroatLift = frame.height * openThroat * throat * 0.14
-  const terminalTipTaper = frame.progress *
-    smoothStep(0.62, 0.9, t) *
-    (1 - smoothStep(0.96, 0.995, t)) *
-    (1 - Math.pow(envelope, 0.9)) *
-    0.04
-  return [
-    displayPoint[0] + waveWidth * openThroat * (0.07 * lipFace - 0.022 * lowerLip - 0.012 * throat - 0.006 * facePinch) - waveWidth * terminalTipTaper,
-    displayPoint[1],
-    Math.max(0, focusedZ + roundedThroatLift + frame.height * openThroat * (0.095 * throatFill - 0.028 * lowerLip - 0.012 * facePinch)),
-  ]
-}
-
-function readableWaveFrontPoint(frame: ReadableWaveFrame, t: number, s: number): Vec3 {
-  const wavePoint = readableWavePoint(frame, t, s)
-  const waveWidth = frame.maxX - frame.minX
-  const frontDepthCenter = (frame.minX + frame.maxX) * 0.5
-  const envelope = readableLateralEnvelope(s)
-  const bodyBand = smoothStep(0.04, 0.56, t) * (1 - smoothStep(0.94, 1, t))
-  const bodyArch = frame.height * 0.78 *
-    (Math.sin(Math.PI * clampUnit(t * 0.9 + 0.03)) ** 1.04) *
-    Math.pow(envelope, 0.72) *
-    bodyBand
-  const capBand = smoothStep(0.5, 0.68, t) * (1 - smoothStep(0.93, 1, t))
-  const lipReturnBand = smoothStep(0.78, 0.9, t) * (1 - smoothStep(0.95, 1, t))
-  const centralLipMask = lipReturnBand * Math.pow(envelope, 0.9)
-  const bodyPinch = 0.26 * bodyBand * Math.pow(envelope, 0.4)
-  const capShoulder = Math.pow(envelope, 0.24) * capBand
-  const capArch = frame.height * 0.82 * capShoulder
-  const tuckedLip = frame.height * (0.58 - 0.19 * Math.pow(envelope, 0.58))
-  const domeHeight = Math.max(wavePoint[2] * 0.16, bodyArch * (1 - 0.34 * capBand), capArch)
-  const spanPinch = clampUnit(
-    bodyPinch +
-    0.24 * capBand * Math.pow(envelope, 0.34) +
-    0.18 * centralLipMask,
-  )
-
-  return [
-    lerpNumber(frontDepthCenter, wavePoint[0], 0.07) + waveWidth * 0.32 * centralLipMask,
-    frame.centerY + s * frame.halfSpan * (1 - spanPinch),
-    lerpNumber(domeHeight, tuckedLip, clampUnit(0.84 * centralLipMask)),
-  ]
-}
-
-function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number): Vec3 {
-  const wavePoint = readableWavePoint(frame, t, s)
-  const waveWidth = frame.maxX - frame.minX
-  const planMaxX = frame.maxX + waveWidth * 0.1
-  const planWidth = planMaxX - frame.minX
-  const planHalfSpan = planWidth * 0.5
-  const baseX = lerpNumber(frame.minX, frame.maxX, t)
-  const envelope = readableLateralEnvelope(s)
-  const heightRatio = clampUnit(wavePoint[2] / Math.max(frame.height, 0.000001))
-  const activeOval = Math.pow(heightRatio, 0.48) * smoothStep(0.1, 0.95, t) * (1 - smoothStep(0.97, 1, t))
-  const bodyRegion = smoothStep(0.08, 0.62, t) * (1 - smoothStep(0.9, 1, t))
-  const shoulderLobe = Math.exp(-Math.pow((t - 0.58) / 0.3, 2)) * (1 - smoothStep(0.9, 1, t))
-  const terminalNose = Math.exp(-Math.pow((t - 0.76) / 0.25, 2)) * (1 - smoothStep(0.92, 0.99, t))
-  const teardropLobe = shoulderLobe * Math.pow(envelope, 1.16)
-  const terminalCenterNose = terminalNose * Math.pow(envelope, 1.18) * smoothStep(0.66, 0.88, t)
-  const shoulderRound = shoulderLobe * Math.pow(envelope, 0.54) * (1 - Math.pow(envelope, 2.1))
-  const terminalRound = terminalNose * Math.pow(envelope, 0.5) * (1 - Math.pow(envelope, 2))
-  const edgeReturn = smoothStep(0.78, 0.98, t)
-  const terminalCap = terminalNose * Math.pow(envelope, 0.52) * (1 - 0.34 * edgeReturn)
-  const midSectionOval = Math.exp(-Math.pow((t - 0.76) / 0.34, 2)) * smoothStep(0.18, 0.96, t)
-  const midSectionShoulder = midSectionOval * (1 - Math.pow(envelope, 1.36)) * (1 - 0.08 * edgeReturn)
-  const terminalCenterRelief = terminalNose * Math.pow(envelope, 1.22) * smoothStep(0.68, 0.94, t)
-  const ovalFootprintPinch = 0.095 * midSectionOval * Math.pow(envelope, 0.52) * (1 - 0.55 * edgeReturn)
-  const bodyPush = waveWidth * (
-    0.004 * bodyRegion * Math.pow(envelope, 1.08) +
-    0.084 * activeOval * Math.pow(envelope, 0.72) +
-    0.038 * teardropLobe +
-    0.032 * shoulderRound +
-    0.019 * terminalCap +
-    0.003 * terminalCenterNose
-  ) * (1 - 0.78 * edgeReturn)
-  const terminalInset = waveWidth * (
-    0.011 * terminalCenterRelief
-  )
-  const terminalPlanRelease = smoothStep(0.66, 0.94, t)
-  const terminalWidthRound = 0.058 * terminalRound * (1 - 0.22 * edgeReturn)
-  const terminalPlanPinch = 0.001 * terminalNose * Math.pow(envelope, 0.9) * (1 - 0.25 * edgeReturn)
-  const planPinch = clampUnit(
-    0.005 * bodyRegion * Math.pow(envelope, 1.02) +
-    0.24 * activeOval * Math.pow(envelope, 0.36) * (1 - 0.18 * edgeReturn) +
-    0.0015 * teardropLobe * (1 - 0.68 * terminalPlanRelease) +
-    ovalFootprintPinch +
-    terminalPlanPinch,
-  )
-  const planX = baseX + bodyPush - terminalInset
-  const planY = frame.centerY + s * planHalfSpan * (1 - planPinch + 0.03 * activeOval * (1 - envelope) + 0.012 * terminalRound + 0.018 * midSectionShoulder) + s * planHalfSpan * terminalWidthRound
-  return [
-    planX,
-    planY,
-    wavePoint[2] * 0.12,
-  ]
 }
 
 function readableLateralEnvelope(s: number): number {
@@ -1490,7 +1298,7 @@ function XCellSharedJointArms({
     [model.config.columns, model.config.rows],
   )
   const opacity = readableSurfaceMode
-    ? scope.topView ? 0.026 : scope.sideView ? 0.004 : 0.004
+    ? scope.topView ? 0.062 : scope.sideView ? 0.036 : 0.034
     : scope.topView ? 0.44 : scope.sideView ? 0.34 : 0.31
   const depthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
   const rodRadius = Math.max(
@@ -1500,7 +1308,7 @@ function XCellSharedJointArms({
     readableSurfaceMode && scope.sideView ? 0.005 : scope.sideView ? 0.009 : 0.007,
   )
   const rodOpacity = readableSurfaceMode
-    ? scope.topView ? 0.008 : scope.sideView ? 0.0025 : 0.0025
+    ? scope.topView ? 0.035 : scope.sideView ? 0.024 : 0.022
     : scope.topView ? 0.4 : scope.sideView ? 0.28 : 0.24
   const mechanismInk = readableSurfaceMode ? '#5f5b54' : '#161713'
   const rodMaterial = useMemo(() => new THREE.MeshBasicMaterial({
@@ -1588,20 +1396,20 @@ function XCellConnectorJoints({
     ? scope.topView ? 1.2 : scope.sideView ? 1.35 : 1.3
     : scope.topView ? 2.2 : scope.sideView ? 2.45 : 2.28
   const coreOpacity = readableSurfaceMode
-    ? scope.topView ? 0.2 : scope.sideView ? 0.045 : 0.045
+    ? scope.topView ? 0.56 : scope.sideView ? 0.36 : 0.34
     : scope.topView ? 0.72 : scope.sideView ? 0.88 : 0.86
   const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
   const pinRadius = Math.max(
     model.config.spacing * (readableSurfaceMode
-      ? scope.topView ? 0.034 : scope.sideView ? 0.016 : 0.016
+      ? scope.topView ? 0.044 : scope.sideView ? 0.024 : 0.023
       : scope.topView ? 0.075 : scope.sideView ? 0.06 : 0.056),
     readableSurfaceMode && scope.sideView ? 0.012 : scope.topView ? 0.016 : 0.016,
   )
   const pinOpacity = readableSurfaceMode
-    ? scope.topView ? 0.1 : scope.sideView ? 0.025 : 0.025
+    ? scope.topView ? 0.36 : scope.sideView ? 0.22 : 0.2
     : scope.topView ? 0.66 : scope.sideView ? 0.76 : 0.72
-  const pinInk = readableSurfaceMode ? '#5a554f' : '#10120e'
-  const jointCoreInk = readableSurfaceMode ? '#5f5b54' : '#151712'
+  const pinInk = readableSurfaceMode ? '#080808' : '#10120e'
+  const jointCoreInk = readableSurfaceMode ? '#050505' : '#151712'
   const pinMaterial = useMemo(() => new THREE.MeshBasicMaterial({
     color: pinInk,
     transparent: true,
@@ -1675,13 +1483,13 @@ function XCellSquareCells({
   const cellDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
   const cellHalfSize = Math.max(
     model.config.spacing * (readableSurfaceMode
-      ? scope.topView ? 0.04 : scope.sideView ? 0.02 : 0.02
+      ? scope.topView ? 0.062 : scope.sideView ? 0.036 : 0.034
       : scope.topView ? 0.28 : scope.sideView ? 0.14 : 0.13),
     scope.topView ? 0.028 : 0.02,
   )
   const cellThickness = Math.max(cellHalfSize * 0.38, 0.006)
   const cellOpacity = readableSurfaceMode
-    ? scope.topView ? 0.28 : scope.sideView ? 0.035 : 0.035
+    ? scope.topView ? 0.72 : scope.sideView ? 0.44 : 0.42
     : scope.topView ? 0.96 : scope.sideView ? 0.72 : 0.68
   const cellRenderOrder = !readableSurfaceMode && scope.topView ? 22 : 18
   const cellGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
@@ -2029,7 +1837,7 @@ function positionCamera(
     : view === 'front'
       ? new THREE.Vector3(target.x + distance, target.y, target.z)
     : view === 'isometric'
-        ? new THREE.Vector3(target.x + distance * 0.58, target.y - distance * 0.58, target.z + distance * 0.34)
+        ? new THREE.Vector3(target.x + distance * 0.24, target.y - distance * 0.82, target.z + distance * 0.42)
       : new THREE.Vector3(target.x + distance * 0.82, target.y - distance * 0.92, target.z + distance * 0.78)
 
   camera.position.copy(position)

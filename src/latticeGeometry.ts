@@ -49,7 +49,7 @@ const CORE_PROFILE_START = 0.02
 const CORE_PROFILE_END = 1
 const CORE_OVERHANG_HEIGHT_FRACTION = 0.28
 export const DEFAULT_CUSTOM_PROFILE_POINTS =
-  '0,0;0.035,0.012;0.085,0.045;0.155,0.125;0.245,0.285;0.355,0.515;0.478,0.755;0.592,0.918;0.69,0.99;0.754,0.958;0.816,0.88;0.876,0.78;0.936,0.66;0.976,0.59;1,0.55'
+  '0,0;0.04,0.011;0.095,0.045;0.17,0.13;0.275,0.32;0.385,0.58;0.49,0.82;0.58,0.96;0.67,0.995;0.77,0.92;0.86,0.78;0.93,0.64;0.98,0.54;0.96,0.46;0.92,0.37;0.85,0.28;0.77,0.19;0.7,0.1;0.68,0.06;0.69,0.035;0.73,0.018;0.82,0.006;1,0'
 export const DEFAULT_CUSTOM_SECTION_POINTS =
   '0,0.025;0.08,0.22;0.22,0.78;0.39,1;0.57,0.82;0.72,0.42;0.86,0.18;1,0.035'
 
@@ -78,7 +78,7 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   profileScale: 0.55,
   xySliceLevel: 0.33,
   smoothing: 1,
-  lipSharpness: 1,
+  lipSharpness: 0.5,
   wallSmoothness: 0.28,
   flatContribution: 0.35,
   widthScale: 1,
@@ -464,11 +464,12 @@ export function runInverseSheetSanityChecks(): string[] {
   const tallWave = buildInverseSheetModel({ ...generatedMode, horizontalOffset: 9, height: 10 })
   const narrowWave = buildInverseSheetModel({ ...generatedMode, overhangWidth: 12 })
   const wideWave = buildInverseSheetModel({ ...generatedMode, overhangWidth: 36 })
-  const neutralAngle = buildInverseSheetModel({ overhangAngleDeg: 90, flatContribution: 0 })
-  const highAngle = buildInverseSheetModel({ overhangAngleDeg: 120, flatContribution: 0 })
+  const neutralAngle = buildInverseSheetModel({ ...generatedMode, overhangAngleDeg: 90, flatContribution: 0 })
+  const highAngle = buildInverseSheetModel({ ...generatedMode, overhangAngleDeg: 120, flatContribution: 0 })
   const highAngleSideProfileBlock = terminalSideProfileCavityBlock(highAngle)
   const generatedLipSideProfileBlock = terminalSideProfileCavityBlock(highAngleHighOverhang)
   const highAngleSmallGrid = buildInverseSheetModel({
+    ...generatedMode,
     rows: 20,
     columns: 20,
     height: 99,
@@ -1895,8 +1896,8 @@ function customProfileTargetPosition(
   const planMask = clampNumber(Math.max(rowMask, planRowMask) * longitudinalMask, 0, 1)
   if (shapeMask <= 0.000001 && planMask <= 0.000001) return rest
 
-  const profileSpan = profileRestLength * lerpNumber(0.94, 1.16, scaleAmount)
-  const profileHeight = profileRestLength * lerpNumber(0.27, 0.47, scaleAmount)
+  const profileSpan = profileRestLength * lerpNumber(1.02, 1.22, scaleAmount)
+  const profileHeight = profileRestLength * lerpNumber(0.255, 0.445, scaleAmount)
   const restX = profileRestLength * profileU
   const horizontalProjection = profile.x * profileSpan - restX
   const liftedHeight = Math.max(0, profile.z) * profileHeight
@@ -2438,7 +2439,7 @@ function applyCurledConeLip(
   const rawDip = clampNumber(lipDip, 0, 1)
   const curlFeasibility = smootherStep(overhangAmount / Math.max(DEFAULT_SHEET_SPACING * 2, 0.000001))
   const dip = rawDip * curlFeasibility
-  const sharp = Math.sqrt(smootherStep(clampNumber(lipSharpness, 0, 1)))
+  const sharp = smootherStep(clampNumber(lipSharpness, 0, 1)) * 0.66
   const returnU = breakingLipReturnU()
   const restXAt = (amount: number) => profileRestLength * amount
   const toDisplacement = (amount: number, current: { x: number; z: number }) => ({
@@ -2552,14 +2553,14 @@ function moanaReferenceLipPoints(dip: number, sharp: number): ProfilePoint[] {
   const lipNoseZ = lerpNumber(0.68, 0.73, curl) - pointed * 0.035
   const forwardLipX = lerpNumber(0.815, 0.88, curl) - pointed * 0.012
   const forwardLipZ = lerpNumber(0.48, 0.54, curl) - pointed * 0.04
-  const downturnedTipX = lerpNumber(0.875, 0.925, curl) - pointed * 0.008
-  const downturnedTipZ = lerpNumber(0.29, 0.34, curl) - pointed * 0.035
-  const lowerTaperX = lerpNumber(0.94, 0.965, curl) - pointed * 0.003
-  const lowerTaperZ = lerpNumber(0.18, 0.205, curl) - pointed * 0.012
-  const terminalTaperX = lerpNumber(0.975, 0.99, curl) - pointed * 0.001
-  const terminalTaperZ = lerpNumber(0.105, 0.12, curl) - pointed * 0.008
-  const apronX = lerpNumber(0.995, 0.998, curl)
-  const apronZ = lerpNumber(0.04, 0.03, curl)
+  const downturnedTipX = lerpNumber(0.866, 0.912, curl) - pointed * 0.006
+  const downturnedTipZ = lerpNumber(0.31, 0.36, curl) - pointed * 0.026
+  const lowerTaperX = lerpNumber(0.936, 0.944, curl) - pointed * 0.0015
+  const lowerTaperZ = lerpNumber(0.21, 0.23, curl) - pointed * 0.008
+  const terminalTaperX = lerpNumber(0.968, 0.978, curl) - pointed * 0.0005
+  const terminalTaperZ = lerpNumber(0.125, 0.14, curl) - pointed * 0.005
+  const apronX = lerpNumber(0.994, 0.996, curl)
+  const apronZ = lerpNumber(0.045, 0.038, curl)
 
   return [
     point(0, 0),
