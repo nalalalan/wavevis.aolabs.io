@@ -703,9 +703,20 @@ function buildReadableWaveXCellCenterOverrides(model: LatticeModel, view: Camera
 }
 
 function readableWaveSidePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3 {
+  const waveWidth = frame.maxX - frame.minX
   const point = readableWavePoint(frame, t, s)
+  const envelope = readableLateralEnvelope(s)
+  const center = Math.pow(envelope, 1.72)
+  const openThroat = frame.progress * center
+  const lipFace = smoothStep(0.62, 0.79, t) * (1 - smoothStep(0.91, 0.99, t))
+  const lowerHook = smoothStep(0.72, 0.89, t) * (1 - smoothStep(0.94, 0.995, t))
+  const throatLift = smoothStep(0.54, 0.7, t) * (1 - smoothStep(0.78, 0.91, t))
 
-  return point
+  return [
+    point[0] + waveWidth * openThroat * (0.055 * lipFace - 0.11 * lowerHook - 0.025 * throatLift),
+    point[1],
+    Math.max(0, point[2] + frame.height * openThroat * (0.055 * throatLift - 0.18 * lowerHook)),
+  ]
 }
 
 function readableWaveIsometricPoint(frame: ReadableWaveFrame, t: number, s: number): Vec3 {
