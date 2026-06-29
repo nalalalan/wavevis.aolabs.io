@@ -1300,7 +1300,7 @@ function summarizeStartupDisplayContract() {
   ))
   const expectedVisibleLabels = [
     ['cell centers', "if (key === 'showNodes') return 'cell centers'"],
-    ['X links', "return 'X links'"],
+    ['X legs', "return 'X legs'"],
   ]
   const missingVisibleLabels = expectedVisibleLabels.filter(([, fragment]) => !targetShapeControlsSource.includes(fragment))
   const failures = [
@@ -1355,10 +1355,15 @@ function summarizeReadableSurfaceRenderContract() {
     ['top surface keeps enough skin for the plan footprint to read without hiding the X array', "view === 'top' ? 0.22 : 0.36"],
     ['isometric surface uses a soft-lit real material rather than a fake throat patch', "view === 'isometric' ? ("],
     ['isometric soft-lit material stays pale enough to preserve the grid and throat', 'emissiveIntensity={0.82} roughness={1} metalness={0}'],
+    ['top surface uses real height-lit material so the mid-height cross-section footprint is readable from overhead', "view === 'top' ? ("],
+    ['top surface height relief stays display-only and bounded so it does not become a 3D side view', 'wavePoint[2] * 0.12'],
+    ['top view adds a derived height-shadow mesh from the actual readable surface, not a fake contour', 'function buildReadableWaveTopHeightShadowGeometry(model: LatticeModel): THREE.BufferGeometry'],
+    ['top height shadow is gated by real surface height and lateral envelope', 'const strength = clampUnit((heightRatio - 0.04) / 0.34) * Math.pow(centerEnvelope, 0.82) * Math.max(bodyBand, terminalBand)'],
+    ['top height shadow stays under the wire grid and does not write depth', '<mesh geometry={topHeightShadowGeometry} renderOrder={-1.5}>'],
     ['top wire grid stays strong enough to carry the cross-section footprint without returning to a dark tunnel', "view === 'top' ? 0.48 : 0.16"],
     ['top wire grid uses a slightly darker reference-sheet ink instead of relying on a helper contour', "const wireColor = view === 'top' ? '#9d968d' : '#b8b3ab'"],
     ['isometric span lines stay thinned after the throat-knot branch', "view === 'top' ? 1 : view === 'side' ? 6 : view === 'front' ? 2 : 3"],
-    ['isometric profile lines stay thinned after the throat-knot branch', "view === 'top' ? 3 : view === 'side' ? 5 : view === 'front' ? 4 : 4"],
+    ['top profile lines stay dense enough to show the rounded plan footprint', "view === 'top' ? 1 : view === 'side' ? 5 : view === 'front' ? 4 : 4"],
     ['side wire rows are thinned so the throat does not become a dark tunnel cluster', "view === 'side' ? 6"],
     ['side projected throat profile lines stay omitted so the throat does not read as a support wall', "if (view === 'side' && t > 0.61 && t < 0.87) continue"],
     ['side view keeps only the outer contour as its extra side outline', "if (view === 'side') {\n    pushPolyline(sampleOuterSideProfileLine(frame, samples))\n  } else if (view === 'front')"],
@@ -1381,26 +1386,29 @@ function summarizeReadableSurfaceRenderContract() {
     ['top projection keeps the plan sheet extension small enough to avoid a terminal wall', 'const planMaxX = frame.maxX + waveWidth * 0.1'],
     ['top projection keeps the rounded lobe inside the original sheet width', 'const baseX = lerpNumber(frame.minX, frame.maxX, t)'],
     ['top projection uses one shoulder lobe rather than stacked terminal bands', 'const shoulderLobe = Math.exp(-Math.pow((t - 0.58) / 0.3, 2)) * (1 - smoothStep(0.9, 1, t))'],
-    ['top projection rounds the terminal nose before the square sheet edge', 'const terminalNose = Math.exp(-Math.pow((t - 0.78) / 0.2, 2)) * (1 - smoothStep(0.94, 1, t))'],
+    ['top projection rounds the terminal nose before the square sheet edge', 'const terminalNose = Math.exp(-Math.pow((t - 0.74) / 0.22, 2)) * (1 - smoothStep(0.9, 0.98, t))'],
     ['top projection uses the shoulder lobe as the readable top footprint instead of a pointed terminal nose', 'const teardropLobe = shoulderLobe * Math.pow(envelope, 1.16)'],
-    ['top projection adds a center-led terminal nose instead of an off-center wall', 'const terminalCenterNose = terminalNose * Math.pow(envelope, 0.92) * smoothStep(0.68, 0.9, t)'],
-    ['top projection adds an off-center rounded terminal shoulder instead of a vertical seam', 'const terminalRound = terminalNose * Math.pow(envelope, 0.58) * (1 - Math.pow(envelope, 1.75))'],
+    ['top projection adds a softened center-led terminal nose instead of an off-center wall', 'const terminalCenterNose = terminalNose * Math.pow(envelope, 1.18) * smoothStep(0.66, 0.88, t)'],
+    ['top projection adds an off-center rounded terminal shoulder instead of a vertical seam', 'const terminalRound = terminalNose * Math.pow(envelope, 0.5) * (1 - Math.pow(envelope, 2))'],
+    ['top projection uses a bounded terminal cap so the plan footprint rounds instead of pointing', 'const terminalCap = terminalNose * Math.pow(envelope, 0.62) * (1 - 0.48 * edgeReturn)'],
     ['top projection rounds the terminal shoulders without making a full-height side bulge', 'const shoulderRound = shoulderLobe * Math.pow(envelope, 0.54) * (1 - Math.pow(envelope, 2.1))'],
-    ['top projection returns the lobe before it becomes the outer right boundary', 'const edgeReturn = smoothStep(0.78, 0.98, t)'],
+    ['top projection returns the lobe before it becomes the outer right boundary', 'const edgeReturn = smoothStep(0.74, 0.96, t)'],
     ['top projection adds a mid-height oval cross-section shoulder from the June 28 reference row', 'const midSectionShoulder = midSectionOval * (1 - Math.pow(envelope, 1.62)) * (1 - 0.18 * edgeReturn)'],
-    ['top projection keeps the centerline push reduced so the terminal footprint is not pointed', 'const terminalCenterRelief = terminalNose * Math.pow(envelope, 1.82) * smoothStep(0.74, 0.92, t)'],
-    ['top projection keeps the retained plan lobe broad enough to show the mound without becoming the stripe-forming branch', '0.068 * teardropLobe'],
-    ['top projection keeps retained shoulder rounding narrow enough to avoid a full-height terminal fan', '0.044 * shoulderRound'],
-    ['top projection keeps off-center terminal rounding narrow enough to avoid a full-height terminal fan', '0.052 * terminalRound'],
-    ['top projection keeps the center-led terminal nose below the pointed-footprint branch', '0.05 * terminalCenterNose'],
-    ['top projection scales down the retained push before it reaches the terminal edge without stacking rows', ') * (1 - 0.7 * edgeReturn)'],
-    ['top projection pulls the terminal centerline back only enough to round the plan footprint without clamping rows', '0.009 * terminalCenterRelief'],
+    ['top projection keeps the centerline push reduced so the terminal footprint is not pointed', 'const terminalCenterRelief = terminalNose * Math.pow(envelope, 1.4) * smoothStep(0.72, 0.94, t)'],
+    ['top projection reduces vertical y-pinch so the top footprint reads as a horizontal oval instead of a tall slit', 'const ovalFootprintPinch = 0.14 * midSectionOval * Math.pow(envelope, 0.6) * (1 - 0.42 * edgeReturn)'],
+    ['top projection keeps the retained plan lobe broad enough to show the mound without becoming the stripe-forming branch', '0.045 * teardropLobe'],
+    ['top projection keeps retained shoulder rounding narrow enough to avoid a full-height terminal fan', '0.026 * shoulderRound'],
+    ['top projection uses the bounded terminal cap for the rounded terminal footprint', '0.014 * terminalCap'],
+    ['top projection keeps the center-led terminal nose below the pointed-footprint branch', '0.006 * terminalCenterNose'],
+    ['top projection scales down the retained push before it reaches the terminal edge without stacking rows', ') * (1 - 0.78 * edgeReturn)'],
+    ['top projection pulls the terminal centerline back only enough to round the plan footprint without clamping rows', '0.006 * terminalCenterRelief'],
     ['top projection avoids a hard terminal clamp that stacks rows into a stripe', 'planX,'],
     ['top projection releases terminal pinch so the top footprint stays rounded', 'const terminalPlanRelease = smoothStep(0.66, 0.94, t)'],
-    ['top projection keeps terminal shoulder widening narrow so the top view does not form a vertical fan', 'const terminalWidthRound = 0.122 * terminalRound * (1 - 0.12 * edgeReturn)'],
-    ['top projection adds a bounded terminal pinch so the footprint rounds inward instead of widening into a stripe', 'const terminalPlanPinch = 0.0035 * terminalNose * Math.pow(envelope, 0.9) * (1 - 0.25 * edgeReturn)'],
-    ['top projection keeps terminal pinch below the triangular-fan branch', '0.0055 * teardropLobe * (1 - 0.68 * terminalPlanRelease)'],
-    ['top projection lets terminal shoulders round in y without collapsing rows', 's * planHalfSpan * (1 - planPinch + 0.016 * terminalRound + 0.018 * midSectionShoulder)'],
+    ['top projection keeps terminal shoulder widening narrow so the top view does not form a vertical fan', 'const terminalWidthRound = 0.035 * terminalRound * (1 - 0.3 * edgeReturn)'],
+    ['top projection adds a bounded terminal pinch so the footprint rounds inward instead of widening into a stripe', 'const terminalPlanPinch = 0.0015 * terminalNose * Math.pow(envelope, 0.9) * (1 - 0.25 * edgeReturn)'],
+    ['top projection keeps terminal pinch below the triangular-fan branch', '0.0015 * teardropLobe * (1 - 0.68 * terminalPlanRelease)'],
+    ['top projection feeds the oval footprint pinch into plan width instead of faking a contour line', 'ovalFootprintPinch +'],
+    ['top projection lets terminal shoulders round in y without collapsing rows', 's * planHalfSpan * (1 - planPinch + 0.006 * terminalRound + 0.006 * midSectionShoulder)'],
     ['top X overlay keeps one continuous frame layer instead of a terminal stripe split', 'topPlan: buildXCellGeometry(mechanism.frames),'],
     ['top X overlay keeps the old terminal split disabled', 'topFold: buildXCellGeometry([]),'],
     ['top readable X bars stay pale enough not to turn the rounded footprint into a terminal stripe', 'opacity={readableSurfaceMode ? 0.012 : 0.36}'],
@@ -2364,7 +2372,10 @@ function summarizeXCellRenderDirectLines(model) {
   const mechanism = buildConnectedXCellMechanism(model)
   const expectedInteriorNodeCount = Math.max(model.config.rows - 2, 0) * Math.max(model.config.columns - 2, 0)
   const expectedInteriorXSegmentCount = expectedInteriorNodeCount * 2
-  const renderedXLegSegmentCount = [...mechanism.connectorUsesByDiagonalId.values()].reduce((sum, uses) => sum + uses.length, 0)
+  const renderedXLegSegmentCount = mechanism.frames.reduce(
+    (sum, frame) => sum + ['ne', 'sw', 'nw', 'se'].filter((direction) => Boolean(frame.endpoints[direction])).length,
+    0,
+  )
   const expectedXLegSegmentCount = mechanism.connectorByDiagonalId.size * 2
   const renderedSharedJointArmCount = [...mechanism.connectorUsesByDiagonalId.values()].reduce((sum, uses) => sum + uses.length, 0)
   const sourceUsesConnectedXMechanism =
@@ -2384,11 +2395,11 @@ function summarizeXCellRenderDirectLines(model) {
   const sourceUsesSharedConnectorArms =
     latticeViewerSource.includes('<XCellSharedJointArms model={model} scope={renderScope} view={view} />') &&
     latticeViewerSource.includes('function XCellSharedJointArms') &&
-    latticeViewerSource.includes('mechanism.connectorUsesByDiagonalId.forEach((uses, diagonalId) => {') &&
-    latticeViewerSource.includes('const connector = mechanism.connectorByDiagonalId.get(diagonalId)') &&
-    latticeViewerSource.includes('if (!connector || uses.length !== 2) return') &&
-    latticeViewerSource.includes('const frame = mechanism.frameByNodeId.get(use.nodeId)') &&
-    latticeViewerSource.includes('positions.push(...frame.center, ...connector)') &&
+    latticeViewerSource.includes('mechanism.frames.forEach((frame) => {') &&
+    latticeViewerSource.includes('const { ne, sw, nw, se } = frame.endpoints') &&
+    latticeViewerSource.includes('const endpoints = [ne, sw, nw, se]') &&
+    latticeViewerSource.includes('positions.push(...frame.center, ...endpoint)') &&
+    !latticeViewerSource.includes('mechanism.connectorUsesByDiagonalId.forEach((uses, diagonalId) => {') &&
     latticeViewerSource.includes('<lineSegments geometry={geometry} renderOrder={17}>') &&
     latticeViewerSource.includes('const depthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView')
   const sourceUsesSharedConnectorRods =
@@ -2416,8 +2427,11 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('color="#f7f3ed"') &&
     latticeViewerSource.includes('color={jointCoreInk}') &&
     latticeViewerSource.includes('? scope.topView ? 2.8 : scope.sideView ? 6.35 : 5.95') &&
+    latticeViewerSource.includes(': scope.topView ? 3.4 : scope.sideView ? 4.4 : 4.1') &&
     latticeViewerSource.includes('? scope.topView ? 1.2 : scope.sideView ? 3.45 : 3.24') &&
+    latticeViewerSource.includes(': scope.topView ? 1.7 : scope.sideView ? 2.45 : 2.28') &&
     latticeViewerSource.includes('? scope.topView ? 0.24 : scope.sideView ? 0.74 : 0.7') &&
+    latticeViewerSource.includes(': scope.topView ? 0.64 : scope.sideView ? 0.88 : 0.86') &&
     latticeViewerSource.includes('const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView') &&
     latticeViewerSource.includes('depthTest={jointDepthTest}') &&
     latticeViewerSource.includes('depthWrite={false}')
@@ -2425,8 +2439,11 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('<XCellCenterPivots model={model} scope={renderScope} view={view} />') &&
     latticeViewerSource.includes('function XCellCenterPivots') &&
     latticeViewerSource.includes('return mechanism.frames.map((frame) => frame.center)') &&
-    latticeViewerSource.includes('<points geometry={geometry} renderOrder={18}>') &&
+    latticeViewerSource.includes('const pivotRenderOrder = !readableSurfaceMode && scope.topView ? 22 : 18') &&
+    latticeViewerSource.includes('<points geometry={geometry} renderOrder={pivotRenderOrder}>') &&
     latticeViewerSource.includes('color="#34342f"') &&
+    latticeViewerSource.includes(': scope.topView ? 2.6 : scope.sideView ? 1.08 : 1.02') &&
+    latticeViewerSource.includes(': scope.topView ? 0.88 : scope.sideView ? 0.55 : 0.5') &&
     latticeViewerSource.includes('const pivotDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView') &&
     latticeViewerSource.includes('depthTest={pivotDepthTest}') &&
     latticeViewerSource.includes('depthWrite={false}')

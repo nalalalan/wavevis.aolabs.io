@@ -175,7 +175,7 @@ function displayToggleLabel(key: BooleanKey): string {
   if (key === 'showSurface') return 'surface'
   if (key === 'showRestGhost') return 'flat grid'
   if (key === 'showNodes') return 'cell centers'
-  return 'X links'
+  return 'X legs'
 }
 
 function NumberInput({

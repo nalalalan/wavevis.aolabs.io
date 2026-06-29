@@ -316,6 +316,7 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const surfaceGeometry = useMemo(() => buildReadableWaveSurfaceGeometry(model, view), [model, view])
   const wireGeometry = useMemo(() => buildReadableWaveWireGeometry(model, view), [model, view])
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
+  const topHeightShadowGeometry = useMemo(() => view === 'top' ? buildReadableWaveTopHeightShadowGeometry(model) : null, [model, view])
   const sideThroatGeometry = useMemo(() => view === 'side' ? buildReadableWaveSideThroatGeometry(model) : null, [model, view])
   const throatGeometry = useMemo(() => view === 'isometric' ? buildReadableWaveThroatGeometry(model) : null, [model, view])
   const surfaceOpacity = view === 'side' ? 0.2 : view === 'front' ? 0.72 : view === 'top' ? 0.22 : 0.36
@@ -330,10 +331,17 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
           <meshStandardMaterial color="#ffffff" emissive="#fbfaf6" emissiveIntensity={0.52} roughness={0.92} metalness={0} side={THREE.DoubleSide} transparent opacity={0.38} depthWrite polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
         ) : view === 'isometric' ? (
           <meshStandardMaterial color="#ffffff" emissive="#fbfaf6" emissiveIntensity={0.82} roughness={1} metalness={0} side={THREE.DoubleSide} transparent opacity={surfaceOpacity} depthWrite polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
+        ) : view === 'top' ? (
+          <meshStandardMaterial color="#fbfaf6" emissive="#f6f0e7" emissiveIntensity={0.18} roughness={1} metalness={0} side={THREE.DoubleSide} transparent opacity={surfaceOpacity} depthWrite={false} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
         ) : (
           <meshBasicMaterial color="#fbfaf6" side={THREE.DoubleSide} transparent opacity={surfaceOpacity} depthWrite={view === 'side'} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
         )}
       </mesh>
+      {topHeightShadowGeometry && (
+        <mesh geometry={topHeightShadowGeometry} renderOrder={-1.5}>
+          <meshBasicMaterial vertexColors side={THREE.DoubleSide} transparent opacity={0.56} depthTest={false} depthWrite={false} />
+        </mesh>
+      )}
       <lineSegments geometry={wireGeometry} renderOrder={-1}>
         <lineBasicMaterial color={wireColor} transparent opacity={wireOpacity} depthTest depthWrite={false} />
       </lineSegments>
@@ -394,7 +402,7 @@ function buildReadableWaveWireGeometry(model: LatticeModel, view: CameraViewRequ
     positions.push(...a, ...b)
   }
   const spanLineStep = view === 'top' ? 1 : view === 'side' ? 6 : view === 'front' ? 2 : 3
-  const profileLineStep = view === 'top' ? 3 : view === 'side' ? 5 : view === 'front' ? 4 : 4
+  const profileLineStep = view === 'top' ? 1 : view === 'side' ? 5 : view === 'front' ? 4 : 4
 
   for (let vIndex = 0; vIndex <= readableWaveVSegments; vIndex += spanLineStep) {
     const s = -1 + (vIndex / readableWaveVSegments) * 2
@@ -422,6 +430,61 @@ function buildReadableWaveWireGeometry(model: LatticeModel, view: CameraViewRequ
 
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3))
+  return geometry
+}
+
+function buildReadableWaveTopHeightShadowGeometry(model: LatticeModel): THREE.BufferGeometry {
+  const frame = readableWaveFrame(model)
+  const positions: number[] = []
+  const colors: number[] = []
+  const rowStride = readableWaveUSegments + 1
+  const topPoints: Vec3[] = []
+  const shadowStrengths: number[] = []
+
+  for (let vIndex = 0; vIndex <= readableWaveVSegments; vIndex += 1) {
+    const s = -1 + (vIndex / readableWaveVSegments) * 2
+    for (let uIndex = 0; uIndex <= readableWaveUSegments; uIndex += 1) {
+      const t = uIndex / readableWaveUSegments
+      const wavePoint = readableWavePoint(frame, t, s)
+      const heightRatio = clampUnit(wavePoint[2] / Math.max(frame.height, 0.000001))
+      const centerEnvelope = Math.pow(readableLateralEnvelope(s), 0.62)
+      const bodyBand = smoothStep(0.18, 0.58, t) * (1 - smoothStep(0.95, 1, t))
+      const terminalBand = smoothStep(0.48, 0.86, t) * (1 - smoothStep(0.98, 1, t))
+      const strength = clampUnit((heightRatio - 0.04) / 0.34) * Math.pow(centerEnvelope, 0.82) * Math.max(bodyBand, terminalBand)
+
+      topPoints.push(readableWaveTopPlanPoint(frame, t, s))
+      shadowStrengths.push(strength)
+    }
+  }
+
+  const pushVertex = (index: number) => {
+    const point = topPoints[index]
+    const strength = shadowStrengths[index]
+    positions.push(point[0], point[1], point[2] + frame.height * 0.0008)
+    const shade = lerpNumber(0.985, 0.38, strength)
+    colors.push(shade, shade * 0.985, shade * 0.955)
+  }
+
+  for (let vIndex = 0; vIndex < readableWaveVSegments; vIndex += 1) {
+    for (let uIndex = 0; uIndex < readableWaveUSegments; uIndex += 1) {
+      const a = vIndex * rowStride + uIndex
+      const b = a + 1
+      const c = a + rowStride
+      const d = c + 1
+      const quadStrength = (shadowStrengths[a] + shadowStrengths[b] + shadowStrengths[c] + shadowStrengths[d]) * 0.25
+      if (quadStrength <= 0.012) continue
+      pushVertex(a)
+      pushVertex(b)
+      pushVertex(c)
+      pushVertex(b)
+      pushVertex(d)
+      pushVertex(c)
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3))
+  geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3))
   return geometry
 }
 
@@ -733,39 +796,42 @@ function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number
   const envelope = readableLateralEnvelope(s)
   const bodyRegion = smoothStep(0.08, 0.62, t) * (1 - smoothStep(0.9, 1, t))
   const shoulderLobe = Math.exp(-Math.pow((t - 0.58) / 0.3, 2)) * (1 - smoothStep(0.9, 1, t))
-  const terminalNose = Math.exp(-Math.pow((t - 0.78) / 0.2, 2)) * (1 - smoothStep(0.94, 1, t))
+  const terminalNose = Math.exp(-Math.pow((t - 0.74) / 0.22, 2)) * (1 - smoothStep(0.9, 0.98, t))
   const teardropLobe = shoulderLobe * Math.pow(envelope, 1.16)
-  const terminalCenterNose = terminalNose * Math.pow(envelope, 0.92) * smoothStep(0.68, 0.9, t)
+  const terminalCenterNose = terminalNose * Math.pow(envelope, 1.18) * smoothStep(0.66, 0.88, t)
   const shoulderRound = shoulderLobe * Math.pow(envelope, 0.54) * (1 - Math.pow(envelope, 2.1))
-  const terminalRound = terminalNose * Math.pow(envelope, 0.58) * (1 - Math.pow(envelope, 1.75))
-  const edgeReturn = smoothStep(0.78, 0.98, t)
+  const terminalRound = terminalNose * Math.pow(envelope, 0.5) * (1 - Math.pow(envelope, 2))
+  const edgeReturn = smoothStep(0.74, 0.96, t)
+  const terminalCap = terminalNose * Math.pow(envelope, 0.62) * (1 - 0.48 * edgeReturn)
   const midSectionOval = Math.exp(-Math.pow((t - 0.78) / 0.31, 2)) * smoothStep(0.22, 0.94, t)
   const midSectionShoulder = midSectionOval * (1 - Math.pow(envelope, 1.62)) * (1 - 0.18 * edgeReturn)
-  const terminalCenterRelief = terminalNose * Math.pow(envelope, 1.82) * smoothStep(0.74, 0.92, t)
+  const terminalCenterRelief = terminalNose * Math.pow(envelope, 1.4) * smoothStep(0.72, 0.94, t)
+  const ovalFootprintPinch = 0.14 * midSectionOval * Math.pow(envelope, 0.6) * (1 - 0.42 * edgeReturn)
   const bodyPush = waveWidth * (
-    0.005 * bodyRegion * Math.pow(envelope, 1.08) +
-    0.068 * teardropLobe +
-    0.044 * shoulderRound +
-    0.052 * terminalRound +
-    0.05 * terminalCenterNose
-  ) * (1 - 0.7 * edgeReturn)
+    0.004 * bodyRegion * Math.pow(envelope, 1.08) +
+    0.045 * teardropLobe +
+    0.026 * shoulderRound +
+    0.014 * terminalCap +
+    0.006 * terminalCenterNose
+  ) * (1 - 0.78 * edgeReturn)
   const terminalInset = waveWidth * (
-    0.009 * terminalCenterRelief
+    0.006 * terminalCenterRelief
   )
   const terminalPlanRelease = smoothStep(0.66, 0.94, t)
-  const terminalWidthRound = 0.122 * terminalRound * (1 - 0.12 * edgeReturn)
-  const terminalPlanPinch = 0.0035 * terminalNose * Math.pow(envelope, 0.9) * (1 - 0.25 * edgeReturn)
+  const terminalWidthRound = 0.035 * terminalRound * (1 - 0.3 * edgeReturn)
+  const terminalPlanPinch = 0.0015 * terminalNose * Math.pow(envelope, 0.9) * (1 - 0.25 * edgeReturn)
   const planPinch = clampUnit(
     0.005 * bodyRegion * Math.pow(envelope, 1.02) +
-    0.0055 * teardropLobe * (1 - 0.68 * terminalPlanRelease) +
+    0.0015 * teardropLobe * (1 - 0.68 * terminalPlanRelease) +
+    ovalFootprintPinch +
     terminalPlanPinch,
   )
   const planX = baseX + bodyPush - terminalInset
-  const planY = frame.centerY + s * planHalfSpan * (1 - planPinch + 0.016 * terminalRound + 0.018 * midSectionShoulder) + s * planHalfSpan * terminalWidthRound
+  const planY = frame.centerY + s * planHalfSpan * (1 - planPinch + 0.006 * terminalRound + 0.006 * midSectionShoulder) + s * planHalfSpan * terminalWidthRound
   return [
     planX,
     planY,
-    wavePoint[2] * 0.025,
+    wavePoint[2] * 0.12,
   ]
 }
 
@@ -1380,14 +1446,13 @@ function XCellSharedJointArms({
     const mechanism = buildConnectedXCellMechanism(model, centerOverrides)
     const positions: number[] = []
 
-    mechanism.connectorUsesByDiagonalId.forEach((uses, diagonalId) => {
-      const connector = mechanism.connectorByDiagonalId.get(diagonalId)
-      if (!connector || uses.length !== 2) return
+    mechanism.frames.forEach((frame) => {
+      const { ne, sw, nw, se } = frame.endpoints
+      const endpoints = [ne, sw, nw, se]
 
-      uses.forEach((use) => {
-        const frame = mechanism.frameByNodeId.get(use.nodeId)
-        if (!frame) return
-        positions.push(...frame.center, ...connector)
+      endpoints.forEach((endpoint) => {
+        if (!endpoint) return
+        positions.push(...frame.center, ...endpoint)
       })
     })
 
@@ -1499,23 +1564,23 @@ function XCellConnectorJoints({
 
   const haloSize = readableSurfaceMode
     ? scope.topView ? 2.8 : scope.sideView ? 6.35 : 5.95
-    : scope.topView ? 5.6 : scope.sideView ? 4.4 : 4.1
+    : scope.topView ? 3.4 : scope.sideView ? 4.4 : 4.1
   const coreSize = readableSurfaceMode
     ? scope.topView ? 1.2 : scope.sideView ? 3.45 : 3.24
-    : scope.topView ? 3.1 : scope.sideView ? 2.45 : 2.28
+    : scope.topView ? 1.7 : scope.sideView ? 2.45 : 2.28
   const coreOpacity = readableSurfaceMode
     ? scope.topView ? 0.24 : scope.sideView ? 0.74 : 0.7
-    : scope.topView ? 0.96 : scope.sideView ? 0.88 : 0.86
+    : scope.topView ? 0.64 : scope.sideView ? 0.88 : 0.86
   const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
   const pinRadius = Math.max(
     model.config.spacing * (readableSurfaceMode
       ? scope.topView ? 0.027 : scope.sideView ? 0.05 : 0.048
-      : scope.topView ? 0.046 : scope.sideView ? 0.038 : 0.035),
+      : scope.topView ? 0.028 : scope.sideView ? 0.038 : 0.035),
     readableSurfaceMode && scope.sideView ? 0.022 : scope.topView ? 0.016 : 0.016,
   )
   const pinOpacity = readableSurfaceMode
     ? scope.topView ? 0.14 : scope.sideView ? 0.62 : 0.58
-    : scope.topView ? 0.82 : scope.sideView ? 0.76 : 0.72
+    : scope.topView ? 0.56 : scope.sideView ? 0.76 : 0.72
   const pinInk = readableSurfaceMode ? '#5a554f' : '#10120e'
   const jointCoreInk = readableSurfaceMode ? '#5f5b54' : '#151712'
   const pinMaterial = useMemo(() => new THREE.MeshBasicMaterial({
@@ -1598,14 +1663,15 @@ function XCellCenterPivots({
 
   const size = readableSurfaceMode
     ? scope.topView ? 0.68 : scope.sideView ? 1.14 : 1.12
-    : scope.topView ? 1.1 : scope.sideView ? 1.08 : 1.02
+    : scope.topView ? 2.6 : scope.sideView ? 1.08 : 1.02
   const opacity = readableSurfaceMode
     ? scope.topView ? 0.018 : scope.sideView ? 0.13 : 0.12
-    : scope.topView ? 0.6 : scope.sideView ? 0.55 : 0.5
+    : scope.topView ? 0.88 : scope.sideView ? 0.55 : 0.5
   const pivotDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
+  const pivotRenderOrder = !readableSurfaceMode && scope.topView ? 22 : 18
 
   return (
-    <points geometry={geometry} renderOrder={18}>
+    <points geometry={geometry} renderOrder={pivotRenderOrder}>
       <pointsMaterial
         color="#34342f"
         transparent
