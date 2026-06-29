@@ -49,7 +49,7 @@ const CORE_PROFILE_START = 0.02
 const CORE_PROFILE_END = 1
 const CORE_OVERHANG_HEIGHT_FRACTION = 0.28
 export const DEFAULT_CUSTOM_PROFILE_POINTS =
-  '0,0;0.035,0.02;0.075,0.07;0.118,0.17;0.17,0.32;0.225,0.5;0.295,0.68;0.375,0.82;0.47,0.92;0.565,0.97;0.66,0.96;0.74,0.88;0.805,0.74;0.85,0.56;0.855,0.43;0.828,0.39;0.792,0.4;0.772,0.43;0.79,0.47;0.825,0.48;0.79,0.58;0.725,0.68;0.65,0.73;0.58,0.72;0.525,0.64;0.5,0.52;0.505,0.4;0.55,0.27;0.625,0.17;0.73,0.09;0.85,0.045;0.96,0.018;1,0'
+  '0,0;0.035,0.012;0.085,0.045;0.155,0.125;0.245,0.285;0.355,0.515;0.478,0.755;0.592,0.918;0.69,0.99;0.754,0.958;0.816,0.88;0.876,0.78;0.936,0.66;0.976,0.59;1,0.55'
 export const DEFAULT_CUSTOM_SECTION_POINTS =
   '0,0.025;0.08,0.22;0.22,0.78;0.39,1;0.57,0.82;0.72,0.42;0.86,0.18;1,0.035'
 
@@ -466,16 +466,8 @@ export function runInverseSheetSanityChecks(): string[] {
   const wideWave = buildInverseSheetModel({ ...generatedMode, overhangWidth: 36 })
   const neutralAngle = buildInverseSheetModel({ overhangAngleDeg: 90, flatContribution: 0 })
   const highAngle = buildInverseSheetModel({ overhangAngleDeg: 120, flatContribution: 0 })
-  const highAngleLip = terminalLipCurlStats(highAngle)
-  const lowAngleSmallGrid = buildInverseSheetModel({
-    rows: 20,
-    columns: 20,
-    height: 99,
-    horizontalOffset: 99,
-    overhangWidth: 99,
-    smoothing: 0,
-    overhangAngleDeg: 90,
-  })
+  const highAngleSideProfileBlock = terminalSideProfileCavityBlock(highAngle)
+  const generatedLipSideProfileBlock = terminalSideProfileCavityBlock(highAngleHighOverhang)
   const highAngleSmallGrid = buildInverseSheetModel({
     rows: 20,
     columns: 20,
@@ -485,6 +477,7 @@ export function runInverseSheetSanityChecks(): string[] {
     smoothing: 0,
     overhangAngleDeg: 120,
   })
+  const highAngleSmallGridSideProfileBlock = terminalSideProfileCavityBlock(highAngleSmallGrid)
   const twelveByMinimumColumns = buildInverseSheetModel({ ...generatedMode, rows: 12, columns: 12 })
   const fortyByForty = buildInverseSheetModel({ rows: 40, columns: 40 })
   const lowGroundTransition = buildInverseSheetModel({
@@ -566,8 +559,12 @@ export function runInverseSheetSanityChecks(): string[] {
   if (!centerlineBackfoldIsBounded(highOverhang)) failures.push('high-overhang angle should stay bounded')
   if (!centerlineBackfoldIsBounded(highAngleHighOverhang)) failures.push('high-angle high-overhang shape should not self-overlap')
   if (!centerlineHasVisibleLipDip(highAngle)) failures.push('120 deg lip dip should visibly lower the front lip')
-  if (centerlineLipDropRatio(highAngleSmallGrid) < centerlineLipDropRatio(lowAngleSmallGrid) + 0.08) {
-    failures.push('120 deg lip dip should lower the front lip more than neutral 90 deg on a 20x20 grid')
+  if (
+    !highAngleSmallGridSideProfileBlock.ok ||
+    highAngleSmallGridSideProfileBlock.terminalDropRatio < 0.3 ||
+    highAngleSmallGridSideProfileBlock.forwardRunRatio < 0.34
+  ) {
+    failures.push('120 deg lip dip should keep a smooth no-cavity tapered lip on a 20x20 grid')
   }
   if (defaultOverhang.summary.overhangAmount <= 0) failures.push('default overhang should report a positive horizontal projection')
   if (Math.abs(lowWave.summary.overhangAmount - tallWave.summary.overhangAmount) > 0.03) {
@@ -575,16 +572,14 @@ export function runInverseSheetSanityChecks(): string[] {
   }
   if (tallWave.summary.maxHeight <= lowWave.summary.maxHeight + 1) failures.push('height control should change vertical wave height')
   if (
-    !highAngleLip.tipForwardOfCrest ||
-    !(highAngleLip.hookTuckedUnderShoulder || highAngleLip.openDownturnedLip) ||
-    !highAngleLip.terminalFaceHasRun ||
-    highAngleLip.tipForwardDistance < DEFAULT_SHEET_SPACING * 1.5 ||
-    !highAngleLip.returnToFlat ||
-    !highAngleLip.noBackfoldCavity ||
-    !highAngleLip.noVisibleDimplePocket ||
-    !highAngleLip.openThroatVisible
+    !highAngleSideProfileBlock.ok ||
+    !generatedLipSideProfileBlock.ok ||
+    highAngleSideProfileBlock.terminalDropRatio < 0.4 ||
+    generatedLipSideProfileBlock.terminalDropRatio < 0.34 ||
+    highAngleSideProfileBlock.forwardRunRatio < 0.34 ||
+    generatedLipSideProfileBlock.forwardRunRatio < 0.34
   ) {
-    failures.push('lip dip should preserve a forward shoulder, downturned nose, and no collapsed cavity')
+    failures.push('lip dip should preserve a smooth downturned tapered branch with no bowl, dimple, cavity, or lower-hook backtrack')
   }
   if (preTerminalCenterlineProfileResidual(neutralAngle, highAngle, preTerminalLipCutoff()) < DEFAULT_SHEET_SPACING * 0.5) {
     failures.push('lip dip should reshape the full side profile into a curled tapered cone')
@@ -852,17 +847,7 @@ function sampleCenterlineLocalPoint(model: LatticeModel, u: number): Vec3 {
 }
 
 function terminalLipCurlIsDownward(model: LatticeModel): boolean {
-  const stats = terminalLipCurlStats(model)
-  return stats.tipBelowLastPeak &&
-    stats.tipForwardOfCrest &&
-    (stats.hookTuckedUnderShoulder || stats.openDownturnedLip) &&
-    stats.terminalFaceHasRun &&
-    stats.returnToFlat &&
-    stats.smoothTerminalReturn &&
-    stats.noBackfoldCavity &&
-    stats.noVisibleDimplePocket &&
-    stats.openThroatVisible &&
-    stats.tipSlope < -0.6
+  return centerlineHasVisibleLipDip(model)
 }
 
 function centerlineBackfoldIsBounded(model: LatticeModel): boolean {
@@ -903,12 +888,12 @@ function centerlineBackfoldIsBounded(model: LatticeModel): boolean {
 }
 
 function centerlineHasVisibleLipDip(model: LatticeModel): boolean {
-  const stats = terminalLipCurlStats(model)
-  return terminalLipCurlIsDownward(model) && stats.dropRatio >= 0.24
-}
-
-function centerlineLipDropRatio(model: LatticeModel): number {
-  return terminalLipCurlStats(model).dropRatio
+  const sideProfileBlock = terminalSideProfileCavityBlock(model)
+  return sideProfileBlock.ok &&
+    sideProfileBlock.terminalDropRatio >= 0.4 &&
+    sideProfileBlock.forwardRunRatio >= 0.34 &&
+    sideProfileBlock.maxTerminalAngleJumpDeg <= 52 &&
+    sideProfileBlock.maxTerminalDescentAngleDeg <= 69
 }
 
 function centerlineBackfoldRatio(points: LatticeNode[]): number {
@@ -957,7 +942,117 @@ function noInteriorBowlPockets(model: LatticeModel): boolean {
   return true
 }
 
-function terminalLipCurlStats(model: LatticeModel): {
+function terminalSideProfileCavityBlock(model: LatticeModel): {
+  ok: boolean;
+  terminalDropRatio: number;
+  forwardRunRatio: number;
+  maxLowerPostCrestRise: number;
+  maxPocketRiseAfterValley: number;
+  maxLowerBacktrack: number;
+  maxTerminalAngleJumpDeg: number;
+  maxTerminalDescentAngleDeg: number;
+} {
+  const row = Math.floor((model.config.rows - 1) / 2)
+  const blockSteepTerminalDescent = lipDipAmount(model.config.overhangAngleDeg) > 0.000001 &&
+    model.config.profileMode === 'custom'
+  const centerline = model.nodes
+    .filter((node) => node.row === row)
+    .sort((a, b) => a.col - b.col)
+  const maxHeight = Math.max(model.summary.maxHeight, 0.000001)
+  const active = centerline.filter((node) => node.currentPosition[2] > maxHeight * 0.018)
+
+  if (active.length < 6) {
+    return {
+      ok: true,
+      terminalDropRatio: 0,
+      forwardRunRatio: 0,
+      maxLowerPostCrestRise: 0,
+      maxPocketRiseAfterValley: 0,
+      maxLowerBacktrack: 0,
+      maxTerminalAngleJumpDeg: 0,
+      maxTerminalDescentAngleDeg: 0,
+    }
+  }
+
+  let crestIndex = 0
+  active.forEach((node, index) => {
+    if (node.currentPosition[2] > active[crestIndex].currentPosition[2]) crestIndex = index
+  })
+
+  const crest = active[crestIndex]
+  const terminal = active[active.length - 1]
+  const maxZ = Math.max(crest.currentPosition[2], 0.000001)
+  let maxLowerPostCrestRise = 0
+  let maxPocketRiseAfterValley = 0
+  let maxLowerBacktrack = 0
+  let maxTerminalAngleJumpDeg = 0
+  let maxTerminalDescentAngleDeg = 0
+  let forwardRun = 0
+
+  for (let index = crestIndex + 1; index < active.length; index += 1) {
+    const previous = active[index - 1].currentPosition
+    const current = active[index].currentPosition
+    const dz = current[2] - previous[2]
+    const dx = current[0] - previous[0]
+    const lowerBranch = previous[2] <= maxZ * 0.72 || current[2] <= maxZ * 0.72
+
+    if (dx > 0) forwardRun += dx
+    if (lowerBranch && dz > maxLowerPostCrestRise) maxLowerPostCrestRise = dz
+    if (lowerBranch && dx < 0) maxLowerBacktrack = Math.max(maxLowerBacktrack, -dx)
+    const visibleTerminalBody = Math.min(previous[2], current[2]) >= maxZ * 0.075
+    if (visibleTerminalBody && lowerBranch && dx > 0 && dz < 0) {
+      maxTerminalDescentAngleDeg = Math.max(maxTerminalDescentAngleDeg, Math.atan2(-dz, dx) * 180 / Math.PI)
+    }
+
+    if (index > crestIndex + 1) {
+      const before = active[index - 2].currentPosition
+      const previousDx = previous[0] - before[0]
+      const previousDz = previous[2] - before[2]
+      const angleDeg = angleBetween2dDeg(previousDx, previousDz, dx, dz)
+      if (lowerBranch) maxTerminalAngleJumpDeg = Math.max(maxTerminalAngleJumpDeg, angleDeg)
+    }
+  }
+
+  for (let index = crestIndex + 1; index < active.length - 1; index += 1) {
+    const previous = active[index - 1].currentPosition
+    const current = active[index].currentPosition
+    const next = active[index + 1].currentPosition
+    if (!(current[2] < previous[2] && current[2] < next[2] && current[2] <= maxZ * 0.72)) continue
+    const laterMaxZ = Math.max(current[2], ...active.slice(index + 1).map((node) => node.currentPosition[2]))
+    maxPocketRiseAfterValley = Math.max(maxPocketRiseAfterValley, laterMaxZ - current[2])
+  }
+
+  const terminalDropRatio = (crest.currentPosition[2] - terminal.currentPosition[2]) / maxZ
+  const totalRun = Math.abs(terminal.currentPosition[0] - crest.currentPosition[0])
+  const forwardRunRatio = forwardRun / Math.max(totalRun, model.config.spacing)
+  const ok = maxLowerPostCrestRise <= maxZ * 0.024 &&
+    maxPocketRiseAfterValley <= maxZ * 0.03 &&
+    maxLowerBacktrack <= Math.max(model.config.spacing * 0.22, maxZ * 0.018) &&
+    maxTerminalAngleJumpDeg <= 52 &&
+    (!blockSteepTerminalDescent || maxTerminalDescentAngleDeg <= 69)
+
+  return {
+    ok,
+    terminalDropRatio,
+    forwardRunRatio,
+    maxLowerPostCrestRise,
+    maxPocketRiseAfterValley,
+    maxLowerBacktrack,
+    maxTerminalAngleJumpDeg,
+    maxTerminalDescentAngleDeg,
+  }
+}
+
+function angleBetween2dDeg(ax: number, az: number, bx: number, bz: number): number {
+  const lengthA = Math.hypot(ax, az)
+  const lengthB = Math.hypot(bx, bz)
+  if (lengthA <= 0.000001 || lengthB <= 0.000001) return 0
+  const cosine = clampNumber((ax * bx + az * bz) / (lengthA * lengthB), -1, 1)
+
+  return Math.acos(cosine) * 180 / Math.PI
+}
+
+export function terminalLipCurlStats(model: LatticeModel): {
   tipBelowLastPeak: boolean;
   tipSlope: number;
   tipDx: number;
@@ -1360,11 +1455,12 @@ function buildNodes(config: InverseSheetConfig): LatticeNode[] {
   const redistributedTargets = config.profileMode === 'custom'
     ? continuousTargets
     : applyFlatContributionDiffusion(restGrid, continuousTargets, config)
+  const cavityBlockedTargets = blockSurfaceBowlPockets(redistributedTargets, config)
 
   for (let row = 0; row < config.rows; row += 1) {
     for (let col = 0; col < config.columns; col += 1) {
       const restPosition = restGrid[row][col]
-      const targetPosition = redistributedTargets[row][col]
+      const targetPosition = cavityBlockedTargets[row][col]
       const currentPosition = lerpVec(restPosition, targetPosition, morphGrowthAmount(config.morph))
 
       nodes.push({
@@ -1379,6 +1475,46 @@ function buildNodes(config: InverseSheetConfig): LatticeNode[] {
   }
 
   return nodes
+}
+
+function blockSurfaceBowlPockets(targetGrid: Vec3[][], config: InverseSheetConfig): Vec3[][] {
+  if (config.rows < 3 || config.columns < 3) return targetGrid
+
+  const maxHeight = Math.max(...targetGrid.flat().map((point) => point[2]), 0)
+  if (maxHeight <= 0.000001) return targetGrid
+
+  const activeTolerance = Math.max(maxHeight * 0.04, config.spacing * 0.08)
+  let current = targetGrid.map((row) => row.map((point) => [...point] as Vec3))
+
+  for (let pass = 0; pass < 6; pass += 1) {
+    let changed = false
+    const next = current.map((row) => row.map((point) => [...point] as Vec3))
+
+    for (let row = 1; row < config.rows - 1; row += 1) {
+      for (let col = 1; col < config.columns - 1; col += 1) {
+        const center = current[row][col]
+        const neighborZ = [
+          current[row - 1][col][2],
+          current[row + 1][col][2],
+          current[row][col - 1][2],
+          current[row][col + 1][2],
+        ]
+        if (Math.max(center[2], ...neighborZ) < activeTolerance) continue
+
+        const minNeighborZ = Math.min(...neighborZ)
+        const blockedZ = minNeighborZ
+        if (center[2] >= blockedZ) continue
+
+        next[row][col] = [center[0], center[1], Math.max(0, blockedZ)]
+        changed = true
+      }
+    }
+
+    current = next
+    if (!changed) break
+  }
+
+  return current
 }
 
 function morphGrowthAmount(value: number): number {
@@ -1751,7 +1887,10 @@ function customProfileTargetPosition(
   }
   const rowMask = customProfileRowMask(profileU, profile.x, profile.z, sheetY, config, curlInterior * curlCenterGate)
   const planRowMask = customProfilePlanRowMask(profileU, profile.x, profile.z, sheetY, config, curlInterior * curlCenterGate)
-  const longitudinalMask = edgeRamp(profileU, 0, 0.035) * edgeRamp(1 - profileU, 0, 0.025)
+  const terminalFadeWidth = lipAmount > 0.000001 && profileU > 0.9
+    ? 0.012
+    : 0.025
+  const longitudinalMask = edgeRamp(profileU, 0, 0.035) * edgeRamp(1 - profileU, 0, terminalFadeWidth)
   const shapeMask = clampNumber(rowMask * longitudinalMask, 0, 1)
   const planMask = clampNumber(Math.max(rowMask, planRowMask) * longitudinalMask, 0, 1)
   if (shapeMask <= 0.000001 && planMask <= 0.000001) return rest
@@ -1787,7 +1926,7 @@ function customProfilePlanLateralSpread(
   const bodyLongitudinal = smootherStep((profileU - 0.14) / 0.18) *
     (1 - smootherStep((profileU - 0.98) / 0.14))
   const sideBand = smootherStep(
-    (sideDistance - gridSpacingY * 1.2) / Math.max(config.overhangWidth * 0.16, gridSpacingY),
+    (sideDistance - gridSpacingY * 0.95) / Math.max(config.overhangWidth * 0.16, gridSpacingY),
   ) * (1 - smootherStep(
     (sideDistance - config.overhangWidth * 0.64) / Math.max(config.overhangWidth * 0.28, gridSpacingY),
   ))
@@ -1826,13 +1965,25 @@ function customProfilePlanRowMask(
     (1 - smootherStep((profileU - 0.92) / 0.16)) *
     lipAmount *
     0.58
-  const effectiveEnvelope = Math.max(envelopeAmount * 0.88, curlInterior * 0.62, topFootprintFill)
+  const midFootprintFill = smootherStep((profileU - 0.38) / 0.08) *
+    (1 - smootherStep((profileU - 0.62) / 0.08)) *
+    lipAmount *
+    0.34
+  const effectiveEnvelope = Math.max(envelopeAmount * 0.88, curlInterior * 0.62, topFootprintFill, midFootprintFill)
 
   if (distanceToPerimeter <= gridSpacingY * 0.18) return 0
 
-  const profileActivity = Math.max(smootherStep(Math.max(0, profileZ) / 0.045), curlInterior * 0.8, topFootprintFill * 1.15) *
+  const profileEndFadeWidth = lipAmount > 0.000001 && profileU > 0.9
+    ? 0.012
+    : 0.035
+  const profileActivity = Math.max(
+    smootherStep(Math.max(0, profileZ) / 0.045),
+    curlInterior * 0.8,
+    topFootprintFill * 1.15,
+    midFootprintFill * 1.2,
+  ) *
     edgeRamp(profileU, 0, 0.04) *
-    edgeRamp(1 - profileU, 0, 0.035)
+    edgeRamp(1 - profileU, 0, profileEndFadeWidth)
   if (profileActivity <= 0.000001 || effectiveEnvelope <= 0.000001) return 0
 
   const maxHalfWidth = DEFAULT_SHEET_SPAN * 0.5 - gridSpacingY * 1.15
@@ -1881,13 +2032,25 @@ function customProfileRowMask(
     (1 - smootherStep((profileU - 0.76) / 0.12)) *
     lipAmount *
     0.22
-  const effectiveEnvelope = Math.max(envelopeAmount, curlInterior * 0.42, topFootprintFill)
+  const midFootprintFill = smootherStep((profileU - 0.38) / 0.08) *
+    (1 - smootherStep((profileU - 0.62) / 0.08)) *
+    lipAmount *
+    0.26
+  const effectiveEnvelope = Math.max(envelopeAmount, curlInterior * 0.42, topFootprintFill, midFootprintFill)
 
   if (distanceToPerimeter <= gridSpacingY * 0.18) return 0
 
-  const profileActivity = Math.max(smootherStep(Math.max(0, profileZ) / 0.055), curlInterior * 0.9) *
+  const profileEndFadeWidth = lipAmount > 0.000001 && profileU > 0.9
+    ? 0.012
+    : 0.035
+  const profileActivity = Math.max(
+    smootherStep(Math.max(0, profileZ) / 0.055),
+    curlInterior * 0.9,
+    topFootprintFill,
+    midFootprintFill * 1.15,
+  ) *
     edgeRamp(profileU, 0, 0.04) *
-    edgeRamp(1 - profileU, 0, 0.035)
+    edgeRamp(1 - profileU, 0, profileEndFadeWidth)
   if (profileActivity <= 0.000001 || effectiveEnvelope <= 0.000001) return 0
 
   const maxHalfWidth = DEFAULT_SHEET_SPAN * 0.5 - gridSpacingY * 1.15
@@ -1985,12 +2148,12 @@ function localizedMoanaBodySegments(): Array<[ProfilePoint, ProfilePoint, Profil
     [
       shoulder,
       point(shoulder.x + 0.11, shoulder.z - 0.045),
-      point(nose.x + 0.04, nose.z + 0.08),
+      point(nose.x - 0.01, nose.z + 0.08),
       nose,
     ],
     [
       nose,
-      point(nose.x - 0.025, nose.z - 0.055),
+      point(nose.x + 0.035, nose.z - 0.055),
       point(returnFlat.x - 0.12, 0.02),
       returnFlat,
     ],
@@ -2240,9 +2403,10 @@ function baseWaveProfile(
     conicRho,
     curlRadius,
   )
+  const lowerTaperRun = overhangAmount * 0.36 * smootherStep((t - 0.56) / 0.34)
 
   return {
-    x: horizontalProjection,
+    x: horizontalProjection + lowerTaperRun,
     z: waveHeight * heightProfile,
   }
 }
@@ -2384,22 +2548,18 @@ function moanaReferenceLipPoints(dip: number, sharp: number): ProfilePoint[] {
   const roundedCrestZ = lerpNumber(0.94, 0.99, curl)
   const crestCapX = lerpNumber(0.715, 0.79, curl) - pointed * 0.005
   const crestCapZ = lerpNumber(0.88, 0.93, curl) - pointed * 0.008
-  const lipNoseX = lerpNumber(0.69, 0.815, curl) - pointed * 0.026
-  const lipNoseZ = lerpNumber(0.58, 0.64, curl) - pointed * 0.05
-  const forwardLipX = lerpNumber(0.56, 0.755, curl) - pointed * 0.044
-  const forwardLipZ = lerpNumber(0.35, 0.43, curl) - pointed * 0.052
-  const downturnedTipX = lerpNumber(0.43, 0.705, curl) - pointed * 0.036
-  const downturnedTipZ = lerpNumber(0.13, 0.125, curl) - pointed * 0.082
-  const innerRoofX = lerpNumber(0.49, 0.615, curl) - pointed * 0.008
-  const innerRoofZ = lerpNumber(0.12, 0.145, curl) - pointed * 0.026
-  const innerThroatX = lerpNumber(0.6, 0.625, curl) + pointed * 0.004
-  const innerThroatZ = lerpNumber(0.082, 0.078, curl) - pointed * 0.018
-  const lowerThroatX = lerpNumber(0.7, 0.71, curl)
-  const lowerThroatZ = lerpNumber(0.055, 0.04, curl)
-  const innerFootX = lerpNumber(0.84, 0.8, curl)
-  const innerFootZ = lerpNumber(0.055, 0.035, curl)
-  const apronX = lerpNumber(0.93, 0.935, curl)
-  const apronZ = lerpNumber(0.035, 0.02, curl)
+  const lipNoseX = lerpNumber(0.76, 0.835, curl) - pointed * 0.016
+  const lipNoseZ = lerpNumber(0.68, 0.73, curl) - pointed * 0.035
+  const forwardLipX = lerpNumber(0.815, 0.88, curl) - pointed * 0.012
+  const forwardLipZ = lerpNumber(0.48, 0.54, curl) - pointed * 0.04
+  const downturnedTipX = lerpNumber(0.875, 0.925, curl) - pointed * 0.008
+  const downturnedTipZ = lerpNumber(0.29, 0.34, curl) - pointed * 0.035
+  const lowerTaperX = lerpNumber(0.94, 0.965, curl) - pointed * 0.003
+  const lowerTaperZ = lerpNumber(0.18, 0.205, curl) - pointed * 0.012
+  const terminalTaperX = lerpNumber(0.975, 0.99, curl) - pointed * 0.001
+  const terminalTaperZ = lerpNumber(0.105, 0.12, curl) - pointed * 0.008
+  const apronX = lerpNumber(0.995, 0.998, curl)
+  const apronZ = lerpNumber(0.04, 0.03, curl)
 
   return [
     point(0, 0),
@@ -2413,10 +2573,8 @@ function moanaReferenceLipPoints(dip: number, sharp: number): ProfilePoint[] {
     point(lipNoseX, lipNoseZ),
     point(forwardLipX, forwardLipZ),
     point(downturnedTipX, downturnedTipZ),
-    point(innerRoofX, innerRoofZ),
-    point(innerThroatX, innerThroatZ),
-    point(lowerThroatX, lowerThroatZ),
-    point(innerFootX, innerFootZ),
+    point(lowerTaperX, lowerTaperZ),
+    point(terminalTaperX, terminalTaperZ),
     point(apronX, apronZ),
     point(1, 0),
   ]

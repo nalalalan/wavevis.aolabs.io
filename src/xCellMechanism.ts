@@ -36,57 +36,51 @@ export type ConnectedXCellMechanismStats = {
   maxInteriorLegCount: number
   maxCenterSurfaceResidual: number
   renderedXSegmentCount: number
-  expectedDiagonalConnectorCount: number
+  expectedAdjacentConnectorCount: number
   minInteriorConnectedPairCount: number
 }
 
 export type ConnectedXCellMechanism = {
   frames: ConnectedXCellFrame[]
   frameByNodeId: Map<string, ConnectedXCellFrame>
-  connectorByDiagonalId: Map<string, Vec3>
-  connectorUseCountByDiagonalId: Map<string, number>
-  connectorUsesByDiagonalId: Map<string, ConnectedXCellEndpointUse[]>
+  connectorByPairId: Map<string, Vec3>
+  connectorUseCountByPairId: Map<string, number>
+  connectorUsesByPairId: Map<string, ConnectedXCellEndpointUse[]>
 }
 
 export type XCellCenterOverrides = Map<string, Vec3>
 
-type DiagonalFamily = {
+type AdjacentPairFamily = {
   positive: XCellDirection
   negative: XCellDirection
   makeStarts: (rows: number, columns: number) => Array<{ row: number; col: number }>
   next: (row: number, col: number) => { row: number; col: number }
-  diagonalId: (row: number, col: number) => string
+  pairId: (row: number, col: number) => string
 }
 
-const NE_SW_FAMILY: DiagonalFamily = {
+const EAST_WEST_FAMILY: AdjacentPairFamily = {
   positive: 'ne',
   negative: 'sw',
-  makeStarts: (rows, columns) => [
-    ...Array.from({ length: columns }, (_value, col) => ({ row: 0, col })),
-    ...Array.from({ length: Math.max(rows - 1, 0) }, (_value, index) => ({ row: index + 1, col: 0 })),
-  ],
-  next: (row, col) => ({ row: row + 1, col: col + 1 }),
-  diagonalId: (row, col) => `x-ne-${row}-${col}`,
+  makeStarts: (rows) => Array.from({ length: rows }, (_value, row) => ({ row, col: 0 })),
+  next: (row, col) => ({ row, col: col + 1 }),
+  pairId: (row, col) => `x-ew-${row}-${col}`,
 }
 
-const NW_SE_FAMILY: DiagonalFamily = {
-  positive: 'nw',
-  negative: 'se',
-  makeStarts: (rows, columns) => [
-    ...Array.from({ length: columns }, (_value, col) => ({ row: 0, col })),
-    ...Array.from({ length: Math.max(rows - 1, 0) }, (_value, index) => ({ row: index + 1, col: columns - 1 })),
-  ],
-  next: (row, col) => ({ row: row + 1, col: col - 1 }),
-  diagonalId: (row, col) => `x-nw-${row}-${col}`,
+const NORTH_SOUTH_FAMILY: AdjacentPairFamily = {
+  positive: 'se',
+  negative: 'nw',
+  makeStarts: (_rows, columns) => Array.from({ length: columns }, (_value, col) => ({ row: 0, col })),
+  next: (row, col) => ({ row: row + 1, col }),
+  pairId: (row, col) => `x-ns-${row}-${col}`,
 }
 
 export function buildConnectedXCellMechanism(model: LatticeModel, centerOverrides?: XCellCenterOverrides): ConnectedXCellMechanism {
   const nodeById = new Map(model.nodes.map((node) => [node.id, node]))
   const centerByNodeId = buildSmoothedXCellCenters(model, centerOverrides)
   const frameByNodeId = new Map<string, ConnectedXCellFrame>()
-  const connectorByDiagonalId = new Map<string, Vec3>()
-  const connectorUseCountByDiagonalId = new Map<string, number>()
-  const connectorUsesByDiagonalId = new Map<string, ConnectedXCellEndpointUse[]>()
+  const connectorByPairId = new Map<string, Vec3>()
+  const connectorUseCountByPairId = new Map<string, number>()
+  const connectorUsesByPairId = new Map<string, ConnectedXCellEndpointUse[]>()
 
   model.nodes.forEach((node) => {
     frameByNodeId.set(node.id, {
@@ -96,15 +90,15 @@ export function buildConnectedXCellMechanism(model: LatticeModel, centerOverride
     })
   })
 
-  solveDiagonalFamily(model, nodeById, frameByNodeId, connectorByDiagonalId, connectorUseCountByDiagonalId, connectorUsesByDiagonalId, NE_SW_FAMILY)
-  solveDiagonalFamily(model, nodeById, frameByNodeId, connectorByDiagonalId, connectorUseCountByDiagonalId, connectorUsesByDiagonalId, NW_SE_FAMILY)
+  solveAdjacentPairFamily(model, nodeById, frameByNodeId, connectorByPairId, connectorUseCountByPairId, connectorUsesByPairId, EAST_WEST_FAMILY)
+  solveAdjacentPairFamily(model, nodeById, frameByNodeId, connectorByPairId, connectorUseCountByPairId, connectorUsesByPairId, NORTH_SOUTH_FAMILY)
 
   return {
     frames: model.nodes.map((node) => frameByNodeId.get(node.id)).filter(Boolean) as ConnectedXCellFrame[],
     frameByNodeId,
-    connectorByDiagonalId,
-    connectorUseCountByDiagonalId,
-    connectorUsesByDiagonalId,
+    connectorByPairId,
+    connectorUseCountByPairId,
+    connectorUsesByPairId,
   }
 }
 
@@ -167,12 +161,12 @@ export function connectedXCellMechanismStats(model: LatticeModel, centerOverride
       minInteriorConnectedPairCount = Math.min(minInteriorConnectedPairCount, connectedPairCount)
     }
   })
-  mechanism.connectorUseCountByDiagonalId.forEach((useCount) => {
+  mechanism.connectorUseCountByPairId.forEach((useCount) => {
     minSharedConnectorUseCount = Math.min(minSharedConnectorUseCount, useCount)
     maxSharedConnectorUseCount = Math.max(maxSharedConnectorUseCount, useCount)
   })
-  mechanism.connectorUsesByDiagonalId.forEach((uses, diagonalId) => {
-    const connector = mechanism.connectorByDiagonalId.get(diagonalId)
+  mechanism.connectorUsesByPairId.forEach((uses, pairId) => {
+    const connector = mechanism.connectorByPairId.get(pairId)
     if (!connector) return
     uses.forEach((use) => {
       const endpoint = mechanism.frameByNodeId.get(use.nodeId)?.endpoints[use.direction]
@@ -225,28 +219,31 @@ export function connectedXCellMechanismStats(model: LatticeModel, centerOverride
     physicalConnectorCount: physicalOccupancy.groupCount,
     minSharedConnectorUseCount: Number.isFinite(minSharedConnectorUseCount) ? minSharedConnectorUseCount : 0,
     maxSharedConnectorUseCount,
-    sharedConnectorCount: mechanism.connectorByDiagonalId.size,
+    sharedConnectorCount: mechanism.connectorByPairId.size,
     minInteriorLegCount: Number.isFinite(minInteriorLegCount) ? minInteriorLegCount : 0,
     maxInteriorLegCount,
     maxCenterSurfaceResidual,
     renderedXSegmentCount: checkedOppositePairCount,
-    expectedDiagonalConnectorCount: 2 * Math.max(model.config.rows - 1, 0) * Math.max(model.config.columns - 1, 0),
+    expectedAdjacentConnectorCount: (
+      model.config.rows * Math.max(model.config.columns - 1, 0) +
+      Math.max(model.config.rows - 1, 0) * model.config.columns
+    ),
     minInteriorConnectedPairCount: Number.isFinite(minInteriorConnectedPairCount) ? minInteriorConnectedPairCount : 0,
   }
 }
 
-function solveDiagonalFamily(
+function solveAdjacentPairFamily(
   model: LatticeModel,
   nodeById: Map<string, LatticeNode>,
   frameByNodeId: Map<string, ConnectedXCellFrame>,
-  connectorByDiagonalId: Map<string, Vec3>,
-  connectorUseCountByDiagonalId: Map<string, number>,
-  connectorUsesByDiagonalId: Map<string, ConnectedXCellEndpointUse[]>,
-  family: DiagonalFamily,
+  connectorByPairId: Map<string, Vec3>,
+  connectorUseCountByPairId: Map<string, number>,
+  connectorUsesByPairId: Map<string, ConnectedXCellEndpointUse[]>,
+  family: AdjacentPairFamily,
 ): void {
   family.makeStarts(model.config.rows, model.config.columns).forEach((start) => {
     const nodes: LatticeNode[] = []
-    const diagonalIds: string[] = []
+    const pairIds: string[] = []
     let row = start.row
     let col = start.col
 
@@ -256,7 +253,7 @@ function solveDiagonalFamily(
       nodes.push(node)
       const next = family.next(row, col)
       if (next.row >= 0 && next.row < model.config.rows && next.col >= 0 && next.col < model.config.columns) {
-        diagonalIds.push(family.diagonalId(row, col))
+        pairIds.push(family.pairId(row, col))
       }
       row = next.row
       col = next.col
@@ -264,12 +261,12 @@ function solveDiagonalFamily(
 
     nodes.slice(0, -1).forEach((source, index) => {
       const target = nodes[index + 1]
-      const diagonalId = diagonalIds[index]
-      if (!source || !target || !diagonalId) return
+      const pairId = pairIds[index]
+      if (!source || !target || !pairId) return
       const sourceCenter = frameByNodeId.get(source.id)?.center ?? source.currentPosition
       const targetCenter = frameByNodeId.get(target.id)?.center ?? target.currentPosition
-      const physicalConnector = centerPairConnector(sourceCenter, targetCenter, family)
-      connectorByDiagonalId.set(diagonalId, physicalConnector)
+      const physicalConnector = centerPairConnector(sourceCenter, targetCenter)
+      connectorByPairId.set(pairId, physicalConnector)
       const sourceFrame = frameByNodeId.get(source.id)
       const targetFrame = frameByNodeId.get(target.id)
       let useCount = 0
@@ -284,15 +281,14 @@ function solveDiagonalFamily(
         useCount += 1
         uses.push({ nodeId: target.id, direction: family.negative })
       }
-      connectorUseCountByDiagonalId.set(diagonalId, useCount)
-      connectorUsesByDiagonalId.set(diagonalId, uses)
+      connectorUseCountByPairId.set(pairId, useCount)
+      connectorUsesByPairId.set(pairId, uses)
     })
   })
 }
 
-function centerPairConnector(sourceCenter: Vec3, targetCenter: Vec3, family: DiagonalFamily): Vec3 {
-  const connectorParameter = family.positive === 'ne' ? 0.42 : 0.58
-  return addVec(sourceCenter, scaleVec(subtractVec(targetCenter, sourceCenter), connectorParameter))
+function centerPairConnector(sourceCenter: Vec3, targetCenter: Vec3): Vec3 {
+  return addVec(sourceCenter, scaleVec(subtractVec(targetCenter, sourceCenter), 0.5))
 }
 
 function physicalConnectorOccupancy(mechanism: ConnectedXCellMechanism): {
@@ -302,8 +298,8 @@ function physicalConnectorOccupancy(mechanism: ConnectedXCellMechanism): {
   groupCount: number
 } {
   const groups = new Map<string, number>()
-  mechanism.connectorByDiagonalId.forEach((connector, diagonalId) => {
-    const useCount = mechanism.connectorUseCountByDiagonalId.get(diagonalId) ?? 0
+  mechanism.connectorByPairId.forEach((connector, pairId) => {
+    const useCount = mechanism.connectorUseCountByPairId.get(pairId) ?? 0
     const key = physicalConnectorKey(connector)
     groups.set(key, (groups.get(key) ?? 0) + useCount)
   })
