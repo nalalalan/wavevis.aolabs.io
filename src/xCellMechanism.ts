@@ -19,6 +19,12 @@ export type ConnectedXCellMechanismStats = {
   maxOppositeCenterResidual: number
   checkedOppositePairCount: number
   maxConnectorEndpointGap: number
+  maxConnectorCenterLineResidual: number
+  maxConnectorSegmentOvershoot: number
+  maxConnectorMidpointResidual: number
+  minConnectorCenterParameter: number
+  maxConnectorCenterParameter: number
+  invalidConnectorCenterPairCount: number
   minPhysicalConnectorUseCount: number
   maxPhysicalConnectorUseCount: number
   overOccupiedPhysicalConnectorCount: number
@@ -113,6 +119,12 @@ export function connectedXCellMechanismStats(model: LatticeModel, centerOverride
   let maxInteriorLegCount = 0
   let maxCenterSurfaceResidual = 0
   let maxConnectorEndpointGap = 0
+  let maxConnectorCenterLineResidual = 0
+  let maxConnectorSegmentOvershoot = 0
+  let maxConnectorMidpointResidual = 0
+  let minConnectorCenterParameter = Infinity
+  let maxConnectorCenterParameter = -Infinity
+  let invalidConnectorCenterPairCount = 0
   let minSharedConnectorUseCount = Infinity
   let maxSharedConnectorUseCount = 0
   const physicalOccupancy = physicalConnectorOccupancy(mechanism)
@@ -167,6 +179,32 @@ export function connectedXCellMechanismStats(model: LatticeModel, centerOverride
       if (!endpoint) return
       maxConnectorEndpointGap = Math.max(maxConnectorEndpointGap, distanceVec(connector, endpoint))
     })
+
+    if (uses.length !== 2) {
+      invalidConnectorCenterPairCount += 1
+      return
+    }
+
+    const sourceFrame = mechanism.frameByNodeId.get(uses[0].nodeId)
+    const targetFrame = mechanism.frameByNodeId.get(uses[1].nodeId)
+    if (!sourceFrame || !targetFrame) {
+      invalidConnectorCenterPairCount += 1
+      return
+    }
+
+    const centerSpan = subtractVec(targetFrame.center, sourceFrame.center)
+    const connectorOffset = subtractVec(connector, sourceFrame.center)
+    const spanLengthSq = dotVec(centerSpan, centerSpan)
+    const parameter = spanLengthSq > 0.000000000001
+      ? dotVec(connectorOffset, centerSpan) / spanLengthSq
+      : 0
+    const closestOnCenterSpan = addVec(sourceFrame.center, scaleVec(centerSpan, parameter))
+    const centerMidpoint = scaleVec(addVec(sourceFrame.center, targetFrame.center), 0.5)
+    maxConnectorCenterLineResidual = Math.max(maxConnectorCenterLineResidual, distanceVec(connector, closestOnCenterSpan))
+    maxConnectorSegmentOvershoot = Math.max(maxConnectorSegmentOvershoot, Math.max(0, -parameter, parameter - 1))
+    maxConnectorMidpointResidual = Math.max(maxConnectorMidpointResidual, distanceVec(connector, centerMidpoint))
+    minConnectorCenterParameter = Math.min(minConnectorCenterParameter, parameter)
+    maxConnectorCenterParameter = Math.max(maxConnectorCenterParameter, parameter)
   })
 
   return {
@@ -175,6 +213,12 @@ export function connectedXCellMechanismStats(model: LatticeModel, centerOverride
     maxOppositeCenterResidual,
     checkedOppositePairCount,
     maxConnectorEndpointGap,
+    maxConnectorCenterLineResidual,
+    maxConnectorSegmentOvershoot,
+    maxConnectorMidpointResidual,
+    minConnectorCenterParameter: Number.isFinite(minConnectorCenterParameter) ? minConnectorCenterParameter : 0,
+    maxConnectorCenterParameter: Number.isFinite(maxConnectorCenterParameter) ? maxConnectorCenterParameter : 0,
+    invalidConnectorCenterPairCount,
     minPhysicalConnectorUseCount: physicalOccupancy.minUseCount,
     maxPhysicalConnectorUseCount: physicalOccupancy.maxUseCount,
     overOccupiedPhysicalConnectorCount: physicalOccupancy.overOccupiedCount,
@@ -218,12 +262,13 @@ function solveDiagonalFamily(
       col = next.col
     }
 
-    solveOppositePairConnectors(nodes.map((node) => frameByNodeId.get(node.id)?.center ?? node.currentPosition)).forEach((connector, index) => {
-      const source = nodes[index]
+    nodes.slice(0, -1).forEach((source, index) => {
       const target = nodes[index + 1]
       const diagonalId = diagonalIds[index]
       if (!source || !target || !diagonalId) return
-      const physicalConnector = addVec(connector, connectorFamilySplitOffset(model, family, index))
+      const sourceCenter = frameByNodeId.get(source.id)?.center ?? source.currentPosition
+      const targetCenter = frameByNodeId.get(target.id)?.center ?? target.currentPosition
+      const physicalConnector = centerPairConnector(sourceCenter, targetCenter, family)
       connectorByDiagonalId.set(diagonalId, physicalConnector)
       const sourceFrame = frameByNodeId.get(source.id)
       const targetFrame = frameByNodeId.get(target.id)
@@ -245,12 +290,9 @@ function solveDiagonalFamily(
   })
 }
 
-function connectorFamilySplitOffset(model: LatticeModel, family: DiagonalFamily, connectorIndex: number): Vec3 {
-  const sign = connectorIndex % 2 === 0 ? 1 : -1
-  const amount = model.config.spacing * 0.16 / Math.SQRT2
-  return family.positive === 'ne'
-    ? [amount * sign, -amount * sign, 0]
-    : [amount * sign, amount * sign, 0]
+function centerPairConnector(sourceCenter: Vec3, targetCenter: Vec3, family: DiagonalFamily): Vec3 {
+  const connectorParameter = family.positive === 'ne' ? 0.42 : 0.58
+  return addVec(sourceCenter, scaleVec(subtractVec(targetCenter, sourceCenter), connectorParameter))
 }
 
 function physicalConnectorOccupancy(mechanism: ConnectedXCellMechanism): {
@@ -335,29 +377,6 @@ function buildSmoothedXCellCenters(model: LatticeModel, centerOverrides?: XCellC
   }
 
   return centers
-}
-
-function solveOppositePairConnectors(centers: Vec3[]): Vec3[] {
-  const connectorCount = Math.max(centers.length - 1, 0)
-  if (connectorCount <= 0) return []
-  if (connectorCount === 1) return [scaleVec(addVec(centers[0], centers[1]), 0.5)]
-
-  const signs: number[] = [1]
-  const offsets: Vec3[] = [[0, 0, 0]]
-
-  for (let connectorIndex = 1; connectorIndex < connectorCount; connectorIndex += 1) {
-    signs[connectorIndex] = -signs[connectorIndex - 1]
-    offsets[connectorIndex] = subtractVec(scaleVec(centers[connectorIndex], 2), offsets[connectorIndex - 1])
-  }
-
-  let freeSum: Vec3 = [0, 0, 0]
-  for (let connectorIndex = 0; connectorIndex < connectorCount; connectorIndex += 1) {
-    const midpointTarget = scaleVec(addVec(centers[connectorIndex], centers[connectorIndex + 1]), 0.5)
-    freeSum = addVec(freeSum, scaleVec(subtractVec(midpointTarget, offsets[connectorIndex]), signs[connectorIndex]))
-  }
-
-  const free = scaleVec(freeSum, 1 / connectorCount)
-  return offsets.map((offset, index) => addVec(offset, scaleVec(free, signs[index])))
 }
 
 function parseNodeRowColumn(id: string): [number, number] {

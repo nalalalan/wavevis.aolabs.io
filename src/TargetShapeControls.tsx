@@ -67,7 +67,7 @@ export default function TargetShapeControls({
         </div>
         <div className="two-col">
           <NumberInput label="rows" value={config.rows} min={2} max={72} step={1} onChange={(value) => setNumber('rows', value)} />
-          <NumberInput label="columns" value={config.columns} min={112} max={120} step={1} onChange={(value) => setNumber('columns', value)} />
+          <NumberInput label="columns" value={config.columns} min={12} max={120} step={1} onChange={(value) => setNumber('columns', value)} />
         </div>
 
         <div className="view-buttons">
@@ -174,7 +174,7 @@ function clampToUsableRanges(config: InverseSheetConfig): InverseSheetConfig {
 function displayToggleLabel(key: BooleanKey): string {
   if (key === 'showSurface') return 'surface'
   if (key === 'showRestGhost') return 'flat grid'
-  if (key === 'showNodes') return 'cell centers'
+  if (key === 'showNodes') return 'cells'
   return 'X legs'
 }
 

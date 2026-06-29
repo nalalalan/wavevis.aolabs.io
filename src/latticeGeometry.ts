@@ -32,7 +32,7 @@ export const COLOR_MODES: Array<{ value: ColorMode; label: string }> = [
 
 const DEFAULT_SHEET_ROWS = 44
 const DEFAULT_SHEET_COLUMNS = 112
-const MIN_INVERSE_SHEET_COLUMNS = DEFAULT_SHEET_COLUMNS
+const MIN_INVERSE_SHEET_COLUMNS = 12
 const DEFAULT_SHEET_SPACING = 1
 const DEFAULT_WAVE_FIELD_LENGTH = 43 * DEFAULT_SHEET_SPACING
 const DEFAULT_WAVE_FIELD_SPAN = (DEFAULT_SHEET_ROWS - 1) * DEFAULT_SHEET_SPACING
@@ -88,7 +88,7 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   dihedralWeight: 0.02,
   showSurface: true,
   showRestGhost: false,
-  showNodes: false,
+  showNodes: true,
   showEdges: true,
   showLabels: false,
   showHeatmap: false,
@@ -515,9 +515,9 @@ export function runInverseSheetSanityChecks(): string[] {
   const steerRight = buildInverseSheetModel({ steer: 1, overhangPosition: 0, flatContribution: 0 })
   const displayOff = buildInverseSheetModel({ showHeatmap: false, colorMode: 'edgeStrain' })
   const displayUres = buildInverseSheetModel({ showHeatmap: true, colorMode: 'displacement' })
-  const resolutionReference = buildInverseSheetModel({ ...generatedMode, rows: 44, columns: MIN_INVERSE_SHEET_COLUMNS, overhangWidth: 32 })
-  const resolution24 = buildInverseSheetModel({ ...generatedMode, rows: 24, columns: 24, overhangWidth: 32 })
-  const resolution72 = buildInverseSheetModel({ ...generatedMode, rows: 72, columns: MIN_INVERSE_SHEET_COLUMNS, overhangWidth: 32 })
+  const resolutionReference = buildInverseSheetModel({ ...generatedMode, rows: 44, columns: DEFAULT_SHEET_COLUMNS, overhangWidth: 32 })
+  const resolution24 = buildInverseSheetModel({ ...generatedMode, rows: 24, columns: DEFAULT_SHEET_COLUMNS, overhangWidth: 32 })
+  const resolution72 = buildInverseSheetModel({ ...generatedMode, rows: 72, columns: DEFAULT_SHEET_COLUMNS, overhangWidth: 32 })
   const flatContributionOff = buildInverseSheetModel({ ...generatedMode, flatContribution: 0 })
   const flatContributionOn = buildInverseSheetModel({ ...generatedMode, flatContribution: 1 })
   const terminalCurl = buildInverseSheetModel({
@@ -603,7 +603,7 @@ export function runInverseSheetSanityChecks(): string[] {
     preTerminalCenterlineProfileResidual(resolution24, resolutionReference, 0.94) > 3.25 ||
     preTerminalCenterlineProfileResidual(resolution72, resolutionReference, 0.94) > 1.35
   ) {
-    failures.push('rows and columns should only resample the same physical overhang profile')
+    failures.push('dense wave row sampling should only resample the same physical overhang profile')
   }
   if (!groundTransitionPreservesCoreAndBroadensSupport(lowGroundTransition, highGroundTransition)) {
     failures.push('ground transition should preserve the core lip while broadening surrounding support')

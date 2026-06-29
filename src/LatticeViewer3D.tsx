@@ -59,7 +59,7 @@ export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequ
           <LatticeModelGroup model={model} selected={selected} view={viewRequest.view} onEdgePick={onEdgePick} />
         </Suspense>
         {viewRequest.view === 'top' && !surfaceReferenceOnly && <SceneGrid bounds={model.bounds} />}
-        {viewRequest.view === 'top' && !surfaceReferenceOnly && (
+        {viewRequest.view === 'top' && !surfaceReferenceOnly && model.config.showHeatmap && (
           <Suspense fallback={null}>
             <AxisLabels bounds={model.bounds} />
           </Suspense>
@@ -240,13 +240,16 @@ function LatticeModelGroup({
           <meshStandardMaterial vertexColors side={THREE.DoubleSide} transparent opacity={surfaceOpacity} roughness={0.78} metalness={0.02} depthWrite={false} />
         </mesh>
       )}
-      {model.config.showNodes && (
+      {model.config.showNodes && !readableWaveReferenceDisplay(model) && (
         <NodeInstances
           nodes={nodeById}
           nodeIds={renderScope.nodeIds}
           radius={nodeRadius}
           sideProjection={sideMechanismView}
         />
+      )}
+      {model.config.showNodes && readableWaveReferenceDisplay(model) && (
+        <XCellSquareCells model={model} scope={renderScope} view={view} />
       )}
       {model.config.showEdges && (
         <>
@@ -259,7 +262,6 @@ function LatticeModelGroup({
           />
           <StraightEdgeSegments model={model} nodes={nodeById} scope={renderScope} view={view} />
           <XCellSharedJointArms model={model} scope={renderScope} view={view} />
-          <XCellCenterPivots model={model} scope={renderScope} view={view} />
           <XCellConnectorJoints model={model} scope={renderScope} view={view} />
         </>
       )}
@@ -309,7 +311,7 @@ function readableSurfaceReferenceOnly(model: LatticeModel): boolean {
 }
 
 function readableWaveReferenceDisplay(model: LatticeModel): boolean {
-  return !model.config.showHeatmap && !model.config.showNodes
+  return !model.config.showHeatmap
 }
 
 function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: CameraViewRequest['view'] }) {
@@ -319,7 +321,7 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const topHeightShadowGeometry = useMemo(() => view === 'top' ? buildReadableWaveTopHeightShadowGeometry(model) : null, [model, view])
   const sideThroatGeometry = useMemo(() => view === 'side' ? buildReadableWaveSideThroatGeometry(model) : null, [model, view])
   const throatGeometry = useMemo(() => view === 'isometric' ? buildReadableWaveThroatGeometry(model) : null, [model, view])
-  const surfaceOpacity = view === 'side' ? 0.2 : view === 'front' ? 0.72 : view === 'top' ? 0.22 : 0.36
+  const surfaceOpacity = view === 'side' ? 0.2 : view === 'front' ? 0.72 : view === 'top' ? 0.26 : 0.36
   const wireOpacity = view === 'side' ? 0.22 : view === 'front' ? 0.21 : view === 'top' ? 0.48 : 0.16
   const wireColor = view === 'top' ? '#9d968d' : '#b8b3ab'
   const outlineOpacity = view === 'side' ? 0.16 : view === 'front' ? 0.1 : view === 'top' ? 0.075 : 0.025
@@ -339,7 +341,7 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
       </mesh>
       {topHeightShadowGeometry && (
         <mesh geometry={topHeightShadowGeometry} renderOrder={-1.5}>
-          <meshBasicMaterial vertexColors side={THREE.DoubleSide} transparent opacity={0.56} depthTest={false} depthWrite={false} />
+          <meshBasicMaterial vertexColors side={THREE.DoubleSide} transparent opacity={0.58} depthTest={false} depthWrite={false} />
         </mesh>
       )}
       <lineSegments geometry={wireGeometry} renderOrder={-1}>
@@ -448,9 +450,9 @@ function buildReadableWaveTopHeightShadowGeometry(model: LatticeModel): THREE.Bu
       const wavePoint = readableWavePoint(frame, t, s)
       const heightRatio = clampUnit(wavePoint[2] / Math.max(frame.height, 0.000001))
       const centerEnvelope = Math.pow(readableLateralEnvelope(s), 0.62)
-      const bodyBand = smoothStep(0.18, 0.58, t) * (1 - smoothStep(0.95, 1, t))
-      const terminalBand = smoothStep(0.48, 0.86, t) * (1 - smoothStep(0.98, 1, t))
-      const strength = clampUnit((heightRatio - 0.04) / 0.34) * Math.pow(centerEnvelope, 0.82) * Math.max(bodyBand, terminalBand)
+      const bodyBand = smoothStep(0.16, 0.44, t) * (1 - smoothStep(0.88, 0.98, t))
+      const terminalBand = smoothStep(0.58, 0.86, t) * (1 - smoothStep(0.97, 1, t))
+      const strength = clampUnit((heightRatio - 0.025) / 0.28) * Math.pow(centerEnvelope, 0.72) * Math.max(bodyBand * 1.05, terminalBand * 0.68)
 
       topPoints.push(readableWaveTopPlanPoint(frame, t, s))
       shadowStrengths.push(strength)
@@ -461,7 +463,7 @@ function buildReadableWaveTopHeightShadowGeometry(model: LatticeModel): THREE.Bu
     const point = topPoints[index]
     const strength = shadowStrengths[index]
     positions.push(point[0], point[1], point[2] + frame.height * 0.0008)
-    const shade = lerpNumber(0.985, 0.38, strength)
+    const shade = lerpNumber(0.985, 0.4, strength)
     colors.push(shade, shade * 0.985, shade * 0.955)
   }
 
@@ -796,30 +798,30 @@ function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number
   const envelope = readableLateralEnvelope(s)
   const bodyRegion = smoothStep(0.08, 0.62, t) * (1 - smoothStep(0.9, 1, t))
   const shoulderLobe = Math.exp(-Math.pow((t - 0.58) / 0.3, 2)) * (1 - smoothStep(0.9, 1, t))
-  const terminalNose = Math.exp(-Math.pow((t - 0.74) / 0.22, 2)) * (1 - smoothStep(0.9, 0.98, t))
+  const terminalNose = Math.exp(-Math.pow((t - 0.76) / 0.25, 2)) * (1 - smoothStep(0.92, 0.99, t))
   const teardropLobe = shoulderLobe * Math.pow(envelope, 1.16)
   const terminalCenterNose = terminalNose * Math.pow(envelope, 1.18) * smoothStep(0.66, 0.88, t)
   const shoulderRound = shoulderLobe * Math.pow(envelope, 0.54) * (1 - Math.pow(envelope, 2.1))
   const terminalRound = terminalNose * Math.pow(envelope, 0.5) * (1 - Math.pow(envelope, 2))
-  const edgeReturn = smoothStep(0.74, 0.96, t)
-  const terminalCap = terminalNose * Math.pow(envelope, 0.62) * (1 - 0.48 * edgeReturn)
-  const midSectionOval = Math.exp(-Math.pow((t - 0.78) / 0.31, 2)) * smoothStep(0.22, 0.94, t)
-  const midSectionShoulder = midSectionOval * (1 - Math.pow(envelope, 1.62)) * (1 - 0.18 * edgeReturn)
-  const terminalCenterRelief = terminalNose * Math.pow(envelope, 1.4) * smoothStep(0.72, 0.94, t)
-  const ovalFootprintPinch = 0.14 * midSectionOval * Math.pow(envelope, 0.6) * (1 - 0.42 * edgeReturn)
+  const edgeReturn = smoothStep(0.78, 0.98, t)
+  const terminalCap = terminalNose * Math.pow(envelope, 0.52) * (1 - 0.34 * edgeReturn)
+  const midSectionOval = Math.exp(-Math.pow((t - 0.76) / 0.34, 2)) * smoothStep(0.18, 0.96, t)
+  const midSectionShoulder = midSectionOval * (1 - Math.pow(envelope, 1.36)) * (1 - 0.08 * edgeReturn)
+  const terminalCenterRelief = terminalNose * Math.pow(envelope, 1.22) * smoothStep(0.68, 0.94, t)
+  const ovalFootprintPinch = 0.095 * midSectionOval * Math.pow(envelope, 0.52) * (1 - 0.55 * edgeReturn)
   const bodyPush = waveWidth * (
     0.004 * bodyRegion * Math.pow(envelope, 1.08) +
-    0.045 * teardropLobe +
-    0.026 * shoulderRound +
-    0.014 * terminalCap +
-    0.006 * terminalCenterNose
+    0.038 * teardropLobe +
+    0.032 * shoulderRound +
+    0.019 * terminalCap +
+    0.003 * terminalCenterNose
   ) * (1 - 0.78 * edgeReturn)
   const terminalInset = waveWidth * (
-    0.006 * terminalCenterRelief
+    0.011 * terminalCenterRelief
   )
   const terminalPlanRelease = smoothStep(0.66, 0.94, t)
-  const terminalWidthRound = 0.035 * terminalRound * (1 - 0.3 * edgeReturn)
-  const terminalPlanPinch = 0.0015 * terminalNose * Math.pow(envelope, 0.9) * (1 - 0.25 * edgeReturn)
+  const terminalWidthRound = 0.058 * terminalRound * (1 - 0.22 * edgeReturn)
+  const terminalPlanPinch = 0.001 * terminalNose * Math.pow(envelope, 0.9) * (1 - 0.25 * edgeReturn)
   const planPinch = clampUnit(
     0.005 * bodyRegion * Math.pow(envelope, 1.02) +
     0.0015 * teardropLobe * (1 - 0.68 * terminalPlanRelease) +
@@ -827,7 +829,7 @@ function readableWaveTopPlanPoint(frame: ReadableWaveFrame, t: number, s: number
     terminalPlanPinch,
   )
   const planX = baseX + bodyPush - terminalInset
-  const planY = frame.centerY + s * planHalfSpan * (1 - planPinch + 0.006 * terminalRound + 0.006 * midSectionShoulder) + s * planHalfSpan * terminalWidthRound
+  const planY = frame.centerY + s * planHalfSpan * (1 - planPinch + 0.012 * terminalRound + 0.018 * midSectionShoulder) + s * planHalfSpan * terminalWidthRound
   return [
     planX,
     planY,
@@ -1472,17 +1474,17 @@ function XCellSharedJointArms({
   )
   const opacity = readableSurfaceMode
     ? scope.topView ? 0.032 : scope.sideView ? 0.09 : 0.084
-    : scope.topView ? 0.34 : scope.sideView ? 0.34 : 0.31
+    : scope.topView ? 0.44 : scope.sideView ? 0.34 : 0.31
   const depthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
   const rodRadius = Math.max(
     model.config.spacing * (readableSurfaceMode
       ? scope.topView ? 0.0052 : scope.sideView ? 0.0155 : 0.0142
-      : scope.topView ? 0.012 : scope.sideView ? 0.012 : 0.011),
+      : scope.topView ? 0.017 : scope.sideView ? 0.012 : 0.011),
     scope.sideView ? 0.009 : 0.007,
   )
   const rodOpacity = readableSurfaceMode
     ? scope.topView ? 0.012 : scope.sideView ? 0.078 : 0.074
-    : scope.topView ? 0.28 : scope.sideView ? 0.28 : 0.24
+    : scope.topView ? 0.4 : scope.sideView ? 0.28 : 0.24
   const mechanismInk = readableSurfaceMode ? '#5f5b54' : '#161713'
   const rodMaterial = useMemo(() => new THREE.MeshBasicMaterial({
     color: mechanismInk,
@@ -1564,23 +1566,23 @@ function XCellConnectorJoints({
 
   const haloSize = readableSurfaceMode
     ? scope.topView ? 2.8 : scope.sideView ? 6.35 : 5.95
-    : scope.topView ? 3.4 : scope.sideView ? 4.4 : 4.1
+    : scope.topView ? 3.8 : scope.sideView ? 4.4 : 4.1
   const coreSize = readableSurfaceMode
     ? scope.topView ? 1.2 : scope.sideView ? 3.45 : 3.24
-    : scope.topView ? 1.7 : scope.sideView ? 2.45 : 2.28
+    : scope.topView ? 2.2 : scope.sideView ? 2.45 : 2.28
   const coreOpacity = readableSurfaceMode
     ? scope.topView ? 0.24 : scope.sideView ? 0.74 : 0.7
-    : scope.topView ? 0.64 : scope.sideView ? 0.88 : 0.86
+    : scope.topView ? 0.72 : scope.sideView ? 0.88 : 0.86
   const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
   const pinRadius = Math.max(
     model.config.spacing * (readableSurfaceMode
-      ? scope.topView ? 0.027 : scope.sideView ? 0.05 : 0.048
-      : scope.topView ? 0.028 : scope.sideView ? 0.038 : 0.035),
+      ? scope.topView ? 0.034 : scope.sideView ? 0.055 : 0.052
+      : scope.topView ? 0.075 : scope.sideView ? 0.06 : 0.056),
     readableSurfaceMode && scope.sideView ? 0.022 : scope.topView ? 0.016 : 0.016,
   )
   const pinOpacity = readableSurfaceMode
     ? scope.topView ? 0.14 : scope.sideView ? 0.62 : 0.58
-    : scope.topView ? 0.56 : scope.sideView ? 0.76 : 0.72
+    : scope.topView ? 0.66 : scope.sideView ? 0.76 : 0.72
   const pinInk = readableSurfaceMode ? '#5a554f' : '#10120e'
   const jointCoreInk = readableSurfaceMode ? '#5f5b54' : '#151712'
   const pinMaterial = useMemo(() => new THREE.MeshBasicMaterial({
@@ -1635,7 +1637,7 @@ function XCellConnectorJoints({
   )
 }
 
-function XCellCenterPivots({
+function XCellSquareCells({
   model,
   scope,
   view,
@@ -1644,45 +1646,52 @@ function XCellCenterPivots({
   scope: NodeEdgeRenderScope
   view: CameraViewRequest['view']
 }) {
+  const cellRef = useRef<THREE.InstancedMesh>(null)
   const readableReferenceMode = readableWaveReferenceDisplay(model)
   const readableSurfaceMode = readableSurfaceReferenceOnly(model)
-  const pivotPositions = useMemo(() => {
+  const cellPositions = useMemo(() => {
     const centerOverrides = readableReferenceMode ? buildReadableWaveXCellCenterOverrides(model, view) : undefined
     const mechanism = buildConnectedXCellMechanism(model, centerOverrides)
     return mechanism.frames.map((frame) => frame.center)
   }, [model, readableReferenceMode, view])
-  const geometry = useMemo(() => {
-    const positions = new Float32Array(pivotPositions.length * 3)
-    pivotPositions.forEach((position, index) => writeVec(positions, index * 3, position))
-    const nextGeometry = new THREE.BufferGeometry()
-    nextGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    return nextGeometry
-  }, [pivotPositions])
 
-  if (pivotPositions.length <= 0) return null
-
-  const size = readableSurfaceMode
-    ? scope.topView ? 0.68 : scope.sideView ? 1.14 : 1.12
-    : scope.topView ? 2.6 : scope.sideView ? 1.08 : 1.02
-  const opacity = readableSurfaceMode
-    ? scope.topView ? 0.018 : scope.sideView ? 0.13 : 0.12
-    : scope.topView ? 0.88 : scope.sideView ? 0.55 : 0.5
-  const pivotDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
-  const pivotRenderOrder = !readableSurfaceMode && scope.topView ? 22 : 18
-
-  return (
-    <points geometry={geometry} renderOrder={pivotRenderOrder}>
-      <pointsMaterial
-        color="#34342f"
-        transparent
-        opacity={opacity}
-        size={size}
-        sizeAttenuation={false}
-        depthTest={pivotDepthTest}
-        depthWrite={false}
-      />
-    </points>
+  const cellDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
+  const cellHalfSize = Math.max(
+    model.config.spacing * (readableSurfaceMode
+      ? scope.topView ? 0.045 : scope.sideView ? 0.062 : 0.058
+      : scope.topView ? 0.28 : scope.sideView ? 0.14 : 0.13),
+    scope.topView ? 0.028 : 0.02,
   )
+  const cellThickness = Math.max(cellHalfSize * 0.38, 0.006)
+  const cellOpacity = readableSurfaceMode
+    ? scope.topView ? 0.36 : scope.sideView ? 0.5 : 0.46
+    : scope.topView ? 0.96 : scope.sideView ? 0.72 : 0.68
+  const cellRenderOrder = !readableSurfaceMode && scope.topView ? 22 : 18
+  const cellGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
+  const cellMaterial = useMemo(() => new THREE.MeshBasicMaterial({
+    color: '#050505',
+    transparent: true,
+    opacity: cellOpacity,
+    depthTest: cellDepthTest,
+    depthWrite: false,
+  }), [cellDepthTest, cellOpacity])
+
+  useLayoutEffect(() => {
+    if (!cellRef.current) return
+
+    const dummy = new THREE.Object3D()
+    cellPositions.forEach((position, index) => {
+      dummy.position.copy(new THREE.Vector3(...position))
+      dummy.scale.set(cellHalfSize, cellHalfSize, cellThickness)
+      dummy.updateMatrix()
+      cellRef.current?.setMatrixAt(index, dummy.matrix)
+    })
+    cellRef.current.instanceMatrix.needsUpdate = true
+  }, [cellPositions, cellHalfSize, cellThickness])
+
+  if (cellPositions.length <= 0) return null
+
+  return <instancedMesh ref={cellRef} args={[cellGeometry, cellMaterial, cellPositions.length]} renderOrder={cellRenderOrder + 1} />
 }
 
 function EdgeHitTargets({
@@ -1972,7 +1981,7 @@ function positionCamera(
   view: CameraViewRequest['view'],
   selected?: SelectedElement,
 ): void {
-  const readableReferenceBounds = !selected && readableWaveReferenceDisplay(model) && (model.config.showSurface || model.config.showEdges)
+  const readableReferenceBounds = !selected && readableWaveReferenceDisplay(model) && (model.config.showSurface || model.config.showEdges || model.config.showNodes)
   const bounds = readableReferenceBounds && view === 'front'
     ? activeReadableWaveBounds(model, 'front')
     : readableReferenceBounds

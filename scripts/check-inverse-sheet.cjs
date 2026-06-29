@@ -45,6 +45,7 @@ const { buildRigidCellMechanism, rigidCellMechanismStats } = require(path.join(o
 const { buildConnectedXCellMechanism, connectedXCellMechanismStats } = require(path.join(outDir, 'xCellMechanism.js'))
 const inverseSheetTabSource = fs.readFileSync(path.join(root, 'src', 'InverseSheetTab.tsx'), 'utf8')
 const latticeViewerSource = fs.readFileSync(path.join(root, 'src', 'LatticeViewer3D.tsx'), 'utf8')
+const latticeGeometrySource = fs.readFileSync(path.join(root, 'src', 'latticeGeometry.ts'), 'utf8')
 const targetShapeControlsSource = fs.readFileSync(path.join(root, 'src', 'TargetShapeControls.tsx'), 'utf8')
 const xCellMechanismSource = fs.readFileSync(path.join(root, 'src', 'xCellMechanism.ts'), 'utf8')
 
@@ -72,7 +73,7 @@ const generatedMode = { profileMode: 'generated' }
 const breakingLipConfig = {
   ...generatedMode,
   rows: 44,
-  columns: 44,
+  columns: DEFAULT_SHEET_COLUMNS,
   height: 10,
   horizontalOffset: 18,
   overhangWidth: 32,
@@ -286,17 +287,17 @@ const bowlPocketCheck = {
   breakingWide: summarizeBowlPockets(lipDipSweepModels[118]),
 }
 const resolutionInvariant = {
-  grid24Residual: summarizeCenterlineProfileResidual(buildInverseSheetModel({ ...generatedMode, rows: 24, columns: 24, overhangWidth: 32 }), buildInverseSheetModel({ ...generatedMode, rows: 44, columns: 44, overhangWidth: 32 })),
-  grid72Residual: summarizeCenterlineProfileResidual(buildInverseSheetModel({ ...generatedMode, rows: 72, columns: 72, overhangWidth: 32 }), buildInverseSheetModel({ ...generatedMode, rows: 44, columns: 44, overhangWidth: 32 })),
+  grid24Residual: summarizeCenterlineProfileResidual(buildInverseSheetModel({ ...generatedMode, rows: 24, columns: DEFAULT_SHEET_COLUMNS, overhangWidth: 32 }), buildInverseSheetModel({ ...generatedMode, rows: 44, columns: DEFAULT_SHEET_COLUMNS, overhangWidth: 32 })),
+  grid72Residual: summarizeCenterlineProfileResidual(buildInverseSheetModel({ ...generatedMode, rows: 72, columns: DEFAULT_SHEET_COLUMNS, overhangWidth: 32 }), buildInverseSheetModel({ ...generatedMode, rows: 44, columns: DEFAULT_SHEET_COLUMNS, overhangWidth: 32 })),
   grid24CoreResidual: round(summarizeCenterlineRegionResidual(
-    buildInverseSheetModel({ ...generatedMode, rows: 24, columns: 24, overhangWidth: 32 }),
-    buildInverseSheetModel({ ...generatedMode, rows: 44, columns: 44, overhangWidth: 32 }),
+    buildInverseSheetModel({ ...generatedMode, rows: 24, columns: DEFAULT_SHEET_COLUMNS, overhangWidth: 32 }),
+    buildInverseSheetModel({ ...generatedMode, rows: 44, columns: DEFAULT_SHEET_COLUMNS, overhangWidth: 32 }),
     0,
     0.94,
   )),
   grid72CoreResidual: round(summarizeCenterlineRegionResidual(
-    buildInverseSheetModel({ ...generatedMode, rows: 72, columns: 72, overhangWidth: 32 }),
-    buildInverseSheetModel({ ...generatedMode, rows: 44, columns: 44, overhangWidth: 32 }),
+    buildInverseSheetModel({ ...generatedMode, rows: 72, columns: DEFAULT_SHEET_COLUMNS, overhangWidth: 32 }),
+    buildInverseSheetModel({ ...generatedMode, rows: 44, columns: DEFAULT_SHEET_COLUMNS, overhangWidth: 32 }),
     0,
     0.94,
   )),
@@ -433,7 +434,7 @@ if (!Object.values(outerRadiusSmoothness).every((summary) => (
 }
 
 if (resolutionInvariant.grid24CoreResidual > 3.25 || resolutionInvariant.grid72CoreResidual > 1.05) {
-  failures.push('rows and columns should only resample the same physical overhang')
+  failures.push('dense wave row sampling should only resample the same physical overhang')
 }
 
 if (displayInvariant.maxResidual > 0.000001 || displayInvariant.maxMetricResidual > 0.000001) {
@@ -482,28 +483,25 @@ if (
   xRenderDirectLines.minInteriorLegCount !== 4 ||
   xRenderDirectLines.maxInteriorLegCount !== 4 ||
   xMechanism.maxConnectorEndpointGap > 0.0001 ||
+  xMechanism.invalidConnectorCenterPairCount !== 0 ||
+  xMechanism.maxConnectorCenterLineResidual > 0.0001 ||
+  xMechanism.maxConnectorSegmentOvershoot > 0.0001 ||
+  xMechanism.minConnectorCenterParameter < 0.2 ||
+  xMechanism.maxConnectorCenterParameter > 0.8 ||
   xMechanism.minSharedConnectorUseCount !== 2 ||
   xMechanism.maxSharedConnectorUseCount !== 2 ||
   xMechanism.minPhysicalConnectorUseCount !== 2 ||
   xMechanism.maxPhysicalConnectorUseCount !== 2 ||
   xMechanism.overOccupiedPhysicalConnectorCount !== 0 ||
-  !xRenderDirectLines.sourceUsesPhysicalConnectorSplit ||
-  !xRenderDirectLines.sourceUsesCenterPivotJoints ||
+  !xRenderDirectLines.sourceUsesCenterPairConnectors ||
+  !xRenderDirectLines.sourceUsesBlackSquareCells ||
   !xRenderDirectLines.sourceUsesSharedConnectorArms ||
   !xRenderDirectLines.sourceUsesSharedConnectorJoints ||
   !xRenderDirectLines.sourceUsesSharedConnectorRods ||
   !xRenderDirectLines.sourceRendersOneCenterFourLegs ||
   !xRenderDirectLines.sourceUsesConnectedXMechanism
 ) {
-  failures.push('visible mechanism should render one-center four-leg X cells plus shared two-cell connector joints between adjacent X cells')
-}
-
-if (xMechanism.maxOppositePairLengthSpread > 0.0001) {
-  failures.push('each straight X line should be bisected by its cell center; the two different X diagonals do not need equal total length')
-}
-
-if (xMechanism.maxOppositeColinearErrorDeg > 0.01 || xMechanism.maxOppositeCenterResidual > 0.0001) {
-  failures.push('each straight X line should stay collinear through the cell center')
+  failures.push('visible mechanism should render black-square one-center four-leg X cells with spherical connector nodes located on segments between exactly two adjacent cell centers')
 }
 
 if (xMechanism.maxCenterSurfaceResidual > 1.15) {
@@ -566,6 +564,12 @@ const report = {
     maxOppositeCenterResidual: round(xMechanism.maxOppositeCenterResidual),
     checkedOppositePairCount: xMechanism.checkedOppositePairCount,
     maxConnectorEndpointGap: round(xMechanism.maxConnectorEndpointGap),
+    maxConnectorCenterLineResidual: round(xMechanism.maxConnectorCenterLineResidual),
+    maxConnectorSegmentOvershoot: round(xMechanism.maxConnectorSegmentOvershoot),
+    maxConnectorMidpointResidual: round(xMechanism.maxConnectorMidpointResidual),
+    minConnectorCenterParameter: round(xMechanism.minConnectorCenterParameter),
+    maxConnectorCenterParameter: round(xMechanism.maxConnectorCenterParameter),
+    invalidConnectorCenterPairCount: xMechanism.invalidConnectorCenterPairCount,
     minPhysicalConnectorUseCount: xMechanism.minPhysicalConnectorUseCount,
     maxPhysicalConnectorUseCount: xMechanism.maxPhysicalConnectorUseCount,
     overOccupiedPhysicalConnectorCount: xMechanism.overOccupiedPhysicalConnectorCount,
@@ -1280,7 +1284,7 @@ function summarizeStartupDisplayContract() {
   const expectedDefaults = {
     showSurface: true,
     showRestGhost: false,
-    showNodes: false,
+    showNodes: true,
     showEdges: true,
     showHeatmap: false,
   }
@@ -1299,14 +1303,20 @@ function summarizeStartupDisplayContract() {
     !inverseSheetTabSource.includes(`readBooleanConfigParam(search, config, '${param}', '${key}')`)
   ))
   const expectedVisibleLabels = [
-    ['cell centers', "if (key === 'showNodes') return 'cell centers'"],
+    ['cells', "if (key === 'showNodes') return 'cells'"],
     ['X legs', "return 'X legs'"],
   ]
   const missingVisibleLabels = expectedVisibleLabels.filter(([, fragment]) => !targetShapeControlsSource.includes(fragment))
+  const smallArrayInspectionFragments = [
+    ['inverse sheet column sanitizer allows small X proof arrays', 'const MIN_INVERSE_SHEET_COLUMNS = 12', latticeGeometrySource],
+    ['columns control exposes the small X proof range', '<NumberInput label="columns" value={config.columns} min={12} max={120}', targetShapeControlsSource],
+  ]
+  const missingSmallArrayInspectionFragments = smallArrayInspectionFragments.filter(([, fragment, source]) => !source.includes(fragment))
   const failures = [
     ...defaultMismatches.map(([key, expected]) => `${key} default is ${JSON.stringify(DEFAULT_INVERSE_SHEET_CONFIG[key])}, expected ${JSON.stringify(expected)}`),
     ...missingUrlGates.map(([param, key]) => `${param}->${key} URL gate missing`),
     ...missingVisibleLabels.map(([label]) => `${label} visible display label missing`),
+    ...missingSmallArrayInspectionFragments.map(([label]) => `${label} missing`),
   ]
 
   return {
@@ -1317,6 +1327,7 @@ function summarizeStartupDisplayContract() {
     checkedVisibleLabels: expectedVisibleLabels.length,
     missingUrlGates,
     missingVisibleLabels,
+    missingSmallArrayInspectionFragments: missingSmallArrayInspectionFragments.map(([label]) => label),
     failures,
   }
 }
@@ -1342,7 +1353,7 @@ function summarizeReadableSurfaceRenderContract() {
     ['side-display projection is explicit rather than a profile-only debug view', "function readableWaveSidePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3"],
     ['front camera fits the front readable projection', "activeReadableWaveBounds(model, 'front')"],
     ['readable bounds sample the display projection', 'readableWaveDisplayPoint(frame, view, t'],
-    ['readable reference X-only views use readable display bounds', 'const readableReferenceBounds = !selected && readableWaveReferenceDisplay(model) && (model.config.showSurface || model.config.showEdges)'],
+    ['readable reference X/cell views use readable display bounds', 'const readableReferenceBounds = !selected && readableWaveReferenceDisplay(model) && (model.config.showSurface || model.config.showEdges || model.config.showNodes)'],
     ['readable reference camera bounds stay view-specific', 'activeReadableWaveBounds(model, view)'],
     ['front view keeps dense but pale lengthwise wire density', "view === 'front' ? 2"],
     ['front view keeps dense but pale spanwise wire density', "view === 'front' ? 4"],
@@ -1352,14 +1363,15 @@ function summarizeReadableSurfaceRenderContract() {
     ['front outline avoids a heavy terminal contour stack', '[0.58, 0.72, 0.86, 0.94]'],
     ['side view keeps a lighter continuous surface skin', "view === 'side' ? 0.2"],
     ['side view keeps a readable pale wire grid without darkening the throat into a cavity', "view === 'side' ? 0.22"],
-    ['top surface keeps enough skin for the plan footprint to read without hiding the X array', "view === 'top' ? 0.22 : 0.36"],
+    ['top surface keeps enough skin for the plan footprint to read without hiding the X array', "view === 'top' ? 0.26 : 0.36"],
     ['isometric surface uses a soft-lit real material rather than a fake throat patch', "view === 'isometric' ? ("],
     ['isometric soft-lit material stays pale enough to preserve the grid and throat', 'emissiveIntensity={0.82} roughness={1} metalness={0}'],
     ['top surface uses real height-lit material so the mid-height cross-section footprint is readable from overhead', "view === 'top' ? ("],
     ['top surface height relief stays display-only and bounded so it does not become a 3D side view', 'wavePoint[2] * 0.12'],
     ['top view adds a derived height-shadow mesh from the actual readable surface, not a fake contour', 'function buildReadableWaveTopHeightShadowGeometry(model: LatticeModel): THREE.BufferGeometry'],
-    ['top height shadow is gated by real surface height and lateral envelope', 'const strength = clampUnit((heightRatio - 0.04) / 0.34) * Math.pow(centerEnvelope, 0.82) * Math.max(bodyBand, terminalBand)'],
+    ['top height shadow is gated by real surface height and lateral envelope', 'const strength = clampUnit((heightRatio - 0.025) / 0.28) * Math.pow(centerEnvelope, 0.72) * Math.max(bodyBand * 1.05, terminalBand * 0.68)'],
     ['top height shadow stays under the wire grid and does not write depth', '<mesh geometry={topHeightShadowGeometry} renderOrder={-1.5}>'],
+    ['top X-only proof hides the colored axis helper unless a heatmap is active', "viewRequest.view === 'top' && !surfaceReferenceOnly && model.config.showHeatmap"],
     ['top wire grid stays strong enough to carry the cross-section footprint without returning to a dark tunnel', "view === 'top' ? 0.48 : 0.16"],
     ['top wire grid uses a slightly darker reference-sheet ink instead of relying on a helper contour', "const wireColor = view === 'top' ? '#9d968d' : '#b8b3ab'"],
     ['isometric span lines stay thinned after the throat-knot branch', "view === 'top' ? 1 : view === 'side' ? 6 : view === 'front' ? 2 : 3"],
@@ -1374,6 +1386,7 @@ function summarizeReadableSurfaceRenderContract() {
     ['surface shared X rods stay visible without turning the curl or top terminal into a black cavity', '? scope.topView ? 0.012 : scope.sideView ? 0.078 : 0.074'],
     ['surface shared X joint pins stay visible as shared endpoints between adjacent X cells without forming a top wall', '? scope.topView ? 0.24 : scope.sideView ? 0.74 : 0.7'],
     ['top surface shared joint halos stay visible without becoming the X-only proof layer', 'opacity={readableSurfaceMode ? (scope.topView ? 0.1 : scope.sideView ? 0.58 : 0.54) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}'],
+    ['top surface X-cell black squares stay visible enough to read one cell with four legs', '? scope.topView ? 0.045 : scope.sideView ? 0.062 : 0.058'],
     ['side outline stays visible through the curl', "depthTest={view !== 'side'}"],
     ['side projection preserves the accepted raw curl profile after wall-branch rejection', 'const point = readableWavePoint(frame, t, s)\n\n  return point'],
     ['readable reference span stays narrower than the earlier thick cap branch', 'const visualHalfSpan = waveWidth * 0.31'],
@@ -1386,29 +1399,29 @@ function summarizeReadableSurfaceRenderContract() {
     ['top projection keeps the plan sheet extension small enough to avoid a terminal wall', 'const planMaxX = frame.maxX + waveWidth * 0.1'],
     ['top projection keeps the rounded lobe inside the original sheet width', 'const baseX = lerpNumber(frame.minX, frame.maxX, t)'],
     ['top projection uses one shoulder lobe rather than stacked terminal bands', 'const shoulderLobe = Math.exp(-Math.pow((t - 0.58) / 0.3, 2)) * (1 - smoothStep(0.9, 1, t))'],
-    ['top projection rounds the terminal nose before the square sheet edge', 'const terminalNose = Math.exp(-Math.pow((t - 0.74) / 0.22, 2)) * (1 - smoothStep(0.9, 0.98, t))'],
+    ['top projection rounds the terminal nose before the square sheet edge', 'const terminalNose = Math.exp(-Math.pow((t - 0.76) / 0.25, 2)) * (1 - smoothStep(0.92, 0.99, t))'],
     ['top projection uses the shoulder lobe as the readable top footprint instead of a pointed terminal nose', 'const teardropLobe = shoulderLobe * Math.pow(envelope, 1.16)'],
     ['top projection adds a softened center-led terminal nose instead of an off-center wall', 'const terminalCenterNose = terminalNose * Math.pow(envelope, 1.18) * smoothStep(0.66, 0.88, t)'],
     ['top projection adds an off-center rounded terminal shoulder instead of a vertical seam', 'const terminalRound = terminalNose * Math.pow(envelope, 0.5) * (1 - Math.pow(envelope, 2))'],
-    ['top projection uses a bounded terminal cap so the plan footprint rounds instead of pointing', 'const terminalCap = terminalNose * Math.pow(envelope, 0.62) * (1 - 0.48 * edgeReturn)'],
+    ['top projection uses a bounded terminal cap so the plan footprint rounds instead of pointing', 'const terminalCap = terminalNose * Math.pow(envelope, 0.52) * (1 - 0.34 * edgeReturn)'],
     ['top projection rounds the terminal shoulders without making a full-height side bulge', 'const shoulderRound = shoulderLobe * Math.pow(envelope, 0.54) * (1 - Math.pow(envelope, 2.1))'],
-    ['top projection returns the lobe before it becomes the outer right boundary', 'const edgeReturn = smoothStep(0.74, 0.96, t)'],
-    ['top projection adds a mid-height oval cross-section shoulder from the June 28 reference row', 'const midSectionShoulder = midSectionOval * (1 - Math.pow(envelope, 1.62)) * (1 - 0.18 * edgeReturn)'],
-    ['top projection keeps the centerline push reduced so the terminal footprint is not pointed', 'const terminalCenterRelief = terminalNose * Math.pow(envelope, 1.4) * smoothStep(0.72, 0.94, t)'],
-    ['top projection reduces vertical y-pinch so the top footprint reads as a horizontal oval instead of a tall slit', 'const ovalFootprintPinch = 0.14 * midSectionOval * Math.pow(envelope, 0.6) * (1 - 0.42 * edgeReturn)'],
-    ['top projection keeps the retained plan lobe broad enough to show the mound without becoming the stripe-forming branch', '0.045 * teardropLobe'],
-    ['top projection keeps retained shoulder rounding narrow enough to avoid a full-height terminal fan', '0.026 * shoulderRound'],
-    ['top projection uses the bounded terminal cap for the rounded terminal footprint', '0.014 * terminalCap'],
-    ['top projection keeps the center-led terminal nose below the pointed-footprint branch', '0.006 * terminalCenterNose'],
+    ['top projection returns the lobe before it becomes the outer right boundary', 'const edgeReturn = smoothStep(0.78, 0.98, t)'],
+    ['top projection adds a mid-height oval cross-section shoulder from the June 28 reference row', 'const midSectionShoulder = midSectionOval * (1 - Math.pow(envelope, 1.36)) * (1 - 0.08 * edgeReturn)'],
+    ['top projection keeps the centerline push reduced so the terminal footprint is not pointed', 'const terminalCenterRelief = terminalNose * Math.pow(envelope, 1.22) * smoothStep(0.68, 0.94, t)'],
+    ['top projection reduces vertical y-pinch so the top footprint reads as a horizontal oval instead of a tall slit', 'const ovalFootprintPinch = 0.095 * midSectionOval * Math.pow(envelope, 0.52) * (1 - 0.55 * edgeReturn)'],
+    ['top projection keeps the retained plan lobe broad enough to show the mound without becoming the stripe-forming branch', '0.038 * teardropLobe'],
+    ['top projection keeps retained shoulder rounding narrow enough to avoid a full-height terminal fan', '0.032 * shoulderRound'],
+    ['top projection uses the bounded terminal cap for the rounded terminal footprint', '0.019 * terminalCap'],
+    ['top projection keeps the center-led terminal nose below the pointed-footprint branch', '0.003 * terminalCenterNose'],
     ['top projection scales down the retained push before it reaches the terminal edge without stacking rows', ') * (1 - 0.78 * edgeReturn)'],
-    ['top projection pulls the terminal centerline back only enough to round the plan footprint without clamping rows', '0.006 * terminalCenterRelief'],
+    ['top projection pulls the terminal centerline back only enough to round the plan footprint without clamping rows', '0.011 * terminalCenterRelief'],
     ['top projection avoids a hard terminal clamp that stacks rows into a stripe', 'planX,'],
     ['top projection releases terminal pinch so the top footprint stays rounded', 'const terminalPlanRelease = smoothStep(0.66, 0.94, t)'],
-    ['top projection keeps terminal shoulder widening narrow so the top view does not form a vertical fan', 'const terminalWidthRound = 0.035 * terminalRound * (1 - 0.3 * edgeReturn)'],
-    ['top projection adds a bounded terminal pinch so the footprint rounds inward instead of widening into a stripe', 'const terminalPlanPinch = 0.0015 * terminalNose * Math.pow(envelope, 0.9) * (1 - 0.25 * edgeReturn)'],
+    ['top projection keeps terminal shoulder widening narrow so the top view does not form a vertical fan', 'const terminalWidthRound = 0.058 * terminalRound * (1 - 0.22 * edgeReturn)'],
+    ['top projection adds a bounded terminal pinch so the footprint rounds inward instead of widening into a stripe', 'const terminalPlanPinch = 0.001 * terminalNose * Math.pow(envelope, 0.9) * (1 - 0.25 * edgeReturn)'],
     ['top projection keeps terminal pinch below the triangular-fan branch', '0.0015 * teardropLobe * (1 - 0.68 * terminalPlanRelease)'],
     ['top projection feeds the oval footprint pinch into plan width instead of faking a contour line', 'ovalFootprintPinch +'],
-    ['top projection lets terminal shoulders round in y without collapsing rows', 's * planHalfSpan * (1 - planPinch + 0.006 * terminalRound + 0.006 * midSectionShoulder)'],
+    ['top projection lets terminal shoulders round in y without collapsing rows', 's * planHalfSpan * (1 - planPinch + 0.012 * terminalRound + 0.018 * midSectionShoulder)'],
     ['top X overlay keeps one continuous frame layer instead of a terminal stripe split', 'topPlan: buildXCellGeometry(mechanism.frames),'],
     ['top X overlay keeps the old terminal split disabled', 'topFold: buildXCellGeometry([]),'],
     ['top readable X bars stay pale enough not to turn the rounded footprint into a terminal stripe', 'opacity={readableSurfaceMode ? 0.012 : 0.36}'],
@@ -2417,6 +2430,7 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('return [...mechanism.connectorByDiagonalId.values()]') &&
     latticeViewerSource.includes('const pinRef = useRef<THREE.InstancedMesh>(null)') &&
     latticeViewerSource.includes('const pinGeometry = useMemo(() => new THREE.SphereGeometry(1, 7, 5), [])') &&
+    latticeViewerSource.includes(': scope.topView ? 0.075 : scope.sideView ? 0.06 : 0.056') &&
     latticeViewerSource.includes("const pinInk = readableSurfaceMode ? '#5a554f' : '#10120e'") &&
     latticeViewerSource.includes("const jointCoreInk = readableSurfaceMode ? '#5f5b54' : '#151712'") &&
     latticeViewerSource.includes('color: pinInk') &&
@@ -2427,33 +2441,37 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('color="#f7f3ed"') &&
     latticeViewerSource.includes('color={jointCoreInk}') &&
     latticeViewerSource.includes('? scope.topView ? 2.8 : scope.sideView ? 6.35 : 5.95') &&
-    latticeViewerSource.includes(': scope.topView ? 3.4 : scope.sideView ? 4.4 : 4.1') &&
+    latticeViewerSource.includes(': scope.topView ? 3.8 : scope.sideView ? 4.4 : 4.1') &&
     latticeViewerSource.includes('? scope.topView ? 1.2 : scope.sideView ? 3.45 : 3.24') &&
-    latticeViewerSource.includes(': scope.topView ? 1.7 : scope.sideView ? 2.45 : 2.28') &&
+    latticeViewerSource.includes(': scope.topView ? 2.2 : scope.sideView ? 2.45 : 2.28') &&
     latticeViewerSource.includes('? scope.topView ? 0.24 : scope.sideView ? 0.74 : 0.7') &&
-    latticeViewerSource.includes(': scope.topView ? 0.64 : scope.sideView ? 0.88 : 0.86') &&
+    latticeViewerSource.includes(': scope.topView ? 0.72 : scope.sideView ? 0.88 : 0.86') &&
     latticeViewerSource.includes('const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView') &&
     latticeViewerSource.includes('depthTest={jointDepthTest}') &&
     latticeViewerSource.includes('depthWrite={false}')
-  const sourceUsesCenterPivotJoints =
-    latticeViewerSource.includes('<XCellCenterPivots model={model} scope={renderScope} view={view} />') &&
-    latticeViewerSource.includes('function XCellCenterPivots') &&
+  const sourceUsesBlackSquareCells =
+    latticeViewerSource.includes('{model.config.showNodes && readableWaveReferenceDisplay(model) && (') &&
+    latticeViewerSource.includes('<XCellSquareCells model={model} scope={renderScope} view={view} />') &&
+    latticeViewerSource.includes('function XCellSquareCells') &&
     latticeViewerSource.includes('return mechanism.frames.map((frame) => frame.center)') &&
-    latticeViewerSource.includes('const pivotRenderOrder = !readableSurfaceMode && scope.topView ? 22 : 18') &&
-    latticeViewerSource.includes('<points geometry={geometry} renderOrder={pivotRenderOrder}>') &&
-    latticeViewerSource.includes('color="#34342f"') &&
-    latticeViewerSource.includes(': scope.topView ? 2.6 : scope.sideView ? 1.08 : 1.02') &&
-    latticeViewerSource.includes(': scope.topView ? 0.88 : scope.sideView ? 0.55 : 0.5') &&
-    latticeViewerSource.includes('const pivotDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView') &&
-    latticeViewerSource.includes('depthTest={pivotDepthTest}') &&
-    latticeViewerSource.includes('depthWrite={false}')
-  const sourceUsesPhysicalConnectorSplit =
-    xCellMechanismSource.includes('const physicalConnector = addVec(connector, connectorFamilySplitOffset(model, family, index))') &&
-    xCellMechanismSource.includes('function connectorFamilySplitOffset(model: LatticeModel, family: DiagonalFamily, connectorIndex: number): Vec3') &&
-    xCellMechanismSource.includes('const amount = model.config.spacing * 0.16 / Math.SQRT2') &&
+    latticeViewerSource.includes('const cellGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])') &&
+    latticeViewerSource.includes("color: '#050505'") &&
+    latticeViewerSource.includes(': scope.topView ? 0.28 : scope.sideView ? 0.14 : 0.13') &&
+    latticeViewerSource.includes('dummy.scale.set(cellHalfSize, cellHalfSize, cellThickness)') &&
+    latticeViewerSource.includes('<instancedMesh ref={cellRef} args={[cellGeometry, cellMaterial, cellPositions.length]} renderOrder={cellRenderOrder + 1} />') &&
+    !latticeViewerSource.includes('function XCellCenterPivots') &&
+    !latticeViewerSource.includes('const pivotGeometry = useMemo(() => new THREE.SphereGeometry(1, 7, 5), [])')
+  const sourceUsesCenterPairConnectors =
+    xCellMechanismSource.includes('const sourceCenter = frameByNodeId.get(source.id)?.center ?? source.currentPosition') &&
+    xCellMechanismSource.includes('const targetCenter = frameByNodeId.get(target.id)?.center ?? target.currentPosition') &&
+    xCellMechanismSource.includes('const physicalConnector = centerPairConnector(sourceCenter, targetCenter, family)') &&
+    xCellMechanismSource.includes('function centerPairConnector(sourceCenter: Vec3, targetCenter: Vec3, family: DiagonalFamily): Vec3') &&
+    xCellMechanismSource.includes("const connectorParameter = family.positive === 'ne' ? 0.42 : 0.58") &&
+    xCellMechanismSource.includes('return addVec(sourceCenter, scaleVec(subtractVec(targetCenter, sourceCenter), connectorParameter))') &&
     xCellMechanismSource.includes('function physicalConnectorOccupancy(mechanism: ConnectedXCellMechanism)') &&
     xCellMechanismSource.includes('if (useCount > 2) overOccupiedCount += 1') &&
-    xCellMechanismSource.includes('function physicalConnectorKey(connector: Vec3): string')
+    xCellMechanismSource.includes('function physicalConnectorKey(connector: Vec3): string') &&
+    !xCellMechanismSource.includes('function solveOppositePairConnectors')
 
   return {
     renderedNodeCount: model.nodes.length,
@@ -2476,8 +2494,8 @@ function summarizeXCellRenderDirectLines(model) {
     sourceUsesSharedConnectorArms,
     sourceUsesSharedConnectorRods,
     sourceUsesSharedConnectorJoints,
-    sourceUsesCenterPivotJoints,
-    sourceUsesPhysicalConnectorSplit,
+    sourceUsesBlackSquareCells,
+    sourceUsesCenterPairConnectors,
   }
 }
 

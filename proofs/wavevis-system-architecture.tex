@@ -209,7 +209,7 @@ If this PDF is the only WaveVis context available, start with this section and t
   \item \textbf{Current source root:} workspace path \code{\_apps/wavevis.aolabs.io/}.
   \item \textbf{Public fallback mirror:} workspace path \code{\_apps/aolabs-site/wavevis/}. A WaveVis deploy to its own \code{gh-pages} branch does not automatically update the \code{aolabs.io/wavevis/} fallback unless the built files are mirrored there and the hub site is pushed.
   \item \textbf{Current architectural direction:} curated custom Moana-ocean profile localized into the inverse-sheet field. Manual \(xz\) and \(xy\) profile editors are not the active path.
-  \item \textbf{Current reference-match boundary:} the June 28, 2026 candidate611 checkpoint targets the June 23 line drawing, the June 24 smooth gridded breaking-wave sequence, and the June 28 stage/cross-section reference. The default product view shows the readable surface plus the connected X-cell mechanism: surface is on, \code{X legs} are on, and \code{cell centers} are off unless explicitly requested. The URL gates remain addressable with \code{surface=1}, \code{connectors=1}, and \code{cells=1}; the visible labels name the mechanism layer. Side is a full three-dimensional side camera, not a cross-section. Candidate611 preserves the retained isometric camera, bounded 3D-only lower-lip tuck, \code{terminalTipTaper=0.1}, continuous top X-frame layer, explicit shared connector joints, instanced shared-joint rods, and the readable default/proof split. The current hard mechanism gate has two parts: every interior cell must be one center pivot with four straight center-to-connector legs forming two straight bisected diagonal bars, and every physical connector must be used by exactly two cells, not four. The current X mechanism reports \(4928\) center pivots, \(9240\) checked straight X bars, \(19092\) rendered X leg segments, \(19092\) rendered shared-joint arms, \(9546\) physical connector joints, interior leg-count range \(4\)--\(4\), zero opposite-pair length spread, zero opposite collinearity error, zero center residual, zero connector endpoint gap, minimum physical connector use count \(2\), maximum physical connector use count \(2\), and \(0\) over-occupied physical connectors. The checkpoint is guarded mechanism/readability progress, not a completed reference match: the top view now uses a denser reference-sheet grid, a bounded top-only height-shadow derived from the actual readable surface, and a softened oval footprint projection, but the full rendered wave is still visibly short of the supplied tube/cross-section reference.
+  \item \textbf{Current reference-match boundary:} the June 29, 2026 Candidate619 checkpoint targets the June 23 line drawing, the June 24 smooth gridded breaking-wave sequence, and the June 28 stage/cross-section reference. The default product view shows the readable surface plus the connected X-cell mechanism: surface is on, \code{X legs} are on, and \code{cells} are on. The URL gates remain addressable with \code{surface=1}, \code{connectors=1}, and \code{cells=1}; the visible labels name the mechanism layer. Side is a full three-dimensional side camera, not a cross-section. Candidate619 preserves the retained isometric camera, bounded 3D-only lower-lip tuck, \code{terminalTipTaper=0.1}, continuous top X-frame layer, explicit spherical connector nodes, instanced shared-joint rods, black square cells at each X-cell body, and the readable default/proof split. The current hard mechanism gate is the adjacent-center connector rule: every interior cell must be one black square body with four straight center-to-connector legs, and every spherical connector node must sit on the segment between exactly two adjacent cell centers with one leg from each center. Crossing diagonal families must remain separate two-cell joints, not collapse into one four-cell physical joint. The current X mechanism reports \(4928\) black square cells, \(19092\) rendered X leg segments, \(19092\) rendered shared-joint arms, \(9546\) physical connector nodes, interior leg-count range \(4\)--\(4\), zero connector endpoint gap, zero connector-center line residual, zero connector segment overshoot, connector parameters \(0.42\)--\(0.58\), \(0\) invalid center-pair connectors, minimum physical connector use count \(2\), maximum physical connector use count \(2\), and \(0\) over-occupied physical connectors. The previous opposite-pair straight-bar solver is no longer used as the completion gate because it could move connectors off the segment between adjacent centers; opposite-pair residuals remain reported as a geometric tradeoff, not hidden. The proof path also guards \code{sourceUsesCenterPairConnectors=true} and \code{sourceUsesBlackSquareCells=true} so the center-pair read cannot silently fall back to connector-ID counts or faint point-only markers. The default dense wave remains \(44\times112\), while URLs may reduce columns to \(12\) or more for X-cell inspection. The checkpoint is guarded mechanism/readability progress, not a completed reference match: the top view now uses a denser reference-sheet grid, a bounded top-only height-shadow derived from the actual readable surface, and a softened oval footprint projection, but the full rendered wave is still visibly short of the supplied tube/cross-section reference.
 \end{itemize}
 
 \subsection{What the next agent must not repeat}
@@ -220,7 +220,7 @@ The repeated failures that this document is meant to prevent are:
   \item Do not form a bowl, dimple, cavity, pucker, or side wall that covers the underside of the curl.
   \item Do not replace Side with a profile-only debug view. Side is a side camera view of the full three-dimensional sheet.
   \item Do not hide, ghost, clip, or remove linkage cells because they look bad. Fix the geometry.
-  \item Do not remove the full array, straight X cells, shared connector joints, or pairwise linkage truth while chasing a prettier silhouette.
+  \item Do not remove the full array, one-center X cells, center-pair connector joints, or two-cell linkage truth while chasing a prettier silhouette.
   \item Do not wire the lip directly to the ground or draw filler geometry across the open underside.
   \item Do not make \code{position} or \code{steer} shape controls. They are rigid post-shape transforms.
   \item Do not call the work done from code intent, automated checks, a nicer profile line, or a local-only screenshot.
@@ -230,55 +230,62 @@ The repeated failures that this document is meant to prevent are:
 
 \subsection{Current live-state evidence}
 
-Figures~\ref{fig:current-live-side}--\ref{fig:current-live-top-x-only} record candidate611 from the current browser-rendered source tree. The default presentation is a readable gridded surface plus the straight connected X-cell mechanism inspired by the June 24 and June 28 references. Side preserves the open curl read while leaving the connected X mechanism visible. 3D preserves the retained isometric camera and bounded lower-lip tuck without adding a fake bridge. Front remains a separate spanwise check from the previous figure set because candidate611 did not alter the front solver path. Top keeps one square sheet panel, one continuous X-frame layer, a stronger reference-sheet grid, a top-only height-shadow derived from the readable surface, and a softened oval projection so the plan view is judged against the new cross-section reference without pasting a helper contour. The mechanism is not deleted: \code{X legs} exposes the straight X linkage, \code{surface=0\&connectors=1} exposes the X-only mechanism view, and \code{node scripts/check-inverse-sheet.cjs} verifies \(4928\) center pivots, \(9240\) checked straight X bars, \(19092\) rendered center-to-connector X legs, \(19092\) rendered shared-joint arms, \(9546\) physical connector joints, interior leg-count range \(4\)--\(4\), zero connector endpoint gap, exactly two physical endpoint uses per connector, and \(0\) over-occupied physical connectors. This paper therefore treats the current render as verified mechanism progress with an open visual-match boundary.
+Figures~\ref{fig:current-live-side}--\ref{fig:current-live-top-x-small-proof} record Candidate619 from the current browser-rendered source tree. The default presentation is a readable gridded surface plus the connected X-cell mechanism inspired by the June 24 and June 28 references. Side preserves the open curl read while leaving the connected X mechanism visible. 3D preserves the retained isometric camera and bounded lower-lip tuck without adding a fake bridge. Front remains a separate spanwise check with the same black-square cell and spherical-node rendering. Top keeps one square sheet panel, one continuous X-frame layer, a stronger reference-sheet grid, a top-only height-shadow derived from the readable surface, and a softened oval projection so the plan view is judged against the new cross-section reference without pasting a helper contour. The mechanism is not deleted: \code{X legs} exposes the actual center-pair linkage, \code{surface=0\&connectors=1\&cells=1} exposes the X-only mechanism view, and \code{node scripts/check-inverse-sheet.cjs} verifies \(4928\) black square cells, \(19092\) rendered center-to-connector X legs, \(19092\) rendered shared-joint arms, \(9546\) spherical connector nodes, interior leg-count range \(4\)--\(4\), zero connector endpoint gap, zero connector-center line residual, zero connector segment overshoot, connector parameters \(0.42\)--\(0.58\), exactly two physical endpoint uses per connector, \(0\) invalid center-pair connectors, \(0\) over-occupied physical connectors, \code{sourceUsesBlackSquareCells=true}, and \code{sourceUsesCenterPairConnectors=true}. Candidate619 also keeps an \(8\times16\) proof route so the same four-leg, two-cell connector contract is readable without the dense whole-array overplot. This paper therefore treats the current render as verified mechanism progress with an open visual-match boundary.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.98\linewidth]{current-live-side.png}
-\caption{Candidate611 browser-rendered Side view for the default inverse-sheet state. The view is a full three-dimensional side camera with the readable surface, light side wire grid, one-center four-leg X cells, center pivots, physical shared connector pins, and instanced shared-joint rods visible together. It preserves the open exact-match boundary: the underside remains readable and the between-cell joints stay explicit, but the reference-wave match is still not closed.}
+\caption{Candidate619 browser-rendered Side view for the default inverse-sheet state. The view is a full three-dimensional side camera with the readable surface, light side wire grid, black square one-center/four-leg cells, spherical two-leg connector nodes, and instanced shared-joint rods visible together. It preserves the open exact-match boundary: the underside remains readable and the between-cell joints stay explicit, but the reference-wave match is still not closed.}
 \label{fig:current-live-side}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.98\linewidth]{current-live-side-x-only.png}
-\caption{Candidate611 Side view with \code{surface=0\&connectors=1}. This X-only evidence removes the surface skin and shows the actual mechanism layer: each cell is one center pivot with four straight center-to-connector legs; two legs form the \code{sw-ne} bar and two legs form the \code{se-nw} bar. Each bar is straight and bisected at the center pivot, the two bars may have different lengths, and neighboring cells meet at visible connector pins. Every physical connector is used by exactly two cells, not four.}
+\caption{Candidate619 Side view with \code{surface=0\&connectors=1\&cells=1}. This X-only evidence removes the surface skin and shows the actual mechanism layer: each cell is one black square with four straight center-to-connector legs, and every connector is a spherical node on the segment between exactly two adjacent cell centers. Neighboring cells meet through visible connector nodes with one leg from each center; crossing diagonal families are separated into distinct two-cell joints rather than one four-cell joint.}
 \label{fig:current-live-side-x-only}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.98\linewidth]{current-live-isometric.png}
-\caption{Candidate611 browser-rendered 3D/isometric view for the same default state. The default presentation retains the recovered geometry floor, restored isometric camera, source-profile readable surface skin, lighter isometric surface, pale wire grid, bounded 3D face-pinch transform, one-center four-leg X cells, physical connector pins, and a visible instanced shared-joint rod pass. Surface-on 3D preserves depth testing for hidden X/joint marks against the readable surface, reducing the false see-through throat wall without adding a fake bridge. This figure remains an improved open visual-match boundary rather than an exact reference match because the lip is still blunter and more capped than the June 24 tube reference.}
+\caption{Candidate619 browser-rendered 3D/isometric view for the same default state. The default presentation retains the recovered geometry floor, restored isometric camera, source-profile readable surface skin, lighter isometric surface, pale wire grid, bounded 3D face-pinch transform, black square four-leg X cells, spherical two-leg connector nodes, and a visible instanced shared-joint rod pass. Surface-on 3D preserves depth testing for hidden X/joint marks against the readable surface, reducing the false see-through throat wall without adding a fake bridge. This figure remains an improved open visual-match boundary rather than an exact reference match because the lip is still blunter and more capped than the June 24 tube reference.}
 \label{fig:current-live-isometric}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.98\linewidth]{current-live-front.png}
-\caption{Candidate579 browser-rendered Front view retained as the separate spanwise product camera. Candidate611 did not alter the front solver path. This view compresses front depth, bounds the terminal lip contribution, depth-tests the pale grid against the lip, keeps rounded terminal width, and shows the one-center X-cell linkage through the projected cap rather than hiding mechanism state behind a pasted cap layer. The projection checkpoint remains open against the June 24 and June 28 references.}
+\caption{Candidate619 browser-rendered Front view retained as the separate spanwise product camera. This view compresses front depth, bounds the terminal lip contribution, depth-tests the pale grid against the lip, keeps rounded terminal width, and shows the black-square X-cell linkage with spherical connector nodes through the projected cap rather than hiding mechanism state behind a pasted cap layer. The projection checkpoint remains open against the June 24 and June 28 references.}
 \label{fig:current-live-front}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.98\linewidth]{current-live-top.png}
-\caption{Candidate611 browser-rendered Top view for the same default state. The surface-plus-X view uses a Top-only shoulder-plus-terminal footprint projection with a stronger reference-sheet grid, one continuous one-center/four-leg X layer, real center-to-connector rods, a guarded mid-section oval term, and a bounded height-shadow from the readable surface. Strict \code{surface=0\&connectors=1} top inspection still exposes the constrained X-only mechanism concentration rather than hiding it, and the top footprint remains an open visual-match target rather than a solved reference state.}
+\caption{Candidate619 browser-rendered Top view for the same default state. The surface-plus-X view uses a Top-only shoulder-plus-terminal footprint projection with a stronger reference-sheet grid, one continuous black-square/four-leg X layer, real center-to-connector rods, spherical connector nodes, a guarded mid-section oval term, and a bounded height-shadow from the readable surface. Strict \code{surface=0\&connectors=1\&cells=1} top inspection still exposes the center-pair X-only mechanism rather than hiding it, and the top footprint remains an open visual-match target rather than a solved reference state.}
 \label{fig:current-live-top}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.98\linewidth]{current-live-top-surface-only.png}
-\caption{Candidate611 Top view with \code{surface=1\&connectors=0\&cells=0}. The gray body is not a pasted cross-section line; it is a bounded height-shadow derived from the same readable wave surface used in the 3D and side views. This makes the June 28 oval/cross-section target visible from overhead while preserving the separate X-only proof path.}
+\caption{Candidate619 Top view with \code{surface=1\&connectors=0\&cells=0}. The gray body is not a pasted cross-section line; it is a bounded height-shadow derived from the same readable wave surface used in the 3D and side views. This makes the June 28 oval/cross-section target visible from overhead while preserving the separate X-only proof path.}
 \label{fig:current-live-top-surface-only}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.98\linewidth]{current-live-top-x-only.png}
-\caption{Candidate611 Top view with \code{surface=0\&connectors=1\&cells=1}. This proof view is intentionally dense because it shows the whole array. Each visible cell center is the pivot for four straight legs; opposite leg pairs form the two bisected X bars, and adjacent cells meet at two-cell connector pins. This is the current hard mechanism acceptance test, not a decorative overlay.}
+\caption{Candidate619 Top view with \code{surface=0\&connectors=1\&cells=1}. This proof view is intentionally dense because it shows the whole array through the \code{X legs} and \code{cells} layers. Each visible black square cell is the body for four straight legs, and adjacent cells meet at spherical two-cell connector nodes placed on the center-to-center spans. This is the current hard mechanism acceptance test, not a decorative overlay.}
 \label{fig:current-live-top-x-only}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\linewidth]{current-live-top-x-small-proof.png}
+\caption{Candidate619 inspectable Top proof with \code{rows=8}, \code{columns=16}, \code{surface=0}, \code{connectors=1}, and \code{cells=1}. This low-density route exists so the hard cell contract can be inspected directly through the \code{X legs} and \code{cells} layers: a cell is not two nearby two-leg elements; it is one black square with four straight legs, and each visible connector is a spherical center-pair node used by exactly two neighboring cells.}
+\label{fig:current-live-top-x-small-proof}
 \end{figure}
 
 \subsection{File map}
@@ -291,11 +298,11 @@ Figures~\ref{fig:current-live-side}--\ref{fig:current-live-top-x-only} record ca
 File or route & Ownership \\
 \midrule
 \code{src/latticeGeometry.ts} & Source of truth for the inverse sheet model, defaults, sanitization, target displacement field, morph behavior, metrics, and geometry sanity checks. \\
-\code{src/LatticeViewer3D.tsx} & Source of truth for Canvas rendering, side/isometric/top full-sheet camera behavior, surface visibility, camera presets, visual layers, and the rendered straight X-cell, center-pivot, and shared-joint layers. \\
-\code{src/xCellMechanism.ts} & Source of truth for the connected X-cell display mechanism: two straight diagonal bars per cell, equal opposite halves through each center pivot, and shared connector joints between neighboring cells. \\
+\code{src/LatticeViewer3D.tsx} & Source of truth for Canvas rendering, side/isometric/top full-sheet camera behavior, surface visibility, camera presets, visual layers, and the rendered center-pair X-cell, center-pivot, and shared-joint layers. \\
+\code{src/xCellMechanism.ts} & Source of truth for the connected X-cell display mechanism: one black-square cell body per lattice cell, four straight center-to-connector legs per cell, and spherical connector nodes that lie on the segment between exactly two adjacent cell centers. \\
 \code{src/TargetShapeControls.tsx} & Source of truth for the visible inverse-sheet controls: rows, columns, views, scale, morph, position, steer, display toggles, reset, export, and import. \\
 \code{src/InverseSheetTab.tsx} & Source of truth for URL-state loading, tab order, view requests, import/export plumbing, and the Inverse Sheet first-tab behavior. \\
-\code{scripts/check-inverse-sheet.cjs} & Main inverse-sheet regression checker. It compiles the TypeScript geometry and checks parameter semantics, lip curl, flatContribution, low-lip stability, lateral smoothness, no bowl pockets, startup URL coverage, and the connected straight X-cell render contract. \\
+\code{scripts/check-inverse-sheet.cjs} & Main inverse-sheet regression checker. It compiles the TypeScript geometry and checks parameter semantics, lip curl, flatContribution, low-lip stability, lateral smoothness, no bowl pockets, startup URL coverage, and the center-pair X-cell render contract. \\
 \code{scripts/check-geometry-invariants.cjs} & Mechanism-level invariant checker for rigid-cell/linkage behavior. \\
 \code{proofs/wavevis-system-architecture.tex} & Source for this PDF. Update it when the public simulator contract, current state, or known failure modes change. \\
 \code{proofs/figures/} & Moana reference images, mechanism proof figures, and current source-rendered state figures used by this paper. \\
@@ -347,7 +354,7 @@ The current inverse-sheet default is intentionally taller and sharper than earli
 \]
 The app displays only the narrow active controls by default. Legacy inputs such as \code{height}, \code{overhang}, \code{lipDip}, \code{width}, \code{lipSharpness}, \code{groundTransition}, \code{wallSmoothness}, and \code{flatContribution} can still be parsed from URLs and JSON imports because older test links and screenshots use them. The visible startup path favors \code{scale}, \code{morph}, \code{position}, and \code{steer} to keep the main wave profile stable.
 
-Columns are sanitized to a smooth-wave minimum. A URL may say \(\code{columns}=24\), but the current generator promotes the active sheet to the minimum column count needed for a smoother wave. This is intentional: too few columns produced angular side silhouettes, dimples, and visibly under-sampled curl segments.
+The default reference-wave sheet remains \(\code{columns}=112\). The sanitizer now allows \(\code{columns}\ge 12\) so X-cell proof routes can be inspected at low density, but compact column counts are not evidence of an exact reference-wave match. Dense-wave regression checks request the default column count explicitly; low-column screenshots are mechanism-readability proofs.
 
 \subsection{Target-field construction}
 
@@ -422,13 +429,14 @@ These checks are guards, not substitutes for the human-facing screenshot. A visi
   \item \code{view=side} sets a side camera over the full three-dimensional linkage array;
   \item \code{view=front} sets a front camera over the same full three-dimensional sheet so the spanwise lip cap can be inspected;
   \item \code{view=isometric} shows the full rectangular sheet in perspective while still making the curl and lip readable;
-  \item the default product view uses a smooth gridded surface skin plus one-center four-leg X-cell leg lines, while node markers remain available as a separate cell toggle;
+  \item the default product view uses a smooth gridded surface skin plus one-center four-leg X-cell leg lines, black square cell bodies, and spherical connector nodes;
   \item Side, Front, and 3D use view-specific mesh outlines instead of the previous SVG overlay or red terminal trace;
-  \item each rendered X cell is one center pivot with four visible center-to-connector legs;
-  \item two of those legs form the straight \code{sw-ne} diagonal bar, and the other two form the straight \code{se-nw} diagonal bar;
-  \item each diagonal is bisected by the cell center pivot, but the two diagonals do not need the same length or a right angle;
-  \item neighboring X cells meet at physical connector joints, and every physical connector must have exactly two endpoint uses;
-  \item cell centers and X legs are display toggles, not repair paths, and their render scope remains covered by the geometry check.
+  \item each rendered X cell is one black square cell body with four visible center-to-connector legs;
+  \item each connector is a spherical node on the segment between exactly two adjacent cell centers;
+  \item each connector has exactly two endpoint uses: one leg from each of those two centers;
+  \item crossing diagonal families must stay visually and physically separate instead of collapsing into a four-cell joint;
+  \item opposite-pair straightness residuals are reported as a tradeoff when the adjacent-center connector rule conflicts with the older diagonal-chain solver;
+  \item cells and X legs are display toggles, not repair paths, and their render scope remains covered by the geometry check.
 \end{itemize}
 If the renderer needs to hide rows to make the shape readable, the generator is still wrong.
 
@@ -579,7 +587,7 @@ Renderer & Shows the actual mechanism. & Fake shell, hidden wall, side view as p
 
 The current visible app does not ask the user to draw a profile. That path created too much ambiguity and repeatedly made the simulator look like a swept tunnel or hand-edited cavity rather than a single coherent wave. The user-facing target is now driven by a curated custom Moana-ocean lip/body profile: a localized ocean deformation with a broad rear ramp, rounded crest, forward-and-down lip, open underside, smooth lateral fade, and flat rectangular perimeter.
 
-The curated target is a reference field, not a set of cell locations. The final cell grid is determined by row and column counts, then sampled against that target. A clean state must keep the full linkage array visible while making the centerline and the lateral silhouette read as one plunging wave. The target must never stitch the lip directly to the ground or draw a hard polygon boundary around a former editor curve, because that creates the wall, bowl, and cavity failures this record explicitly rejects. The curl is also resolution-sensitive: under-resolved column counts are promoted to the smooth-wave minimum because honoring a compact column request recreated the visible dimple and made the side silhouette fail.
+The curated target is a reference field, not a set of cell locations. The final cell grid is determined by row and column counts, then sampled against that target. A clean state must keep the full linkage array visible while making the centerline and the lateral silhouette read as one plunging wave. The target must never stitch the lip directly to the ground or draw a hard polygon boundary around a former editor curve, because that creates the wall, bowl, and cavity failures this record explicitly rejects. The curl is also resolution-sensitive: the default reference-wave state keeps \(112\) columns, while reduced column counts are reserved for low-density mechanism inspection and must not be mistaken for a completed reference-shape view.
 
 \section{Slider semantics}
 
@@ -594,7 +602,7 @@ Control & Intended effect & Must not do \\
 \code{scale} & Uniformly enlarge or reduce the curated Moana-ocean target. & Change steer, position, topology, or the target's wave identity. \\
 \code{steer} & Rigid yaw rotation of the finished wave. & Bend, stretch, or reshape the wave. \\
 \code{position} & Rigid horizontal translation of the finished wave. & Change silhouette, strain field, or curl. \\
-display toggles & Surface, flat grid, cell centers, and X legs are display layers only. & Hide broken geometry or substitute a fake repair path. \\
+display toggles & Surface, flat grid, cells, and X legs are display layers only. & Hide broken geometry or substitute a fake repair path. \\
 \bottomrule
 \end{tabular}
 }
@@ -626,14 +634,14 @@ with \(w(u)\) varying through the wave. The curl should have a smaller active wi
 
 \section{Mechanism topology}
 
-WaveVis uses a rectangular graph of nodes, horizontal profile edges, vertical span edges, and quads as the source lattice. The visible mechanism layer now derives a connected X cell at each lattice node. Each cell has one center pivot and four visible legs that leave that same center. Two legs form the \code{sw-ne} straight bar and two legs form the \code{se-nw} straight bar. Each bar is bisected by the center pivot. The two bars may differ in total length, and the included angle is free. Neighboring cells share the diagonal connector locations, so the array reads as a field of X cells connected through visible joints rather than as isolated crossed marks or two nearby two-leg pseudo-cells. The graph is not allowed to become a set of isolated rows.
+WaveVis uses a rectangular graph of nodes, horizontal profile edges, vertical span edges, and quads as the source lattice. The visible mechanism layer now derives a connected X cell at each lattice node. Each cell renders as a black square body with four visible legs that leave the same center. Each leg terminates at a spherical connector node located on the segment between that cell center and one adjacent cell center. Each connector has exactly two endpoint uses: one leg from each of those two adjacent centers. Crossing diagonal families are separated into distinct physical joints so a crossing point cannot become a four-cell connector. The graph is not allowed to become isolated crossed marks, two nearby two-leg pseudo-cells, or a set of isolated rows.
 
-The mechanism evidence from the earlier proof remains relevant. The all-four-equal X-cell branch was rejected because the finite connector assignment does not close cleanly under the current overhang contract. The accepted branch is pairwise: one straight bar provides one equal collinear opposite pair, the crossing bar provides the other equal collinear opposite pair, and the angle and length relation between the two bars are allowed to vary. This pairwise rule preserves a readable connected X linkage without forcing impossible equal-arm closure~\cite{wavevis_constraint_2026}.
+The mechanism evidence from the earlier proof remains relevant as a warning against fake filler surfaces and impossible all-four-equal closure. Candidate619 supersedes the earlier opposite-pair solver for the public X-cell acceptance gate because that solver could preserve collinearity by moving connectors away from the segment between adjacent cell centers. The current branch preserves the center-pair connector rule first, reports the resulting opposite-pair residuals, and does not call those residuals solved unless a later mechanism satisfies both constraints without moving the connector off the adjacent-center segment~\cite{wavevis_constraint_2026}.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.93\linewidth]{constraint-contract-summary.png}
-\caption{Mechanism contract inherited from the constraint proof and updated in the current renderer. WaveVis should preserve exact shared contact, straight X bars, and pairwise equal, collinear opposite halves rather than hiding infeasible all-four-equal geometry behind filler surfaces.}
+\caption{Mechanism contract inherited from the constraint proof and updated in the current renderer. WaveVis should preserve exact shared contact, one-center cells, and two-cell connector joints on adjacent-center spans rather than hiding infeasible geometry behind filler surfaces or a connector-ID count.}
 \end{figure}
 
 \begin{figure}[H]
@@ -697,19 +705,19 @@ The inverse-sheet checker compiles the TypeScript geometry into a temporary Comm
 
 The current acceptance evidence expected from \code{scripts/check-inverse-sheet.cjs} includes:
 \begin{itemize}
-  \item startup display defaults to \code{showSurface=true}, \code{showEdges=true}, \code{showNodes=false}, and \code{showHeatmap=false};
-  \item rendered center pivot count equals the full rectangular grid count \(4928\);
-  \item checked straight X bar count equals the expected interior X bar count \(9240\);
+  \item startup display defaults to \code{showSurface=true}, \code{showEdges=true}, \code{showNodes=true}, and \code{showHeatmap=false};
+  \item rendered black-square cell count equals the full rectangular grid count \(4928\);
   \item rendered center-to-connector X leg segment count equals the expected connector-use count \(19092\);
-  \item every interior X cell has exactly four legs from one center pivot;
-  \item rendered shared connector joint count equals the expected diagonal connector count \(9546\);
+  \item every interior X cell has exactly four legs from one black square body;
+  \item rendered spherical connector-node count equals the expected diagonal connector count \(9546\);
   \item each physical connector has exactly two endpoint uses;
   \item maximum X connector endpoint gap is zero;
-  \item maximum X opposite-pair length spread is zero;
-  \item maximum X opposite collinearity error is zero;
-  \item maximum X opposite-center residual is zero;
-  \item every interior X cell exposes the two connected diagonal pairs required by the mechanism;
-  \item connected X-cell centers stay close to the sampled wave surface rather than becoming a detached fake mechanism;
+  \item maximum connector-center line residual is zero;
+  \item maximum connector segment overshoot is zero;
+  \item connector parameters remain inside the center-to-center span, currently \(0.42\)--\(0.58\);
+  \item invalid connector center-pair count is zero;
+  \item opposite-pair straightness residuals are reported, not used to hide a connector that left its adjacent-center segment;
+  \item connected X-cell bodies stay close to the sampled wave surface rather than becoming a detached fake mechanism;
   \item no bowl-pocket count is reported for default, compact-user, and breaking-wide presets;
   \item side-overhang aspect stays in the downturned-lip band after the supplied-line update: startup default aspect between \(1.35\) and \(2.65\), compact user morph case between \(1.45\) and \(2.85\), and both with reach-to-height between \(0.72\) and \(1.35\);
   \item broad open-curl lip stats keep open-throat, no-dimple, no-backfold, and return-to-flat checks true;
@@ -784,7 +792,7 @@ Progress does not automatically ingest every active Codex chat. If a future Wave
 
 This section is intentionally blunt so a future chat does not have to infer whether the system is finished.
 
-\textbf{Verified current state on June 28, 2026:}
+\textbf{Verified current state on June 29, 2026:}
 \begin{itemize}
   \item The reliable public route is \code{https://aolabs.io/wavevis/}.
   \item The public WaveVis page includes a clickable AO Labs home mark, an app identity mark, the \code{wavevis.aolabs.io} title, and a \code{System Architecture PDF} action.
@@ -792,14 +800,14 @@ This section is intentionally blunt so a future chat does not have to infer whet
   \item The current PDF route is the WaveVis fallback paper route: \code{/wavevis/proofs/}, file \code{wavevis-system-architecture.pdf}.
   \item Side, Front, Top, and 3D are the product view modes. Side is the full three-dimensional sheet seen from the side, not a profile-only debug view.
   \item Current checks pass for the production build, mechanism geometry invariants, and the inverse-sheet regression suite.
-  \item The June 28 candidate611 checkpoint uses a default surface-plus-X presentation across 3D, Side, Front, and Top, hidden-by-default cell-center markers, visible \code{X legs}, preserved mechanism toggles, slider robustness, connected X-cell invariants, the restored isometric camera, retained 3D-only lower-lip tuck, \code{terminalTipTaper=0.1}, a continuous top X overlay without the old terminal split, one-center four-leg X rendering, explicit physical connector joints, instanced shared-joint rods, surface-on 3D depth-tested hidden X/joint rendering, a denser top grid, a bounded top height-shadow, and a visible-label guard that names \code{showEdges} as \code{X legs} rather than \code{connectors}.
+  \item The June 29 Candidate619 checkpoint uses a default surface-plus-X presentation across 3D, Side, Front, and Top, visible black square cell bodies, visible \code{X legs}, preserved mechanism toggles, slider robustness, center-pair X-cell invariants, the restored isometric camera, retained 3D-only lower-lip tuck, \code{terminalTipTaper=0.1}, a continuous top X overlay without the old terminal split, one-center four-leg X rendering, explicit spherical physical connector nodes, instanced shared-joint rods, surface-on 3D depth-tested hidden X/joint rendering, a denser top grid, a bounded top height-shadow, a 12-column minimum for inspectable X-cell proof routes, and visible-label guards that name \code{showNodes} as \code{cells} and \code{showEdges} as \code{X legs}.
   \item The current side render uses a left-to-right side camera with a smooth rise, reference-trace forward/downturned inward curling lip, connector joints, overhang, and an X-only verification path through \code{surface=0\&connectors=1}. The current 3D render keeps the sheet visible as a gridded surface with connected X cells and avoids the rejected hidden-line, bulb, hard-plateau, lit-oval, opacity-only smoothing branch, overstrong diagonal-crease transform, front-biased flattened camera, open-C cavity, forward/down vertical-insert profile, busier profile throat-smoothing branch, opposite-camera branches, and the candidate404 side-projection skirt. It remains visibly short of exact June 24 or June 28 reference identity because the lip is cleaner but still blunter and more capped than the supplied tube reference. The retained Front render is a spanwise check with depth-tested pale grid lines, rounded terminal width, controlled cap contours, a front-only pale lit cap cue, a lower projection dome, and visible center X linkage, not a closed reference match. The top render keeps one square reference sheet, one continuous X layer, a stronger reference-sheet wire grid, a guarded mid-section oval projection term, and a height-shadow derived from actual surface height; it does not paste the rejected contour-helper branch into the product view.
-  \item Browser-rendered side, X-only side, isometric, top, top-surface-only, and top-X-only figures were refreshed from candidate611. Current source metrics include \(4928\) center pivots, \(9240\) checked straight X bars, \(19092\) rendered center-to-connector X legs, \(19092\) rendered shared-joint arms, \(9546\) physical connector joints, interior X-cell leg count range \(4\)--\(4\), zero X connector endpoint gap, exactly two physical endpoint uses for every connector, zero over-occupied physical connectors, zero X opposite-pair length spread, zero X opposite collinearity error, zero X opposite center residual, max X center-surface residual \(0.4596\), and source guards requiring the one-center/four-leg renderer, physical connector split, visible shared-joint rod layer, top height-shadow branch, and the \code{cell centers}/\code{X legs} visible labels.
+  \item Browser-rendered side, X-only side, isometric, front, top, top-surface-only, dense top-X-only, and low-density top-X proof figures were refreshed from Candidate619. Current source metrics include \(4928\) black square cells, \(19092\) rendered center-to-connector X legs, \(19092\) rendered shared-joint arms, \(9546\) spherical physical connector nodes, interior X-cell leg count range \(4\)--\(4\), zero X connector endpoint gap, zero connector-center line residual, zero connector segment overshoot, connector parameters \(0.42\)--\(0.58\), \(0\) invalid center-pair connectors, exactly two physical endpoint uses for every connector, zero over-occupied physical connectors, max X center-surface residual \(0.4596\), and source guards requiring the one-center/four-leg renderer, center-pair connector placement, black square cell layer, spherical connector-node layer, visible shared-joint rod layer, top height-shadow branch, hidden axis helpers in X-only proof mode, the 12-column proof range, and the \code{cells}/\code{X legs} visible labels. Opposite-pair residuals are reported, not claimed solved by moving connectors off the adjacent-center segment.
 \end{itemize}
 
 \textbf{Open state that must not be overstated:}
 \begin{itemize}
-  \item Exact matching to the supplied breaking-wave line drawing, June 24 gridded reference, June 28 stage/cross-section reference, or photorealistic Moana-water frame is not a proven completed result. The correct claim is that the simulator now preserves the hard connected-X mechanism and exposes a clearer top-grid footprint while the full visible wave match remains open.
+  \item Exact matching to the supplied breaking-wave line drawing, June 24 gridded reference, June 28 stage/cross-section reference, or photorealistic Moana-water frame is not a proven completed result. The correct claim is that the simulator now preserves the hard center-pair X mechanism and exposes a clearer top-grid footprint while the full visible wave match remains open.
   \item \code{https://wavevis.aolabs.io/} is still treated as blocked/stale unless a fresh certificate and body check passes.
   \item This is a simulator and architecture record. It is not evidence that a physical lattice prototype has been fabricated or experimentally validated.
   \item If Alan reports a visible dimple, cavity, side wall, bowl, missing curl, zig-zag, disconnected cell, or profile/side confusion after this PDF ships, the live rendered artifact overrides this paper. Repair the source and update the validation gate.
