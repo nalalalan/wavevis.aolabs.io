@@ -420,7 +420,7 @@ function buildReadableWaveWireGeometry(model: LatticeModel, view: CameraViewRequ
 
 function readableWaveSpanParameter(view: CameraViewRequest['view'], amount: number): number {
   const centered = -1 + clampUnit(amount) * 2
-  return view === 'side' ? centered * 0.62 : centered
+  return view === 'side' ? centered * 0.82 : centered
 }
 
 function buildReadableWaveTopHeightShadowGeometry(model: LatticeModel): THREE.BufferGeometry {
@@ -1207,25 +1207,25 @@ function StraightEdgeSegments({
     return (
       <>
         <lineSegments geometry={geometries.spanFlat} renderOrder={0}>
-          <lineBasicMaterial color="#4a4740" transparent opacity={readableSurfaceMode ? 0.1 : 0.003} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#777168" transparent opacity={readableSurfaceMode ? 0.055 : 0.003} depthTest={readableSurfaceMode} depthWrite={readableSurfaceMode} />
         </lineSegments>
         <lineSegments geometry={geometries.profileFlat} renderOrder={1}>
-          <lineBasicMaterial color="#3f3c37" transparent opacity={readableSurfaceMode ? 0.14 : 0.045} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#6b655d" transparent opacity={readableSurfaceMode ? 0.078 : 0.045} depthTest={readableSurfaceMode} depthWrite={readableSurfaceMode} />
         </lineSegments>
         <lineSegments geometry={geometries.spanSoftActive} renderOrder={2}>
-          <lineBasicMaterial color="#3c3934" transparent opacity={readableSurfaceMode ? 0.18 : 0.001} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#69635b" transparent opacity={readableSurfaceMode ? 0.09 : 0.001} depthTest={readableSurfaceMode} depthWrite={readableSurfaceMode} />
         </lineSegments>
         <lineSegments geometry={geometries.profileSoftActive} renderOrder={3}>
-          <lineBasicMaterial color="#34312c" transparent opacity={readableSurfaceMode ? 0.26 : 0.058} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#5d574f" transparent opacity={readableSurfaceMode ? 0.135 : 0.058} depthTest={readableSurfaceMode} depthWrite={readableSurfaceMode} />
         </lineSegments>
         <lineSegments geometry={geometries.spanActive} renderOrder={4}>
-          <lineBasicMaterial color="#2e2c27" transparent opacity={readableSurfaceMode ? 0.34 : 0.006} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#554f48" transparent opacity={readableSurfaceMode ? 0.155 : 0.006} depthTest={readableSurfaceMode} depthWrite={readableSurfaceMode} />
         </lineSegments>
         <lineSegments geometry={geometries.profileActive} renderOrder={5}>
-          <lineBasicMaterial color={readableSurfaceMode ? '#201f1c' : inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.52 : 0.17} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color={readableSurfaceMode ? '#49453e' : inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.245 : 0.17} depthTest={readableSurfaceMode} depthWrite={readableSurfaceMode} />
         </lineSegments>
         <lineSegments geometry={geometries.profileRimActive} renderOrder={6}>
-          <lineBasicMaterial color={readableSurfaceMode ? '#25231f' : inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.42 : 0.105} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color={readableSurfaceMode ? '#504b44' : inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.2 : 0.105} depthTest={readableSurfaceMode} depthWrite={readableSurfaceMode} />
         </lineSegments>
       </>
     )
@@ -1312,25 +1312,25 @@ function XCellSharedJointArms({
     [model.config.columns, model.config.rows],
   )
   const opacity = readableSurfaceMode
-    ? scope.topView ? 0.062 : scope.sideView ? 0.5 : 0.12
+    ? scope.topView ? 0.062 : scope.sideView ? 0.24 : 0.12
     : scope.topView ? 0.44 : scope.sideView ? 0.34 : 0.31
-  const depthTest = readableSurfaceMode ? false : !scope.topView
+  const depthTest = readableSurfaceMode ? scope.sideView : !scope.topView
   const rodRadius = Math.max(
     model.config.spacing * (readableSurfaceMode
       ? scope.topView ? 0.0052 : scope.sideView ? 0.013 : 0.0095
       : scope.topView ? 0.017 : scope.sideView ? 0.012 : 0.011),
-    readableSurfaceMode && scope.sideView ? 0.007 : scope.sideView ? 0.009 : 0.007,
+    readableSurfaceMode && scope.sideView ? 0.006 : scope.sideView ? 0.009 : 0.007,
   )
   const rodOpacity = readableSurfaceMode
-    ? scope.topView ? 0.035 : scope.sideView ? 0.42 : 0.09
+    ? scope.topView ? 0.035 : scope.sideView ? 0.16 : 0.09
     : scope.topView ? 0.4 : scope.sideView ? 0.28 : 0.24
-  const mechanismInk = readableSurfaceMode ? (scope.sideView ? '#22211e' : '#4d4943') : '#161713'
+  const mechanismInk = readableSurfaceMode ? (scope.sideView ? '#514c45' : '#4d4943') : '#161713'
   const rodMaterial = useMemo(() => new THREE.MeshBasicMaterial({
     color: mechanismInk,
     transparent: true,
     opacity: rodOpacity,
     depthTest,
-    depthWrite: false,
+    depthWrite: readableSurfaceMode && scope.sideView,
   }), [depthTest, mechanismInk, rodOpacity])
 
   useLayoutEffect(() => {
@@ -1366,11 +1366,11 @@ function XCellSharedJointArms({
       <instancedMesh ref={rodRef} args={[rodGeometry, rodMaterial, armCount]} renderOrder={16} frustumCulled={false} />
       <lineSegments geometry={geometry} renderOrder={17}>
         <lineBasicMaterial
-          color={readableSurfaceMode ? '#5f5b54' : '#151712'}
+          color={readableSurfaceMode ? (scope.sideView ? '#7a746a' : '#5f5b54') : '#151712'}
           transparent
           opacity={opacity}
           depthTest={depthTest}
-          depthWrite={false}
+          depthWrite={readableSurfaceMode && scope.sideView}
         />
       </lineSegments>
     </>
@@ -1410,26 +1410,26 @@ function XCellConnectorJoints({
     ? scope.topView ? 1.2 : scope.sideView ? 1.9 : 1.5
     : scope.topView ? 2.2 : scope.sideView ? 2.45 : 2.28
   const coreOpacity = readableSurfaceMode
-    ? scope.topView ? 0.56 : scope.sideView ? 0.78 : 0.48
+    ? scope.topView ? 0.56 : scope.sideView ? 0.38 : 0.48
     : scope.topView ? 0.72 : scope.sideView ? 0.88 : 0.86
-  const jointDepthTest = readableSurfaceMode ? false : !scope.topView
+  const jointDepthTest = readableSurfaceMode ? scope.sideView : !scope.topView
   const pinRadius = Math.max(
     model.config.spacing * (readableSurfaceMode
       ? scope.topView ? 0.044 : scope.sideView ? 0.034 : 0.028
       : scope.topView ? 0.075 : scope.sideView ? 0.06 : 0.056),
-    readableSurfaceMode && scope.sideView ? 0.012 : scope.topView ? 0.016 : 0.016,
+    readableSurfaceMode && scope.sideView ? 0.01 : scope.topView ? 0.016 : 0.016,
   )
   const pinOpacity = readableSurfaceMode
-    ? scope.topView ? 0.36 : scope.sideView ? 0.58 : 0.34
+    ? scope.topView ? 0.36 : scope.sideView ? 0.24 : 0.34
     : scope.topView ? 0.66 : scope.sideView ? 0.76 : 0.72
-  const pinInk = readableSurfaceMode ? (scope.sideView ? '#181713' : '#3d3a35') : '#10120e'
-  const jointCoreInk = readableSurfaceMode ? (scope.sideView ? '#201f1b' : '#45423d') : '#151712'
+  const pinInk = readableSurfaceMode ? (scope.sideView ? '#4d4941' : '#3d3a35') : '#10120e'
+  const jointCoreInk = readableSurfaceMode ? (scope.sideView ? '#5e584f' : '#45423d') : '#151712'
   const pinMaterial = useMemo(() => new THREE.MeshBasicMaterial({
     color: pinInk,
     transparent: true,
     opacity: pinOpacity,
     depthTest: jointDepthTest,
-    depthWrite: false,
+    depthWrite: readableSurfaceMode && scope.sideView,
   }), [jointDepthTest, pinInk, pinOpacity])
 
   useLayoutEffect(() => {
@@ -1454,11 +1454,11 @@ function XCellConnectorJoints({
         <pointsMaterial
           color="#f7f3ed"
           transparent
-          opacity={readableSurfaceMode ? (scope.topView ? 0.075 : scope.sideView ? 0.22 : 0.04) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}
+          opacity={readableSurfaceMode ? (scope.topView ? 0.075 : scope.sideView ? 0.1 : 0.04) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}
           size={haloSize}
           sizeAttenuation={false}
           depthTest={jointDepthTest}
-          depthWrite={false}
+          depthWrite={readableSurfaceMode && scope.sideView}
         />
       </points>
       <points geometry={geometry} renderOrder={20}>
@@ -1469,7 +1469,7 @@ function XCellConnectorJoints({
           size={coreSize}
           sizeAttenuation={false}
           depthTest={jointDepthTest}
-          depthWrite={false}
+          depthWrite={readableSurfaceMode && scope.sideView}
         />
       </points>
     </>
@@ -1494,25 +1494,25 @@ function XCellSquareCells({
     return mechanism.frames.map((frame) => frame.center)
   }, [model, readableReferenceMode, view])
 
-  const cellDepthTest = readableSurfaceMode ? false : !scope.topView
+  const cellDepthTest = readableSurfaceMode ? scope.sideView : !scope.topView
   const cellHalfSize = Math.max(
     model.config.spacing * (readableSurfaceMode
-      ? scope.topView ? 0.062 : scope.sideView ? 0.072 : 0.045
+      ? scope.topView ? 0.062 : scope.sideView ? 0.05 : 0.045
       : scope.topView ? 0.28 : scope.sideView ? 0.14 : 0.13),
     scope.topView ? 0.028 : 0.02,
   )
   const cellThickness = Math.max(cellHalfSize * 0.38, 0.006)
   const cellOpacity = readableSurfaceMode
-    ? scope.topView ? 0.72 : scope.sideView ? 0.82 : 0.58
+    ? scope.topView ? 0.72 : scope.sideView ? 0.34 : 0.58
     : scope.topView ? 0.96 : scope.sideView ? 0.72 : 0.68
   const cellRenderOrder = !readableSurfaceMode && scope.topView ? 22 : 18
   const cellGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
   const cellMaterial = useMemo(() => new THREE.MeshBasicMaterial({
-    color: readableSurfaceMode ? (scope.sideView ? '#11110f' : '#4a4742') : '#050505',
+    color: readableSurfaceMode ? (scope.sideView ? '#48443e' : '#4a4742') : '#050505',
     transparent: true,
     opacity: cellOpacity,
     depthTest: cellDepthTest,
-    depthWrite: false,
+    depthWrite: readableSurfaceMode && scope.sideView,
   }), [cellDepthTest, cellOpacity])
 
   useLayoutEffect(() => {
