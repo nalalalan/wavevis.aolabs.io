@@ -217,6 +217,9 @@ function LatticeModelGroup({
   const restGhostGeometry = useMemo(() => buildRestGhostGeometry(model, nodeById), [model, nodeById])
   const surfaceGeometry = useMemo(() => buildSurfaceGeometry(model, nodeById, quadMetricById, dihedralByQuad, model.quads), [model, nodeById, quadMetricById, dihedralByQuad])
   const surfaceVisible = model.config.showSurface
+  const referenceMechanismLocked = readableWaveReferenceDisplay(model)
+  const nodesVisible = model.config.showNodes || referenceMechanismLocked
+  const edgesVisible = model.config.showEdges || referenceMechanismLocked
   const labelsVisible = model.config.showLabels && model.config.rows <= 15 && model.config.columns <= 15
   const largeGrid = model.config.rows > 30 || model.config.columns > 30
   const edgePickRadius = Math.max(model.config.spacing * (largeGrid ? 0.08 : 0.09), 0.035)
@@ -240,7 +243,7 @@ function LatticeModelGroup({
           <meshStandardMaterial vertexColors side={THREE.DoubleSide} transparent opacity={surfaceOpacity} roughness={0.78} metalness={0.02} depthWrite={false} />
         </mesh>
       )}
-      {model.config.showNodes && !readableWaveReferenceDisplay(model) && (
+      {nodesVisible && !readableWaveReferenceDisplay(model) && (
         <NodeInstances
           nodes={nodeById}
           nodeIds={renderScope.nodeIds}
@@ -248,10 +251,10 @@ function LatticeModelGroup({
           sideProjection={sideMechanismView}
         />
       )}
-      {model.config.showNodes && readableWaveReferenceDisplay(model) && (
+      {nodesVisible && readableWaveReferenceDisplay(model) && (
         <XCellSquareCells model={model} scope={renderScope} view={view} />
       )}
-      {model.config.showEdges && (
+      {edgesVisible && (
         <>
           <EdgeHitTargets
             model={model}
@@ -268,7 +271,7 @@ function LatticeModelGroup({
       {view === 'isometric' && model.config.showHeatmap && (
         <SideProfileSilhouette
           model={model}
-          compact={model.config.showNodes || model.config.showEdges}
+          compact={nodesVisible || edgesVisible}
         />
       )}
       {labelsVisible && <NodeLabels nodes={model.nodes} />}
@@ -298,7 +301,7 @@ const readableWaveVSegments = 54
 const readableReferenceProfilePoints =
   '0,0;0.04,0.008;0.095,0.033;0.17,0.105;0.275,0.305;0.385,0.58;0.5,0.82;0.61,0.965;0.69,1;0.78,0.965;0.858,0.86;0.922,0.704;0.967,0.528;0.985,0.384;0.965,0.3;0.937,0.228;0.919,0.16;0.934,0.092;0.971,0.037;1,0'
 const readableSideReferenceProfilePoints =
-  '0,0;0.17,0.004;0.3,0.11;0.39,0.42;0.5,0.79;0.652,1;0.793,0.83;0.91,0.4;0.888,0.2;0.803,0.12;0.795,0.2;0.824,0.28;0.855,0.28;0.762,0.43;0.64,0.42;0.55,0.29;0.49,0.15;0.54,0.07;0.7,0.03;1,0'
+  '0,0;0.17,0.004;0.3,0.11;0.39,0.42;0.5,0.79;0.652,1;0.762,0.96;0.838,0.81;0.898,0.6;0.935,0.44;0.922,0.35;0.876,0.29;0.816,0.3;0.776,0.38;0.79,0.48;0.836,0.55;0.76,0.57;0.64,0.49;0.54,0.32;0.49,0.16;0.54,0.07;0.72,0.03;1,0'
 
 function readableSurfaceReferenceOnly(model: LatticeModel): boolean {
   return model.config.showSurface && readableWaveReferenceDisplay(model)
@@ -313,10 +316,10 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const wireGeometry = useMemo(() => buildReadableWaveWireGeometry(model, view), [model, view])
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
   const topHeightShadowGeometry = useMemo(() => view === 'top' ? buildReadableWaveTopHeightShadowGeometry(model) : null, [model, view])
-  const surfaceOpacity = view === 'side' ? 0.12 : view === 'front' ? 0.72 : view === 'top' ? 0.26 : 0.36
-  const wireOpacity = view === 'side' ? 0.2 : view === 'front' ? 0.21 : view === 'top' ? 0.48 : 0.16
+  const surfaceOpacity = view === 'side' ? 0.018 : view === 'front' ? 0.72 : view === 'top' ? 0.26 : 0.36
+  const wireOpacity = view === 'side' ? 0.095 : view === 'front' ? 0.21 : view === 'top' ? 0.48 : 0.16
   const wireColor = view === 'top' ? '#9d968d' : '#b8b3ab'
-  const outlineOpacity = view === 'side' ? 0.12 : view === 'front' ? 0.1 : view === 'top' ? 0.075 : 0.025
+  const outlineOpacity = view === 'side' ? 0.012 : view === 'front' ? 0.1 : view === 'top' ? 0.075 : 0.025
 
   return (
     <group renderOrder={-2}>
@@ -328,7 +331,7 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
         ) : view === 'top' ? (
           <meshStandardMaterial color="#fbfaf6" emissive="#f6f0e7" emissiveIntensity={0.18} roughness={1} metalness={0} side={THREE.DoubleSide} transparent opacity={surfaceOpacity} depthWrite polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
         ) : (
-          <meshBasicMaterial color="#fbfaf6" side={THREE.DoubleSide} transparent opacity={surfaceOpacity} depthWrite={view === 'side'} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
+          <meshBasicMaterial color="#fbfaf6" side={THREE.DoubleSide} transparent opacity={surfaceOpacity} depthWrite={false} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
         )}
       </mesh>
       {topHeightShadowGeometry && (
@@ -631,11 +634,11 @@ function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number, view:
     : lerpNumber(shoulderFoldBlend, Math.pow(envelope, 0.55), terminalLocalization * 0.48)
   const terminalLipEnvelope = topPlanView
     ? lerpNumber(Math.pow(envelope, 1.12), Math.pow(envelope, 1.45), terminalLocalization * 0.18)
-    : lerpNumber(Math.pow(envelope, 1.22), Math.pow(envelope, 2.4), terminalLocalization * 0.48)
+    : lerpNumber(Math.pow(envelope, 1.18), Math.pow(envelope, 1.72), terminalLocalization * 0.36)
   const crestLiftBlend = lerpNumber(liftBlend, Math.pow(envelope, 2.2), capLocalization * curlShoulder * 0.7)
-  const lipLiftBlend = lerpNumber(crestLiftBlend, terminalLipEnvelope, frame.progress * lipBody * 0.82)
+  const lipLiftBlend = lerpNumber(crestLiftBlend, terminalLipEnvelope, frame.progress * lipBody * 0.68)
   const pinchEnvelope = Math.pow(envelope, 0.42)
-  const curlPinch = topPlanView ? 0 : Math.min(0.075, frame.progress * pinchEnvelope * (0.004 * curlShoulder + 0.036 * lipTip))
+  const curlPinch = topPlanView ? 0 : Math.min(0.052, frame.progress * pinchEnvelope * (0.002 * curlShoulder + 0.024 * lipTip))
   const yPinch = s * frame.halfSpan * curlPinch * perimeterPlanFade
   const foldedX = lerpNumber(baseX, centerX, foldBlend)
 
@@ -1176,16 +1179,16 @@ function StraightEdgeSegments({
     return (
       <>
         <lineSegments geometry={geometries.spanFlat} renderOrder={0}>
-          <lineBasicMaterial color="#312f2a" transparent opacity={readableSurfaceMode ? 0.007 : 0.018} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#312f2a" transparent opacity={readableSurfaceMode ? 0.035 : 0.018} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileFlat} renderOrder={1}>
-          <lineBasicMaterial color="#26241f" transparent opacity={readableSurfaceMode ? 0.004 : 0.052} depthTest depthWrite={false} />
+          <lineBasicMaterial color="#26241f" transparent opacity={readableSurfaceMode ? 0.06 : 0.052} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.spanActive} renderOrder={2}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.007 : 0.052} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.08 : 0.052} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileActive} renderOrder={3}>
-          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.005 : 0.18} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color={inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.16 : 0.18} depthTest={false} depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -1204,25 +1207,25 @@ function StraightEdgeSegments({
     return (
       <>
         <lineSegments geometry={geometries.spanFlat} renderOrder={0}>
-          <lineBasicMaterial color="#6a665f" transparent opacity={readableSurfaceMode ? 0.02 : 0.003} depthTest={readableSurfaceMode} depthWrite={false} />
+          <lineBasicMaterial color="#4a4740" transparent opacity={readableSurfaceMode ? 0.1 : 0.003} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileFlat} renderOrder={1}>
-          <lineBasicMaterial color="#625e57" transparent opacity={readableSurfaceMode ? 0.026 : 0.045} depthTest={readableSurfaceMode} depthWrite={false} />
+          <lineBasicMaterial color="#3f3c37" transparent opacity={readableSurfaceMode ? 0.14 : 0.045} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.spanSoftActive} renderOrder={2}>
-          <lineBasicMaterial color="#625f59" transparent opacity={readableSurfaceMode ? 0.028 : 0.001} depthTest={readableSurfaceMode} depthWrite={false} />
+          <lineBasicMaterial color="#3c3934" transparent opacity={readableSurfaceMode ? 0.18 : 0.001} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileSoftActive} renderOrder={3}>
-          <lineBasicMaterial color="#5a574f" transparent opacity={readableSurfaceMode ? 0.035 : 0.058} depthTest={readableSurfaceMode} depthWrite={false} />
+          <lineBasicMaterial color="#34312c" transparent opacity={readableSurfaceMode ? 0.26 : 0.058} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.spanActive} renderOrder={4}>
-          <lineBasicMaterial color="#4c4a44" transparent opacity={readableSurfaceMode ? 0.048 : 0.006} depthTest={readableSurfaceMode} depthWrite={false} />
+          <lineBasicMaterial color="#2e2c27" transparent opacity={readableSurfaceMode ? 0.34 : 0.006} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileActive} renderOrder={5}>
-          <lineBasicMaterial color={readableSurfaceMode ? '#484641' : inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.072 : 0.17} depthTest={readableSurfaceMode} depthWrite={false} />
+          <lineBasicMaterial color={readableSurfaceMode ? '#201f1c' : inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.52 : 0.17} depthTest={false} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileRimActive} renderOrder={6}>
-          <lineBasicMaterial color={readableSurfaceMode ? '#4e4b45' : inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.062 : 0.105} depthTest={readableSurfaceMode} depthWrite={false} />
+          <lineBasicMaterial color={readableSurfaceMode ? '#25231f' : inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.42 : 0.105} depthTest={false} depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -1309,19 +1312,19 @@ function XCellSharedJointArms({
     [model.config.columns, model.config.rows],
   )
   const opacity = readableSurfaceMode
-    ? scope.topView ? 0.062 : scope.sideView ? 0.11 : 0.034
+    ? scope.topView ? 0.062 : scope.sideView ? 0.5 : 0.12
     : scope.topView ? 0.44 : scope.sideView ? 0.34 : 0.31
-  const depthTest = readableSurfaceMode ? (scope.topView ? false : true) : !scope.topView
+  const depthTest = readableSurfaceMode ? false : !scope.topView
   const rodRadius = Math.max(
     model.config.spacing * (readableSurfaceMode
-      ? scope.topView ? 0.0052 : scope.sideView ? 0.011 : 0.0078
+      ? scope.topView ? 0.0052 : scope.sideView ? 0.013 : 0.0095
       : scope.topView ? 0.017 : scope.sideView ? 0.012 : 0.011),
-    readableSurfaceMode && scope.sideView ? 0.005 : scope.sideView ? 0.009 : 0.007,
+    readableSurfaceMode && scope.sideView ? 0.007 : scope.sideView ? 0.009 : 0.007,
   )
   const rodOpacity = readableSurfaceMode
-    ? scope.topView ? 0.035 : scope.sideView ? 0.07 : 0.022
+    ? scope.topView ? 0.035 : scope.sideView ? 0.42 : 0.09
     : scope.topView ? 0.4 : scope.sideView ? 0.28 : 0.24
-  const mechanismInk = readableSurfaceMode ? '#5f5b54' : '#161713'
+  const mechanismInk = readableSurfaceMode ? (scope.sideView ? '#22211e' : '#4d4943') : '#161713'
   const rodMaterial = useMemo(() => new THREE.MeshBasicMaterial({
     color: mechanismInk,
     transparent: true,
@@ -1401,26 +1404,26 @@ function XCellConnectorJoints({
   }, [jointPositions])
 
   const haloSize = readableSurfaceMode
-    ? scope.topView ? 2.8 : scope.sideView ? 2.6 : 2.5
+    ? scope.topView ? 2.8 : scope.sideView ? 2.65 : 2.7
     : scope.topView ? 3.8 : scope.sideView ? 4.4 : 4.1
   const coreSize = readableSurfaceMode
-    ? scope.topView ? 1.2 : scope.sideView ? 1.7 : 1.3
+    ? scope.topView ? 1.2 : scope.sideView ? 1.9 : 1.5
     : scope.topView ? 2.2 : scope.sideView ? 2.45 : 2.28
   const coreOpacity = readableSurfaceMode
-    ? scope.topView ? 0.56 : scope.sideView ? 0.52 : 0.34
+    ? scope.topView ? 0.56 : scope.sideView ? 0.78 : 0.48
     : scope.topView ? 0.72 : scope.sideView ? 0.88 : 0.86
-  const jointDepthTest = readableSurfaceMode ? (scope.topView ? false : true) : !scope.topView
+  const jointDepthTest = readableSurfaceMode ? false : !scope.topView
   const pinRadius = Math.max(
     model.config.spacing * (readableSurfaceMode
-      ? scope.topView ? 0.044 : scope.sideView ? 0.032 : 0.023
+      ? scope.topView ? 0.044 : scope.sideView ? 0.034 : 0.028
       : scope.topView ? 0.075 : scope.sideView ? 0.06 : 0.056),
     readableSurfaceMode && scope.sideView ? 0.012 : scope.topView ? 0.016 : 0.016,
   )
   const pinOpacity = readableSurfaceMode
-    ? scope.topView ? 0.36 : scope.sideView ? 0.29 : 0.2
+    ? scope.topView ? 0.36 : scope.sideView ? 0.58 : 0.34
     : scope.topView ? 0.66 : scope.sideView ? 0.76 : 0.72
-  const pinInk = readableSurfaceMode ? '#3d3a35' : '#10120e'
-  const jointCoreInk = readableSurfaceMode ? '#45423d' : '#151712'
+  const pinInk = readableSurfaceMode ? (scope.sideView ? '#181713' : '#3d3a35') : '#10120e'
+  const jointCoreInk = readableSurfaceMode ? (scope.sideView ? '#201f1b' : '#45423d') : '#151712'
   const pinMaterial = useMemo(() => new THREE.MeshBasicMaterial({
     color: pinInk,
     transparent: true,
@@ -1451,7 +1454,7 @@ function XCellConnectorJoints({
         <pointsMaterial
           color="#f7f3ed"
           transparent
-          opacity={readableSurfaceMode ? (scope.topView ? 0.075 : scope.sideView ? 0.1 : 0.04) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}
+          opacity={readableSurfaceMode ? (scope.topView ? 0.075 : scope.sideView ? 0.22 : 0.04) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}
           size={haloSize}
           sizeAttenuation={false}
           depthTest={jointDepthTest}
@@ -1491,21 +1494,21 @@ function XCellSquareCells({
     return mechanism.frames.map((frame) => frame.center)
   }, [model, readableReferenceMode, view])
 
-  const cellDepthTest = readableSurfaceMode ? (scope.topView ? false : true) : !scope.topView
+  const cellDepthTest = readableSurfaceMode ? false : !scope.topView
   const cellHalfSize = Math.max(
     model.config.spacing * (readableSurfaceMode
-      ? scope.topView ? 0.062 : scope.sideView ? 0.06 : 0.034
+      ? scope.topView ? 0.062 : scope.sideView ? 0.072 : 0.045
       : scope.topView ? 0.28 : scope.sideView ? 0.14 : 0.13),
     scope.topView ? 0.028 : 0.02,
   )
   const cellThickness = Math.max(cellHalfSize * 0.38, 0.006)
   const cellOpacity = readableSurfaceMode
-    ? scope.topView ? 0.72 : scope.sideView ? 0.5 : 0.42
+    ? scope.topView ? 0.72 : scope.sideView ? 0.82 : 0.58
     : scope.topView ? 0.96 : scope.sideView ? 0.72 : 0.68
   const cellRenderOrder = !readableSurfaceMode && scope.topView ? 22 : 18
   const cellGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
   const cellMaterial = useMemo(() => new THREE.MeshBasicMaterial({
-    color: readableSurfaceMode ? '#4a4742' : '#050505',
+    color: readableSurfaceMode ? (scope.sideView ? '#11110f' : '#4a4742') : '#050505',
     transparent: true,
     opacity: cellOpacity,
     depthTest: cellDepthTest,
@@ -1817,7 +1820,7 @@ function positionCamera(
   view: CameraViewRequest['view'],
   selected?: SelectedElement,
 ): void {
-  const readableReferenceBounds = !selected && readableWaveReferenceDisplay(model) && (model.config.showSurface || model.config.showEdges || model.config.showNodes)
+  const readableReferenceBounds = !selected && readableWaveReferenceDisplay(model)
   const bounds = readableReferenceBounds && view === 'front'
     ? activeReadableWaveBounds(model, 'front')
     : readableReferenceBounds
