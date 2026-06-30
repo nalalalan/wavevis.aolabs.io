@@ -306,8 +306,10 @@ const readableWaveUSegments = 104
 const readableWaveVSegments = 54
 const readableReferenceProfilePoints =
   '0,0;0.04,0.014;0.09,0.052;0.15,0.138;0.22,0.302;0.31,0.514;0.42,0.724;0.54,0.882;0.64,0.966;0.72,0.99;0.798,0.93;0.862,0.802;0.912,0.63;0.942,0.49;0.966,0.33;0.978,0.29;0.988,0.25;0.996,0.21;0.999,0.02;1,0'
+const readableSideReferenceProfilePoints =
+  '0,0;0.07,0.025;0.16,0.095;0.27,0.255;0.4,0.51;0.53,0.765;0.645,0.94;0.72,1;0.802,0.965;0.875,0.862;0.93,0.705;0.952,0.545;0.932,0.39;0.885,0.265;0.835,0.155;0.875,0.096;0.94,0.045;1,0'
 const readableIsometricProfilePoints =
-  '0,0;0.038,0.014;0.086,0.056;0.148,0.146;0.226,0.316;0.326,0.536;0.444,0.746;0.56,0.904;0.65,0.982;0.718,0.988;0.786,0.918;0.842,0.772;0.888,0.586;0.922,0.432;0.948,0.286;0.968,0.224;0.986,0.18;0.996,0.12;0.999,0.02;1,0'
+  readableSideReferenceProfilePoints
 
 function readableSurfaceReferenceOnly(model: LatticeModel): boolean {
   return model.config.showSurface && readableWaveReferenceDisplay(model)
@@ -540,7 +542,7 @@ function sampleOuterSideProfileLine(frame: ReadableWaveFrame, samples: number): 
 }
 
 function readableWaveFrame(model: LatticeModel, _view: CameraViewRequest['view'] = 'side'): ReadableWaveFrame {
-  const profile = buildReadableWaveProfile(readableReferenceProfilePoints)
+  const profile = buildReadableWaveProfile((_view === 'side' || _view === 'isometric') ? readableSideReferenceProfilePoints : readableReferenceProfilePoints)
   const isometricProfile = buildReadableWaveProfile(readableIsometricProfilePoints)
   const sideBounds = activeSideProfileBounds(model)
   const height = Math.max(model.summary.maxHeight * 1.42, model.config.height * Math.max(model.config.profileScale, 1.14), model.config.spacing * 12.8)
@@ -618,11 +620,11 @@ function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number, _view
   const lipTip = smoothStep(0.7, 1, t)
   const lipBody = smoothStep(0.62, 0.94, t)
   const capLocalization = frame.progress * smoothStep(0.44, 0.82, t)
-  const shoulderFoldBlend = lerpNumber(baseFoldBlend, Math.pow(envelope, 2.45), capLocalization * curlShoulder * 0.68)
+  const shoulderFoldBlend = lerpNumber(baseFoldBlend, Math.pow(envelope, 3.4), capLocalization * curlShoulder * 0.72)
   const terminalLocalization = frame.progress * lipTip
-  const foldBlend = lerpNumber(shoulderFoldBlend, Math.pow(envelope, 2.85), terminalLocalization * 0.82)
-  const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.2), Math.pow(envelope, 5.25), terminalLocalization * 0.86)
-  const crestLiftBlend = lerpNumber(liftBlend, Math.pow(envelope, 3.35), capLocalization * curlShoulder * 0.66)
+  const foldBlend = lerpNumber(shoulderFoldBlend, Math.pow(envelope, 5.8), terminalLocalization * 0.86)
+  const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.2), Math.pow(envelope, 8), terminalLocalization * 0.9)
+  const crestLiftBlend = lerpNumber(liftBlend, Math.pow(envelope, 5.2), capLocalization * curlShoulder * 0.7)
   const lipLiftBlend = lerpNumber(crestLiftBlend, terminalLipEnvelope, frame.progress * lipBody * 0.82)
   const pinchEnvelope = Math.pow(envelope, 0.42)
   const curlPinch = Math.min(0.44, frame.progress * pinchEnvelope * (0.028 * curlShoulder + 0.34 * lipTip))
@@ -695,7 +697,7 @@ function readableWaveIsometricPoint(frame: ReadableWaveFrame, t: number, s: numb
   return [
     displayPoint[0] + waveWidth * openThroat * (0.056 * lipFace + 0.012 * lowerLip + 0.008 * throat - 0.004 * facePinch) - waveWidth * terminalTipTaper * 0.38,
     displayPoint[1],
-    Math.max(0, focusedZ + roundedThroatLift + frame.height * openThroat * (0.062 * undersideRelease + 0.044 * lowerLip - 0.004 * facePinch)),
+    Math.max(0, focusedZ + roundedThroatLift + frame.height * openThroat * (0.11 * undersideRelease + 0.075 * lowerLip - 0.004 * facePinch)),
   ]
 }
 
@@ -798,7 +800,7 @@ function buildReadableWaveXCellCenterOverrides(model: LatticeModel, view: Camera
 
 function readableLateralEnvelope(s: number): number {
   const absolute = clampUnit(Math.abs(s))
-  return Math.pow(Math.cos(absolute * Math.PI * 0.5), 2.18)
+  return Math.pow(Math.cos(absolute * Math.PI * 0.5), 3.2)
 }
 
 function sampleReadableWaveProfile(profile: ReadableWaveFrame['profile'], t: number): ReadableWaveProfilePoint {

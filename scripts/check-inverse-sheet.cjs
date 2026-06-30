@@ -65,6 +65,7 @@ const CORE_PROFILE_START = 0.02
 const CORE_PROFILE_END = 1
 const SOURCE_BREAKING_WAVE_TRACE = '0,0;0.04,0.008;0.095,0.033;0.17,0.105;0.275,0.305;0.385,0.58;0.5,0.82;0.61,0.965;0.69,1;0.78,0.965;0.858,0.86;0.922,0.704;0.967,0.528;0.985,0.384;0.965,0.3;0.937,0.228;0.919,0.16;0.934,0.092;0.971,0.037;1,0'
 const READABLE_REFERENCE_TRACE = extractSourceConstString(latticeViewerSource, 'readableReferenceProfilePoints') || SOURCE_BREAKING_WAVE_TRACE
+const READABLE_SIDE_REFERENCE_TRACE = extractSourceConstString(latticeViewerSource, 'readableSideReferenceProfilePoints') || READABLE_REFERENCE_TRACE
 
 function sliderLipDipAmount(angleDeg) {
   return Math.min(1, Math.max(0, (angleDeg - 90) / 30))
@@ -75,6 +76,7 @@ const startupUrlParamCoverage = summarizeStartupUrlParamCoverage()
 const startupDisplayContract = summarizeStartupDisplayContract()
 const readableSurfaceRenderContract = summarizeReadableSurfaceRenderContract()
 const readableProfileCavityBlock = summarizeReadableProfileCavityBlock(READABLE_REFERENCE_TRACE)
+const readableSideProfileCavityBlock = summarizeReadableProfileCavityBlock(READABLE_SIDE_REFERENCE_TRACE)
 const readablePerimeterFlatness = summarizeReadablePerimeterFlatness(READABLE_REFERENCE_TRACE)
 const readableTerminalTaperBlock = summarizeReadableTerminalTaperBlock(READABLE_REFERENCE_TRACE)
 const generatedMode = { profileMode: 'generated' }
@@ -514,6 +516,10 @@ if (!readableProfileCavityBlock.ok) {
   failures.push(`readable reference profile should block bowl/dimple/cavity branches before visual QA: ${readableProfileCavityBlock.failures.join('; ')}`)
 }
 
+if (!readableSideProfileCavityBlock.ok) {
+  failures.push(`readable side/isometric profile should block under-lip dimples before visual QA: ${readableSideProfileCavityBlock.failures.join('; ')}`)
+}
+
 if (!readablePerimeterFlatness.ok) {
   failures.push(`readable reference surface must keep every sheet perimeter flat: ${readablePerimeterFlatness.failures.join('; ')}`)
 }
@@ -581,6 +587,7 @@ const report = {
   startupDisplayContract,
   readableSurfaceRenderContract,
   readableProfileCavityBlock,
+  readableSideProfileCavityBlock,
   readablePerimeterFlatness,
   readableTerminalTaperBlock,
   readableModelSideProfileBlock,
@@ -1326,7 +1333,7 @@ function summarizeReadableTerminalTaperBlock(value) {
 
   const requiredSourceFragments = [
     ['renderer profile carries the dimple-free taper under the overhang', value],
-    ['isometric throat raises the underside instead of cutting a pocket', '0.062 * undersideRelease + 0.044 * lowerLip'],
+    ['isometric throat raises the underside instead of cutting a pocket', '0.11 * undersideRelease + 0.075 * lowerLip'],
   ]
   const missingSourceFragments = requiredSourceFragments
     .filter(([, fragment]) => !latticeViewerSource.includes(fragment))
@@ -2123,7 +2130,7 @@ function summarizeReadableSurfaceRenderContract() {
     ['top view uses its own full-mechanism plan projection', "if (view === 'top') return readableWaveTopPlanPoint(frame, t, s)", latticeViewerSource],
     ['isometric view uses the explicit no-dimple throat projection', "if (view === 'isometric') return readableWaveIsometricPoint(frame, t, s)", latticeViewerSource],
     ['front view uses the rounded front projection', "if (view === 'front') return readableWaveFrontPoint(frame, t, s)", latticeViewerSource],
-    ['isometric underside is lifted open rather than cut into a pocket', '0.062 * undersideRelease + 0.044 * lowerLip', latticeViewerSource],
+    ['isometric underside is lifted open rather than cut into a pocket', '0.11 * undersideRelease + 0.075 * lowerLip', latticeViewerSource],
     ['isometric throat lift is tied to the open throat band', 'const roundedThroatLift = frame.height * openThroat * throat * 0.22', latticeViewerSource],
     ['surface-on config keeps cells and X legs enabled in state', 'normalizeInverseSheetMechanismVisibility(sanitizeInverseSheetConfig(next))', inverseSheetTabSource],
     ['surface-on URL/import/run normalization cannot leave hidden mechanism checkboxes', 'function normalizeInverseSheetMechanismVisibility(config: InverseSheetConfig): InverseSheetConfig', inverseSheetTabSource],
