@@ -1135,10 +1135,10 @@ function StraightEdgeSegments({
       const meanCol = node.col
       const maxDisplacement = distanceVec(node.currentPosition, node.restPosition)
       return (
-        meanCol >= maxCol * 0.42 &&
+        meanCol >= maxCol * 0.35 &&
         maxZ >= maxHeight * 0.018 &&
-        maxZ <= maxHeight * 0.72 &&
-        maxDisplacement >= displacementThreshold * 0.72
+        maxZ <= maxHeight * 0.86 &&
+        maxDisplacement >= displacementThreshold * 0.58
       )
     }
     const frameProfileRim = (frame: ConnectedXCellFrame) => {
@@ -1207,25 +1207,25 @@ function StraightEdgeSegments({
     return (
       <>
         <lineSegments geometry={geometries.spanFlat} renderOrder={0}>
-          <lineBasicMaterial color="#777168" transparent opacity={readableSurfaceMode ? 0.055 : 0.003} depthTest={readableSurfaceMode} depthWrite={readableSurfaceMode} />
+          <lineBasicMaterial color="#777168" transparent opacity={readableSurfaceMode ? 0.045 : 0.003} depthTest={readableSurfaceMode} depthWrite={readableSurfaceMode} />
         </lineSegments>
         <lineSegments geometry={geometries.profileFlat} renderOrder={1}>
-          <lineBasicMaterial color="#6b655d" transparent opacity={readableSurfaceMode ? 0.078 : 0.045} depthTest={readableSurfaceMode} depthWrite={readableSurfaceMode} />
+          <lineBasicMaterial color="#6b655d" transparent opacity={readableSurfaceMode ? 0.062 : 0.045} depthTest={readableSurfaceMode} depthWrite={readableSurfaceMode} />
         </lineSegments>
         <lineSegments geometry={geometries.spanSoftActive} renderOrder={2}>
-          <lineBasicMaterial color="#8d867b" transparent opacity={readableSurfaceMode ? 0.055 : 0.001} depthTest={readableSurfaceMode} depthWrite={readableSurfaceMode} />
+          <lineBasicMaterial color="#8d867b" transparent opacity={readableSurfaceMode ? 0.04 : 0.001} depthTest={readableSurfaceMode} depthWrite={readableSurfaceMode} />
         </lineSegments>
         <lineSegments geometry={geometries.profileSoftActive} renderOrder={3}>
-          <lineBasicMaterial color="#837c72" transparent opacity={readableSurfaceMode ? 0.08 : 0.058} depthTest={readableSurfaceMode} depthWrite={readableSurfaceMode} />
+          <lineBasicMaterial color="#837c72" transparent opacity={readableSurfaceMode ? 0.052 : 0.058} depthTest={readableSurfaceMode} depthWrite={readableSurfaceMode} />
         </lineSegments>
         <lineSegments geometry={geometries.spanActive} renderOrder={4}>
-          <lineBasicMaterial color="#7d756b" transparent opacity={readableSurfaceMode ? 0.09 : 0.006} depthTest={readableSurfaceMode} depthWrite={readableSurfaceMode} />
+          <lineBasicMaterial color="#7d756b" transparent opacity={readableSurfaceMode ? 0.065 : 0.006} depthTest={readableSurfaceMode} depthWrite={readableSurfaceMode} />
         </lineSegments>
         <lineSegments geometry={geometries.profileActive} renderOrder={5}>
-          <lineBasicMaterial color={readableSurfaceMode ? '#6f695f' : inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.16 : 0.17} depthTest={readableSurfaceMode} depthWrite={readableSurfaceMode} />
+          <lineBasicMaterial color={readableSurfaceMode ? '#6f695f' : inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.125 : 0.17} depthTest={readableSurfaceMode} depthWrite={readableSurfaceMode} />
         </lineSegments>
         <lineSegments geometry={geometries.profileRimActive} renderOrder={6}>
-          <lineBasicMaterial color={readableSurfaceMode ? '#746d63' : inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.13 : 0.105} depthTest={readableSurfaceMode} depthWrite={readableSurfaceMode} />
+          <lineBasicMaterial color={readableSurfaceMode ? '#746d63' : inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.105 : 0.105} depthTest={readableSurfaceMode} depthWrite={readableSurfaceMode} />
         </lineSegments>
       </>
     )
@@ -1312,7 +1312,7 @@ function XCellSharedJointArms({
     [model.config.columns, model.config.rows],
   )
   const opacity = readableSurfaceMode
-    ? scope.topView ? 0.062 : scope.sideView ? 0.12 : scope.isometricView ? 0.055 : 0.12
+    ? scope.topView ? 0.062 : scope.sideView ? 0.1 : scope.isometricView ? 0.055 : 0.12
     : scope.topView ? 0.44 : scope.sideView ? 0.34 : 0.31
   const depthTest = readableSurfaceMode ? scope.sideView : !scope.topView
   const rodRadius = Math.max(
@@ -1322,7 +1322,7 @@ function XCellSharedJointArms({
     readableSurfaceMode && scope.sideView ? 0.006 : scope.sideView ? 0.009 : 0.007,
   )
   const rodOpacity = readableSurfaceMode
-    ? scope.topView ? 0.035 : scope.sideView ? 0.07 : scope.isometricView ? 0.035 : 0.09
+    ? scope.topView ? 0.035 : scope.sideView ? 0.055 : scope.isometricView ? 0.035 : 0.09
     : scope.topView ? 0.4 : scope.sideView ? 0.28 : 0.24
   const mechanismInk = readableSurfaceMode ? (scope.sideView ? '#7a746a' : scope.isometricView ? '#6f695f' : '#4d4943') : '#161713'
   const rodMaterial = useMemo(() => new THREE.MeshBasicMaterial({
@@ -1410,7 +1410,7 @@ function XCellConnectorJoints({
     ? scope.topView ? 1.2 : scope.sideView ? 1.35 : scope.isometricView ? 1.2 : 1.5
     : scope.topView ? 2.2 : scope.sideView ? 2.45 : 2.28
   const coreOpacity = readableSurfaceMode
-    ? scope.topView ? 0.56 : scope.sideView ? 0.2 : scope.isometricView ? 0.22 : 0.48
+    ? scope.topView ? 0.56 : scope.sideView ? 0.17 : scope.isometricView ? 0.22 : 0.48
     : scope.topView ? 0.72 : scope.sideView ? 0.88 : 0.86
   const jointDepthTest = readableSurfaceMode ? scope.sideView : !scope.topView
   const pinRadius = Math.max(
@@ -1420,7 +1420,7 @@ function XCellConnectorJoints({
     readableSurfaceMode && scope.sideView ? 0.01 : scope.topView ? 0.016 : 0.016,
   )
   const pinOpacity = readableSurfaceMode
-    ? scope.topView ? 0.36 : scope.sideView ? 0.12 : scope.isometricView ? 0.14 : 0.34
+    ? scope.topView ? 0.36 : scope.sideView ? 0.095 : scope.isometricView ? 0.14 : 0.34
     : scope.topView ? 0.66 : scope.sideView ? 0.76 : 0.72
   const pinInk = readableSurfaceMode ? (scope.sideView ? '#81786e' : scope.isometricView ? '#777066' : '#3d3a35') : '#10120e'
   const jointCoreInk = readableSurfaceMode ? (scope.sideView ? '#8c8479' : scope.isometricView ? '#81796f' : '#45423d') : '#151712'
@@ -1503,7 +1503,7 @@ function XCellSquareCells({
   )
   const cellThickness = Math.max(cellHalfSize * 0.38, 0.006)
   const cellOpacity = readableSurfaceMode
-    ? scope.topView ? 0.72 : scope.sideView ? 0.18 : scope.isometricView ? 0.18 : 0.58
+    ? scope.topView ? 0.72 : scope.sideView ? 0.145 : scope.isometricView ? 0.18 : 0.58
     : scope.topView ? 0.96 : scope.sideView ? 0.72 : 0.68
   const cellRenderOrder = !readableSurfaceMode && scope.topView ? 22 : 18
   const cellGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
