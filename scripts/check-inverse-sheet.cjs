@@ -2067,7 +2067,9 @@ function summarizeReadableSurfaceRenderContract() {
     ['top terminal fold stays broad enough that the overhead mechanism footprint is rounded rather than centerline-pointed', '? lerpNumber(shoulderFoldBlend, Math.pow(envelope, 0.24), terminalLocalization * 0.24)'],
     ['off-center curl relief stays reduced so the side throat stays open', 'const offCenterCurlRelief = smoothStep(0.36, 0.92, t) * frame.progress * (1 - Math.pow(envelope, 0.32)) * 0.75'],
     ['readable reference lateral envelope broadens the curl without becoming a full-width tube', 'return Math.pow(Math.cos(absolute * Math.PI * 0.5), 2.18)'],
-    ['side terminal lip envelope narrows the curl tip instead of leaving a blunt tube cap', ': lerpNumber(Math.pow(envelope, 1.28), Math.pow(envelope, 2.35), terminalLocalization * 0.58)'],
+    ['side terminal lip envelope narrows the curl tip instead of leaving a blunt tube cap', ': lerpNumber(Math.pow(envelope, 1.55), Math.pow(envelope, 3.6), terminalLocalization * 0.84)'],
+    ['side terminal narrowing starts earlier while top keeps its rounded proof profile', 'const lipTip = topPlanView ? smoothStep(0.7, 1, t) : smoothStep(0.62, 0.98, t)'],
+    ['side lip body narrowing starts before the cap becomes a tube wall', 'const lipBody = topPlanView ? smoothStep(0.62, 0.94, t) : smoothStep(0.56, 0.9, t)'],
     ['terminal curl pinch is disabled in top view and narrowed in side view so the mechanism does not collapse into an angular arrow', 'const curlPinch = topPlanView ? 0 : Math.min(0.068, frame.progress * pinchEnvelope * (0.002 * curlShoulder + 0.032 * lipTip))'],
     ['terminal profile sampler still shapes the late branch', 'function readableTerminalProfileParameter(t: number): number'],
     ['terminal profile sampler reaches the real flat endpoint instead of forcing a vertical wall', 'const midTerminalSlowdown = Math.sin(terminalAmount * Math.PI) * 0.028'],
@@ -2083,9 +2085,9 @@ function summarizeReadableSurfaceRenderContract() {
     ['isometric camera keeps the curl inspectable without cropping the mechanism sheet', "view === 'isometric' ? 1.18"],
     ['top readable profile keeps the rounded proof footprint instead of inheriting the side-only barrel opening', '0.858,0.86;0.922,0.704;0.967,0.528;0.985,0.384'],
     ['top readable profile returns from the tube to the flat terminal perimeter without a backtracked dimple pocket', '0.937,0.228;0.919,0.16;0.934,0.092;0.971,0.037;1,0'],
-    ['side readable profile keeps the reference-like rounded crest and downturned lip instead of the Candidate672 notch', '0.39,0.39;0.5,0.76;0.64,0.97;0.735,0.99;0.815,0.9;0.875,0.74;0.906,0.58'],
-    ['side readable profile keeps the inner throat smooth instead of closing into a side-wall tube', '0.895,0.45;0.86,0.37;0.805,0.34;0.755,0.37;0.72,0.42;0.69,0.44'],
-    ['side readable profile returns through a smooth inner barrel and flat base instead of a detached lower tongue', '0.65,0.39;0.57,0.29;0.5,0.18;0.522,0.1;0.66,0.052;1,0'],
+    ['side readable profile keeps the reference-like rounded crest and downturned lip instead of the Candidate672 notch', '0.39,0.39;0.5,0.76;0.64,0.97;0.735,0.995;0.82,0.91;0.87,0.74;0.898,0.56'],
+    ['side readable profile keeps the inner throat smooth instead of closing into a side-wall tube', '0.885,0.43;0.845,0.34;0.785,0.28;0.715,0.24;0.64,0.19;0.56,0.12'],
+    ['side readable profile returns through a smooth inner barrel and flat base instead of a detached lower tongue', '0.515,0.07;0.57,0.035;0.74,0.018;1,0'],
   ]
   const forbiddenFragments = [
     ['side span collapses back into a silhouette strip', "return view === 'side' ? centered * 0.12 : centered"],
