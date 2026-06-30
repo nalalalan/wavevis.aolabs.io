@@ -15,7 +15,7 @@ type InverseSheetTabProps = {
 }
 
 export default function InverseSheetTab({ activeTab, onTabChange, resizeHandle }: InverseSheetTabProps) {
-  const [config, setConfig] = useState<InverseSheetConfig>(() => readInitialInverseSheetConfig())
+  const [config, setConfig] = useState<InverseSheetConfig>(() => normalizeInverseSheetMechanismVisibility(readInitialInverseSheetConfig()))
   const [selected, setSelected] = useState<SelectedElement>(null)
   const [pickedEdges, setPickedEdges] = useState<string[]>([])
   const [status, setStatus] = useState<string | null>(null)
@@ -24,12 +24,12 @@ export default function InverseSheetTab({ activeTab, onTabChange, resizeHandle }
   const model = useMemo(() => buildInverseSheetModel(config), [config])
 
   const updateConfig = (next: InverseSheetConfig) => {
-    setConfig(sanitizeInverseSheetConfig(next))
+    setConfig(normalizeInverseSheetMechanismVisibility(sanitizeInverseSheetConfig(next)))
     setStatus(null)
   }
 
   const resetDefaults = () => {
-    setConfig(DEFAULT_INVERSE_SHEET_CONFIG)
+    setConfig(normalizeInverseSheetMechanismVisibility(DEFAULT_INVERSE_SHEET_CONFIG))
     setSelected(null)
     setPickedEdges([])
     setStatus('Defaults restored.')
@@ -56,7 +56,7 @@ export default function InverseSheetTab({ activeTab, onTabChange, resizeHandle }
 
   const importConfig = (text: string) => {
     try {
-      setConfig(parseConfigJson(text))
+      setConfig(normalizeInverseSheetMechanismVisibility(parseConfigJson(text)))
       setSelected(null)
       setPickedEdges([])
       setStatus('Config JSON imported and clamped.')
@@ -106,7 +106,7 @@ export default function InverseSheetTab({ activeTab, onTabChange, resizeHandle }
           currentView={viewRequest.view}
           onConfigChange={updateConfig}
           onRun={() => {
-            setConfig((current) => sanitizeInverseSheetConfig(current))
+            setConfig((current) => normalizeInverseSheetMechanismVisibility(sanitizeInverseSheetConfig(current)))
             setStatus('Inverse sheet updated.')
           }}
           onReset={resetDefaults}
@@ -172,6 +172,11 @@ function readInitialInverseSheetConfig(): InverseSheetConfig {
   readBooleanConfigParam(search, config, 'connectors', 'showEdges')
 
   return sanitizeInverseSheetConfig(config)
+}
+
+function normalizeInverseSheetMechanismVisibility(config: InverseSheetConfig): InverseSheetConfig {
+  if (!config.showSurface || (config.showNodes && config.showEdges)) return config
+  return { ...config, showNodes: true, showEdges: true }
 }
 
 function readInitialInverseSheetView(): CameraView {

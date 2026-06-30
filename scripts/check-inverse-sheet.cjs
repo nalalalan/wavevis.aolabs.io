@@ -1982,11 +1982,19 @@ function summarizeStartupDisplayContract() {
     ['columns control exposes the small X proof range', '<NumberInput label="columns" value={config.columns} min={12} max={120}', targetShapeControlsSource],
   ]
   const missingSmallArrayInspectionFragments = smallArrayInspectionFragments.filter(([, fragment, source]) => !source.includes(fragment))
+  const mechanismLockFragments = [
+    ['surface-on config keeps cells and X legs enabled in state', 'normalizeInverseSheetMechanismVisibility(sanitizeInverseSheetConfig(next))', inverseSheetTabSource],
+    ['surface-on URL/import/run normalization cannot leave hidden mechanism checkboxes', 'function normalizeInverseSheetMechanismVisibility(config: InverseSheetConfig): InverseSheetConfig', inverseSheetTabSource],
+    ['surface-on cells/X legs controls render as checked', 'checked={mechanismLockedToggle ? true : config[key]}', targetShapeControlsSource],
+    ['surface-on cells/X legs controls cannot be unchecked while the public surface is visible', 'disabled={mechanismLockedToggle}', targetShapeControlsSource],
+  ]
+  const missingMechanismLockFragments = mechanismLockFragments.filter(([, fragment, source]) => !source.includes(fragment))
   const failures = [
     ...defaultMismatches.map(([key, expected]) => `${key} default is ${JSON.stringify(DEFAULT_INVERSE_SHEET_CONFIG[key])}, expected ${JSON.stringify(expected)}`),
     ...missingUrlGates.map(([param, key]) => `${param}->${key} URL gate missing`),
     ...missingVisibleLabels.map(([label]) => `${label} visible display label missing`),
     ...missingSmallArrayInspectionFragments.map(([label]) => `${label} missing`),
+    ...missingMechanismLockFragments.map(([label]) => `${label} missing`),
   ]
 
   return {
@@ -1998,6 +2006,7 @@ function summarizeStartupDisplayContract() {
     missingUrlGates,
     missingVisibleLabels,
     missingSmallArrayInspectionFragments: missingSmallArrayInspectionFragments.map(([label]) => label),
+    missingMechanismLockFragments: missingMechanismLockFragments.map(([label]) => label),
     failures,
   }
 }

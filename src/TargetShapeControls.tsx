@@ -120,12 +120,20 @@ export default function TargetShapeControls({
         </div>
 
         <div className="toggle-grid quiet-toggle-grid">
-          {(['showSurface', 'showRestGhost', 'showNodes', 'showEdges'] as BooleanKey[]).map((key) => (
-            <label key={key}>
-              <input type="checkbox" checked={config[key]} onChange={(event) => setBoolean(key, event.target.checked)} />
-              {displayToggleLabel(key)}
-            </label>
-          ))}
+          {(['showSurface', 'showRestGhost', 'showNodes', 'showEdges'] as BooleanKey[]).map((key) => {
+            const mechanismLockedToggle = config.showSurface && (key === 'showNodes' || key === 'showEdges')
+            return (
+              <label key={key}>
+                <input
+                  type="checkbox"
+                  checked={mechanismLockedToggle ? true : config[key]}
+                  disabled={mechanismLockedToggle}
+                  onChange={(event) => setBoolean(key, event.target.checked)}
+                />
+                {displayToggleLabel(key)}
+              </label>
+            )
+          })}
         </div>
 
       </section>
