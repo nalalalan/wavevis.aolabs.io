@@ -296,7 +296,7 @@ type ReadableWaveFrame = {
 const readableWaveUSegments = 104
 const readableWaveVSegments = 54
 const readableReferenceProfilePoints =
-  '0,0;0.04,0.011;0.095,0.045;0.17,0.13;0.275,0.32;0.385,0.58;0.49,0.82;0.58,0.96;0.67,0.995;0.77,0.92;0.86,0.78;0.93,0.64;0.98,0.54;0.96,0.46;0.92,0.37;0.85,0.28;0.77,0.19;0.7,0.1;0.68,0.06;0.69,0.035;0.73,0.018;0.82,0.006;1,0'
+  '0,0;0.04,0.008;0.095,0.033;0.17,0.105;0.275,0.305;0.385,0.58;0.5,0.82;0.61,0.965;0.7,1;0.785,0.97;0.865,0.89;0.935,0.77;0.985,0.62;1,0.5;0.985,0.39;0.955,0.29;0.945,0.21;0.965,0.13;0.995,0.045;1,0'
 
 function readableSurfaceReferenceOnly(model: LatticeModel): boolean {
   return model.config.showSurface && readableWaveReferenceDisplay(model)
@@ -417,7 +417,7 @@ function buildReadableWaveWireGeometry(model: LatticeModel, view: CameraViewRequ
 
 function readableWaveSpanParameter(view: CameraViewRequest['view'], amount: number): number {
   const centered = -1 + clampUnit(amount) * 2
-  return view === 'side' ? centered * 0.045 : centered
+  return view === 'side' ? centered * 0.006 : centered
 }
 
 function buildReadableWaveTopHeightShadowGeometry(model: LatticeModel): THREE.BufferGeometry {
@@ -595,7 +595,8 @@ function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3
   const liftBlend = Math.pow(envelope, 1.08)
   const growth = Math.sin(frame.progress * Math.PI * 0.5)
   const curlBlend = smoothStep(0.22, 1, frame.progress)
-  const profilePoint = sampleReadableWaveProfile(frame.profile, t)
+  const profileT = readableTerminalProfileParameter(t)
+  const profilePoint = sampleReadableWaveProfile(frame.profile, profileT)
   const lateralCurlBlend = curlBlend * Math.pow(envelope, 1.45)
   const baseX = lerpNumber(frame.minX, frame.maxX, t)
   const baseY = frame.centerY + s * frame.halfSpan
@@ -627,15 +628,10 @@ function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3
   const pinchEnvelope = Math.pow(envelope, 0.42)
   const curlPinch = Math.min(0.18, frame.progress * pinchEnvelope * (0.01 * curlShoulder + 0.095 * lipTip))
   const yPinch = s * frame.halfSpan * curlPinch * perimeterPlanFade
-  const terminalForwardBulge = waveWidth *
-    frame.progress *
-    smoothStep(0.7, 0.9, t) *
-    (1 - smoothStep(0.96, 1, t)) *
-    Math.pow(envelope, 1.85) *
-    0.055
+  const foldedX = lerpNumber(baseX, centerX, foldBlend)
 
   return [
-    lerpNumber(baseX, centerX, foldBlend) + terminalForwardBulge,
+    lerpNumber(baseX, foldedX, perimeterPlanFade),
     baseY - yPinch,
     Math.max(0, centerZ * lipLiftBlend),
   ]
@@ -644,6 +640,13 @@ function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3
 function readableWaveDisplayPoint(frame: ReadableWaveFrame, view: CameraViewRequest['view'], t: number, s: number): Vec3 {
   void view
   return readableWavePoint(frame, t, s)
+}
+
+function readableTerminalProfileParameter(t: number): number {
+  const amount = clampUnit(t)
+  const terminalBlend = smoothStep(0.68, 0.98, amount)
+  const stretchedTerminal = amount < 0.68 ? amount : 0.68 + (amount - 0.68) * 0.86
+  return lerpNumber(amount, stretchedTerminal, terminalBlend)
 }
 
 function buildReadableWaveXCellCenterOverrides(model: LatticeModel, view: CameraViewRequest['view']): Map<string, Vec3> {

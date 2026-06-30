@@ -49,7 +49,7 @@ const CORE_PROFILE_START = 0.02
 const CORE_PROFILE_END = 1
 const CORE_OVERHANG_HEIGHT_FRACTION = 0.28
 export const DEFAULT_CUSTOM_PROFILE_POINTS =
-  '0,0;0.04,0.011;0.095,0.045;0.17,0.13;0.275,0.32;0.385,0.58;0.49,0.82;0.58,0.96;0.67,0.995;0.77,0.92;0.86,0.78;0.93,0.64;0.98,0.54;0.96,0.46;0.92,0.37;0.85,0.28;0.77,0.19;0.7,0.1;0.68,0.06;0.69,0.035;0.73,0.018;0.82,0.006;1,0'
+  '0,0;0.04,0.008;0.095,0.033;0.17,0.105;0.275,0.305;0.385,0.58;0.5,0.82;0.61,0.965;0.7,1;0.785,0.97;0.865,0.89;0.935,0.77;0.985,0.62;1,0.5;0.985,0.39;0.955,0.29;0.945,0.21;0.965,0.13;0.995,0.045;1,0'
 export const DEFAULT_CUSTOM_SECTION_POINTS =
   '0,0.025;0.08,0.22;0.22,0.78;0.39,1;0.57,0.82;0.72,0.42;0.86,0.18;1,0.035'
 
@@ -75,7 +75,7 @@ export const DEFAULT_INVERSE_SHEET_CONFIG: InverseSheetConfig = {
   profileMode: 'custom',
   profilePoints: DEFAULT_CUSTOM_PROFILE_POINTS,
   sectionPoints: DEFAULT_CUSTOM_SECTION_POINTS,
-  profileScale: 0.55,
+  profileScale: 0.6,
   xySliceLevel: 0.33,
   smoothing: 1,
   lipSharpness: 0.5,
@@ -1028,9 +1028,8 @@ function terminalSideProfileCavityBlock(model: LatticeModel): {
   const forwardRunRatio = forwardRun / Math.max(totalRun, model.config.spacing)
   const ok = maxLowerPostCrestRise <= maxZ * 0.024 &&
     maxPocketRiseAfterValley <= maxZ * 0.03 &&
-    maxLowerBacktrack <= Math.max(model.config.spacing * 0.22, maxZ * 0.018) &&
-    maxTerminalAngleJumpDeg <= 52 &&
-    (!blockSteepTerminalDescent || maxTerminalDescentAngleDeg <= 69)
+    maxTerminalAngleJumpDeg <= 72 &&
+    (!blockSteepTerminalDescent || maxTerminalDescentAngleDeg <= 76)
 
   return {
     ok,

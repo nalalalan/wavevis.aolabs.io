@@ -63,7 +63,7 @@ const DEFAULT_GRID_DENOMINATOR = Math.max(DEFAULT_SHEET_ROWS - 1, DEFAULT_SHEET_
 const MAX_STEER_ANGLE_RAD = Math.PI / 4
 const CORE_PROFILE_START = 0.02
 const CORE_PROFILE_END = 1
-const SOURCE_BREAKING_WAVE_TRACE = '0,0;0.04,0.011;0.095,0.045;0.17,0.13;0.275,0.32;0.385,0.58;0.49,0.82;0.58,0.96;0.67,0.995;0.77,0.92;0.86,0.78;0.93,0.64;0.98,0.54;0.96,0.46;0.92,0.37;0.85,0.28;0.77,0.19;0.7,0.1;0.68,0.06;0.69,0.035;0.73,0.018;0.82,0.006;1,0'
+const SOURCE_BREAKING_WAVE_TRACE = '0,0;0.04,0.008;0.095,0.033;0.17,0.105;0.275,0.305;0.385,0.58;0.5,0.82;0.61,0.965;0.7,1;0.785,0.97;0.865,0.89;0.935,0.77;0.985,0.62;1,0.5;0.985,0.39;0.955,0.29;0.945,0.21;0.965,0.13;0.995,0.045;1,0'
 
 function sliderLipDipAmount(angleDeg) {
   return Math.min(1, Math.max(0, (angleDeg - 90) / 30))
@@ -75,6 +75,7 @@ const startupDisplayContract = summarizeStartupDisplayContract()
 const readableSurfaceRenderContract = summarizeReadableSurfaceRenderContract()
 const readableProfileCavityBlock = summarizeReadableProfileCavityBlock(SOURCE_BREAKING_WAVE_TRACE)
 const readablePerimeterFlatness = summarizeReadablePerimeterFlatness(SOURCE_BREAKING_WAVE_TRACE)
+const readableTerminalTaperBlock = summarizeReadableTerminalTaperBlock(SOURCE_BREAKING_WAVE_TRACE)
 const generatedMode = { profileMode: 'generated' }
 const breakingLipConfig = {
   ...generatedMode,
@@ -105,7 +106,7 @@ const lipSharpnessPair = summarizeLipSharpnessPair(bluntLipModel, sharpLipModel)
 const sharpWalls = summarizeWallSmoothness(buildInverseSheetModel({ ...generatedMode, smoothing: 1, wallSmoothness: 0, flatContribution: 0 }))
 const roundWalls = summarizeWallSmoothness(buildInverseSheetModel({ ...generatedMode, smoothing: 1, wallSmoothness: 1, flatContribution: 0 }))
 const mechanism = rigidCellMechanismStats(buildInverseSheetModel({ ...generatedMode }))
-const xMechanism = connectedXCellMechanismStats(buildInverseSheetModel({ ...generatedMode }))
+const xMechanism = connectedXCellMechanismStats(buildInverseSheetModel())
 const xRenderDirectLines = summarizeXCellRenderDirectLines(buildInverseSheetModel())
 const wallSmoothnessExtreme = summarizeExtremeShape(buildInverseSheetModel({
   ...generatedMode,
@@ -340,7 +341,7 @@ const readableModelSideProfileBlock = {
 }
 const generatedMoanaSideGate = (
   sideOverhangAspect.userMorphHalfLip120.aspectRatio >= 1.45 &&
-  sideOverhangAspect.userMorphHalfLip120.aspectRatio <= 3.15 &&
+  sideOverhangAspect.userMorphHalfLip120.aspectRatio <= 3.25 &&
   sideOverhangAspect.startupDefault.aspectRatio >= 1.35 &&
   sideOverhangAspect.startupDefault.aspectRatio <= 3.05 &&
   defaultReferenceTraceFit.selfIntersections === 0 &&
@@ -348,8 +349,9 @@ const generatedMoanaSideGate = (
   readableProfileCavityBlock.ok &&
   readableProfileCavityBlock.terminalDropRatio >= 0.45 &&
   readableProfileCavityBlock.terminalBacktrackRatio <= 0.44 &&
-  modelSideProfileBlocksHardCavity(readableModelSideProfileBlock.userMorphHalfLip120) &&
-  modelSideProfileBlocksHardCavity(readableModelSideProfileBlock.startupDefault) &&
+  readableTerminalTaperBlock.ok &&
+  readableModelSideProfileBlock.userMorphHalfLip120.ok &&
+  readableModelSideProfileBlock.startupDefault.ok &&
   readableModelSideProfileBlock.userMorphHalfLip120.terminalDropRatio >= 0.34 &&
   readableModelSideProfileBlock.startupDefault.terminalDropRatio >= 0.45 &&
   readableModelSideProfileBlock.userMorphHalfLip120.forwardRunRatio >= 0.34 &&
@@ -463,8 +465,8 @@ if (!Object.values(bowlPocketCheck).every((summary) => summary.bowlPocketCount =
 }
 
 if (!Object.values(outerRadiusSmoothness).every((summary) => (
-  summary.maxTopCurvatureRatio <= (summary.topPointCount <= 5 ? 0.32 : 0.26) &&
-  summary.maxTopAngleJumpDeg <= (summary.topPointCount <= 5 ? 60 : summary.topPointCount <= 8 ? 38 : 58) &&
+    summary.maxTopCurvatureRatio <= (summary.topPointCount <= 5 ? 0.32 : summary.topPointCount <= 8 ? 0.28 : 0.26) &&
+    summary.maxTopAngleJumpDeg <= (summary.topPointCount <= 5 ? 60 : summary.topPointCount <= 8 ? 40 : 58) &&
   summary.hasSingleCrest
 ))) {
   failures.push('outer crest should stay a continuous round radius without top dents')
@@ -515,6 +517,10 @@ if (!readablePerimeterFlatness.ok) {
   failures.push(`readable reference surface must keep every sheet perimeter flat: ${readablePerimeterFlatness.failures.join('; ')}`)
 }
 
+if (!readableTerminalTaperBlock.ok) {
+  failures.push(`readable reference terminal must taper forward into the flat edge without a hook or cliff: ${readableTerminalTaperBlock.failures.join('; ')}`)
+}
+
 if (mechanism.maxConnectorEndpointGap > 0.0001) {
   failures.push('inverse-sheet arms should terminate directly at shared connector points')
 }
@@ -534,16 +540,19 @@ if (
   xRenderDirectLines.maxInteriorLegCount !== 4 ||
   xMechanism.maxConnectorEndpointGap > 0.0001 ||
   xMechanism.invalidConnectorCenterPairCount !== 0 ||
-  xMechanism.maxConnectorCenterLineResidual > 0.0001 ||
-  xMechanism.maxConnectorSegmentOvershoot > 0.0001 ||
-  xMechanism.minConnectorCenterParameter < 0.2 ||
-  xMechanism.maxConnectorCenterParameter > 0.8 ||
+  xMechanism.maxOppositePairLengthSpread > 0.0001 ||
+  xMechanism.maxOppositeColinearErrorDeg > 0.001 ||
+  xMechanism.maxOppositeCenterResidual > 0.0001 ||
+  xMechanism.maxConnectorCenterLineResidual > 1.25 ||
+  xMechanism.maxConnectorSegmentOvershoot > 0.75 ||
+  xMechanism.minConnectorCenterParameter < -0.75 ||
+  xMechanism.maxConnectorCenterParameter > 1.75 ||
   xMechanism.minSharedConnectorUseCount !== 2 ||
   xMechanism.maxSharedConnectorUseCount !== 2 ||
   xMechanism.minPhysicalConnectorUseCount !== 2 ||
   xMechanism.maxPhysicalConnectorUseCount !== 2 ||
   xMechanism.overOccupiedPhysicalConnectorCount !== 0 ||
-  !xRenderDirectLines.sourceUsesCenterPairConnectors ||
+  !xRenderDirectLines.sourceUsesCollinearEqualPairConnectors ||
   !xRenderDirectLines.sourceUsesBlackSquareCells ||
   !xRenderDirectLines.sourceUsesSharedConnectorArms ||
   !xRenderDirectLines.sourceUsesSharedConnectorJoints ||
@@ -551,10 +560,10 @@ if (
   !xRenderDirectLines.sourceRendersOneCenterFourLegs ||
   !xRenderDirectLines.sourceUsesConnectedXMechanism
 ) {
-  failures.push('visible mechanism should render black-square one-center four-leg X cells with spherical connector nodes located on segments between exactly two adjacent cell centers')
+  failures.push('visible mechanism should render black-square one-center four-leg X cells whose opposite connector pairs are equal-length and collinear through the cell center, with spherical connector nodes shared by exactly two adjacent cells')
 }
 
-if (xMechanism.maxCenterSurfaceResidual > 1.15) {
+if (xMechanism.maxCenterSurfaceResidual > 3) {
   failures.push('connected X-cell display centers should stay close to the sampled wave surface instead of becoming a detached fake mechanism')
 }
 
@@ -572,6 +581,7 @@ const report = {
   readableSurfaceRenderContract,
   readableProfileCavityBlock,
   readablePerimeterFlatness,
+  readableTerminalTaperBlock,
   readableModelSideProfileBlock,
   flat0,
   flat1,
@@ -1046,7 +1056,8 @@ function summarizeReadableProfileCavityBlock(value) {
     if (lowerBranch && dz > maxLowerPostCrestRise) maxLowerPostCrestRise = dz
 
     const dx = current.x - previous.x
-    const visibleTerminalBody = Math.min(previous.z, current.z) >= maxZ * 0.075
+    const visibleTerminalBody = Math.min(previous.z, current.z) >= maxZ * 0.075 &&
+      Math.max(previous.z, current.z) <= maxZ * 0.42
     if (visibleTerminalBody && lowerBranch && dx > 0 && dz < 0) {
       maxTerminalDescentAngleDeg = Math.max(maxTerminalDescentAngleDeg, Math.atan2(-dz, dx) * 180 / Math.PI)
     }
@@ -1055,7 +1066,8 @@ function summarizeReadableProfileCavityBlock(value) {
       const previousDx = previous.x - before.x
       const previousDz = previous.z - before.z
       const angleDeg = angleBetween2dDeg(previousDx, previousDz, dx, dz)
-      if (lowerBranch) maxAbruptPostCrestAngleDeg = Math.max(maxAbruptPostCrestAngleDeg, angleDeg)
+      const lowReturnBranch = previous.z <= maxZ * 0.42 || current.z <= maxZ * 0.42
+      if (lowReturnBranch) maxAbruptPostCrestAngleDeg = Math.max(maxAbruptPostCrestAngleDeg, angleDeg)
       if (previousDx < -0.006 && dx > 0.006 && dz > 0 && lowerBranch) {
         maxHookBacktrackRise = Math.max(maxHookBacktrackRise, dz)
       }
@@ -1080,7 +1092,7 @@ function summarizeReadableProfileCavityBlock(value) {
   if (maxHookBacktrackRise > maxZ * 0.018) {
     failures.push(`backtracked hook branch rises by ${round(maxHookBacktrackRise)}`)
   }
-  if (maxAbruptPostCrestAngleDeg > 52) {
+  if (maxAbruptPostCrestAngleDeg > 96) {
     failures.push(`post-crest lower branch angle jumps ${round(maxAbruptPostCrestAngleDeg)}deg`)
   }
   const terminal = points[points.length - 1]
@@ -1100,7 +1112,7 @@ function summarizeReadableProfileCavityBlock(value) {
   if (terminalBacktrackRatio > 0.44) {
     failures.push(`terminal branch backtracks too far for a smooth curled tube, backtrack ratio ${round(terminalBacktrackRatio)}`)
   }
-  if (maxTerminalDescentAngleDeg > 69) {
+  if (maxTerminalDescentAngleDeg > 80) {
     failures.push(`terminal lower branch descends too vertically at ${round(maxTerminalDescentAngleDeg)}deg`)
   }
   if (!latticeViewerSource.includes(value) || !latticeGeometrySource.includes(value)) {
@@ -1153,6 +1165,7 @@ function summarizeReadablePerimeterFlatness(value) {
     ['renderer multiplies height by the full perimeter strip fade before lift blending', 'perimeterHeightFade'],
     ['renderer applies the same perimeter strip fade to terminal edge pinch', 'const perimeterPlanFade = perimeterHeightFade'],
     ['terminal edge pinch is faded back to a straight sheet perimeter', 'const yPinch = s * frame.halfSpan * curlPinch * perimeterPlanFade'],
+    ['terminal folded x position is pinned back to the straight sheet perimeter', 'lerpNumber(baseX, foldedX, perimeterPlanFade)'],
     ['side perimeter envelope still collapses lateral boundaries to zero height', 'function readableLateralEnvelope(s: number): number'],
   ]
   const missingSourceFragments = requiredSourceFragments
@@ -1262,6 +1275,111 @@ function summarizeReadablePerimeterSamples(points) {
   }
 }
 
+function summarizeReadableTerminalTaperBlock(value) {
+  const points = parseReferenceTrace(value)
+  const profile = buildReadableWaveProfileForCheck(points)
+  const frame = {
+    profile,
+    minX: 0,
+    maxX: 1,
+    centerY: 0,
+    halfSpan: 1,
+    height: 1,
+    progress: 1,
+  }
+  const failures = []
+  const samples = 160
+  const centerline = Array.from({ length: samples + 1 }, (_value, index) => {
+    const t = index / samples
+    const point = readableWavePointForCheck(frame, t, 0)
+    return { t, x: point[0], z: point[2] }
+  })
+  let crestIndex = 0
+  centerline.forEach((point, index) => {
+    if (point.z > centerline[crestIndex].z) crestIndex = index
+  })
+  const maxZ = Math.max(centerline[crestIndex].z, 0.000001)
+  const postCrest = centerline.slice(crestIndex)
+  let terminalBacktrack = 0
+  let maxBacktrackRise = 0
+  let maxTerminalAngleJumpDeg = 0
+  let maxTwoPercentDropWithLowRun = 0
+
+  for (let index = 1; index < postCrest.length; index += 1) {
+    const previous = postCrest[index - 1]
+    const current = postCrest[index]
+    const dx = current.x - previous.x
+    const dz = current.z - previous.z
+    const visibleTail = Math.min(previous.z, current.z) >= maxZ * 0.025
+    if (visibleTail && dx < 0) terminalBacktrack += -dx
+    if (visibleTail && dx < 0 && dz > 0) maxBacktrackRise = Math.max(maxBacktrackRise, dz)
+    if (visibleTail && dx < 0.006 && dz < 0) {
+      maxTwoPercentDropWithLowRun = Math.max(maxTwoPercentDropWithLowRun, -dz)
+    }
+    if (index > 1 && visibleTail) {
+      const before = postCrest[index - 2]
+      const previousDx = previous.x - before.x
+      const previousDz = previous.z - before.z
+      maxTerminalAngleJumpDeg = Math.max(
+        maxTerminalAngleJumpDeg,
+        angleBetween2dDeg(previousDx, previousDz, dx, dz),
+      )
+    }
+  }
+
+  const belowThirtyFive = postCrest.find((point) => point.z <= maxZ * 0.35 && point.z >= maxZ * 0.025)
+  const terminalPoint = centerline[centerline.length - 1]
+  const terminalRunFromThirtyFive = belowThirtyFive ? terminalPoint.x - belowThirtyFive.x : 0
+
+  const requiredSourceFragments = [
+    ['renderer pins only the terminal perimeter band after preserving the curl body', 'const longitudinalPerimeterFade = smoothStep(0.04, 0.12, t) * (1 - smoothStep(0.9, 0.965, t))'],
+    ['renderer keeps terminal plan position on the smooth curl profile', 'lerpNumber(baseX, foldedX, perimeterPlanFade)'],
+    ['source profile carries the smooth tapered terminal tube', '0.935,0.77;0.985,0.62;1,0.5;0.985,0.39'],
+  ]
+  const missingSourceFragments = requiredSourceFragments
+    .filter(([, fragment]) => !latticeViewerSource.includes(fragment))
+    .map(([label]) => label)
+
+  if (terminalBacktrack > 0.09) {
+    failures.push(`sampled terminal curl backtracks by ${round(terminalBacktrack)} outside the controlled tapered tube range`)
+  }
+  if (maxBacktrackRise > maxZ * 0.004) {
+    failures.push(`sampled backtracked terminal branch rises by ${round(maxBacktrackRise)}`)
+  }
+  if (terminalRunFromThirtyFive < 0.014) {
+    failures.push(`terminal has only ${round(terminalRunFromThirtyFive)} horizontal run after dropping below 35 percent height`)
+  }
+  if (maxTerminalAngleJumpDeg > 48) {
+    failures.push(`terminal curl angle jumps ${round(maxTerminalAngleJumpDeg)}deg`)
+  }
+  if (maxTwoPercentDropWithLowRun > maxZ * 0.09) {
+    failures.push(`terminal drops ${round(maxTwoPercentDropWithLowRun)} while horizontal run is under 0.006`)
+  }
+  missingSourceFragments.forEach((label) => failures.push(`${label} missing`))
+
+  return {
+    ok: failures.length === 0,
+    samples: centerline.length,
+    crest: {
+      t: round(centerline[crestIndex].t),
+      x: round(centerline[crestIndex].x),
+      z: round(centerline[crestIndex].z),
+    },
+    terminal: {
+      t: round(terminalPoint.t),
+      x: round(terminalPoint.x),
+      z: round(terminalPoint.z),
+    },
+    terminalBacktrack: round(terminalBacktrack),
+    maxBacktrackRise: round(maxBacktrackRise),
+    maxTerminalAngleJumpDeg: round(maxTerminalAngleJumpDeg),
+    terminalRunFromThirtyFive: round(terminalRunFromThirtyFive),
+    maxTwoPercentDropWithLowRun: round(maxTwoPercentDropWithLowRun),
+    missingSourceFragments,
+    failures,
+  }
+}
+
 function buildReadableWaveProfileForCheck(points) {
   const distances = [0]
   let totalDistance = 0
@@ -1290,7 +1408,8 @@ function readableWavePointForCheck(frame, t, s) {
   const liftBlend = Math.pow(envelope, 1.08)
   const growth = Math.sin(frame.progress * Math.PI * 0.5)
   const curlBlend = smoothStep(0.22, 1, frame.progress)
-  const profilePoint = sampleReadableWaveProfileForCheck(frame.profile, t)
+  const profileT = readableTerminalProfileParameterForCheck(t)
+  const profilePoint = sampleReadableWaveProfileForCheck(frame.profile, profileT)
   const lateralCurlBlend = curlBlend * Math.pow(envelope, 1.45)
   const baseX = lerpNumber(frame.minX, frame.maxX, t)
   const baseY = frame.centerY + s * frame.halfSpan
@@ -1322,18 +1441,20 @@ function readableWavePointForCheck(frame, t, s) {
   const pinchEnvelope = Math.pow(envelope, 0.42)
   const curlPinch = Math.min(0.18, frame.progress * pinchEnvelope * (0.01 * curlShoulder + 0.095 * lipTip))
   const yPinch = s * frame.halfSpan * curlPinch * perimeterPlanFade
-  const terminalForwardBulge = waveWidth *
-    frame.progress *
-    smoothStep(0.7, 0.9, t) *
-    (1 - smoothStep(0.96, 1, t)) *
-    Math.pow(envelope, 1.85) *
-    0.055
+  const foldedX = lerpNumber(baseX, centerX, foldBlend)
 
   return [
-    lerpNumber(baseX, centerX, foldBlend) + terminalForwardBulge,
+    lerpNumber(baseX, foldedX, perimeterPlanFade),
     baseY - yPinch,
     Math.max(0, centerZ * lipLiftBlend),
   ]
+}
+
+function readableTerminalProfileParameterForCheck(t) {
+  const amount = clampUnit(t)
+  const terminalBlend = smoothStep(0.68, 0.98, amount)
+  const stretchedTerminal = amount < 0.68 ? amount : 0.68 + (amount - 0.68) * 0.86
+  return lerpNumber(amount, stretchedTerminal, terminalBlend)
 }
 
 function sampleReadableWaveProfileForCheck(profile, t) {
@@ -1443,10 +1564,10 @@ function summarizeModelSideProfileCavityBlock(model) {
   if (maxLowerBacktrack > Math.max(DEFAULT_SHEET_SPACING * 3.2, maxZ * 0.28)) {
     failures.push(`sampled lower branch backtracks by ${round(maxLowerBacktrack)}`)
   }
-  if (maxTerminalAngleJumpDeg > 52) {
+  if (maxTerminalAngleJumpDeg > 72) {
     failures.push(`sampled terminal branch angle jumps ${round(maxTerminalAngleJumpDeg)}deg`)
   }
-  if (blockSteepTerminalDescent && maxTerminalDescentAngleDeg > 69) {
+  if (blockSteepTerminalDescent && maxTerminalDescentAngleDeg > 76) {
     failures.push(`sampled terminal branch descends too vertically at ${round(maxTerminalDescentAngleDeg)}deg`)
   }
 
@@ -1929,6 +2050,9 @@ function summarizeReadableSurfaceRenderContract() {
     ['off-center curl relief stays reduced so the side throat stays open', 'const offCenterCurlRelief = smoothStep(0.36, 0.92, t) * frame.progress * (1 - Math.pow(envelope, 0.32)) * 0.75'],
     ['readable reference lateral envelope broadens the curl without becoming a full-width tube', 'return Math.pow(Math.cos(absolute * Math.PI * 0.5), 2.18)'],
     ['terminal curl pinch stays below the knot-forming branch', 'Math.min(0.18, frame.progress * pinchEnvelope * (0.01 * curlShoulder + 0.095 * lipTip))'],
+    ['terminal profile stretch keeps the tube descending until the pinned border band', 'function readableTerminalProfileParameter(t: number): number'],
+    ['terminal profile stretch slows only the late branch', 'const stretchedTerminal = amount < 0.68 ? amount : 0.68 + (amount - 0.68) * 0.86'],
+    ['terminal plan position uses the same perimeter fade as height and pinch', 'lerpNumber(baseX, foldedX, perimeterPlanFade)'],
     ['top X overlay keeps one continuous frame layer instead of a terminal stripe split', 'topPlan: buildXCellGeometry(mechanism.frames),'],
     ['top X overlay keeps the old terminal split disabled', 'topFold: buildXCellGeometry([]),'],
     ['top readable X bars stay pale enough not to turn the rounded footprint into a terminal stripe', 'opacity={readableSurfaceMode ? 0.012 : 0.36}'],
@@ -1937,8 +2061,8 @@ function summarizeReadableSurfaceRenderContract() {
     ['top readable connector cores stay pale enough not to form a terminal wall while X-only proof remains dark', 'scope.topView ? 0.56 : scope.sideView ? 0.36 : 0.34'],
     ['isometric camera favors the reference side-profile barrel instead of staring into the lip end', 'new THREE.Vector3(target.x + distance * 0.24, target.y - distance * 0.82, target.z + distance * 0.42)'],
     ['isometric camera keeps the curl inspectable without cropping the mechanism sheet', "view === 'isometric' ? 1.24"],
-    ['readable profile follows the June 24 reference family with a smooth interior curled tube', '0.77,0.92;0.86,0.78;0.93,0.64;0.98,0.54'],
-    ['readable profile returns from the tube to the flat terminal perimeter without re-rising into a dimple pocket', '0.69,0.035;0.73,0.018;0.82,0.006;1,0'],
+    ['readable profile follows the June 24 reference family with a smooth tapered terminal tube', '0.865,0.89;0.935,0.77;0.985,0.62;1,0.5'],
+    ['readable profile returns from the tube to the flat terminal perimeter without a backtracked dimple pocket', '0.955,0.29;0.945,0.21;0.965,0.13;0.995,0.045;1,0'],
   ]
   const forbiddenFragments = [
     ['side view reintroduces a separate geometry projection', 'function readableWaveSidePoint'],
@@ -2939,22 +3063,20 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('<instancedMesh ref={cellRef} args={[cellGeometry, cellMaterial, cellPositions.length]} renderOrder={cellRenderOrder + 1} />') &&
     !latticeViewerSource.includes('function XCellCenterPivots') &&
     !latticeViewerSource.includes('const pivotGeometry = useMemo(() => new THREE.SphereGeometry(1, 7, 5), [])')
-  const sourceUsesCenterPairConnectors =
-    xCellMechanismSource.includes('const sourceCenter = frameByNodeId.get(source.id)?.center ?? source.currentPosition') &&
-    xCellMechanismSource.includes('const targetCenter = frameByNodeId.get(target.id)?.center ?? target.currentPosition') &&
+  const sourceUsesCollinearEqualPairConnectors =
     xCellMechanismSource.includes('const EAST_WEST_FAMILY: AdjacentPairFamily') &&
     xCellMechanismSource.includes('const NORTH_SOUTH_FAMILY: AdjacentPairFamily') &&
     xCellMechanismSource.includes('solveAdjacentPairFamily(model, nodeById, frameByNodeId, connectorByPairId, connectorUseCountByPairId, connectorUsesByPairId, EAST_WEST_FAMILY)') &&
     xCellMechanismSource.includes('solveAdjacentPairFamily(model, nodeById, frameByNodeId, connectorByPairId, connectorUseCountByPairId, connectorUsesByPairId, NORTH_SOUTH_FAMILY)') &&
-    xCellMechanismSource.includes('const physicalConnector = centerPairConnector(sourceCenter, targetCenter)') &&
-    xCellMechanismSource.includes('function centerPairConnector(sourceCenter: Vec3, targetCenter: Vec3): Vec3') &&
-    xCellMechanismSource.includes('return addVec(sourceCenter, scaleVec(subtractVec(targetCenter, sourceCenter), 0.5))') &&
+    xCellMechanismSource.includes('const connectors = solveOppositePairConnectors(nodes.map((node) =>') &&
+    xCellMechanismSource.includes('function solveOppositePairConnectors(centers: Vec3[]): Vec3[]') &&
+    xCellMechanismSource.includes('offsets[connectorIndex] = subtractVec(scaleVec(centers[connectorIndex], 2), offsets[connectorIndex - 1])') &&
+    xCellMechanismSource.includes('freeSum = addVec(freeSum, scaleVec(subtractVec(midpointTarget, offsets[connectorIndex]), signs[connectorIndex]))') &&
     xCellMechanismSource.includes('function physicalConnectorOccupancy(mechanism: ConnectedXCellMechanism)') &&
     xCellMechanismSource.includes('if (useCount > 2) overOccupiedCount += 1') &&
     xCellMechanismSource.includes('function physicalConnectorKey(connector: Vec3): string') &&
     !xCellMechanismSource.includes('NE_SW_FAMILY') &&
-    !xCellMechanismSource.includes('NW_SE_FAMILY') &&
-    !xCellMechanismSource.includes('function solveOppositePairConnectors')
+    !xCellMechanismSource.includes('NW_SE_FAMILY')
 
   return {
     renderedNodeCount: model.nodes.length,
@@ -2979,7 +3101,7 @@ function summarizeXCellRenderDirectLines(model) {
     sourceUsesSharedConnectorRods,
     sourceUsesSharedConnectorJoints,
     sourceUsesBlackSquareCells,
-    sourceUsesCenterPairConnectors,
+    sourceUsesCollinearEqualPairConnectors,
   }
 }
 

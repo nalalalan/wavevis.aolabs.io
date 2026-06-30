@@ -259,13 +259,15 @@ function solveAdjacentPairFamily(
       col = next.col
     }
 
+    const connectors = solveOppositePairConnectors(nodes.map((node) =>
+      frameByNodeId.get(node.id)?.center ?? node.currentPosition))
+
     nodes.slice(0, -1).forEach((source, index) => {
       const target = nodes[index + 1]
       const pairId = pairIds[index]
       if (!source || !target || !pairId) return
-      const sourceCenter = frameByNodeId.get(source.id)?.center ?? source.currentPosition
-      const targetCenter = frameByNodeId.get(target.id)?.center ?? target.currentPosition
-      const physicalConnector = centerPairConnector(sourceCenter, targetCenter)
+      const physicalConnector = connectors[index]
+      if (!physicalConnector) return
       connectorByPairId.set(pairId, physicalConnector)
       const sourceFrame = frameByNodeId.get(source.id)
       const targetFrame = frameByNodeId.get(target.id)
@@ -287,8 +289,27 @@ function solveAdjacentPairFamily(
   })
 }
 
-function centerPairConnector(sourceCenter: Vec3, targetCenter: Vec3): Vec3 {
-  return addVec(sourceCenter, scaleVec(subtractVec(targetCenter, sourceCenter), 0.5))
+function solveOppositePairConnectors(centers: Vec3[]): Vec3[] {
+  const connectorCount = Math.max(centers.length - 1, 0)
+  if (connectorCount <= 0) return []
+  if (connectorCount === 1) return [scaleVec(addVec(centers[0], centers[1]), 0.5)]
+
+  const signs: number[] = [1]
+  const offsets: Vec3[] = [[0, 0, 0]]
+
+  for (let connectorIndex = 1; connectorIndex < connectorCount; connectorIndex += 1) {
+    signs[connectorIndex] = -signs[connectorIndex - 1]
+    offsets[connectorIndex] = subtractVec(scaleVec(centers[connectorIndex], 2), offsets[connectorIndex - 1])
+  }
+
+  let freeSum: Vec3 = [0, 0, 0]
+  for (let connectorIndex = 0; connectorIndex < connectorCount; connectorIndex += 1) {
+    const midpointTarget = scaleVec(addVec(centers[connectorIndex], centers[connectorIndex + 1]), 0.5)
+    freeSum = addVec(freeSum, scaleVec(subtractVec(midpointTarget, offsets[connectorIndex]), signs[connectorIndex]))
+  }
+
+  const free = scaleVec(freeSum, 1 / connectorCount)
+  return offsets.map((offset, index) => addVec(offset, scaleVec(free, signs[index])))
 }
 
 function physicalConnectorOccupancy(mechanism: ConnectedXCellMechanism): {
@@ -342,7 +363,7 @@ function buildSmoothedXCellCenters(model: LatticeModel, centerOverrides?: XCellC
     { row: 1, col: 1, weight: 0.045 },
   ]
 
-  for (let pass = 0; pass < 1; pass += 1) {
+  for (let pass = 0; pass < 5; pass += 1) {
     const nextCenters = new Map<string, Vec3>()
 
     model.nodes.forEach((node) => {
