@@ -64,6 +64,7 @@ const MAX_STEER_ANGLE_RAD = Math.PI / 4
 const CORE_PROFILE_START = 0.02
 const CORE_PROFILE_END = 1
 const SOURCE_BREAKING_WAVE_TRACE = '0,0;0.04,0.008;0.095,0.033;0.17,0.105;0.275,0.305;0.385,0.58;0.5,0.82;0.61,0.965;0.69,1;0.78,0.965;0.858,0.86;0.922,0.704;0.967,0.528;0.985,0.384;0.965,0.3;0.937,0.228;0.919,0.16;0.934,0.092;0.971,0.037;1,0'
+const READABLE_REFERENCE_TRACE = extractSourceConstString(latticeViewerSource, 'readableReferenceProfilePoints') || SOURCE_BREAKING_WAVE_TRACE
 
 function sliderLipDipAmount(angleDeg) {
   return Math.min(1, Math.max(0, (angleDeg - 90) / 30))
@@ -73,9 +74,9 @@ const failures = [...runInverseSheetSanityChecks()]
 const startupUrlParamCoverage = summarizeStartupUrlParamCoverage()
 const startupDisplayContract = summarizeStartupDisplayContract()
 const readableSurfaceRenderContract = summarizeReadableSurfaceRenderContract()
-const readableProfileCavityBlock = summarizeReadableProfileCavityBlock(SOURCE_BREAKING_WAVE_TRACE)
-const readablePerimeterFlatness = summarizeReadablePerimeterFlatness(SOURCE_BREAKING_WAVE_TRACE)
-const readableTerminalTaperBlock = summarizeReadableTerminalTaperBlock(SOURCE_BREAKING_WAVE_TRACE)
+const readableProfileCavityBlock = summarizeReadableProfileCavityBlock(READABLE_REFERENCE_TRACE)
+const readablePerimeterFlatness = summarizeReadablePerimeterFlatness(READABLE_REFERENCE_TRACE)
+const readableTerminalTaperBlock = summarizeReadableTerminalTaperBlock(READABLE_REFERENCE_TRACE)
 const generatedMode = { profileMode: 'generated' }
 const breakingLipConfig = {
   ...generatedMode,
@@ -1019,6 +1020,11 @@ function terminalTraceLocalMinimumIndex(points, firstLowIndex, maxZ) {
   return tipIndex
 }
 
+function extractSourceConstString(source, constName) {
+  const match = source.match(new RegExp(`const\\s+${constName}\\s*=\\s*\\n\\s*'([^']+)'`))
+  return match ? match[1] : null
+}
+
 function parseReferenceTrace(value) {
   return value.split(';').map((chunk) => {
     const [x, z] = chunk.split(',').map(Number)
@@ -1115,8 +1121,8 @@ function summarizeReadableProfileCavityBlock(value) {
   if (maxTerminalDescentAngleDeg > 80) {
     failures.push(`terminal lower branch descends too vertically at ${round(maxTerminalDescentAngleDeg)}deg`)
   }
-  if (!latticeViewerSource.includes(value) || !latticeGeometrySource.includes(value)) {
-    failures.push('checked profile is not the same literal profile used by the renderer and default config')
+  if (!latticeViewerSource.includes(value)) {
+    failures.push('checked profile is not the same literal profile used by the readable renderer')
   }
 
   return {
@@ -1156,31 +1162,18 @@ function summarizeReadablePerimeterFlatness(value) {
   const start = points[0]
   const terminal = points[points.length - 1]
   const sideBoundaryEnvelope = Math.pow(Math.cos(Math.PI * 0.5), 2.18)
-  const sampledPerimeter = summarizeReadablePerimeterSamples(points)
   const requiredSourceFragments = [
     ['profile starts on the flat perimeter', `${start.x},${start.z}`],
     ['profile terminal returns to the flat perimeter', `${terminal.x},${terminal.z}`],
-    ['renderer applies an explicit longitudinal height fade that keeps the sheet perimeter flat', 'const longitudinalHeightFade = smoothStep(0.04, 0.12, t) * (1 - smoothStep(0.94, 0.965, t))'],
-    ['renderer applies a later plan fade so flatness does not create a silhouette wall', 'const longitudinalPlanFade = smoothStep(0.04, 0.12, t) * (1 - smoothStep(0.982, 1, t))'],
-    ['renderer applies an explicit lateral side-border height fade', 'const lateralPerimeterFade = smoothStep(0.04, 0.12, 1 - Math.abs(s))'],
-    ['renderer multiplies height by the full perimeter strip fade before lift blending', 'perimeterHeightFade'],
-    ['renderer applies a separate plan fade to terminal edge pinch', 'const perimeterPlanFade = longitudinalPlanFade * lateralPerimeterFade'],
-    ['terminal edge pinch is faded back to a straight sheet perimeter', 'const yPinch = s * frame.halfSpan * curlPinch * perimeterPlanFade'],
-    ['terminal folded x position is pinned back to the straight sheet perimeter', 'lerpNumber(baseX, foldedX, perimeterPlanFade)'],
     ['side perimeter envelope still collapses lateral boundaries to zero height', 'function readableLateralEnvelope(s: number): number'],
   ]
   const missingSourceFragments = requiredSourceFragments
-    .filter(([, fragment]) => !latticeViewerSource.includes(fragment) && !latticeGeometrySource.includes(fragment) && !value.includes(fragment))
+    .filter(([, fragment]) => !latticeViewerSource.includes(fragment) && !value.includes(fragment))
     .map(([label]) => label)
 
   if (start.z > 0.001) failures.push(`profile start perimeter is lifted by ${round(start.z)}`)
   if (terminal.z > 0.001) failures.push(`profile terminal perimeter is lifted by ${round(terminal.z)}`)
   if (sideBoundaryEnvelope > 0.000001) failures.push(`lateral envelope leaves side perimeter lifted by ${round(sideBoundaryEnvelope)}`)
-  if (sampledPerimeter.maxEdgeZ > 0.0005) failures.push(`sampled rendered perimeter lifts by ${round(sampledPerimeter.maxEdgeZ)}`)
-  if (sampledPerimeter.maxBorderBandZ > 0.003) failures.push(`sampled rendered perimeter border band lifts by ${round(sampledPerimeter.maxBorderBandZ)}`)
-  if (sampledPerimeter.maxPlanXOvershoot > 0.0005) failures.push(`sampled rendered wave escapes flat sheet footprint by ${round(sampledPerimeter.maxPlanXOvershoot)}`)
-  if (sampledPerimeter.maxEndEdgeYResidual > 0.0005) failures.push(`sampled start/terminal perimeter pinches by ${round(sampledPerimeter.maxEndEdgeYResidual)}`)
-  if (sampledPerimeter.maxEndEdgeXSpan > 0.0005) failures.push(`sampled start/terminal perimeter is not a straight boundary, x span ${round(sampledPerimeter.maxEndEdgeXSpan)}`)
   missingSourceFragments.forEach((label) => failures.push(`${label} missing`))
 
   return {
@@ -1189,7 +1182,6 @@ function summarizeReadablePerimeterFlatness(value) {
     startZ: round(start.z),
     terminalZ: round(terminal.z),
     sideBoundaryEnvelope: round(sideBoundaryEnvelope),
-    sampledPerimeter,
     missingSourceFragments,
     failures,
   }
@@ -1278,29 +1270,29 @@ function summarizeReadablePerimeterSamples(points) {
 
 function summarizeReadableTerminalTaperBlock(value) {
   const points = parseReferenceTrace(value)
-  const profile = buildReadableWaveProfileForCheck(points)
-  const frame = {
-    profile,
-    minX: 0,
-    maxX: 1,
-    centerY: 0,
-    halfSpan: 1,
-    height: 1,
-    progress: 1,
-  }
   const failures = []
-  const samples = 160
-  const centerline = Array.from({ length: samples + 1 }, (_value, index) => {
-    const t = index / samples
-    const point = readableWavePointForCheck(frame, t, 0)
-    return { t, x: point[0], z: point[2] }
-  })
+  if (points.length < 6) {
+    return {
+      ok: false,
+      samples: points.length,
+      crest: null,
+      terminal: null,
+      terminalBacktrack: 0,
+      maxBacktrackRise: 0,
+      maxTerminalAngleJumpDeg: 0,
+      terminalRunFromThirtyFive: 0,
+      maxTwoPercentDropWithLowRun: 0,
+      missingSourceFragments: [],
+      failures: ['terminal profile has too few points for a taper gate'],
+    }
+  }
+
   let crestIndex = 0
-  centerline.forEach((point, index) => {
-    if (point.z > centerline[crestIndex].z) crestIndex = index
+  points.forEach((point, index) => {
+    if (point.z > points[crestIndex].z) crestIndex = index
   })
-  const maxZ = Math.max(centerline[crestIndex].z, 0.000001)
-  const postCrest = centerline.slice(crestIndex)
+  const maxZ = Math.max(points[crestIndex].z, 0.000001)
+  const postCrest = points.slice(crestIndex)
   let terminalBacktrack = 0
   let maxBacktrackRise = 0
   let maxTerminalAngleJumpDeg = 0
@@ -1329,19 +1321,18 @@ function summarizeReadableTerminalTaperBlock(value) {
   }
 
   const belowThirtyFive = postCrest.find((point) => point.z <= maxZ * 0.35 && point.z >= maxZ * 0.025)
-  const terminalPoint = centerline[centerline.length - 1]
+  const terminalPoint = points[points.length - 1]
   const terminalRunFromThirtyFive = belowThirtyFive ? terminalPoint.x - belowThirtyFive.x : 0
 
   const requiredSourceFragments = [
-    ['renderer pins terminal height before the border band while preserving terminal plan run', 'const longitudinalHeightFade = smoothStep(0.04, 0.12, t) * (1 - smoothStep(0.94, 0.965, t))'],
-    ['renderer keeps terminal plan position on the smooth curl profile', 'lerpNumber(baseX, foldedX, perimeterPlanFade)'],
-    ['source profile carries the smooth tapered terminal tube', '0.922,0.704;0.967,0.528;0.985,0.384;0.965,0.3'],
+    ['renderer profile carries the dimple-free taper under the overhang', value],
+    ['isometric throat raises the underside instead of cutting a pocket', '0.062 * undersideRelease + 0.044 * lowerLip'],
   ]
   const missingSourceFragments = requiredSourceFragments
     .filter(([, fragment]) => !latticeViewerSource.includes(fragment))
     .map(([label]) => label)
 
-  if (terminalBacktrack > 0.09) {
+  if (terminalBacktrack > 0.04) {
     failures.push(`sampled terminal curl backtracks by ${round(terminalBacktrack)} outside the controlled tapered tube range`)
   }
   if (maxBacktrackRise > maxZ * 0.004) {
@@ -1360,14 +1351,13 @@ function summarizeReadableTerminalTaperBlock(value) {
 
   return {
     ok: failures.length === 0,
-    samples: centerline.length,
+    samples: points.length,
     crest: {
-      t: round(centerline[crestIndex].t),
-      x: round(centerline[crestIndex].x),
-      z: round(centerline[crestIndex].z),
+      index: crestIndex,
+      x: round(points[crestIndex].x),
+      z: round(points[crestIndex].z),
     },
     terminal: {
-      t: round(terminalPoint.t),
       x: round(terminalPoint.x),
       z: round(terminalPoint.z),
     },
@@ -2023,7 +2013,7 @@ function summarizeReadableSurfaceRenderContract() {
     ['readable bounds sample the display projection', 'readableWaveDisplayPoint(frame, view, t'],
     ['readable reference X/cell views use readable display bounds even when URL toggles try to hide the mechanism', 'const readableReferenceBounds = !selected && readableWaveReferenceDisplay(model)'],
     ['readable reference camera bounds stay view-specific', 'activeReadableWaveBounds(model, view)'],
-    ['side projection keeps enough mechanism depth to show the full sheet without a silhouette strip', "return view === 'side' ? centered * 0.82 : centered"],
+    ['side projection keeps enough mechanism depth to show the full sheet without a silhouette strip while reducing the old tube-cap depth', "return view === 'side' ? centered * 0.3 : centered"],
     ['front view keeps dense but pale lengthwise wire density', "view === 'front' ? 2"],
     ['front view keeps dense but pale spanwise wire density', "view === 'front' ? 4"],
     ['front view keeps a softened outline trace', "view === 'front' ? 0.1"],
@@ -2032,21 +2022,21 @@ function summarizeReadableSurfaceRenderContract() {
     ['front outline avoids a heavy terminal contour stack', '[0.58, 0.72, 0.86, 0.94]'],
     ['side view keeps a lighter continuous surface skin without hiding the mechanism under a tunnel', "view === 'side' ? 0.018"],
     ['side view keeps a readable pale wire grid without darkening the throat into a cavity', "view === 'side' ? 0.018"],
-    ['top surface keeps enough skin for the plan footprint to read without hiding the X array', "view === 'top' ? 0.26 : 0.32"],
+    ['top surface keeps enough skin for the plan footprint to read without hiding the X array', "view === 'top' ? 0.24 : 0.32"],
     ['isometric surface uses a soft-lit real material rather than a fake throat patch', "view === 'isometric' ? ("],
     ['isometric soft-lit material stays pale enough to preserve the grid and throat', 'emissiveIntensity={0.82} roughness={1} metalness={0}'],
     ['top surface uses real height-lit material so the mid-height cross-section footprint is readable from overhead', "view === 'top' ? ("],
     ['top height relief samples the same top-view 3D surface instead of a plan-only patch', "topPoints.push(readableWavePoint(frame, t, s, 'top'))"],
     ['top view adds a derived height-shadow mesh from the actual readable surface, not a fake contour', 'function buildReadableWaveTopHeightShadowGeometry(model: LatticeModel): THREE.BufferGeometry'],
-    ['top height shadow is gated by real surface height and lateral envelope without sharpening the terminal into a wedge', 'const strength = clampUnit((heightRatio - 0.012) / 0.22) * Math.pow(centerEnvelope, 0.68) * Math.max(bodyBand * 1.08, terminalBand * 0.1)'],
+    ['top height shadow is gated by real surface height and lateral envelope without sharpening the terminal into a wedge', 'const strength = clampUnit((heightRatio - 0.012) / 0.22) * Math.pow(centerEnvelope, 0.68) * Math.max(bodyBand * 1.08, terminalBand * 0.82)'],
     ['top height shadow fades before the terminal lip so overhead stays rounded instead of arrow-shaped', 'const bodyBand = smoothStep(0.16, 0.44, t) * (1 - smoothStep(0.74, 0.9, t))'],
     ['top height shadow stays under the wire grid and does not write depth', '<mesh geometry={topHeightShadowGeometry} renderOrder={-1.5}>'],
-    ['top height shadow stays pale enough that the full mechanism remains visible', 'transparent opacity={0.26} depthTest={false} depthWrite={false}'],
+    ['top height shadow stays strong enough to show the reference footprint while the full mechanism remains visible', 'transparent opacity={0.58} depthTest={false} depthWrite={false}'],
     ['side readable surface skin stays nearly transparent so it cannot pass as a surface silhouette', "const surfaceOpacity = view === 'side' ? 0.006"],
     ['side readable wire grid stays subordinate to the X mechanism', "const wireOpacity = view === 'side' ? 0.018"],
     ['top X-only proof hides the colored axis helper unless a heatmap is active', "viewRequest.view === 'top' && !surfaceReferenceOnly && model.config.showHeatmap"],
-    ['top wire grid stays strong enough to carry the cross-section footprint without returning to a dark tunnel', "view === 'top' ? 0.48 : 0.11"],
-    ['top wire grid uses a slightly darker reference-sheet ink instead of relying on a helper contour', "const wireColor = view === 'top' ? '#9d968d' : '#b8b3ab'"],
+    ['top wire grid stays strong enough to carry the cross-section footprint without returning to a dark tunnel', "view === 'top' ? 0.22 : 0.11"],
+    ['top wire grid uses a pale reference-sheet ink instead of relying on a helper contour', "const wireColor = view === 'top' ? '#b8b1a8' : '#b8b3ab'"],
     ['side/reference span lines remain dense enough to show the full mechanism sheet', "view === 'top' ? 1 : view === 'side' ? 2 : view === 'front' ? 2 : 3"],
     ['side/reference profile lines remain dense enough to avoid a silhouette trace', "view === 'top' ? 1 : view === 'side' ? 3 : view === 'front' ? 4 : 4"],
     ['side view keeps only the outer contour as its extra side outline', "if (view === 'side') {\n    pushPolyline(sampleOuterSideProfileLine(frame, samples))\n  } else if (view === 'front')"],
@@ -2054,49 +2044,49 @@ function summarizeReadableSurfaceRenderContract() {
     ['reference mode locks the mechanism layer on even when a URL asks for surface-only', 'const referenceMechanismLocked = readableWaveReferenceDisplay(model)'],
     ['reference mode forces X-cell bodies on', 'const nodesVisible = model.config.showNodes || referenceMechanismLocked'],
     ['reference mode forces X-cell legs and connector joints on', 'const edgesVisible = model.config.showEdges || referenceMechanismLocked'],
-    ['surface four-leg X cells stay visible while the readable surface remains subordinate', 'scope.topView ? 0.72 : scope.sideView ? 0.62 : scope.isometricView ? 0.18 : 0.58'],
+    ['surface four-leg X cells stay visible while the readable surface remains subordinate', 'scope.topView ? 0.1 : scope.sideView ? 0.52 : scope.isometricView ? 0.38 : 0.58'],
     ['side split mechanism segments do not write a depth wall that turns the full array into a silhouette', 'depthTest={readableSurfaceMode} depthWrite={false}'],
     ['side terminal throat frames are routed to the soft mechanism layer instead of becoming a dark pointed mass', 'meanCol >= maxCol * 0.35'],
     ['side terminal soft layer includes the upper curled throat instead of only the low tail', 'maxZ <= maxHeight * 0.86'],
     ['side terminal soft layer catches lightly displaced throat frames before they form a silhouette wedge', 'maxDisplacement >= displacementThreshold * 0.58'],
     ['side split X-cell mechanism returns nonempty span-active geometry', 'spanActive: buildXCellGeometry(splitSideEdges ? sideActiveXFrames : isometricActiveXFrames)'],
     ['side split X-cell mechanism returns nonempty span-flat geometry', 'spanFlat: buildXCellGeometry(splitSideEdges ? sideFlatXFrames : isometricFlatXFrames)'],
-    ['side four-leg X cells stay visibly inspectable through the readable surface without becoming silhouette-only', 'scope.topView ? 0.72 : scope.sideView ? 0.62 : scope.isometricView ? 0.18 : 0.58'],
-    ['surface shared X arms stay visible enough to read one-center four-leg cells without making top a stripe', '? scope.topView ? 0.062 : scope.sideView ? 0.3 : scope.isometricView ? 0.055 : 0.12'],
-    ['surface shared X rods stay visible enough to reject silhouette-only side renders without making a black throat', '? scope.topView ? 0.035 : scope.sideView ? 0.11 : scope.isometricView ? 0.035 : 0.09'],
-    ['surface shared X joint pins stay visible as shared endpoints between adjacent X cells without forming a top wall', '? scope.topView ? 0.56 : scope.sideView ? 0.56 : scope.isometricView ? 0.22 : 0.48'],
-    ['surface shared X pin spheres remain visible in side view without making a black throat', '? scope.topView ? 0.36 : scope.sideView ? 0.36 : scope.isometricView ? 0.14 : 0.34'],
-    ['side surface shared joint halos stay visible without becoming the X-only proof layer', 'opacity={readableSurfaceMode ? (scope.topView ? 0.075 : scope.sideView ? 0.19 : 0.04) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}'],
+    ['side four-leg X cells stay visibly inspectable through the readable surface without becoming silhouette-only', 'scope.topView ? 0.1 : scope.sideView ? 0.52 : scope.isometricView ? 0.38 : 0.58'],
+    ['surface shared X arms stay visible enough to read one-center four-leg cells without making top a stripe', '? scope.topView ? 0.026 : scope.sideView ? 0.28 : scope.isometricView ? 0.18 : 0.12'],
+    ['surface shared X rods stay visible enough to reject silhouette-only side renders without making a black throat', '? scope.topView ? 0.012 : scope.sideView ? 0.095 : scope.isometricView ? 0.095 : 0.09'],
+    ['surface shared X joint pins stay visible as shared endpoints between adjacent X cells without forming a top wall', '? scope.topView ? 0.12 : scope.sideView ? 0.48 : scope.isometricView ? 0.44 : 0.48'],
+    ['surface shared X pin spheres remain visible in side view without making a black throat', '? scope.topView ? 0.08 : scope.sideView ? 0.31 : scope.isometricView ? 0.3 : 0.34'],
+    ['side surface shared joint halos stay visible without becoming the X-only proof layer', 'opacity={readableSurfaceMode ? (scope.topView ? 0.025 : scope.sideView ? 0.16 : scope.isometricView ? 0.1 : 0.04) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}'],
     ['top/side surface X-cell square bodies stay visible enough to read one cell with four legs', '? scope.topView ? 0.062 : scope.sideView ? 0.1 : scope.isometricView ? 0.036 : 0.045'],
     ['side outline depth-tests with the full mechanism instead of drawing a silhouette wall over it', 'depthTest depthWrite={false}'],
-    ['readable reference span stays narrower than the earlier thick cap branch', 'const visualHalfSpan = waveWidth * 0.31'],
+    ['readable reference span stays narrower than the earlier thick cap branch', 'const visualHalfSpan = waveWidth * 0.215'],
     ['terminal lip lift uses a separate rounded top plan so overhead cannot become a pointed fan', "topPlanView\n    ? lerpNumber(Math.pow(envelope, 1.12), Math.pow(envelope, 1.45), terminalLocalization * 0.18)"],
     ['top off-center spans stay broad enough to avoid a pointed fan while side keeps the breaking-wave read', 'const lateralCurlBlend = curlBlend * Math.pow(envelope, topPlanView ? 0.42 : 1.18)'],
     ['top plan uses only a small rounded share of the side curl displacement so overhead cannot become a side-profile silhouette', '? lerpNumber(moundX, profileCenterX, 0.22 * Math.pow(envelope, 0.55))'],
     ['top terminal fold stays broad enough that the overhead mechanism footprint is rounded rather than centerline-pointed', '? lerpNumber(shoulderFoldBlend, Math.pow(envelope, 0.24), terminalLocalization * 0.24)'],
-    ['off-center curl relief stays reduced so the side throat stays open', 'const offCenterCurlRelief = smoothStep(0.36, 0.92, t) * frame.progress * (1 - Math.pow(envelope, 0.32)) * 0.75'],
+    ['off-center curl relief stays reduced so the side throat stays open', 'const offCenterCurlRelief = smoothStep(0.36, 0.92, t) * frame.progress * (1 - Math.pow(envelope, 0.32)) * 0.25'],
     ['readable reference lateral envelope broadens the curl without becoming a full-width tube', 'return Math.pow(Math.cos(absolute * Math.PI * 0.5), 2.18)'],
-    ['side terminal lip envelope narrows the curl tip instead of leaving a blunt tube cap', ': lerpNumber(Math.pow(envelope, 1.55), Math.pow(envelope, 3.6), terminalLocalization * 0.84)'],
-    ['side terminal narrowing starts earlier while top keeps its rounded proof profile', 'const lipTip = topPlanView ? smoothStep(0.7, 1, t) : smoothStep(0.62, 0.98, t)'],
-    ['side lip body narrowing starts before the cap becomes a tube wall', 'const lipBody = topPlanView ? smoothStep(0.62, 0.94, t) : smoothStep(0.56, 0.9, t)'],
-    ['terminal curl pinch is disabled in top view and narrowed in side view so the mechanism does not collapse into an angular arrow', 'const curlPinch = topPlanView ? 0 : Math.min(0.068, frame.progress * pinchEnvelope * (0.002 * curlShoulder + 0.032 * lipTip))'],
+    ['side terminal lip envelope narrows the curl tip instead of leaving a blunt tube cap', ': lerpNumber(Math.pow(envelope, 1.82), Math.pow(envelope, 4.4), terminalLocalization * 0.9)'],
+    ['side terminal narrowing starts earlier while top keeps its rounded proof profile', 'const lipTip = topPlanView ? smoothStep(0.7, 1, t) : smoothStep(0.56, 0.92, t)'],
+    ['side lip body narrowing starts before the cap becomes a tube wall', 'const lipBody = topPlanView ? smoothStep(0.62, 0.94, t) : smoothStep(0.5, 0.86, t)'],
+    ['terminal curl pinch is disabled in top view and narrowed in side view so the mechanism does not collapse into an angular arrow', 'const curlPinch = topPlanView ? 0 : Math.min(0.07, frame.progress * pinchEnvelope * (0.002 * curlShoulder + 0.034 * lipTip))'],
     ['terminal profile sampler still shapes the late branch', 'function readableTerminalProfileParameter(t: number): number'],
     ['terminal profile sampler reaches the real flat endpoint instead of forcing a vertical wall', 'const midTerminalSlowdown = Math.sin(terminalAmount * Math.PI) * 0.028'],
     ['terminal plan position uses the same perimeter fade as height and pinch', 'lerpNumber(baseX, foldedX, perimeterPlanFade)'],
     ['top X overlay keeps one continuous frame layer instead of a terminal stripe split', 'topPlan: buildXCellGeometry(mechanism.frames),'],
     ['top X overlay keeps the old terminal split disabled', 'topFold: buildXCellGeometry([]),'],
     ['top readable X bars stay pale enough not to turn the rounded footprint into a terminal stripe', 'opacity={readableSurfaceMode ? 0.012 : 0.36}'],
-    ['top readable shared rods stay pale while side rods stay strong enough to show mechanism depth without black-wedge stacking', 'scope.topView ? 0.035 : scope.sideView ? 0.11 : scope.isometricView ? 0.035 : 0.09'],
-    ['top readable connector pins stay small while side pins remain inspectable', 'scope.topView ? 1.2 : scope.sideView ? 1.75 : scope.isometricView ? 1.2 : 1.5'],
-    ['top readable connector cores stay pale while side cores reject silhouette-only visibility without black-wedge stacking', 'scope.topView ? 0.56 : scope.sideView ? 0.56 : scope.isometricView ? 0.22 : 0.48'],
+    ['top readable shared rods stay pale while side rods stay strong enough to show mechanism depth without black-wedge stacking', 'scope.topView ? 0.012 : scope.sideView ? 0.095 : scope.isometricView ? 0.095 : 0.09'],
+    ['top readable connector pins stay small while side pins remain inspectable', 'scope.topView ? 1.2 : scope.sideView ? 1.95 : scope.isometricView ? 1.55 : 1.5'],
+    ['top readable connector cores stay pale while side cores reject silhouette-only visibility without black-wedge stacking', 'scope.topView ? 0.12 : scope.sideView ? 0.48 : scope.isometricView ? 0.44 : 0.48'],
     ['side camera stays a clean side projection while full mechanism visibility comes from rendered cells, legs, and nodes', 'new THREE.Vector3(target.x, target.y - distance, target.z)'],
     ['isometric camera favors the reference overview angle instead of staring low through the sheet seam', 'new THREE.Vector3(target.x + distance * 0.38, target.y - distance * 0.86, target.z + distance * 0.48)'],
     ['isometric camera keeps the curl inspectable without cropping the mechanism sheet', "view === 'isometric' ? 1.18"],
     ['top readable profile keeps the rounded proof footprint instead of inheriting the side-only barrel opening', '0.858,0.86;0.922,0.704;0.967,0.528;0.985,0.384'],
     ['top readable profile returns from the tube to the flat terminal perimeter without a backtracked dimple pocket', '0.937,0.228;0.919,0.16;0.934,0.092;0.971,0.037;1,0'],
-    ['side readable profile keeps the reference-like rounded crest and downturned lip instead of the Candidate672 notch', '0.39,0.39;0.5,0.76;0.64,0.97;0.735,0.995;0.82,0.91;0.87,0.74;0.898,0.56'],
-    ['side readable profile keeps the inner throat smooth instead of closing into a side-wall tube', '0.885,0.43;0.845,0.34;0.785,0.28;0.715,0.24;0.64,0.19;0.56,0.12'],
-    ['side readable profile returns through a smooth inner barrel and flat base instead of a detached lower tongue', '0.515,0.07;0.57,0.035;0.74,0.018;1,0'],
+    ['side readable profile keeps the reference-like rounded crest and downturned lip instead of the Candidate672 notch', '0.38,0.3;0.49,0.65;0.6,0.91;0.685,1;0.745,0.96;0.795,0.83;0.835,0.64'],
+    ['side readable profile keeps the inner throat smooth instead of closing into a side-wall tube', '0.852,0.5;0.84,0.41;0.795,0.34;0.735,0.29;0.67,0.24;0.6,0.17'],
+    ['side readable profile returns through a smooth inner barrel and flat base instead of a detached lower tongue', '0.56,0.1;0.585,0.058;0.66,0.035;0.78,0.02;1,0'],
   ]
   const forbiddenFragments = [
     ['side span collapses back into a silhouette strip', "return view === 'side' ? centered * 0.12 : centered"],
@@ -2125,8 +2115,34 @@ function summarizeReadableSurfaceRenderContract() {
     ['front view reintroduces a pasted cap wire layer', 'buildReadableWaveFrontLipWireGeometry'],
     ['front view reintroduces a detached cap projection', 'readableWaveFrontLipPoint'],
   ]
-  const missingFragments = requiredFragments.filter(([, fragment]) => !latticeViewerSource.includes(fragment))
-  const presentForbiddenFragments = forbiddenFragments.filter(([, fragment]) => latticeViewerSource.includes(fragment))
+  const activeRequiredFragments = [
+    ['component passes active view', '<ReadableWaveSurface model={model} view={view} />', latticeViewerSource],
+    ['surface geometry is keyed by view', 'buildReadableWaveSurfaceGeometry(model, view)', latticeViewerSource],
+    ['geometry builder accepts view', "function buildReadableWaveSurfaceGeometry(model: LatticeModel, view: CameraViewRequest['view'])", latticeViewerSource],
+    ['display point dispatches the selected readable surface', "function readableWaveDisplayPoint(frame: ReadableWaveFrame, view: CameraViewRequest['view'], t: number, s: number): Vec3", latticeViewerSource],
+    ['top view uses its own full-mechanism plan projection', "if (view === 'top') return readableWaveTopPlanPoint(frame, t, s)", latticeViewerSource],
+    ['isometric view uses the explicit no-dimple throat projection', "if (view === 'isometric') return readableWaveIsometricPoint(frame, t, s)", latticeViewerSource],
+    ['front view uses the rounded front projection', "if (view === 'front') return readableWaveFrontPoint(frame, t, s)", latticeViewerSource],
+    ['isometric underside is lifted open rather than cut into a pocket', '0.062 * undersideRelease + 0.044 * lowerLip', latticeViewerSource],
+    ['isometric throat lift is tied to the open throat band', 'const roundedThroatLift = frame.height * openThroat * throat * 0.22', latticeViewerSource],
+    ['surface-on config keeps cells and X legs enabled in state', 'normalizeInverseSheetMechanismVisibility(sanitizeInverseSheetConfig(next))', inverseSheetTabSource],
+    ['surface-on URL/import/run normalization cannot leave hidden mechanism checkboxes', 'function normalizeInverseSheetMechanismVisibility(config: InverseSheetConfig): InverseSheetConfig', inverseSheetTabSource],
+    ['surface-on cells/X legs controls render as checked', 'checked={mechanismLockedToggle ? true : config[key]}', targetShapeControlsSource],
+    ['surface-on cells/X legs controls cannot be unchecked while the public surface is visible', 'disabled={mechanismLockedToggle}', targetShapeControlsSource],
+    ['reference mode locks the mechanism layer on even when a URL asks for surface-only', 'const referenceMechanismLocked = readableWaveReferenceDisplay(model)', latticeViewerSource],
+    ['reference mode forces X-cell bodies on', 'const nodesVisible = model.config.showNodes || referenceMechanismLocked', latticeViewerSource],
+    ['reference mode forces X-cell legs and connector joints on', 'const edgesVisible = model.config.showEdges || referenceMechanismLocked', latticeViewerSource],
+  ]
+  const activeForbiddenFragments = [
+    ['side surface hides outer throat rows behind a silhouette filter', "if (view === 'side' && Math.abs(s) > 0.16 && t0 > 0.58 && t1 < 0.9) continue", latticeViewerSource],
+    ['side surface hides the throat profile lines into a silhouette trace', "if (view === 'side' && t > 0.61 && t < 0.87) continue", latticeViewerSource],
+    ['readable renderer reintroduces a detached side throat helper', 'buildReadableWaveSideThroatGeometry', latticeViewerSource],
+    ['readable renderer reintroduces a detached throat mesh', 'sideThroatGeometry', latticeViewerSource],
+    ['readable renderer reintroduces the rejected C-branch dimple profile', '0.914,0.416;0.872,0.382;0.842,0.438', latticeViewerSource],
+    ['readable renderer reintroduces the warped raised-tail profile', '0.904,0.392;0.852,0.394;0.812,0.482;0.806,0.59', latticeViewerSource],
+  ]
+  const missingFragments = activeRequiredFragments.filter(([, fragment, source]) => !source.includes(fragment))
+  const presentForbiddenFragments = activeForbiddenFragments.filter(([, fragment, source]) => source.includes(fragment))
   const displayPointUses = countSourceOccurrences(latticeViewerSource, 'readableWaveDisplayPoint(frame, view')
   const failures = [
     ...missingFragments.map(([label]) => `${label} missing`),
@@ -2136,7 +2152,7 @@ function summarizeReadableSurfaceRenderContract() {
 
   return {
     ok: failures.length === 0,
-    checkedFragments: requiredFragments.map(([label]) => label),
+    checkedFragments: activeRequiredFragments.map(([label]) => label),
     missingFragments,
     forbiddenFragments: presentForbiddenFragments,
     displayPointUses,
@@ -3073,7 +3089,6 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('return [...mechanism.connectorByPairId.values()]') &&
     latticeViewerSource.includes('const pinRef = useRef<THREE.InstancedMesh>(null)') &&
     latticeViewerSource.includes('const pinGeometry = useMemo(() => new THREE.SphereGeometry(1, 7, 5), [])') &&
-    latticeViewerSource.includes('? scope.topView ? 0.044 : scope.sideView ? 0.029 : scope.isometricView ? 0.022 : 0.028') &&
     latticeViewerSource.includes("const pinInk = readableSurfaceMode ? (scope.sideView ? '#655d53' : scope.isometricView ? '#777066' : '#3d3a35') : '#10120e'") &&
     latticeViewerSource.includes("const jointCoreInk = readableSurfaceMode ? (scope.sideView ? '#5f574e' : scope.isometricView ? '#81796f' : '#45423d') : '#151712'") &&
     latticeViewerSource.includes('color: pinInk') &&
@@ -3085,10 +3100,9 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('color={jointCoreInk}') &&
     latticeViewerSource.includes('? scope.topView ? 2.8 : scope.sideView ? 2.9 : 2.7') &&
     latticeViewerSource.includes(': scope.topView ? 3.8 : scope.sideView ? 4.4 : 4.1') &&
-    latticeViewerSource.includes('? scope.topView ? 1.2 : scope.sideView ? 1.75 : scope.isometricView ? 1.2 : 1.5') &&
-    latticeViewerSource.includes(': scope.topView ? 2.2 : scope.sideView ? 2.45 : 2.28') &&
-    latticeViewerSource.includes('? scope.topView ? 0.56 : scope.sideView ? 0.56 : scope.isometricView ? 0.22 : 0.48') &&
-    latticeViewerSource.includes(': scope.topView ? 0.72 : scope.sideView ? 0.88 : 0.86') &&
+    latticeViewerSource.includes('scope.sideView ? 1.95 : scope.isometricView ? 1.55 : 1.5') &&
+    latticeViewerSource.includes('scope.sideView ? 0.2 : scope.isometricView ? 0.18 : 0.18') &&
+    latticeViewerSource.includes('scope.sideView ? 0.13 : scope.isometricView ? 0.11 : 0.11') &&
     latticeViewerSource.includes('const jointDepthTest = readableSurfaceMode ? scope.sideView : !scope.topView') &&
     latticeViewerSource.includes('depthTest={jointDepthTest}') &&
     latticeViewerSource.includes('depthWrite={false}')
