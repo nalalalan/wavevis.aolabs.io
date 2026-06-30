@@ -63,7 +63,7 @@ const DEFAULT_GRID_DENOMINATOR = Math.max(DEFAULT_SHEET_ROWS - 1, DEFAULT_SHEET_
 const MAX_STEER_ANGLE_RAD = Math.PI / 4
 const CORE_PROFILE_START = 0.02
 const CORE_PROFILE_END = 1
-const SOURCE_BREAKING_WAVE_TRACE = '0,0;0.04,0.008;0.095,0.033;0.17,0.105;0.275,0.305;0.385,0.58;0.5,0.82;0.61,0.965;0.7,1;0.785,0.97;0.865,0.89;0.935,0.77;0.985,0.62;1,0.5;0.985,0.39;0.955,0.29;0.945,0.21;0.965,0.13;0.995,0.045;1,0'
+const SOURCE_BREAKING_WAVE_TRACE = '0,0;0.04,0.008;0.095,0.033;0.17,0.105;0.275,0.305;0.385,0.58;0.5,0.82;0.61,0.965;0.69,1;0.78,0.965;0.86,0.86;0.925,0.7;0.97,0.52;0.985,0.38;0.965,0.3;0.94,0.23;0.925,0.16;0.94,0.09;0.975,0.035;1,0'
 
 function sliderLipDipAmount(angleDeg) {
   return Math.min(1, Math.max(0, (angleDeg - 90) / 30))
@@ -1334,7 +1334,7 @@ function summarizeReadableTerminalTaperBlock(value) {
   const requiredSourceFragments = [
     ['renderer pins only the terminal perimeter band after preserving the curl body', 'const longitudinalPerimeterFade = smoothStep(0.04, 0.12, t) * (1 - smoothStep(0.9, 0.965, t))'],
     ['renderer keeps terminal plan position on the smooth curl profile', 'lerpNumber(baseX, foldedX, perimeterPlanFade)'],
-    ['source profile carries the smooth tapered terminal tube', '0.935,0.77;0.985,0.62;1,0.5;0.985,0.39'],
+    ['source profile carries the smooth tapered terminal tube', '0.925,0.7;0.97,0.52;0.985,0.38;0.965,0.3'],
   ]
   const missingSourceFragments = requiredSourceFragments
     .filter(([, fragment]) => !latticeViewerSource.includes(fragment))
@@ -2018,7 +2018,7 @@ function summarizeReadableSurfaceRenderContract() {
     ['side surface writes depth so hidden backside grid lines do not fake the throat', "depthWrite={view === 'side'}"],
     ['front outline avoids a heavy terminal contour stack', '[0.58, 0.72, 0.86, 0.94]'],
     ['side view keeps a lighter continuous surface skin', "view === 'side' ? 0.22"],
-    ['side view keeps a readable pale wire grid without darkening the throat into a cavity', "view === 'side' ? 0.16"],
+    ['side view keeps a readable pale wire grid without darkening the throat into a cavity', "view === 'side' ? 0.22"],
     ['top surface keeps enough skin for the plan footprint to read without hiding the X array', "view === 'top' ? 0.26 : 0.36"],
     ['isometric surface uses a soft-lit real material rather than a fake throat patch', "view === 'isometric' ? ("],
     ['isometric soft-lit material stays pale enough to preserve the grid and throat', 'emissiveIntensity={0.82} roughness={1} metalness={0}'],
@@ -2036,12 +2036,12 @@ function summarizeReadableSurfaceRenderContract() {
     ['side projected throat profile lines stay omitted so the throat does not read as a support wall', "if (view === 'side' && t > 0.61 && t < 0.87) continue"],
     ['side view keeps only the outer contour as its extra side outline', "if (view === 'side') {\n    pushPolyline(sampleOuterSideProfileLine(frame, samples))\n  } else if (view === 'front')"],
     ['side outer contour samples the same shared no-cavity surface as the surface', 'readableWavePoint(frame, index / samples, 0)'],
-    ['isometric four-leg X cells stay visible but subordinate to the smooth readable surface', 'scope.topView ? 0.72 : scope.sideView ? 0.44 : 0.42'],
-    ['side four-leg X cells stay visible but subordinate to the smooth readable throat', 'scope.topView ? 0.72 : scope.sideView ? 0.44 : 0.42'],
-    ['surface shared X arms stay visible enough to read one-center four-leg cells without making top a stripe', '? scope.topView ? 0.062 : scope.sideView ? 0.036 : 0.034'],
-    ['surface shared X rods stay visible without turning the curl or top terminal into a black cavity', '? scope.topView ? 0.035 : scope.sideView ? 0.024 : 0.022'],
-    ['surface shared X joint pins stay visible as shared endpoints between adjacent X cells without forming a top wall', '? scope.topView ? 0.56 : scope.sideView ? 0.36 : 0.34'],
-    ['top surface shared joint halos stay visible without becoming the X-only proof layer', 'opacity={readableSurfaceMode ? (scope.topView ? 0.075 : scope.sideView ? 0.04 : 0.04) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}'],
+    ['isometric four-leg X cells stay visible but subordinate to the smooth readable surface', 'scope.topView ? 0.72 : scope.sideView ? 0.28 : 0.42'],
+    ['side four-leg X cells stay visible but subordinate to the smooth readable throat', 'scope.topView ? 0.72 : scope.sideView ? 0.28 : 0.42'],
+    ['surface shared X arms stay visible enough to read one-center four-leg cells without making top a stripe', '? scope.topView ? 0.062 : scope.sideView ? 0.026 : 0.034'],
+    ['surface shared X rods stay visible without turning the curl or top terminal into a black cavity', '? scope.topView ? 0.035 : scope.sideView ? 0.017 : 0.022'],
+    ['surface shared X joint pins stay visible as shared endpoints between adjacent X cells without forming a top wall', '? scope.topView ? 0.56 : scope.sideView ? 0.24 : 0.34'],
+    ['top surface shared joint halos stay visible without becoming the X-only proof layer', 'opacity={readableSurfaceMode ? (scope.topView ? 0.075 : scope.sideView ? 0.028 : 0.04) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}'],
     ['top surface X-cell black squares stay visible enough to read one cell with four legs', '? scope.topView ? 0.062 : scope.sideView ? 0.036 : 0.034'],
     ['side outline stays visible through the curl', "depthTest={view !== 'side'}"],
     ['readable reference span stays narrower than the earlier thick cap branch', 'const visualHalfSpan = waveWidth * 0.31'],
@@ -2056,13 +2056,13 @@ function summarizeReadableSurfaceRenderContract() {
     ['top X overlay keeps one continuous frame layer instead of a terminal stripe split', 'topPlan: buildXCellGeometry(mechanism.frames),'],
     ['top X overlay keeps the old terminal split disabled', 'topFold: buildXCellGeometry([]),'],
     ['top readable X bars stay pale enough not to turn the rounded footprint into a terminal stripe', 'opacity={readableSurfaceMode ? 0.012 : 0.36}'],
-    ['top readable shared rods stay pale enough not to darken the terminal into a wall', 'scope.topView ? 0.035 : scope.sideView ? 0.024 : 0.022'],
+    ['top readable shared rods stay pale enough not to darken the terminal into a wall', 'scope.topView ? 0.035 : scope.sideView ? 0.017 : 0.022'],
     ['top readable connector pins stay small enough not to form a terminal wall while X-only proof remains dark', 'scope.topView ? 1.2 : scope.sideView ? 1.35 : 1.3'],
-    ['top readable connector cores stay pale enough not to form a terminal wall while X-only proof remains dark', 'scope.topView ? 0.56 : scope.sideView ? 0.36 : 0.34'],
+    ['top readable connector cores stay pale enough not to form a terminal wall while X-only proof remains dark', 'scope.topView ? 0.56 : scope.sideView ? 0.24 : 0.34'],
     ['isometric camera favors the reference side-profile barrel instead of staring into the lip end', 'new THREE.Vector3(target.x + distance * 0.24, target.y - distance * 0.82, target.z + distance * 0.42)'],
     ['isometric camera keeps the curl inspectable without cropping the mechanism sheet', "view === 'isometric' ? 1.24"],
-    ['readable profile follows the June 24 reference family with a smooth tapered terminal tube', '0.865,0.89;0.935,0.77;0.985,0.62;1,0.5'],
-    ['readable profile returns from the tube to the flat terminal perimeter without a backtracked dimple pocket', '0.955,0.29;0.945,0.21;0.965,0.13;0.995,0.045;1,0'],
+    ['readable profile follows the June 24 reference family with a smooth tapered terminal tube', '0.86,0.86;0.925,0.7;0.97,0.52;0.985,0.38'],
+    ['readable profile returns from the tube to the flat terminal perimeter without a backtracked dimple pocket', '0.94,0.23;0.925,0.16;0.94,0.09;0.975,0.035;1,0'],
   ]
   const forbiddenFragments = [
     ['side view reintroduces a separate geometry projection', 'function readableWaveSidePoint'],
@@ -3046,7 +3046,7 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes(': scope.topView ? 3.8 : scope.sideView ? 4.4 : 4.1') &&
     latticeViewerSource.includes('? scope.topView ? 1.2 : scope.sideView ? 1.35 : 1.3') &&
     latticeViewerSource.includes(': scope.topView ? 2.2 : scope.sideView ? 2.45 : 2.28') &&
-    latticeViewerSource.includes('? scope.topView ? 0.56 : scope.sideView ? 0.36 : 0.34') &&
+    latticeViewerSource.includes('? scope.topView ? 0.56 : scope.sideView ? 0.24 : 0.34') &&
     latticeViewerSource.includes(': scope.topView ? 0.72 : scope.sideView ? 0.88 : 0.86') &&
     latticeViewerSource.includes('const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView') &&
     latticeViewerSource.includes('depthTest={jointDepthTest}') &&

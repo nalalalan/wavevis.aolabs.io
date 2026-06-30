@@ -296,7 +296,7 @@ type ReadableWaveFrame = {
 const readableWaveUSegments = 104
 const readableWaveVSegments = 54
 const readableReferenceProfilePoints =
-  '0,0;0.04,0.008;0.095,0.033;0.17,0.105;0.275,0.305;0.385,0.58;0.5,0.82;0.61,0.965;0.7,1;0.785,0.97;0.865,0.89;0.935,0.77;0.985,0.62;1,0.5;0.985,0.39;0.955,0.29;0.945,0.21;0.965,0.13;0.995,0.045;1,0'
+  '0,0;0.04,0.008;0.095,0.033;0.17,0.105;0.275,0.305;0.385,0.58;0.5,0.82;0.61,0.965;0.69,1;0.78,0.965;0.86,0.86;0.925,0.7;0.97,0.52;0.985,0.38;0.965,0.3;0.94,0.23;0.925,0.16;0.94,0.09;0.975,0.035;1,0'
 
 function readableSurfaceReferenceOnly(model: LatticeModel): boolean {
   return model.config.showSurface && readableWaveReferenceDisplay(model)
@@ -312,9 +312,9 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
   const outlineGeometry = useMemo(() => buildReadableWaveOutlineGeometry(model, view), [model, view])
   const topHeightShadowGeometry = useMemo(() => view === 'top' ? buildReadableWaveTopHeightShadowGeometry(model) : null, [model, view])
   const surfaceOpacity = view === 'side' ? 0.22 : view === 'front' ? 0.72 : view === 'top' ? 0.26 : 0.36
-  const wireOpacity = view === 'side' ? 0.16 : view === 'front' ? 0.21 : view === 'top' ? 0.48 : 0.16
+  const wireOpacity = view === 'side' ? 0.22 : view === 'front' ? 0.21 : view === 'top' ? 0.48 : 0.16
   const wireColor = view === 'top' ? '#9d968d' : '#b8b3ab'
-  const outlineOpacity = view === 'side' ? 0.16 : view === 'front' ? 0.1 : view === 'top' ? 0.075 : 0.025
+  const outlineOpacity = view === 'side' ? 0.24 : view === 'front' ? 0.1 : view === 'top' ? 0.075 : 0.025
 
   return (
     <group renderOrder={-2}>
@@ -1301,7 +1301,7 @@ function XCellSharedJointArms({
     [model.config.columns, model.config.rows],
   )
   const opacity = readableSurfaceMode
-    ? scope.topView ? 0.062 : scope.sideView ? 0.036 : 0.034
+    ? scope.topView ? 0.062 : scope.sideView ? 0.026 : 0.034
     : scope.topView ? 0.44 : scope.sideView ? 0.34 : 0.31
   const depthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
   const rodRadius = Math.max(
@@ -1311,7 +1311,7 @@ function XCellSharedJointArms({
     readableSurfaceMode && scope.sideView ? 0.005 : scope.sideView ? 0.009 : 0.007,
   )
   const rodOpacity = readableSurfaceMode
-    ? scope.topView ? 0.035 : scope.sideView ? 0.024 : 0.022
+    ? scope.topView ? 0.035 : scope.sideView ? 0.017 : 0.022
     : scope.topView ? 0.4 : scope.sideView ? 0.28 : 0.24
   const mechanismInk = readableSurfaceMode ? '#5f5b54' : '#161713'
   const rodMaterial = useMemo(() => new THREE.MeshBasicMaterial({
@@ -1399,7 +1399,7 @@ function XCellConnectorJoints({
     ? scope.topView ? 1.2 : scope.sideView ? 1.35 : 1.3
     : scope.topView ? 2.2 : scope.sideView ? 2.45 : 2.28
   const coreOpacity = readableSurfaceMode
-    ? scope.topView ? 0.56 : scope.sideView ? 0.36 : 0.34
+    ? scope.topView ? 0.56 : scope.sideView ? 0.24 : 0.34
     : scope.topView ? 0.72 : scope.sideView ? 0.88 : 0.86
   const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.topView ? false : true) : !scope.topView
   const pinRadius = Math.max(
@@ -1409,7 +1409,7 @@ function XCellConnectorJoints({
     readableSurfaceMode && scope.sideView ? 0.012 : scope.topView ? 0.016 : 0.016,
   )
   const pinOpacity = readableSurfaceMode
-    ? scope.topView ? 0.36 : scope.sideView ? 0.22 : 0.2
+    ? scope.topView ? 0.36 : scope.sideView ? 0.15 : 0.2
     : scope.topView ? 0.66 : scope.sideView ? 0.76 : 0.72
   const pinInk = readableSurfaceMode ? '#080808' : '#10120e'
   const jointCoreInk = readableSurfaceMode ? '#050505' : '#151712'
@@ -1443,7 +1443,7 @@ function XCellConnectorJoints({
         <pointsMaterial
           color="#f7f3ed"
           transparent
-          opacity={readableSurfaceMode ? (scope.topView ? 0.075 : scope.sideView ? 0.04 : 0.04) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}
+          opacity={readableSurfaceMode ? (scope.topView ? 0.075 : scope.sideView ? 0.028 : 0.04) : scope.topView ? 0.76 : scope.sideView ? 0.62 : 0.58}
           size={haloSize}
           sizeAttenuation={false}
           depthTest={jointDepthTest}
@@ -1492,7 +1492,7 @@ function XCellSquareCells({
   )
   const cellThickness = Math.max(cellHalfSize * 0.38, 0.006)
   const cellOpacity = readableSurfaceMode
-    ? scope.topView ? 0.72 : scope.sideView ? 0.44 : 0.42
+    ? scope.topView ? 0.72 : scope.sideView ? 0.28 : 0.42
     : scope.topView ? 0.96 : scope.sideView ? 0.72 : 0.68
   const cellRenderOrder = !readableSurfaceMode && scope.topView ? 22 : 18
   const cellGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
