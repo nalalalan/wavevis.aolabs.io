@@ -1210,19 +1210,19 @@ function StraightEdgeSegments({
           <lineBasicMaterial color="#625e57" transparent opacity={readableSurfaceMode ? 0.026 : 0.045} depthTest={readableSurfaceMode} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.spanSoftActive} renderOrder={2}>
-          <lineBasicMaterial color="#625f59" transparent opacity={readableSurfaceMode ? 0.038 : 0.001} depthTest={readableSurfaceMode} depthWrite={false} />
+          <lineBasicMaterial color="#625f59" transparent opacity={readableSurfaceMode ? 0.028 : 0.001} depthTest={readableSurfaceMode} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileSoftActive} renderOrder={3}>
-          <lineBasicMaterial color="#5a574f" transparent opacity={readableSurfaceMode ? 0.048 : 0.058} depthTest={readableSurfaceMode} depthWrite={false} />
+          <lineBasicMaterial color="#5a574f" transparent opacity={readableSurfaceMode ? 0.035 : 0.058} depthTest={readableSurfaceMode} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.spanActive} renderOrder={4}>
-          <lineBasicMaterial color="#4c4a44" transparent opacity={readableSurfaceMode ? 0.06 : 0.006} depthTest={readableSurfaceMode} depthWrite={false} />
+          <lineBasicMaterial color="#4c4a44" transparent opacity={readableSurfaceMode ? 0.048 : 0.006} depthTest={readableSurfaceMode} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileActive} renderOrder={5}>
-          <lineBasicMaterial color={readableSurfaceMode ? '#484641' : inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.09 : 0.17} depthTest={readableSurfaceMode} depthWrite={false} />
+          <lineBasicMaterial color={readableSurfaceMode ? '#484641' : inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.072 : 0.17} depthTest={readableSurfaceMode} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileRimActive} renderOrder={6}>
-          <lineBasicMaterial color={readableSurfaceMode ? '#4e4b45' : inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.075 : 0.105} depthTest={readableSurfaceMode} depthWrite={false} />
+          <lineBasicMaterial color={readableSurfaceMode ? '#4e4b45' : inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.062 : 0.105} depthTest={readableSurfaceMode} depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -1319,7 +1319,7 @@ function XCellSharedJointArms({
     readableSurfaceMode && scope.sideView ? 0.005 : scope.sideView ? 0.009 : 0.007,
   )
   const rodOpacity = readableSurfaceMode
-    ? scope.topView ? 0.035 : scope.sideView ? 0.085 : 0.022
+    ? scope.topView ? 0.035 : scope.sideView ? 0.07 : 0.022
     : scope.topView ? 0.4 : scope.sideView ? 0.28 : 0.24
   const mechanismInk = readableSurfaceMode ? '#5f5b54' : '#161713'
   const rodMaterial = useMemo(() => new THREE.MeshBasicMaterial({
@@ -1417,7 +1417,7 @@ function XCellConnectorJoints({
     readableSurfaceMode && scope.sideView ? 0.012 : scope.topView ? 0.016 : 0.016,
   )
   const pinOpacity = readableSurfaceMode
-    ? scope.topView ? 0.36 : scope.sideView ? 0.36 : 0.2
+    ? scope.topView ? 0.36 : scope.sideView ? 0.29 : 0.2
     : scope.topView ? 0.66 : scope.sideView ? 0.76 : 0.72
   const pinInk = readableSurfaceMode ? '#3d3a35' : '#10120e'
   const jointCoreInk = readableSurfaceMode ? '#45423d' : '#151712'
@@ -1500,7 +1500,7 @@ function XCellSquareCells({
   )
   const cellThickness = Math.max(cellHalfSize * 0.38, 0.006)
   const cellOpacity = readableSurfaceMode
-    ? scope.topView ? 0.72 : scope.sideView ? 0.58 : 0.42
+    ? scope.topView ? 0.72 : scope.sideView ? 0.5 : 0.42
     : scope.topView ? 0.96 : scope.sideView ? 0.72 : 0.68
   const cellRenderOrder = !readableSurfaceMode && scope.topView ? 22 : 18
   const cellGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
