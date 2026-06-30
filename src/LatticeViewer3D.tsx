@@ -296,7 +296,9 @@ type ReadableWaveFrame = {
 const readableWaveUSegments = 104
 const readableWaveVSegments = 54
 const readableReferenceProfilePoints =
-  '0,0;0.04,0.008;0.095,0.033;0.17,0.105;0.275,0.305;0.385,0.58;0.5,0.82;0.61,0.965;0.69,1;0.78,0.965;0.86,0.86;0.925,0.7;0.97,0.52;0.985,0.38;0.965,0.3;0.94,0.23;0.925,0.16;0.94,0.09;0.975,0.035;1,0'
+  '0,0;0.04,0.008;0.095,0.033;0.17,0.105;0.275,0.305;0.385,0.58;0.5,0.82;0.61,0.965;0.69,1;0.78,0.965;0.858,0.86;0.922,0.704;0.967,0.528;0.985,0.384;0.965,0.3;0.937,0.228;0.919,0.16;0.934,0.092;0.971,0.037;1,0'
+const readableSideReferenceProfilePoints =
+  '0,0;0.04,0.008;0.095,0.033;0.17,0.105;0.275,0.305;0.385,0.58;0.5,0.82;0.61,0.965;0.69,1;0.78,0.965;0.86,0.875;0.93,0.735;0.982,0.58;0.962,0.49;0.916,0.425;0.864,0.39;0.824,0.365;0.795,0.332;0.815,0.275;0.875,0.178;0.948,0.078;1,0'
 
 function readableSurfaceReferenceOnly(model: LatticeModel): boolean {
   return model.config.showSurface && readableWaveReferenceDisplay(model)
@@ -345,7 +347,7 @@ function ReadableWaveSurface({ model, view }: { model: LatticeModel; view: Camer
 }
 
 function buildReadableWaveSurfaceGeometry(model: LatticeModel, view: CameraViewRequest['view']): THREE.BufferGeometry {
-  const frame = readableWaveFrame(model)
+  const frame = readableWaveFrame(model, view)
   const vertexCount = (readableWaveUSegments + 1) * (readableWaveVSegments + 1)
   const positions = new Float32Array(vertexCount * 3)
   const indices: number[] = []
@@ -378,7 +380,7 @@ function buildReadableWaveSurfaceGeometry(model: LatticeModel, view: CameraViewR
 }
 
 function buildReadableWaveWireGeometry(model: LatticeModel, view: CameraViewRequest['view']): THREE.BufferGeometry {
-  const frame = readableWaveFrame(model)
+  const frame = readableWaveFrame(model, view)
   const positions: number[] = []
   const pushSegment = (a: Vec3, b: Vec3) => {
     positions.push(...a, ...b)
@@ -417,11 +419,11 @@ function buildReadableWaveWireGeometry(model: LatticeModel, view: CameraViewRequ
 
 function readableWaveSpanParameter(view: CameraViewRequest['view'], amount: number): number {
   const centered = -1 + clampUnit(amount) * 2
-  return view === 'side' ? centered * 0.006 : centered
+  return view === 'side' ? centered * 0.16 : centered
 }
 
 function buildReadableWaveTopHeightShadowGeometry(model: LatticeModel): THREE.BufferGeometry {
-  const frame = readableWaveFrame(model)
+  const frame = readableWaveFrame(model, 'top')
   const positions: number[] = []
   const colors: number[] = []
   const rowStride = readableWaveUSegments + 1
@@ -476,7 +478,7 @@ function buildReadableWaveTopHeightShadowGeometry(model: LatticeModel): THREE.Bu
 }
 
 function buildReadableWaveOutlineGeometry(model: LatticeModel, view: CameraViewRequest['view']): THREE.BufferGeometry {
-  const frame = readableWaveFrame(model)
+  const frame = readableWaveFrame(model, view)
   const positions: number[] = []
   const pushPolyline = (points: Vec3[]) => {
     for (let index = 0; index < points.length - 1; index += 1) {
@@ -534,8 +536,8 @@ function sampleOuterSideProfileLine(frame: ReadableWaveFrame, samples: number): 
   return points
 }
 
-function readableWaveFrame(model: LatticeModel): ReadableWaveFrame {
-  const profile = buildReadableWaveProfile(readableReferenceProfilePoints)
+function readableWaveFrame(model: LatticeModel, view: CameraViewRequest['view'] = 'side'): ReadableWaveFrame {
+  const profile = buildReadableWaveProfile(view === 'side' ? readableSideReferenceProfilePoints : readableReferenceProfilePoints)
   const sideBounds = activeSideProfileBounds(model)
   const height = Math.max(model.summary.maxHeight * 1.42, model.config.height * Math.max(model.config.profileScale, 1.14), model.config.spacing * 12.8)
   const waveWidth = Math.min(sideBounds.span[0] * 0.82, height * 2.03)
@@ -650,7 +652,7 @@ function readableTerminalProfileParameter(t: number): number {
 }
 
 function buildReadableWaveXCellCenterOverrides(model: LatticeModel, view: CameraViewRequest['view']): Map<string, Vec3> {
-  const frame = readableWaveFrame(model)
+  const frame = readableWaveFrame(model, view)
   const rowDenominator = Math.max(model.config.rows - 1, 1)
   const columnDenominator = Math.max(model.config.columns - 1, 1)
 
@@ -660,7 +662,7 @@ function buildReadableWaveXCellCenterOverrides(model: LatticeModel, view: Camera
       frame,
       view,
       node.col / columnDenominator,
-      -1 + (node.row / rowDenominator) * 2,
+      readableWaveSpanParameter(view, node.row / rowDenominator),
     ),
   ] as const))
 }
@@ -1862,7 +1864,7 @@ function positionCamera(
 }
 
 function activeReadableWaveBounds(model: LatticeModel, view: CameraViewRequest['view'] = 'isometric'): LatticeBounds {
-  const frame = readableWaveFrame(model)
+  const frame = readableWaveFrame(model, view)
   const points: Vec3[] = []
   const uSamples = 56
   const vSamples = 32

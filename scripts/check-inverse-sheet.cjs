@@ -63,7 +63,7 @@ const DEFAULT_GRID_DENOMINATOR = Math.max(DEFAULT_SHEET_ROWS - 1, DEFAULT_SHEET_
 const MAX_STEER_ANGLE_RAD = Math.PI / 4
 const CORE_PROFILE_START = 0.02
 const CORE_PROFILE_END = 1
-const SOURCE_BREAKING_WAVE_TRACE = '0,0;0.04,0.008;0.095,0.033;0.17,0.105;0.275,0.305;0.385,0.58;0.5,0.82;0.61,0.965;0.69,1;0.78,0.965;0.86,0.86;0.925,0.7;0.97,0.52;0.985,0.38;0.965,0.3;0.94,0.23;0.925,0.16;0.94,0.09;0.975,0.035;1,0'
+const SOURCE_BREAKING_WAVE_TRACE = '0,0;0.04,0.008;0.095,0.033;0.17,0.105;0.275,0.305;0.385,0.58;0.5,0.82;0.61,0.965;0.69,1;0.78,0.965;0.858,0.86;0.922,0.704;0.967,0.528;0.985,0.384;0.965,0.3;0.937,0.228;0.919,0.16;0.934,0.092;0.971,0.037;1,0'
 
 function sliderLipDipAmount(angleDeg) {
   return Math.min(1, Math.max(0, (angleDeg - 90) / 30))
@@ -1334,7 +1334,7 @@ function summarizeReadableTerminalTaperBlock(value) {
   const requiredSourceFragments = [
     ['renderer pins only the terminal perimeter band after preserving the curl body', 'const longitudinalPerimeterFade = smoothStep(0.04, 0.12, t) * (1 - smoothStep(0.9, 0.965, t))'],
     ['renderer keeps terminal plan position on the smooth curl profile', 'lerpNumber(baseX, foldedX, perimeterPlanFade)'],
-    ['source profile carries the smooth tapered terminal tube', '0.925,0.7;0.97,0.52;0.985,0.38;0.965,0.3'],
+    ['source profile carries the smooth tapered terminal tube', '0.922,0.704;0.967,0.528;0.985,0.384;0.965,0.3'],
   ]
   const missingSourceFragments = requiredSourceFragments
     .filter(([, fragment]) => !latticeViewerSource.includes(fragment))
@@ -2005,12 +2005,14 @@ function summarizeReadableSurfaceRenderContract() {
     ['component passes active view', '<ReadableWaveSurface model={model} view={view} />'],
     ['surface geometry is keyed by view', 'buildReadableWaveSurfaceGeometry(model, view)'],
     ['geometry builder accepts view', "function buildReadableWaveSurfaceGeometry(model: LatticeModel, view: CameraViewRequest['view'])"],
-    ['display point documents that view cannot change geometry', 'void view'],
-    ['display point returns the shared wave surface', 'return readableWavePoint(frame, t, s)'],
+    ['readable frame is view-aware so side can open the barrel without changing top proof', "function readableWaveFrame(model: LatticeModel, view: CameraViewRequest['view'] = 'side')"],
+    ['readable frame chooses the open side profile only for the side view', "view === 'side' ? readableSideReferenceProfilePoints : readableReferenceProfilePoints"],
+    ['display point returns the selected readable frame surface', 'return readableWavePoint(frame, t, s)'],
     ['front camera fits the front readable projection', "activeReadableWaveBounds(model, 'front')"],
     ['readable bounds sample the display projection', 'readableWaveDisplayPoint(frame, view, t'],
     ['readable reference X/cell views use readable display bounds', 'const readableReferenceBounds = !selected && readableWaveReferenceDisplay(model) && (model.config.showSurface || model.config.showEdges || model.config.showNodes)'],
     ['readable reference camera bounds stay view-specific', 'activeReadableWaveBounds(model, view)'],
+    ['side projection uses a narrow visible span instead of full-depth wall or collapsed outline', "return view === 'side' ? centered * 0.16 : centered"],
     ['front view keeps dense but pale lengthwise wire density', "view === 'front' ? 2"],
     ['front view keeps dense but pale spanwise wire density', "view === 'front' ? 4"],
     ['front view keeps a softened outline trace', "view === 'front' ? 0.1"],
@@ -2061,8 +2063,10 @@ function summarizeReadableSurfaceRenderContract() {
     ['top readable connector cores stay pale enough not to form a terminal wall while X-only proof remains dark', 'scope.topView ? 0.56 : scope.sideView ? 0.24 : 0.34'],
     ['isometric camera favors the reference side-profile barrel instead of staring into the lip end', 'new THREE.Vector3(target.x + distance * 0.24, target.y - distance * 0.82, target.z + distance * 0.42)'],
     ['isometric camera keeps the curl inspectable without cropping the mechanism sheet', "view === 'isometric' ? 1.24"],
-    ['readable profile follows the June 24 reference family with a smooth tapered terminal tube', '0.86,0.86;0.925,0.7;0.97,0.52;0.985,0.38'],
-    ['readable profile returns from the tube to the flat terminal perimeter without a backtracked dimple pocket', '0.94,0.23;0.925,0.16;0.94,0.09;0.975,0.035;1,0'],
+    ['top readable profile keeps the rounded proof footprint instead of inheriting the side-only barrel opening', '0.858,0.86;0.922,0.704;0.967,0.528;0.985,0.384'],
+    ['top readable profile returns from the tube to the flat terminal perimeter without a backtracked dimple pocket', '0.937,0.228;0.919,0.16;0.934,0.092;0.971,0.037;1,0'],
+    ['side readable profile opens the reference barrel without the Candidate663 knot', '0.982,0.58;0.962,0.49;0.916,0.425;0.864,0.39'],
+    ['side readable profile smooths the inner throat before returning to the flat perimeter', '0.824,0.365;0.795,0.332;0.815,0.275;0.875,0.178'],
   ]
   const forbiddenFragments = [
     ['side view reintroduces a separate geometry projection', 'function readableWaveSidePoint'],
