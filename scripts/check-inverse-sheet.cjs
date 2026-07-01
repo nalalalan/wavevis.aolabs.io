@@ -87,7 +87,7 @@ const startupUrlParamCoverage = summarizeStartupUrlParamCoverage()
 const startupDisplayContract = summarizeStartupDisplayContract()
 const readableSurfaceRenderContract = summarizeReadableSurfaceRenderContract()
 const readableProfileCavityBlock = summarizeReadableProfileCavityBlock(READABLE_REFERENCE_TRACE, { allowReferenceCurl: true })
-const readableSideProfileCavityBlock = summarizeReadableProfileCavityBlock(READABLE_SIDE_REFERENCE_TRACE, { allowReferenceCurl: true, minTerminalBacktrackRatio: 0.24 })
+const readableSideProfileCavityBlock = summarizeReadableProfileCavityBlock(READABLE_SIDE_REFERENCE_TRACE, { allowReferenceCurl: true, minTerminalBacktrackRatio: 0.24, minBacktrackTurnHeightRatio: 0.16, maxTerminalDescentAngleDeg: 82 })
 const readableLipReferenceBlock = summarizeReadableProfileCavityBlock(READABLE_LIP_REFERENCE_TRACE, { allowReferenceCurl: true })
 const readablePerimeterFlatness = summarizeReadablePerimeterFlatness(READABLE_REFERENCE_TRACE)
 const readableTerminalTaperBlock = summarizeReadableTerminalTaperBlock(READABLE_REFERENCE_TRACE, { allowReferenceCurl: true })
@@ -1105,6 +1105,7 @@ function summarizeReadableProfileCavityBlock(value, options = {}) {
   let maxHookBacktrackRise = 0
   let maxTerminalDescentAngleDeg = 0
   let minLowReturnX = Number.POSITIVE_INFINITY
+  let minLowBacktrackTurnZ = Number.POSITIVE_INFINITY
 
   for (let index = crestIndex + 1; index < points.length; index += 1) {
     const previous = points[index - 1]
@@ -1127,6 +1128,9 @@ function summarizeReadableProfileCavityBlock(value, options = {}) {
       const angleDeg = angleBetween2dDeg(previousDx, previousDz, dx, dz)
       const lowReturnBranch = previous.z <= maxZ * 0.42 || current.z <= maxZ * 0.42
       if (lowReturnBranch) maxAbruptPostCrestAngleDeg = Math.max(maxAbruptPostCrestAngleDeg, angleDeg)
+      if (previousDx < -0.006 && dx > 0.006 && lowerBranch && previous.z <= maxZ * 0.42) {
+        minLowBacktrackTurnZ = Math.min(minLowBacktrackTurnZ, previous.z)
+      }
       if (previousDx < -0.006 && dx > 0.006 && dz > 0 && lowerBranch) {
         maxHookBacktrackRise = Math.max(maxHookBacktrackRise, dz)
       }
@@ -1182,11 +1186,21 @@ function summarizeReadableProfileCavityBlock(value, options = {}) {
   if (Number.isFinite(options.minTerminalBacktrackRatio) && terminalBacktrackRatio < options.minTerminalBacktrackRatio) {
     failures.push(`reference side curl collapses into a pointy notch, backtrack ratio ${round(terminalBacktrackRatio)}`)
   }
+  if (
+    Number.isFinite(options.minBacktrackTurnHeightRatio) &&
+    Number.isFinite(minLowBacktrackTurnZ) &&
+    minLowBacktrackTurnZ < maxZ * options.minBacktrackTurnHeightRatio
+  ) {
+    failures.push(`side curl turns forward too close to the flat base, turn height ${round(minLowBacktrackTurnZ)}`)
+  }
   const minLowReturnLimit = options.allowReferenceCurl ? 0.46 : 0.75
   if (minLowReturnX < minLowReturnLimit) {
     failures.push(`lower under-lip return folds too far left before flattening, min x ${round(minLowReturnX)}`)
   }
-  if (maxTerminalDescentAngleDeg > 64) {
+  const maxTerminalDescentLimit = Number.isFinite(options.maxTerminalDescentAngleDeg)
+    ? options.maxTerminalDescentAngleDeg
+    : 64
+  if (maxTerminalDescentAngleDeg > maxTerminalDescentLimit) {
     failures.push(`terminal lower branch descends too vertically at ${round(maxTerminalDescentAngleDeg)}deg`)
   }
   if (options.requireSuspendedLip && terminalHeightRatio < 0.18) {
@@ -1217,6 +1231,7 @@ function summarizeReadableProfileCavityBlock(value, options = {}) {
     terminalBacktrackRatio: round(terminalBacktrackRatio),
     terminalFlatRunFromEightPercent: round(terminalFlatRunFromEightPercent),
     minLowReturnX: round(minLowReturnX),
+    minLowBacktrackTurnZ: Number.isFinite(minLowBacktrackTurnZ) ? round(minLowBacktrackTurnZ) : null,
     maxLowerPostCrestRise: round(maxLowerPostCrestRise),
     maxPocketRiseAfterValley: round(maxPocketRiseAfterValley),
     maxHookBacktrackRise: round(maxHookBacktrackRise),
