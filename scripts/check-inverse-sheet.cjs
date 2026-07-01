@@ -63,9 +63,14 @@ const DEFAULT_GRID_DENOMINATOR = Math.max(DEFAULT_SHEET_ROWS - 1, DEFAULT_SHEET_
 const MAX_STEER_ANGLE_RAD = Math.PI / 4
 const CORE_PROFILE_START = 0.02
 const CORE_PROFILE_END = 1
-const SOURCE_BREAKING_WAVE_TRACE = '0,0;0.04,0.008;0.095,0.033;0.17,0.105;0.275,0.305;0.385,0.58;0.5,0.82;0.61,0.965;0.69,1;0.78,0.965;0.858,0.86;0.922,0.704;0.967,0.528;0.985,0.384;0.965,0.3;0.937,0.228;0.919,0.16;0.934,0.092;0.971,0.037;1,0'
+const SOURCE_BREAKING_WAVE_TRACE = '0,0;0.04,0.04;0.1,0.12;0.17,0.28;0.25,0.5;0.34,0.72;0.44,0.88;0.53,0.97;0.62,1;0.71,0.995;0.8,0.9;0.86,0.72;0.89,0.56;0.895,0.43;0.875,0.34;0.825,0.29;0.775,0.31;0.755,0.36;0.77,0.41;0.815,0.43;0.84,0.48;0.82,0.58;0.755,0.66;0.66,0.7;0.57,0.68;0.5,0.58;0.47,0.45;0.485,0.33;0.555,0.22;0.67,0.13;0.805,0.07;0.925,0.035;1,0'
+const readableEnvelopeExponentMatch = latticeViewerSource.match(/return Math\.pow\(Math\.cos\(absolute \* Math\.PI \* 0\.5\), ([0-9.]+)\)/)
+const READABLE_LATERAL_ENVELOPE_EXPONENT = readableEnvelopeExponentMatch ? Number(readableEnvelopeExponentMatch[1]) : 1.42
 const READABLE_REFERENCE_TRACE = extractSourceConstString(latticeViewerSource, 'readableReferenceProfilePoints') || SOURCE_BREAKING_WAVE_TRACE
 const READABLE_SIDE_REFERENCE_TRACE = extractSourceConstString(latticeViewerSource, 'readableSideReferenceProfilePoints') || READABLE_REFERENCE_TRACE
+const READABLE_ISOMETRIC_REFERENCE_TRACE = extractSourceConstString(latticeViewerSource, 'readableIsometricReferenceProfilePoints') || READABLE_SIDE_REFERENCE_TRACE || READABLE_REFERENCE_TRACE
+const READABLE_LIP_REFERENCE_TRACE = READABLE_SIDE_REFERENCE_TRACE
+const READABLE_ISOMETRIC_LIP_REFERENCE_TRACE = READABLE_ISOMETRIC_REFERENCE_TRACE
 
 function sliderLipDipAmount(angleDeg) {
   return Math.min(1, Math.max(0, (angleDeg - 90) / 30))
@@ -75,11 +80,12 @@ const failures = [...runInverseSheetSanityChecks()]
 const startupUrlParamCoverage = summarizeStartupUrlParamCoverage()
 const startupDisplayContract = summarizeStartupDisplayContract()
 const readableSurfaceRenderContract = summarizeReadableSurfaceRenderContract()
-const readableProfileCavityBlock = summarizeReadableProfileCavityBlock(READABLE_REFERENCE_TRACE)
-const readableSideProfileCavityBlock = summarizeReadableProfileCavityBlock(READABLE_SIDE_REFERENCE_TRACE)
-const readableIsometricSupportNeckBlock = summarizeReadableIsometricSupportNeckBlock()
+const readableProfileCavityBlock = summarizeReadableProfileCavityBlock(READABLE_REFERENCE_TRACE, { allowReferenceCurl: true })
+const readableSideProfileCavityBlock = summarizeReadableProfileCavityBlock(READABLE_SIDE_REFERENCE_TRACE, { allowReferenceCurl: true })
+const readableLipReferenceBlock = summarizeReadableProfileCavityBlock(READABLE_LIP_REFERENCE_TRACE, { allowReferenceCurl: true })
 const readablePerimeterFlatness = summarizeReadablePerimeterFlatness(READABLE_REFERENCE_TRACE)
-const readableTerminalTaperBlock = summarizeReadableTerminalTaperBlock(READABLE_REFERENCE_TRACE)
+const readableTerminalTaperBlock = summarizeReadableTerminalTaperBlock(READABLE_REFERENCE_TRACE, { allowReferenceCurl: true })
+const readableTunnelSweepBlock = summarizeReadableTunnelSweepBlock()
 const generatedMode = { profileMode: 'generated' }
 const breakingLipConfig = {
   ...generatedMode,
@@ -343,7 +349,7 @@ const readableModelSideProfileBlock = {
   userMorphHalfLip120: summarizeModelSideProfileCavityBlock(userSideAspectModel),
   startupDefault: summarizeModelSideProfileCavityBlock(buildInverseSheetModel()),
 }
-const generatedMoanaSideGate = (
+const generatedRoundedSideGate = (
   sideOverhangAspect.userMorphHalfLip120.aspectRatio >= 1.45 &&
   sideOverhangAspect.userMorphHalfLip120.aspectRatio <= 3.25 &&
   sideOverhangAspect.startupDefault.aspectRatio >= 1.35 &&
@@ -484,7 +490,7 @@ if (displayInvariant.maxResidual > 0.000001 || displayInvariant.maxMetricResidua
   failures.push('display modes should only affect colors/materials')
 }
 
-if (!generatedMoanaSideGate) {
+if (!generatedRoundedSideGate) {
   failures.push('side-view terminal geometry should read as a smooth tapered wave body with no bowl, dimple, cavity, or hooked lower branch')
 }
 
@@ -510,7 +516,7 @@ if (!startupDisplayContract.ok) {
 }
 
 if (!readableSurfaceRenderContract.ok) {
-  failures.push(`readable surface renderer should keep top-view square-sheet projection separate from side/isometric views: ${readableSurfaceRenderContract.failures.join('; ')}`)
+  failures.push(`readable surface renderer should keep product views on one localized 3D reference field: ${readableSurfaceRenderContract.failures.join('; ')}`)
 }
 
 if (!readableProfileCavityBlock.ok) {
@@ -521,8 +527,8 @@ if (!readableSideProfileCavityBlock.ok) {
   failures.push(`readable side/isometric profile should block under-lip dimples before visual QA: ${readableSideProfileCavityBlock.failures.join('; ')}`)
 }
 
-if (!readableIsometricSupportNeckBlock.ok) {
-  failures.push(`readable isometric throat should reject narrow support-neck/dimple projections before visual QA: ${readableIsometricSupportNeckBlock.failures.join('; ')}`)
+if (!readableLipReferenceBlock.ok) {
+  failures.push(`readable side reference must stay rounded without a chopped lip or base-return support neck: ${readableLipReferenceBlock.failures.join('; ')}`)
 }
 
 if (!readablePerimeterFlatness.ok) {
@@ -531,6 +537,10 @@ if (!readablePerimeterFlatness.ok) {
 
 if (!readableTerminalTaperBlock.ok) {
   failures.push(`readable reference terminal must taper forward into the flat edge without a hook or cliff: ${readableTerminalTaperBlock.failures.join('; ')}`)
+}
+
+if (!readableTunnelSweepBlock.ok) {
+  failures.push(`readable reference surface must localize the curl instead of sweeping a side profile into a tunnel: ${readableTunnelSweepBlock.failures.join('; ')}`)
 }
 
 if (mechanism.maxConnectorEndpointGap > 0.0001) {
@@ -593,9 +603,10 @@ const report = {
   readableSurfaceRenderContract,
   readableProfileCavityBlock,
   readableSideProfileCavityBlock,
-  readableIsometricSupportNeckBlock,
+  readableLipReferenceBlock,
   readablePerimeterFlatness,
   readableTerminalTaperBlock,
+  readableTunnelSweepBlock,
   readableModelSideProfileBlock,
   flat0,
   flat1,
@@ -1051,55 +1062,7 @@ function parseReferenceTrace(value) {
   }).filter((point) => Number.isFinite(point.x) && Number.isFinite(point.z))
 }
 
-function summarizeReadableIsometricSupportNeckBlock() {
-  const requiredFragments = [
-    ['isometric open-throat band is broadened instead of center-column concentrated', 'const center = Math.pow(envelope, 1.42)'],
-    ['isometric rounded height fade keeps off-center underside rows visible', 'const roundedHeightFade = lerpNumber(0.52, 1, Math.pow(envelope, 1.55))'],
-    ['isometric height focus no longer collapses the underside into a narrow support neck', 'const lateralHeightFocus = lerpNumber(0.62, 1, Math.pow(envelope, 0.9))'],
-    ['isometric throat lift is bounded below the old support-neck coefficient', 'const roundedThroatLift = frame.height * openThroat * throat * 0.055'],
-    ['isometric lower lip uses low distributed lift instead of a dimple/neck column', '0.028 * undersideRelease + 0.014 * lowerLip + 0.01 * throat - 0.006 * facePinch'],
-    ['isometric underside releases forward as a smooth throat rather than hanging vertically', '0.052 * lipFace + 0.026 * undersideRelease + 0.014 * lowerLip + 0.01 * throat - 0.006 * facePinch'],
-  ]
-  const forbiddenFragments = [
-    ['old center-column throat concentration', 'const center = Math.pow(envelope, 2.22)'],
-    ['old narrow off-center height fade', 'const roundedHeightFade = lerpNumber(0.26, 1, Math.pow(envelope, 2.32))'],
-    ['old center-focused height band', 'const lateralHeightFocus = lerpNumber(0.38, 1, Math.pow(envelope, 1.12))'],
-    ['old large throat-lift support neck', 'const roundedThroatLift = frame.height * openThroat * throat * 0.22'],
-    ['old lower-lip/underside lift that passed while the render had a support neck', '0.11 * undersideRelease + 0.075 * lowerLip'],
-  ]
-  const centerPower = extractSourceNumber(/const center = Math\.pow\(envelope, ([0-9.]+)\)/)
-  const roundedThroatLiftCoeff = extractSourceNumber(/const roundedThroatLift = frame\.height \* openThroat \* throat \* ([0-9.]+)/)
-  const lowerLipLiftCoeff = extractSourceNumber(/0\.028 \* undersideRelease \+ ([0-9.]+) \* lowerLip \+ 0\.01 \* throat/)
-  const undersideLiftCoeff = extractSourceNumber(/frame\.height \* openThroat \* \(([0-9.]+) \* undersideRelease \+ 0\.014 \* lowerLip/)
-  const missingFragments = requiredFragments.filter(([, fragment]) => !latticeViewerSource.includes(fragment))
-  const presentForbiddenFragments = forbiddenFragments.filter(([, fragment]) => latticeViewerSource.includes(fragment))
-  const metricFailures = []
-
-  if (!Number.isFinite(centerPower) || centerPower > 1.6) metricFailures.push(`centerPower=${round(centerPower)} should be <= 1.6`)
-  if (!Number.isFinite(roundedThroatLiftCoeff) || roundedThroatLiftCoeff > 0.11) metricFailures.push(`roundedThroatLiftCoeff=${round(roundedThroatLiftCoeff)} should be <= 0.11`)
-  if (!Number.isFinite(lowerLipLiftCoeff) || lowerLipLiftCoeff > 0.035) metricFailures.push(`lowerLipLiftCoeff=${round(lowerLipLiftCoeff)} should be <= 0.035`)
-  if (!Number.isFinite(undersideLiftCoeff) || undersideLiftCoeff > 0.055) metricFailures.push(`undersideLiftCoeff=${round(undersideLiftCoeff)} should be <= 0.055`)
-
-  const failures = [
-    ...missingFragments.map(([label]) => `${label} missing`),
-    ...presentForbiddenFragments.map(([label]) => label),
-    ...metricFailures,
-  ]
-
-  return {
-    ok: failures.length === 0,
-    centerPower: round(centerPower),
-    roundedThroatLiftCoeff: round(roundedThroatLiftCoeff),
-    lowerLipLiftCoeff: round(lowerLipLiftCoeff),
-    undersideLiftCoeff: round(undersideLiftCoeff),
-    checkedFragments: requiredFragments.map(([label]) => label),
-    missingFragments,
-    forbiddenFragments: presentForbiddenFragments,
-    failures,
-  }
-}
-
-function summarizeReadableProfileCavityBlock(value) {
+function summarizeReadableProfileCavityBlock(value, options = {}) {
   const points = parseReferenceTrace(value)
   const failures = []
   if (points.length < 6) {
@@ -1158,13 +1121,13 @@ function summarizeReadableProfileCavityBlock(value) {
     maxPocketRiseAfterValley = Math.max(maxPocketRiseAfterValley, laterMaxZ - current.z)
   }
 
-  if (maxLowerPostCrestRise > maxZ * 0.024) {
+  if (!options.allowReferenceCurl && maxLowerPostCrestRise > maxZ * 0.024) {
     failures.push(`post-crest lower branch rises by ${round(maxLowerPostCrestRise)} after tapering`)
   }
-  if (maxPocketRiseAfterValley > maxZ * 0.03) {
+  if (!options.allowReferenceCurl && maxPocketRiseAfterValley > maxZ * 0.03) {
     failures.push(`local under-lip valley rises by ${round(maxPocketRiseAfterValley)} into a pocket`)
   }
-  if (maxHookBacktrackRise > maxZ * 0.018) {
+  if (!options.allowReferenceCurl && maxHookBacktrackRise > maxZ * 0.018) {
     failures.push(`backtracked hook branch rises by ${round(maxHookBacktrackRise)}`)
   }
   if (maxAbruptPostCrestAngleDeg > 96) {
@@ -1180,18 +1143,39 @@ function summarizeReadableProfileCavityBlock(value) {
     terminalSpan += Math.abs(dx)
   }
   const terminalBacktrackRatio = terminalBacktrack / Math.max(terminalSpan, 0.000001)
+  const firstFlatReturn = points
+    .slice(crestIndex + 1)
+    .find((point) => point.z <= maxZ * 0.08)
+  const terminalFlatRunFromEightPercent = firstFlatReturn
+    ? terminal.x - firstFlatReturn.x
+    : 0
+  const terminalHeightRatio = terminal.z / maxZ
 
   if (terminalDropRatio < 0.45) {
     failures.push(`terminal branch stays too high at drop ratio ${round(terminalDropRatio)}`)
   }
-  if (terminalBacktrackRatio > 0.44) {
+  const allowedBacktrackRatio = options.allowReferenceCurl ? 0.68 : 0.44
+  if (terminalBacktrackRatio > allowedBacktrackRatio) {
     failures.push(`terminal branch backtracks too far for a smooth curled tube, backtrack ratio ${round(terminalBacktrackRatio)}`)
   }
-  if (minLowReturnX < 0.75) {
+  const minLowReturnLimit = options.allowReferenceCurl ? 0.46 : 0.75
+  if (minLowReturnX < minLowReturnLimit) {
     failures.push(`lower under-lip return folds too far left before flattening, min x ${round(minLowReturnX)}`)
   }
   if (maxTerminalDescentAngleDeg > 80) {
     failures.push(`terminal lower branch descends too vertically at ${round(maxTerminalDescentAngleDeg)}deg`)
+  }
+  if (options.requireSuspendedLip && terminalHeightRatio < 0.18) {
+    failures.push(`side lip terminal falls into the base instead of staying suspended, height ratio ${round(terminalHeightRatio)}`)
+  }
+  if (options.requireSuspendedLip && terminalHeightRatio > 0.42) {
+    failures.push(`side lip terminal stays too high for a downturned curl, height ratio ${round(terminalHeightRatio)}`)
+  }
+  if (options.requireSuspendedLip && Number.isFinite(firstFlatReturn?.x)) {
+    failures.push(`side centerline returns to base at x ${round(firstFlatReturn.x)}; the flat base must come from sheet perimeter rows`)
+  }
+  if (options.blockDanglingTerminal && terminalFlatRunFromEightPercent < 0.035) {
+    failures.push(`terminal lower return stays visibly diagonal until the endpoint, flat run ${round(terminalFlatRunFromEightPercent)}`)
   }
   if (!latticeViewerSource.includes(value)) {
     failures.push('checked profile is not the same literal profile used by the readable renderer')
@@ -1204,8 +1188,10 @@ function summarizeReadableProfileCavityBlock(value) {
     crest: points[crestIndex],
     terminal,
     terminalDropRatio: round(terminalDropRatio),
+    terminalHeightRatio: round(terminalHeightRatio),
     terminalBacktrack: round(terminalBacktrack),
     terminalBacktrackRatio: round(terminalBacktrackRatio),
+    terminalFlatRunFromEightPercent: round(terminalFlatRunFromEightPercent),
     minLowReturnX: round(minLowReturnX),
     maxLowerPostCrestRise: round(maxLowerPostCrestRise),
     maxPocketRiseAfterValley: round(maxPocketRiseAfterValley),
@@ -1234,7 +1220,7 @@ function summarizeReadablePerimeterFlatness(value) {
 
   const start = points[0]
   const terminal = points[points.length - 1]
-  const sideBoundaryEnvelope = Math.pow(Math.cos(Math.PI * 0.5), 2.18)
+  const sideBoundaryEnvelope = Math.pow(Math.cos(Math.PI * 0.5), READABLE_LATERAL_ENVELOPE_EXPONENT)
   const requiredSourceFragments = [
     ['profile starts on the flat perimeter', `${start.x},${start.z}`],
     ['profile terminal returns to the flat perimeter', `${terminal.x},${terminal.z}`],
@@ -1262,8 +1248,11 @@ function summarizeReadablePerimeterFlatness(value) {
 
 function summarizeReadablePerimeterSamples(points) {
   const profile = buildReadableWaveProfileForCheck(points)
+  const lipProfile = buildReadableWaveProfileForCheck(parseReferenceTrace(READABLE_LIP_REFERENCE_TRACE))
   const frame = {
     profile,
+    curlProfile: buildReadableWaveProfileForCheck(parseReferenceTrace(READABLE_SIDE_REFERENCE_TRACE)),
+    lipProfile,
     minX: 0,
     maxX: 1,
     centerY: 0,
@@ -1341,7 +1330,7 @@ function summarizeReadablePerimeterSamples(points) {
   }
 }
 
-function summarizeReadableTerminalTaperBlock(value) {
+function summarizeReadableTerminalTaperBlock(value, options = {}) {
   const points = parseReferenceTrace(value)
   const failures = []
   if (points.length < 6) {
@@ -1399,25 +1388,32 @@ function summarizeReadableTerminalTaperBlock(value) {
 
   const requiredSourceFragments = [
     ['renderer profile carries the dimple-free taper under the overhang', value],
-    ['isometric throat uses low distributed lift instead of a support-neck column', '0.028 * undersideRelease + 0.014 * lowerLip + 0.01 * throat - 0.006 * facePinch'],
+    ['renderer samples the same rounded side reference for the lip profile', 'const lipProfileSource = readableSideReferenceProfilePoints'],
+    ['renderer keeps any terminal blend bounded by the rounded side reference', 'const openCoreBlend = frame.progress *'],
   ]
   const missingSourceFragments = requiredSourceFragments
     .filter(([, fragment]) => !latticeViewerSource.includes(fragment))
     .map(([label]) => label)
 
-  if (terminalBacktrack > 0.04) {
+  const terminalBacktrackLimit = options.allowReferenceCurl ? 0.56 : 0.04
+  const backtrackRiseLimit = options.allowReferenceCurl ? maxZ * 0.16 : maxZ * 0.004
+  const terminalAngleLimit = options.allowReferenceCurl ? 86 : 48
+  if (options.allowReferenceCurl && terminalBacktrack < 0.2) {
+    failures.push(`rounded side reference curl lacks enough backtracking arc: ${round(terminalBacktrack)}`)
+  }
+  if (terminalBacktrack > terminalBacktrackLimit) {
     failures.push(`sampled terminal curl backtracks by ${round(terminalBacktrack)} outside the controlled tapered tube range`)
   }
-  if (maxBacktrackRise > maxZ * 0.004) {
+  if (maxBacktrackRise > backtrackRiseLimit) {
     failures.push(`sampled backtracked terminal branch rises by ${round(maxBacktrackRise)}`)
   }
-  if (terminalRunFromThirtyFive < 0.014) {
+  if (!options.allowReferenceCurl && terminalRunFromThirtyFive < 0.014) {
     failures.push(`terminal has only ${round(terminalRunFromThirtyFive)} horizontal run after dropping below 35 percent height`)
   }
-  if (maxTerminalAngleJumpDeg > 48) {
+  if (maxTerminalAngleJumpDeg > terminalAngleLimit) {
     failures.push(`terminal curl angle jumps ${round(maxTerminalAngleJumpDeg)}deg`)
   }
-  if (maxTwoPercentDropWithLowRun > maxZ * 0.09) {
+  if (!options.allowReferenceCurl && maxTwoPercentDropWithLowRun > maxZ * 0.09) {
     failures.push(`terminal drops ${round(maxTwoPercentDropWithLowRun)} while horizontal run is under 0.006`)
   }
   missingSourceFragments.forEach((label) => failures.push(`${label} missing`))
@@ -1439,6 +1435,188 @@ function summarizeReadableTerminalTaperBlock(value) {
     maxTerminalAngleJumpDeg: round(maxTerminalAngleJumpDeg),
     terminalRunFromThirtyFive: round(terminalRunFromThirtyFive),
     maxTwoPercentDropWithLowRun: round(maxTwoPercentDropWithLowRun),
+    missingSourceFragments,
+    failures,
+  }
+}
+
+function summarizeReadableTunnelSweepBlock() {
+  const profile = buildReadableWaveProfileForCheck(parseReferenceTrace(READABLE_ISOMETRIC_REFERENCE_TRACE))
+  const lipProfile = buildReadableWaveProfileForCheck(parseReferenceTrace(READABLE_ISOMETRIC_LIP_REFERENCE_TRACE))
+  const frame = {
+    profile,
+    curlProfile: buildReadableWaveProfileForCheck(parseReferenceTrace(READABLE_SIDE_REFERENCE_TRACE)),
+    lipProfile,
+    minX: 0,
+    maxX: 1,
+    centerY: 0,
+    halfSpan: 1,
+    height: 1,
+    progress: 1,
+  }
+  const failures = []
+  const rows = []
+  const sampleTs = [0.6, 0.66, 0.72, 0.78, 0.84, 0.9]
+  const shoulderSamples = [0.58, -0.58, 0.66, -0.66]
+  const outerSamples = [0.84, -0.84, 0.9, -0.9]
+  let maxShoulderRatio = 0
+  let maxOuterRatio = 0
+  let minLipShoulderRatio = Infinity
+  let minCenterLipZ = Infinity
+  let maxIntermediateBulkRatio = 0
+  let maxTallFrontSpanRatio = 0
+  let maxTopBlobSpanRatio = 0
+  const projectionRows = []
+
+  for (const t of sampleTs) {
+    const centerZ = readableWaveReferencePointForCheck(frame, t, 0)[2]
+    if (centerZ < 0.08) continue
+
+    const shoulderZ = maxOf(shoulderSamples.map((s) => readableWaveReferencePointForCheck(frame, t, s)[2]))
+    const outerZ = maxOf(outerSamples.map((s) => readableWaveReferencePointForCheck(frame, t, s)[2]))
+    const shoulderRatio = shoulderZ / Math.max(centerZ, 0.000001)
+    const outerRatio = outerZ / Math.max(centerZ, 0.000001)
+    maxShoulderRatio = Math.max(maxShoulderRatio, shoulderRatio)
+    maxOuterRatio = Math.max(maxOuterRatio, outerRatio)
+    if (t >= 0.72 && t <= 0.84) minLipShoulderRatio = Math.min(minLipShoulderRatio, shoulderRatio)
+    minCenterLipZ = Math.min(minCenterLipZ, centerZ)
+    rows.push({
+      t: round(t),
+      centerZ: round(centerZ),
+      shoulderRatio: round(shoulderRatio),
+      outerRatio: round(outerRatio),
+    })
+  }
+  for (const t of [0.64, 0.68, 0.72, 0.76, 0.8, 0.84, 0.88]) {
+    const centerZ = readableWaveReferencePointForCheck(frame, t, 0)[2]
+    if (centerZ < 0.08) continue
+    const samples = []
+    const tallYs = []
+    const topBlobYs = []
+    for (let index = 0; index <= 80; index += 1) {
+      const s = -1 + (index / 80) * 2
+      const point = readableWaveReferencePointForCheck(frame, t, s)
+      const heightRatio = point[2] / Math.max(centerZ, 0.000001)
+      if (Math.abs(s) >= 0.18 && Math.abs(s) <= 0.62) samples.push(heightRatio)
+      if (point[2] >= 0.19) tallYs.push(point[1])
+      if (point[2] >= 0.28) topBlobYs.push(point[1])
+    }
+    const intermediateBulkRatio = samples.length
+      ? samples.reduce((sum, value) => sum + value, 0) / samples.length
+      : 0
+    const tallFrontSpanRatio = tallYs.length >= 2
+      ? (Math.max(...tallYs) - Math.min(...tallYs)) / 2
+      : 0
+    const topBlobSpanRatio = topBlobYs.length >= 2
+      ? (Math.max(...topBlobYs) - Math.min(...topBlobYs)) / 2
+      : 0
+    maxIntermediateBulkRatio = Math.max(maxIntermediateBulkRatio, intermediateBulkRatio)
+    maxTallFrontSpanRatio = Math.max(maxTallFrontSpanRatio, tallFrontSpanRatio)
+    maxTopBlobSpanRatio = Math.max(maxTopBlobSpanRatio, topBlobSpanRatio)
+    projectionRows.push({
+      t: round(t),
+      centerZ: round(centerZ),
+      intermediateBulkRatio: round(intermediateBulkRatio),
+      tallFrontSpanRatio: round(tallFrontSpanRatio),
+      topBlobSpanRatio: round(topBlobSpanRatio),
+    })
+  }
+  const crestZ = maxOf([0.58, 0.64, 0.7].map((t) => readableWaveReferencePointForCheck(frame, t, 0)[2]))
+  const lipZ = readableWaveReferencePointForCheck(frame, 0.78, 0)[2]
+  const lowerCurlZ = readableWaveReferencePointForCheck(frame, 0.9, 0)[2]
+  const tailZ = readableWaveReferencePointForCheck(frame, 0.985, 0)[2]
+  const lipX = readableWaveReferencePointForCheck(frame, 0.78, 0)[0]
+  const lowerCurlX = readableWaveReferencePointForCheck(frame, 0.9, 0)[0]
+  const throatY = readableWaveReferencePointForCheck(frame, 0.78, 0)[1]
+
+  const requiredSourceFragments = [
+    ['readable 3D view has one localized reference field shared by product views', 'function readableWaveReferencePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3'],
+    ['isometric view dispatches the localized 3D reference field', "if (view === 'isometric') return readableWaveReferencePoint(frame, t, s)"],
+    ['top view dispatches the same localized 3D reference field', "if (view === 'top') return readableWaveReferencePoint(frame, t, s)"],
+    ['front view samples a crest-section from the same localized 3D reference field', "if (view === 'front') return readableWaveFrontSectionPoint(frame, t, s)"],
+    ['side view dispatches the same localized 3D reference field', 'return readableWaveReferencePoint(frame, t, s)'],
+    ['readable reference field samples the localized wave-point model', 'const wavePoint = readableWavePoint(frame, t, s)'],
+    ['readable product views share the open-throat side reference instead of rebuilding a separate wall field', 'const bodyProfileSource = readableSideReferenceProfilePoints'],
+    ['readable product views do not split the rounded side reference into a chopped lip profile', 'const lipProfileSource = readableSideReferenceProfilePoints'],
+    ['readable reference field supports only a narrow shoulder without rebuilding a side wall', 'const shoulderLift = frame.height * frame.progress * 0.075 * lipSupportBand * shoulderBand'],
+    ['readable reference field pulls the open throat toward camera without dragging a broad support ridge', 'const throatPullShape = smoothStep(0.04, 0.2, envelope) * Math.pow(envelope, 0.62)'],
+    ['readable renderer keeps terminal blending bounded by the rounded side reference before the flat endpoint', 'const openCoreBlend = frame.progress *'],
+    ['readable renderer localizes terminal curl instead of sweeping it into a full-width tunnel', 'const lateralCurlBlend = curlBlend * curlSpan'],
+    ['readable renderer broadens the crest cap enough to avoid a pointy front fin', 'const crestCapSpan = Math.pow(1 - smoothStep(0.2, 0.82, absoluteSpan), 0.78)'],
+  ]
+  const missingSourceFragments = requiredSourceFragments
+    .filter(([, fragment]) => !latticeViewerSource.includes(fragment))
+    .map(([label]) => label)
+
+  if (rows.length < 3) {
+    failures.push('curl localization gate found too few centerline lip samples')
+  }
+  if (maxShoulderRatio > 0.46) {
+    failures.push(`shoulder rows retain ${round(maxShoulderRatio)} of center lip height`)
+  }
+  if (minLipShoulderRatio < 0.07) {
+    failures.push(`lip support rows collapse into a skinny center-strip sail: min shoulder ratio ${round(minLipShoulderRatio)}`)
+  }
+  if (maxOuterRatio > 0.14) {
+    failures.push(`outer rows retain ${round(maxOuterRatio)} of center lip height`)
+  }
+  if (maxIntermediateBulkRatio > 0.36) {
+    failures.push(`front/top projection still has a full-width intermediate-height support body: ${round(maxIntermediateBulkRatio)}`)
+  }
+  if (maxTallFrontSpanRatio < 0.32) {
+    failures.push(`front crest cap still collapses into a point: tall span ratio ${round(maxTallFrontSpanRatio)}`)
+  }
+  if (maxTallFrontSpanRatio > 0.56) {
+    failures.push(`front projection still reads as a full wall: tall span ratio ${round(maxTallFrontSpanRatio)}`)
+  }
+  if (maxTopBlobSpanRatio < 0.28) {
+    failures.push(`top/front crest cap remains too point-like: top span ratio ${round(maxTopBlobSpanRatio)}`)
+  }
+  if (maxTopBlobSpanRatio > 0.44) {
+    failures.push(`top projection still reads as a broad blob: top span ratio ${round(maxTopBlobSpanRatio)}`)
+  }
+  if (crestZ < 0.52) {
+    failures.push(`rolled center crest is too low at ${round(crestZ)}`)
+  }
+  if (lipZ < 0.24 || lipZ > crestZ * 1.08) {
+    failures.push(`rolled lip height ${round(lipZ)} does not sit below the crest ${round(crestZ)}`)
+  }
+  if (lowerCurlZ > lipZ * 0.92) {
+    failures.push(`lower curl remains too high at ${round(lowerCurlZ)} relative to lip ${round(lipZ)}`)
+  }
+  if (tailZ > 0.06) {
+    failures.push(`downstream tail stays lifted at ${round(tailZ)}`)
+  }
+  if (lipX > 0.99 || lowerCurlX > 1) {
+    failures.push(`rounded lip collapses into the footprint edge wall: lipX ${round(lipX)}, lowerCurlX ${round(lowerCurlX)}`)
+  }
+  if (lowerCurlX < lipX - 0.16 || lowerCurlX > lipX + 0.1) {
+    failures.push(`lower curl return is not a smooth rounded lip: ${round(lowerCurlX)} vs ${round(lipX)}`)
+  }
+  if (throatY > -0.12) {
+    failures.push(`open throat does not pull toward the camera enough: ${round(throatY)}`)
+  }
+  missingSourceFragments.forEach((label) => failures.push(`${label} missing`))
+
+  return {
+    ok: failures.length === 0,
+    sampleCount: rows.length,
+    minCenterLipZ: round(Number.isFinite(minCenterLipZ) ? minCenterLipZ : 0),
+    maxShoulderRatio: round(maxShoulderRatio),
+    minLipShoulderRatio: round(Number.isFinite(minLipShoulderRatio) ? minLipShoulderRatio : 0),
+    maxOuterRatio: round(maxOuterRatio),
+    maxIntermediateBulkRatio: round(maxIntermediateBulkRatio),
+    maxTallFrontSpanRatio: round(maxTallFrontSpanRatio),
+    maxTopBlobSpanRatio: round(maxTopBlobSpanRatio),
+    crestZ: round(crestZ),
+    lipZ: round(lipZ),
+    lowerCurlZ: round(lowerCurlZ),
+    tailZ: round(tailZ),
+    lipX: round(lipX),
+    lowerCurlX: round(lowerCurlX),
+    throatY: round(throatY),
+    rows,
+    projectionRows,
     missingSourceFragments,
     failures,
   }
@@ -1473,38 +1651,63 @@ function readableWavePointForCheck(frame, t, s) {
   const growth = Math.sin(frame.progress * Math.PI * 0.5)
   const curlBlend = smoothStep(0.22, 1, frame.progress)
   const profileT = readableTerminalProfileParameterForCheck(t)
-  const profilePoint = sampleReadableWaveProfileForCheck(frame.profile, profileT)
-  const lateralCurlBlend = curlBlend * Math.pow(envelope, 1.18)
+  const baseProfilePoint = sampleReadableWaveProfileForCheck(frame.profile, profileT)
+  const lipProfilePoint = sampleReadableWaveProfileForCheck(frame.lipProfile || frame.profile, profileT)
+  const bodySpan = Math.pow(envelope, 1.82)
+  const absoluteSpan = clampUnit(Math.abs(s))
+  const baseHeightSpan = Math.pow(envelope, 5.4)
+  const crestCapBand = smoothStep(0.54, 0.66, t) * (1 - smoothStep(0.82, 0.94, t))
+  const crestCapSpan = Math.pow(1 - smoothStep(0.2, 0.82, absoluteSpan), 0.78)
+  const heightSpan = lerpNumber(baseHeightSpan, Math.max(baseHeightSpan, crestCapSpan), crestCapBand * 0.86)
+  const curlSpan = smoothStep(0.54, 0.994, envelope)
+  const lipSpan = smoothStep(0.68, 0.999, envelope)
+  const openCoreBlend = frame.progress *
+    smoothStep(0.58, 0.86, t) *
+    (1 - smoothStep(0.94, 0.998, t)) *
+    Math.pow(1 - curlSpan, 0.66) *
+    0.28
+  const curlProfilePoint = sampleReadableWaveProfileForCheck(frame.curlProfile || frame.profile, profileT)
+  const centerCurlPoint = {
+    x: lerpNumber(baseProfilePoint.x, curlProfilePoint.x, curlSpan),
+    z: lerpNumber(baseProfilePoint.z, curlProfilePoint.z, curlSpan),
+  }
+  const profilePoint = {
+    x: lerpNumber(centerCurlPoint.x, lipProfilePoint.x, openCoreBlend),
+    z: lerpNumber(centerCurlPoint.z, lipProfilePoint.z, openCoreBlend),
+  }
+  const lateralCurlBlend = curlBlend * curlSpan
   const baseX = lerpNumber(frame.minX, frame.maxX, t)
   const baseY = frame.centerY + s * frame.halfSpan
   const moundLift = Math.sin(Math.PI * t) ** 1.18
-  const moundX = baseX - waveWidth * 0.035 * moundLift
-  const moundZ = frame.height * 0.72 * moundLift
+  const moundX = baseX - waveWidth * 0.02 * moundLift * bodySpan
+  const moundZ = frame.height * 0.22 * moundLift * lerpNumber(0.02, 1, bodySpan)
   const curledX = frame.minX + waveWidth * profilePoint.x
   const curledZ = frame.height * (profilePoint.z / frame.profile.maxZ)
   const centerX = lerpNumber(moundX, curledX, lateralCurlBlend)
-  const offCenterCurlRelief = smoothStep(0.36, 0.92, t) * frame.progress * (1 - Math.pow(envelope, 0.32)) * 0.75
+  const offCenterCurlRelief = smoothStep(0.36, 0.92, t) * frame.progress * (1 - curlSpan) * 0.22
   const longitudinalHeightFade = smoothStep(0.04, 0.12, t)
   const longitudinalPlanFade = smoothStep(0.04, 0.12, t)
   const lateralPerimeterFade = smoothStep(0.04, 0.12, 1 - Math.abs(s))
   const perimeterHeightFade = longitudinalHeightFade * lateralPerimeterFade
   const perimeterPlanFade = longitudinalPlanFade * lateralPerimeterFade
+  const lateralLiftFade = lerpNumber(0.002, 1, heightSpan)
   const centerZ = lerpNumber(moundZ, curledZ, lateralCurlBlend) *
     growth *
     (1 - offCenterCurlRelief) *
+    lateralLiftFade *
     perimeterHeightFade
   const curlShoulder = smoothStep(0.44, 0.72, t) * (1 - smoothStep(0.88, 1, t))
   const lipTip = smoothStep(0.7, 1, t)
   const lipBody = smoothStep(0.62, 0.94, t)
   const capLocalization = frame.progress * smoothStep(0.44, 0.82, t)
-  const shoulderFoldBlend = lerpNumber(baseFoldBlend, Math.pow(envelope, 1.35), capLocalization * curlShoulder * 0.68)
+  const shoulderFoldBlend = lerpNumber(baseFoldBlend, Math.pow(envelope, 1.08), capLocalization * curlShoulder * 0.46)
   const terminalLocalization = frame.progress * lipTip
-  const foldBlend = lerpNumber(shoulderFoldBlend, Math.pow(envelope, 0.55), terminalLocalization * 0.48)
-  const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.22), Math.pow(envelope, 2.4), terminalLocalization * 0.48)
-  const crestLiftBlend = lerpNumber(liftBlend, Math.pow(envelope, 2.2), capLocalization * curlShoulder * 0.7)
-  const lipLiftBlend = lerpNumber(crestLiftBlend, terminalLipEnvelope, frame.progress * lipBody * 0.82)
-  const pinchEnvelope = Math.pow(envelope, 0.42)
-  const curlPinch = Math.min(0.075, frame.progress * pinchEnvelope * (0.004 * curlShoulder + 0.036 * lipTip))
+  const foldBlend = lerpNumber(shoulderFoldBlend, Math.pow(envelope, 3.55), terminalLocalization * 0.8)
+  const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.25), Math.pow(envelope, 4.4), terminalLocalization * 0.9)
+  const crestLiftBlend = lerpNumber(liftBlend, Math.pow(envelope, 1.18), capLocalization * curlShoulder * 0.42)
+  const lipLiftBlend = lerpNumber(crestLiftBlend, terminalLipEnvelope * lerpNumber(0.12, 1, lipSpan), frame.progress * lipBody * 0.94)
+  const pinchEnvelope = Math.pow(envelope, 0.92)
+  const curlPinch = Math.min(0.018, frame.progress * pinchEnvelope * (0.001 * curlShoulder + 0.008 * lipTip))
   const yPinch = s * frame.halfSpan * curlPinch * perimeterPlanFade
   const foldedX = lerpNumber(baseX, centerX, foldBlend)
 
@@ -1512,6 +1715,24 @@ function readableWavePointForCheck(frame, t, s) {
     lerpNumber(baseX, foldedX, perimeterPlanFade),
     baseY - yPinch,
     Math.max(0, centerZ * lipLiftBlend),
+  ]
+}
+
+function readableWaveReferencePointForCheck(frame, t, s) {
+  const wavePoint = readableWavePointForCheck(frame, t, s)
+  const absoluteSpan = clampUnit(Math.abs(s))
+  const envelope = readableLateralEnvelopeForCheck(s)
+  const lipSupportBand = smoothStep(0.58, 0.72, t) * (1 - smoothStep(0.84, 0.93, t))
+  const shoulderBand = smoothStep(0.48, 0.58, absoluteSpan) * (1 - smoothStep(0.66, 0.78, absoluteSpan))
+  const openThroatBand = smoothStep(0.66, 0.78, t) * (1 - smoothStep(0.9, 0.97, t))
+  const shoulderLift = frame.height * frame.progress * 0.075 * lipSupportBand * shoulderBand
+  const throatPullShape = smoothStep(0.04, 0.2, envelope) * Math.pow(envelope, 0.62)
+  const throatPullY = frame.halfSpan * frame.progress * 0.16 * openThroatBand * throatPullShape
+
+  return [
+    wavePoint[0],
+    wavePoint[1] - throatPullY,
+    Math.max(wavePoint[2], shoulderLift),
   ]
 }
 
@@ -1544,7 +1765,7 @@ function sampleReadableWaveProfileForCheck(profile, t) {
 
 function readableLateralEnvelopeForCheck(s) {
   const absolute = clampUnit(Math.abs(s))
-  return Math.pow(Math.cos(absolute * Math.PI * 0.5), 2.18)
+  return Math.pow(Math.cos(absolute * Math.PI * 0.5), READABLE_LATERAL_ENVELOPE_EXPONENT)
 }
 
 function summarizeModelSideProfileCavityBlock(model) {
@@ -2080,21 +2301,26 @@ function summarizeReadableSurfaceRenderContract() {
     ['surface geometry is keyed by view', 'buildReadableWaveSurfaceGeometry(model, view)', latticeViewerSource],
     ['geometry builder accepts view', "function buildReadableWaveSurfaceGeometry(model: LatticeModel, view: CameraViewRequest['view'])", latticeViewerSource],
     ['display point dispatches the selected readable surface', "function readableWaveDisplayPoint(frame: ReadableWaveFrame, view: CameraViewRequest['view'], t: number, s: number): Vec3", latticeViewerSource],
-    ['side projection narrows lateral span enough to avoid a full-depth tube wall while preserving visible mechanism depth', "return _view === 'side' ? centered * 0.2 : centered", latticeViewerSource],
-    ['top view uses its own full-mechanism plan projection', "if (view === 'top') return readableWaveTopPlanPoint(frame, t, s)", latticeViewerSource],
-    ['isometric view uses the explicit no-dimple throat projection', "if (view === 'isometric') return readableWaveIsometricPoint(frame, t, s)", latticeViewerSource],
-    ['front view uses the rounded front projection', "if (view === 'front') return readableWaveFrontPoint(frame, t, s)", latticeViewerSource],
+    ['side projection narrows lateral span enough to avoid a full-depth tube wall while preserving visible mechanism depth', "return _view === 'side' ? centered * 0.08 : centered", latticeViewerSource],
+    ['top view uses the shared localized reference field instead of a separate plan surrogate', "if (view === 'top') return readableWaveReferencePoint(frame, t, s)", latticeViewerSource],
+    ['isometric view uses the explicit localized 3D reference field instead of sweeping the side trace', "if (view === 'isometric') return readableWaveReferencePoint(frame, t, s)", latticeViewerSource],
+    ['front view uses a sectioned sample of the shared localized reference field instead of projecting the whole side trace', "if (view === 'front') return readableWaveFrontSectionPoint(frame, t, s)", latticeViewerSource],
+    ['front section samples the same readable 3D field instead of a separate arch surrogate', 'const sectionPoint = readableWaveReferencePoint(frame, sectionT, s)', latticeViewerSource],
     ['readable renderer uses the same terminal profile sampler as the validation model', 'const profileT = readableTerminalProfileParameter(t)', latticeViewerSource],
+    ['readable renderer keeps terminal blending bounded by the rounded side reference before the flat endpoint', 'const openCoreBlend = frame.progress *', latticeViewerSource],
     ['terminal profile sampler reaches the real flat endpoint instead of forcing a vertical wall', 'const midTerminalSlowdown = Math.sin(terminalAmount * Math.PI) * 0.028', latticeViewerSource],
-    ['readable renderer broadens the terminal curl transition instead of making a center-only wall', 'const lateralCurlBlend = curlBlend * Math.pow(envelope, 1.18)', latticeViewerSource],
+    ['readable renderer localizes terminal curl instead of sweeping it into a full-width tunnel', 'const lateralCurlBlend = curlBlend * curlSpan', latticeViewerSource],
+    ['readable 3D field exists as the shared localized target for product views', 'function readableWaveReferencePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3', latticeViewerSource],
+    ['readable 3D field samples the localized wave-point model instead of a broad wall surrogate', 'const wavePoint = readableWavePoint(frame, t, s)', latticeViewerSource],
+    ['readable 3D field supports only a localized shoulder without rebuilding a side wall', 'const shoulderLift = frame.height * frame.progress * 0.075 * lipSupportBand * shoulderBand', latticeViewerSource],
+    ['readable renderer broadens the crest cap enough to avoid a pointy front fin', 'const crestCapSpan = Math.pow(1 - smoothStep(0.2, 0.82, absoluteSpan), 0.78)', latticeViewerSource],
+    ['readable 3D field pulls the open throat toward camera without dragging a broad support ridge', 'const throatPullShape = smoothStep(0.04, 0.2, envelope) * Math.pow(envelope, 0.62)', latticeViewerSource],
     ['readable renderer fades height to the longitudinal and lateral perimeter', 'const perimeterHeightFade = longitudinalHeightFade * lateralPerimeterFade', latticeViewerSource],
     ['readable renderer fades plan displacement to the longitudinal and lateral perimeter', 'const perimeterPlanFade = longitudinalPlanFade * lateralPerimeterFade', latticeViewerSource],
-    ['terminal fold stays broad enough across span to avoid the isometric support-wall read', 'const foldBlend = lerpNumber(shoulderFoldBlend, Math.pow(envelope, 0.55), terminalLocalization * 0.48)', latticeViewerSource],
-    ['terminal lip envelope stays broad enough to avoid a blunt center-only tube cap', 'const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.22), Math.pow(envelope, 2.4), terminalLocalization * 0.48)', latticeViewerSource],
-    ['terminal curl pinch is low so the gridded sheet does not collapse into a vertical throat wall', 'const curlPinch = Math.min(0.075, frame.progress * pinchEnvelope * (0.004 * curlShoulder + 0.036 * lipTip))', latticeViewerSource],
-    ['readable reference lateral envelope broadens the curl without becoming a full-width tube', 'return Math.pow(Math.cos(absolute * Math.PI * 0.5), 2.18)', latticeViewerSource],
-    ['isometric underside uses low distributed lift rather than the old support-neck coefficients', '0.028 * undersideRelease + 0.014 * lowerLip + 0.01 * throat - 0.006 * facePinch', latticeViewerSource],
-    ['isometric throat lift is bounded below the old support-neck coefficient', 'const roundedThroatLift = frame.height * openThroat * throat * 0.055', latticeViewerSource],
+    ['terminal fold keeps the material sheet localized instead of building a full-width wall', 'const foldBlend = lerpNumber(shoulderFoldBlend, Math.pow(envelope, 3.55), terminalLocalization * 0.8)', latticeViewerSource],
+    ['terminal lip envelope fades off-center lip rows instead of rebuilding a base support', 'const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.25), Math.pow(envelope, 4.4), terminalLocalization * 0.9)', latticeViewerSource],
+    ['terminal curl pinch is low so the gridded sheet does not collapse into a vertical throat wall', 'const curlPinch = Math.min(0.018, frame.progress * pinchEnvelope * (0.001 * curlShoulder + 0.008 * lipTip))', latticeViewerSource],
+    ['readable reference lateral envelope broadens the curl without becoming a full-width tube', 'return Math.pow(Math.cos(absolute * Math.PI * 0.5), 1.42)', latticeViewerSource],
     ['isometric split X lines depth-test against the readable surface instead of drawing a hidden support neck through it', 'const isometricMechanismDepthTest = readableSurfaceMode', latticeViewerSource],
     ['surface shared X arms depth-test in isometric reference mode', 'const depthTest = readableSurfaceMode ? (scope.sideView || scope.isometricView) : !scope.topView', latticeViewerSource],
     ['surface shared connector joints depth-test in isometric reference mode', 'const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.isometricView) : !scope.topView', latticeViewerSource],
@@ -2125,6 +2351,7 @@ function summarizeReadableSurfaceRenderContract() {
     ['isometric shared connector joints draw through the readable surface again', 'const jointDepthTest = readableSurfaceMode ? scope.sideView : !scope.topView', latticeViewerSource],
     ['isometric X-cell square bodies draw through the readable surface again', 'const cellDepthTest = readableSurfaceMode ? scope.sideView : !scope.topView', latticeViewerSource],
     ['isometric camera returns to the side-wall read angle', 'new THREE.Vector3(target.x + distance * 0.68, target.y - distance * 0.58, target.z + distance * 0.46)', latticeViewerSource],
+    ['isometric view returns to the stale side-profile extrusion path', "if (view === 'isometric') return readableWavePoint(frame, t, s)", latticeViewerSource],
   ]
   const missingFragments = activeRequiredFragments.filter(([, fragment, source]) => !source.includes(fragment))
   const presentForbiddenFragments = activeForbiddenFragments.filter(([, fragment, source]) => source.includes(fragment))

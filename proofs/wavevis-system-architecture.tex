@@ -112,6 +112,7 @@
 \graphicspath{{figures/}{references/}}
 \newcolumntype{Y}[1]{>{\raggedright\arraybackslash}p{#1}}
 \newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\pathcode}[1]{\nolinkurl{#1}}
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
 \newcommand{\dd}{\mathrm{d}}
@@ -125,7 +126,7 @@
     \vspace*{-0.6em}
 
     {\fontsize{20}{22}\selectfont\bfseries\color{SumiInk}
-    WaveVis inverse-sheet architecture for Moana-ocean breaking-wave linkage arrays\par}
+    WaveVis inverse-sheet architecture for rounded breaking-wave linkage arrays\par}
 
     \vspace{0.95em}
 
@@ -139,7 +140,7 @@
 \end{center}
 
 \vspace{0.35em}
-\noindent\textbf{WaveVis is an inverse computational-design record for a rectangular linkage sheet that is being driven toward one localized plunging-wave deformation while keeping the mechanism visible. This PDF is not allowed to be a decorative paper, a candidate gallery, or a misleading overlay. It is the reconstruction manual for the project: the target references, coordinate frames, source files, equations, topology constraints, render/display split, validation gates, failure ledger, deployment boundary, and next iteration protocol needed for a fresh engineer to continue from source truth. The accepted reference family is the supplied Moana-like breaking wave, the June 23 side drawing, the June 24 smooth gridded overview/sequence, and the June 28 stage/cross-section sheet. The rejected family is equally explicit: swept tunnels, side walls, bowls, dimples, dark pockets, under-overhang support necks, profile-only traces, hidden mechanisms, fake filler bridges, and any figure that makes the wrong geometry look authoritative. Current state is open: Candidate785 is only a previous recovery floor and Candidate795 is the current dirty, unaccepted local source attempt. Candidate795 removes the wrong overlay path, aligns the renderer and checker around the terminal sampler, broadens the lateral envelope, removes the premature terminal fade that made a foot, and changes the isometric camera to a reference-overview angle. It passes local geometry gates, but rendered visual review still rejects it because the side terminal remains too sharp and the isometric/top views still read as a broad wall or rounded mound rather than a localized open-throat breaking wave. Completion remains blocked until the rendered full mechanism passes side, isometric, top, forced-mechanism-on, paper/PDF, and public-route verification.}
+\noindent\textbf{WaveVis is an inverse computational-design record for a rectangular linkage sheet that is being driven toward one localized plunging-wave deformation while keeping the mechanism visible. This PDF is not allowed to be a decorative paper, a candidate gallery, or a misleading overlay. It is the reconstruction manual for the project: the target references, coordinate frames, source files, equations, topology constraints, render/display split, validation gates, failure ledger, deployment boundary, and next iteration protocol needed for a fresh engineer to continue from source truth. The accepted reference family is the latest supplied rounded breaking-wave side line, the June 24 smooth gridded overview/sequence, the June 28 stage/cross-section sheet, and the two retained ocean-curl photographs used only as secondary water-form references. The rejected family is equally explicit: swept tunnels, side walls, skinny center-strip sails, triangular cuts, pointy side profiles, bowls, dimples, dark pockets, under-overhang support necks, profile-only traces, hidden mechanisms, fake filler bridges, old candidate screenshots, wrong or irrelevant stills, and any figure that makes the wrong geometry look authoritative. Current local state is Candidate867: the readable side reference has been replaced by the rounded supplied line; the crest-cap span has been widened so the front does not collapse into a point; \code{view=front} now samples a crest-section window from the same three-dimensional reference field instead of projecting the entire side trace into a fin; \pathcode{scripts/check-inverse-sheet.cjs} passes the rounded-cap, flat-perimeter, no-dimple, no-wall, and full visible X-mechanism gates; and browser screenshots exist in the Candidate867 sectioned-front capture folder. This is still not a public completion claim. Public route verification, PDF rebuild verification, fallback parity, and exact reference-family acceptance remain required before WaveVis can be called current.}
 
 \vspace{0.65em}
 \noindent\textbf{Fresh-chat use.} Read this PDF before changing WaveVis. Then inspect the current source, the live route, the latest handoff, and the rendered artifact. If any of those disagree, the live/source/rendered state wins over this prose until the PDF is rebuilt and reverified. A future chat should be able to reconstruct the model and the iteration state from this record without relying on old chat memory.
@@ -151,7 +152,7 @@
 
 \section{Introduction}
 
-WaveVis is an inverse-design simulator for a deployable mechanism. It takes a target surface intent, samples it on a rectangular sheet, and renders the resulting cell/connector mechanism rather than only a smooth mesh. That places it between several technical families: deformable-body, cloth, shell, and mass-spring simulation where surfaces are discretized, regularized, and advanced under mechanical constraints~\cite{terzopoulos_elastically_1987,baraff_witkin_1998,grinspun_discrete_shells_2003,liu_fast_mass_spring_2013}; spacetime, constraint-projection, and shape-regularization methods where feasibility is enforced by explicit objective terms or repeated local/global corrections~\cite{witkin_spacetime_1988,muller_position_based_2007,sorkine_arap_2007,bouaziz_projective_2014}; computational linkage design where motion and contact constraints are part of the design object~\cite{coros_mechanical_characters_2013,zhu_linkedit_2015,mccarthy_linkages_2000}; and inverse/topology design of mechanisms and metamaterials where a desired deformation field must be made compatible with a manufacturable structure~\cite{bendsoe_kikuchi_1988,sigmund_compliant_1997,coulais_textured_2016,kadic_3d_metamaterials_2019}. WaveVis is not a solved member of any of those literatures. It is an active reconstruction record for one specific mechanism question: can a rectangular linkage sheet be made to read as a localized plunging wave while keeping its full kinematic graph visible?
+WaveVis is an inverse-design simulator for a deployable mechanism. It takes a target surface intent, samples it on a rectangular sheet, and renders the resulting cell/connector mechanism rather than only a smooth mesh. That places it between several technical families: deformable-body, cloth, shell, rod, and mass-spring simulation where surfaces and slender members are discretized, regularized, and advanced under mechanical constraints~\cite{terzopoulos_elastically_1987,baraff_witkin_1998,grinspun_discrete_shells_2003,bergou_discrete_rods_2008,liu_fast_mass_spring_2013}; spacetime, constraint-projection, projective-dynamics, and differentiable-simulation methods where feasibility is enforced by explicit objective terms, local/global corrections, or gradients~\cite{witkin_spacetime_1988,muller_position_based_2007,sorkine_arap_2007,bouaziz_projective_2014,du_diffpd_2022}; computational mechanism design where actuator placement, linkage topology, compliant flexures, and contact constraints are part of the design object~\cite{skouras_actuated_deformable_2013,coros_mechanical_characters_2013,thomaszewski_linkage_characters_2014,megaro_compliant_mechanisms_2017,zhu_linkedit_2015,mccarthy_linkages_2000}; and inverse/topology design of mechanisms, inflatables, auxetics, and metamaterials where a desired deformation field must be made compatible with a manufacturable structure~\cite{bendsoe_kikuchi_1988,sigmund_compliant_1997,skouras_designing_inflatable_2014,konakovic_auxetic_2016,panetta_surface_inflatables_2021,coulais_textured_2016,kadic_3d_metamaterials_2019}. WaveVis is not a solved member of any of those literatures. It is an active reconstruction record for one specific mechanism question: can a rectangular linkage sheet be made to read as a localized plunging wave while keeping its full kinematic graph visible?
 
 The design problem is stricter than drawing a curve or matching a screenshot. A side outline can look acceptable while the actual three-dimensional sheet has a wall across the underside, a cavity where the lip should be open, an extruded barrel, or zig-zagging linkage legs that no longer read as a mechanism. Conversely, a mechanism can satisfy a local numerical check while failing the human outcome: a full rectangular sheet with a localized plunging wave. WaveVis must therefore treat the visible artifact, target field, kinematic topology, URL state, source checks, paper figures, and public deployment as one coupled system.
 
@@ -165,9 +166,9 @@ The current hard failure is not subtle. A rendered state showed an inward suppor
 
 \subsection{Reference geometry}
 
-The design reference is the Moana ocean plus the June 23, 2026 supplied line drawing: a smooth, localized volume of water that rises out of a larger flat body, grows into a broad rounded crest, curls into a smaller inward spiral, and finishes with a smooth downturned tapered lip while leaving an open underside and a long low return. These reference frames are not decorative. They are the visual contract for the simulator's target geometry. A successful WaveVis state should read as a simplified linkage approximation of this water form: the outer radius is large and smooth, the inner curl radius is smaller, the lip projects forward before curling down, and the side field fades away instead of forming a constant barrel. This is deliberately stricter than matching a side-profile curve: the full linkage array in side and isometric views must preserve the open curl without side walls, erratic zig-zags, disconnected cells, or hidden filler geometry.
+The design reference is the latest supplied rounded side-profile line plus the gridded breaking-wave reference sheets and retained ocean-curl photographs: a smooth, localized volume that rises out of a larger flat sheet, grows into a broad rounded crest, curls into a smaller inward spiral, and finishes with a smooth downturned tapered lip while leaving an open underside and a long low return. These reference frames are not decorative. They are the visual contract for the simulator's target geometry. A successful WaveVis state should read as a simplified linkage approximation of this water form: the outer radius is large and smooth, the inner curl radius is smaller, the lip projects forward before curling down, the front/cross-section view is rounded rather than pointed, and the side field fades away instead of forming a constant barrel. This is deliberately stricter than matching a side-profile curve: the full linkage array in side and isometric views must preserve the open curl without side walls, erratic zig-zags, disconnected cells, or hidden filler geometry.
 
-\textbf{Current verification boundary.} This document records the target, architecture, and required gates. It does not by itself prove that the current generator has matched the supplied references. The rendered full-array artifact remains the source of truth. If the page, screenshots, or live route do not visibly match the Moana-like localized plunging wave while preserving linkage cells and flat perimeter, the correct state is ``open visual mismatch,'' not ``reference matched.''
+\textbf{Current verification boundary.} This document records the target, architecture, and required gates. It does not by itself prove that the current generator has matched the supplied references. The rendered full-array artifact remains the source of truth. If the page, screenshots, or live route do not visibly match the localized plunging-wave reference family while preserving linkage cells and flat perimeter, the correct state is ``open visual mismatch,'' not ``reference matched.''
 
 \begin{figure}[H]
 \centering
@@ -178,8 +179,15 @@ The design reference is the Moana ocean plus the June 23, 2026 supplied line dra
 
 \begin{figure}[H]
 \centering
+\includegraphics[width=0.98\linewidth]{reference-moana-barrel-water.jpg}
+\caption{Secondary supplied open-throat reference. The image is used only to define the underside condition: the lip is suspended, the throat remains open, and no side wall, support neck, or dark pocket may be used to close the curl.}
+\label{fig:moana-barrel-reference}
+\end{figure}
+
+\begin{figure}[H]
+\centering
 \includegraphics[width=0.98\linewidth]{reference-breaking-wave-line.png}
-\caption{June 23 supplied side-profile reference. This image sharpens the visible target: broad outer arch, smaller inward curl, smooth downturned tapered tip, smooth curved inner throat, and long low return. It is a shape reference only; the three-dimensional WaveVis render must still preserve the full linkage sheet rather than becoming a two-dimensional trace or silhouette.}
+\caption{Latest supplied side-profile reference. This image sharpens the visible target: broad rounded outer arch, smaller inward curl, smooth downturned tapered tip, smooth curved inner throat, and long low return. A pointy side profile is explicitly wrong. This is a shape reference only; the three-dimensional WaveVis render must still preserve the full linkage sheet rather than becoming a two-dimensional trace or silhouette.}
 \label{fig:breaking-wave-line-reference}
 \end{figure}
 
@@ -215,8 +223,14 @@ If this PDF is the only WaveVis context available, start with this section and t
   \item \textbf{Current source root:} workspace path \code{\_apps/wavevis.aolabs.io/}.
   \item \textbf{Public fallback mirror:} workspace path \code{\_apps/aolabs-site/wavevis/}. A WaveVis deploy to its own \code{gh-pages} branch does not automatically update the \code{aolabs.io/wavevis/} fallback unless the built files are mirrored there and the hub site is pushed.
   \item \textbf{Current architectural direction:} curated supplied-reference field localized into the inverse-sheet model, plus a separate readable display surface for visual inspection. Manual \(xz\) and \(xy\) profile editors are not the active path.
-  \item \textbf{Current branch state:} Candidate785 is the last committed recovery floor, but it is not the final accepted geometry. Candidate795 is the dirty local source attempt in \code{src/LatticeViewer3D.tsx} and \code{scripts/check-inverse-sheet.cjs}. It passed \code{npm run check:geometry} locally with log \code{\_verification/candidate795/geometry.log}. Browser captures exist under \code{\_verification/browser-20260630-candidate795/}. Those captures are diagnostic only, not accepted paper figures.
-  \item \textbf{Active hard fail:} Alan opened the rendered WaveVis state and identified an obvious under-overhang dimple/support-neck. Candidate795 removes the rejected paper overlay, keeps the mechanism on in reference mode, aligns several renderer/checker gates, and changes the isometric camera, but the rendered side/3D views still have an unaccepted sharp lower terminal connection and the overview still reads too much like a broad wall or mound. The defect remains open until source, screenshots, paper figures, public route, and fallback route all show a smooth open throat with the full mechanism visible.
+  \item \textbf{Current branch state:} Candidate867 is the active local source state. It changes \pathcode{src/LatticeViewer3D.tsx} and \pathcode{scripts/check-inverse-sheet.cjs}: rounded side trace, broadened crest-cap height span, sectioned front view, and updated no-point/no-wall gates. Candidate841--Candidate866 are rejected diagnostics that explain the failures being blocked: support-neck dimples, broad roof/curtain, triangular cut/fin, side-wall tunnel, pointy side profile, and full-length front projection.
+  \item \textbf{Current verification state:} the local inverse-sheet checker \pathcode{scripts/check-inverse-sheet.cjs} passes; \code{npm run build} passes; browser screenshots exist in:
+  \begin{quote}\footnotesize
+  \pathcode{_verification/}\\
+  \pathcode{browser-20260701-}\\
+  \pathcode{candidate867-sectioned-front-view/}
+  \end{quote}
+  The side view now follows the rounded supplied profile and the front view is a rounded crest-section rather than a spike. This is local verification only until the PDF and public routes are rebuilt and checked.
   \item \textbf{Correct acceptance target:} the supplied June 24 smooth breaking-wave reference family and June 28 stage/cross-section reference. The wrong target is any internal trace diagram, centerline overlay, profile-only silhouette, or helper contour that cannot reconstruct the mechanism.
   \item \textbf{Current mechanism contract:} every interior cell is one black square body with four straight legs; opposite leg pairs are equal length and collinear through the cell center; every spherical connector node is a physical two-cell joint with exactly two attached leg uses; crossing diagonal families are separate joints rather than four-cell connector collisions.
   \item \textbf{Do-not-claim boundary:} do not claim reference match, paper current, or public completion from a geometry log, a compiled PDF, a local screenshot, an internal overlay, or a smoother profile string. The rendered full mechanism is the acceptance object.
@@ -245,24 +259,35 @@ This subsection replaces the old Candidate785 figure gallery. Those screenshots 
 \begin{table}[H]
 \centering
 {\small
-\begin{tabular}{Y{0.23\linewidth}Y{0.34\linewidth}Y{0.33\linewidth}}
+\begin{tabular}{@{}Y{0.23\linewidth}Y{0.34\linewidth}Y{0.33\linewidth}@{}}
 \toprule
 Class & Current source & Paper/display rule \\
 \midrule
-Accepted references & Supplied Moana stills, June 23 side drawing, June 24 smooth gridded overview/sequence, June 28 stage/cross-section reference. & Keep as target figures and cite them as references, not as achieved WaveVis output. \\
-Rejected display asset & Profile-trace overlay image. & Removed from tracked proof and public figure assets; do not use internal trace overlays as paper figures. \\
-Rejected candidate state & Candidate785 live/fallback screenshots. & Historical floor only. Do not describe it as no-dimple verified after Alan identified the support-neck/dimple family. \\
-Dirty active attempt & Candidate795 viewer and geometry-checker changes: removed overlay evidence, aligned the terminal sampler with the checker, broadened lateral curl support, removed the premature terminal fade, kept reference-mode mechanism visibility locked, and changed the isometric camera toward the supplied overview angle. & Passed local geometry gate but remains unaccepted because rendered visual match is still open. Do not publish Candidate795 screenshots as accepted evidence. \\
+Accepted references & Latest supplied rounded side drawing, June 24 smooth gridded overview/sequence, June 28 stage/cross-section reference, and retained ocean-curl photos used only for water-form context. & Keep as target figures and cite them as references, not as achieved WaveVis output. \\
+Rejected display asset & Profile-trace overlay image and non-target stills. & Removed from tracked proof and public figure assets; do not use internal trace overlays or visually irrelevant stills as paper figures. \\
+Rejected candidate states & Candidate785 and Candidate841--Candidate866 screenshots. & Historical diagnostics only. Do not describe them as accepted renders after Alan identified support-neck, pointy-profile, front-fin, wall, and blob families. \\
+Active local candidate & Candidate867 viewer and checker changes: supplied rounded side trace, broadened crest-cap span, sectioned front view from the shared 3D reference field, no-point/no-wall front gates, flat perimeter, and visible mechanism locks. & Local geometry/build/browser verification exists, but do not publish it as final accepted evidence until the PDF and public routes are rebuilt and checked. \\
 Mechanism invariant & One-center four-leg X cells with exact opposite-pair collinearity/equal length and physical two-use connector nodes. & Keep as a hard gate and cite source/checker values after each accepted candidate. \\
-Open defect & Under-overhang dimple/support-neck beneath the curl. & Blocks paper claims, proof figures, deployment claims, and Progress closure. \\
+Open boundary & Exact reference-family match and public/fallback route parity. & Blocks final paper claims, deployment claims, and Progress closure until live routes and PDF renders are verified. \\
 \bottomrule
 \end{tabular}
 }
-\caption{WaveVis state ledger as of June 30, 2026. The paper tracks which information is reference truth, rejected history, active source state, and still-open defect state.}
+\caption{WaveVis state ledger as of July 1, 2026. The paper tracks which information is reference truth, rejected history, active source state, and still-open defect state.}
 \label{tab:current-ledger}
 \end{table}
 
 The only current figures that belong in the paper by default are target references and mechanism-proof figures that still define the actual constraint. Candidate screenshots belong only when they are labeled as rejected or diagnostic and they help the next iteration avoid a known failure.
+
+\subsection{Figure and asset hygiene}
+
+WaveVis now treats paper figures as source evidence, not decoration. A file can appear in this PDF only if it belongs to one of four classes:
+\begin{enumerate}
+  \item a target reference that defines the accepted geometry family;
+  \item a current accepted render that passed source checks, browser inspection, and route verification;
+  \item a mechanism proof figure that defines a hard constraint still used by the source;
+  \item a clearly labeled rejected diagnostic that explains a failure mode future iterations must avoid.
+\end{enumerate}
+Profile-trace overlays, centerline-only comparisons, stale candidate screenshots, unrelated stills, helper contours, and any image whose purpose is to make the current source look more correct than the rendered mechanism must stay out of the paper and the public proof folder. When an asset is removed for this reason, the removal is part of the source-of-truth record rather than cleanup churn.
 
 \subsection{File map}
 
@@ -281,7 +306,7 @@ File or route & Ownership \\
 \code{scripts/check-inverse-sheet.cjs} & Main inverse-sheet regression checker. It compiles the TypeScript geometry and checks parameter semantics, lip curl, flatContribution, low-lip stability, lateral smoothness, no bowl pockets, terminal taper, startup URL coverage, and the collinear equal-pair X-cell render contract. \\
 \code{scripts/check-geometry-invariants.cjs} & Mechanism-level invariant checker for rigid-cell/linkage behavior. \\
 \code{proofs/wavevis-system-architecture.tex} & Source for this PDF. Update it when the public simulator contract, current state, or known failure modes change. \\
-\code{proofs/figures/} & Moana reference images, mechanism proof figures, and current source-rendered state figures used by this paper. \\
+\code{proofs/figures/} & Project-defining reference images and mechanism proof figures used by this paper. Old current-state screenshots and trace overlays must stay out of the paper unless explicitly labeled as rejected diagnostics. \\
 \code{dist/} & Built WaveVis static app after \code{npm run build}. Do not edit by hand. \\
 \code{aolabs-site/wavevis/} & Public fallback mirror for \code{https://aolabs.io/wavevis/}. Copy the built \code{dist} contents here when the public fallback must update. \\
 \bottomrule
@@ -299,7 +324,7 @@ A fresh agent continuing WaveVis should do the following in order:
   \item Reproduce Alan's active preset from the URL before changing source. Do not judge a different default state.
   \item Run \code{npm run check:geometry}. If it fails, fix source before visual tuning.
   \item Render and inspect \code{Side}, \code{3D}, and \code{Top}. Side and 3D must both be full-sheet views with the curl visible.
-  \item Make the smallest source change that improves the human-facing Moana-wave outcome without regressing the mechanism invariants.
+  \item Make the smallest source change that improves the human-facing breaking-wave outcome without regressing the mechanism invariants.
   \item Re-run \code{npm run check:geometry} and \code{npm run build}.
   \item Verify live/public output after deploy or fallback mirror update. A local screenshot is not the public artifact.
   \item Update this PDF if the architecture, current state, source map, controls, or known failure classes changed.
@@ -429,9 +454,16 @@ The source samples this curve numerically using 18 subdivisions per cubic segmen
 
 The readable display path uses a lateral envelope
 \[
-  E(s)=\cos^{2.18}\left(\frac{\pi}{2}|s|\right), \qquad s\in[-1,1],
+  E(s)=\cos^{1.42}\left(\frac{\pi}{2}|s|\right), \qquad s\in[-1,1],
 \]
-then uses higher powers of \(E\) near the terminal lip to localize the curl. The source intentionally makes the lip narrower than the broad ramp; otherwise a centerline curl becomes a swept tunnel. In the model path, the same principle appears through \code{transverseSupportMask}, \code{lipAwareRimMask}, \code{terminalLipSpanMask}, \code{shapeMask}, and the post-core taper terms.
+then uses higher powers of \(E\) near the terminal lip to localize the curl. The source intentionally makes the lip narrower than the broad ramp; otherwise a centerline curl becomes a swept tunnel. Candidate867 adds a crest-cap exception around the rounded lip:
+\[
+  C(t)=S(0.54,0.66,t)\,[1-S(0.82,0.94,t)],
+\]
+\[
+  H_{\mathrm{cap}}(s)=\left(1-S(0.20,0.82,|s|)\right)^{0.78},
+\]
+and blends the height span toward \(H_{\mathrm{cap}}\) with weight \(0.86C(t)\). This is not a tunnel relaxation. It is the blocker against the opposite failure Alan identified: a pointy fin or spike in the front/cross-section view. In the model path, the same localization principle appears through \code{transverseSupportMask}, \code{lipAwareRimMask}, \code{terminalLipSpanMask}, \code{shapeMask}, and the post-core taper terms.
 
 \subsubsection{Bowl/dimple blocker}
 
@@ -471,6 +503,33 @@ WaveVis is not currently optimizing a single scalar objective. The useful mental
   +w_v E_{\mathrm{view}}
 \]
 subject to boundary pinning, topology completeness, connector occupancy, no bowl/dimple pockets, and public route verification. At this stage the objective is enforced as explicit gates rather than a continuous solver: reference match is judged on the rendered object; mechanism feasibility is checked in source; stale paper/public assets are treated as failures.
+
+For a future continuous solver, the scalar terms should be reconstructed from the current gates rather than invented from scratch. A practical decomposition is:
+\[
+\begin{aligned}
+E_{\mathrm{ref}} &= \lambda_c d_{\mathrm{Fr}}\!\left(\Pi_{\mathrm{side}}\Phi_\theta,\Gamma_{\mathrm{side}}\right)
+  + \lambda_o\,E_{\mathrm{open}}
+  + \lambda_t\,E_{\mathrm{top}},\\
+E_{\mathrm{smooth}} &= \sum_{(i,j)} \norm{\Delta^2_x p_{ij}}^2+\norm{\Delta^2_y p_{ij}}^2,\\
+E_{\mathrm{mechanism}} &= \sum_n\left(
+  \epsilon_{\mathrm{oppLen}}(n)^2+
+  \epsilon_{\mathrm{oppCol}}(n)^2+
+  \epsilon_{\mathrm{jointUse}}(n)^2+
+  \epsilon_{\mathrm{anchor}}(n)^2
+\right),\\
+E_{\mathrm{view}} &= \epsilon_{\mathrm{sideWall}}^2+\epsilon_{\mathrm{skinnySail}}^2+\epsilon_{\mathrm{frontPoint}}^2+\epsilon_{\mathrm{frontWall}}^2+\epsilon_{\mathrm{hiddenMech}}^2.
+\end{aligned}
+\]
+Here \(d_{\mathrm{Fr}}\) is a curve-distance proxy between the side projection and the supplied side reference, \(E_{\mathrm{open}}\) samples the underside throat below the lip for dimples, bites, bowls, and support-necks, and \(E_{\mathrm{top}}\) rejects broad terminal blobs, triangles, and V fans in plan view. \(E_{\mathrm{frontPoint}}\) rejects a rounded-wave front view that collapses into a vertical fin; \(E_{\mathrm{frontWall}}\) rejects the opposite full-width wall. This follows the general inverse-design pattern of optimizing a physically meaningful state subject to explicit manufacturability and simulation constraints~\cite{skouras_designing_inflatable_2014,konakovic_auxetic_2016,panetta_surface_inflatables_2021,du_diffpd_2022}, but WaveVis should keep the gate form until the rendered artifact is stable enough that a scalar objective would not hide a visible failure.
+
+\subsubsection{Candidate iteration record}
+
+Every new geometry candidate must be traceable. The minimum record is:
+\[
+  \mathcal{R}_k=
+  \{\text{candidate id},\text{source diff},\text{intended defect},\text{metrics},\text{render captures},\text{accept/reject reason}\}.
+\]
+The accept/reject reason must name the rendered shape, not only the code change. A valid note says, for example, ``rejected: side open throat improved but top became a broad terminal blob.'' An invalid note says only ``geometry check passed.'' Candidate848--Candidate866 are examples of why this record matters: some local gates passed, but browser renders still showed support ridges, broad top blobs, front-wall reads, or pointy fin profiles. Candidate867 is the first local candidate in this sequence whose side view follows the rounded supplied line and whose front view is a rounded crest-section, but it remains local until public/PDF verification closes.
 
 \subsection{Rigid controls}
 
@@ -521,10 +580,10 @@ These checks are guards, not substitutes for the human-facing screenshot. A visi
 \code{LatticeViewer3D.tsx} renders the readable surface and a connected X-cell mechanism from the actual lattice graph. In the current contract:
 \begin{itemize}
   \item \code{view=side} sets a side camera over the full three-dimensional linkage array;
-  \item \code{view=front} sets a front camera over the same full three-dimensional sheet so the spanwise lip cap can be inspected;
+  \item \code{view=front} sets a front camera over a crest-section window sampled from the same readable three-dimensional field, so the view inspects the rounded cross-section instead of projecting the whole side trace into a fin;
   \item \code{view=isometric} shows the full rectangular sheet in perspective while still making the curl and lip readable;
   \item the default product view uses a smooth gridded surface skin plus one-center four-leg X-cell leg lines, black square cell bodies, and spherical connector nodes;
-  \item Side, Front, and 3D use view-specific mesh outlines instead of the previous SVG overlay or red terminal trace;
+  \item Side, Front, and 3D use view-specific mesh outlines instead of the previous SVG overlay, centerline comparison, or red terminal trace;
   \item each rendered X cell is one black square cell body with four visible center-to-connector legs;
   \item each connector is a spherical two-use physical node between adjacent cells;
   \item each connector has exactly two endpoint uses: one leg from each of those two centers;
@@ -533,36 +592,6 @@ These checks are guards, not substitutes for the human-facing screenshot. A visi
   \item cells and X legs are display toggles, not repair paths, and their render scope remains covered by the geometry check.
 \end{itemize}
 If the renderer needs to hide rows to make the shape readable, the generator is still wrong.
-
-
-\begin{figure}[H]
-\centering
-\begin{subfigure}[t]{0.48\linewidth}
-  \centering
-  \includegraphics[width=\linewidth]{reference-moana-barrel-water.jpg}
-  \caption{Open underside and suspended lip.}
-\end{subfigure}\hfill
-\begin{subfigure}[t]{0.48\linewidth}
-  \centering
-  \includegraphics[width=\linewidth]{reference-moana-touch-curl.jpg}
-  \caption{Forward/downward curl at the water edge.}
-\end{subfigure}
-
-\vspace{0.8em}
-
-\begin{subfigure}[t]{0.48\linewidth}
-  \centering
-  \includegraphics[width=\linewidth]{reference-moana-water-mound.png}
-  \caption{Localized mound emerging from flat water.}
-\end{subfigure}\hfill
-\begin{subfigure}[t]{0.48\linewidth}
-  \centering
-  \includegraphics[width=\linewidth]{reference-moana-night-column.jpg}
-  \caption{Rounded column without a hard perimeter wall.}
-\end{subfigure}
-\caption{Additional supplied reference frames. Together they define the acceptance target: water-like surface continuity, strong center curl, smooth lateral fade, no side wall covering the underside, and no swept tunnel extrusion.}
-\label{fig:moana-reference-set}
-\end{figure}
 
 \section{Target outcome}
 
@@ -646,7 +675,7 @@ The target-building pipeline is:
 \begin{enumerate}
   \item sanitize rows, columns, visible sliders, hidden legacy shape parameters, display flags, and URL parameters;
   \item build the full rectangular node grid;
-  \item compute the canonical Moana-ocean wave displacement from the curated target;
+  \item compute the canonical rounded breaking-wave displacement from the supplied reference target;
   \item apply the span envelope that localizes the wave in \(y\);
   \item preserve the boundary by forcing perimeter displacement to zero;
   \item apply morph interpolation from rest to target;
@@ -656,12 +685,12 @@ The target-building pipeline is:
   \item render the full array, side view, 3D view, and top view without substituting fake surfaces.
 \end{enumerate}
 
-The distinction between the curated target and rigid placement parameters is essential. The visible app no longer exposes manual \(xz\) or \(xy\) profile editors. The source target owns the Moana-ocean profile. The user-facing sliders are intentionally narrow: scale uniformly resizes that target, morph blends from rest to the completed target, steer rotates the finished target around the anchor, and position translates the finished target horizontally. Neither steer nor position may feed back into profile curvature, curl, width, strain generation, or cell topology.
+The distinction between the supplied reference target and rigid placement parameters is essential. The visible app no longer exposes manual \(xz\) or \(xy\) profile editors. The source target owns the rounded breaking-wave profile. The user-facing sliders are intentionally narrow: scale uniformly resizes that target, morph blends from rest to the completed target, steer rotates the finished target around the anchor, and position translates the finished target horizontally. Neither steer nor position may feed back into profile curvature, curl, width, strain generation, or cell topology.
 
 \begin{table}[H]
 \centering
 {\small
-\begin{tabular}{Y{0.22\linewidth}Y{0.37\linewidth}Y{0.30\linewidth}}
+\begin{tabular}{@{}Y{0.22\linewidth}Y{0.37\linewidth}Y{0.30\linewidth}@{}}
 \toprule
 Stage & Contract & Failure caught \\
 \midrule
@@ -678,9 +707,9 @@ Paper evidence & Includes only target references, accepted mechanism proofs, acc
 \caption{Pipeline stages and the failure modes each stage must prevent.}
 \end{table}
 
-\section{Curated Moana Target}
+\section{Supplied rounded target}
 
-The current visible app does not ask the user to draw a profile. That path created too much ambiguity and repeatedly made the simulator look like a swept tunnel or hand-edited cavity rather than a single coherent wave. The user-facing target is now driven by a curated custom Moana-ocean lip/body profile: a localized ocean deformation with a broad rear ramp, rounded crest, forward-and-down lip, open underside, smooth lateral fade, and flat rectangular perimeter.
+The current visible app does not ask the user to draw a profile. That path created too much ambiguity and repeatedly made the simulator look like a swept tunnel or hand-edited cavity rather than a single coherent wave. The user-facing target is now driven by the supplied rounded breaking-wave lip/body profile: a localized ocean deformation with a broad rear ramp, rounded crest, forward-and-down lip, open underside, smooth lateral fade, and flat rectangular perimeter.
 
 The curated target is a reference field, not a set of cell locations. The final cell grid is determined by row and column counts, then sampled against that target. A clean state must keep the full linkage array visible while making the centerline and lateral profile read as one plunging wave. The target must never stitch the lip directly to the ground or draw a hard polygon boundary around a former editor curve, because that creates the wall, bowl, cavity, and silhouette-only failures this record explicitly rejects. The curl is also resolution-sensitive: the default reference-wave state keeps \(112\) columns, while reduced column counts are reserved for low-density mechanism inspection and must not be mistaken for a completed reference-shape view.
 
@@ -689,19 +718,19 @@ The curated target is a reference field, not a set of cell locations. The final 
 \begin{table}[H]
 \centering
 {\small
-\begin{tabular}{Y{0.24\linewidth}Y{0.32\linewidth}Y{0.33\linewidth}}
+\begin{tabular}{@{}Y{0.24\linewidth}Y{0.32\linewidth}Y{0.33\linewidth}@{}}
 \toprule
 Control & Intended effect & Must not do \\
 \midrule
 \code{morph} & Blend rest sheet into the completed target. & Remesh, flip cells, create zig-zags, change profile identity. \\
-\code{scale} & Uniformly enlarge or reduce the curated Moana-ocean target. & Change steer, position, topology, or the target's wave identity. \\
+\code{scale} & Uniformly enlarge or reduce the supplied rounded target. & Change steer, position, topology, or the target's wave identity. \\
 \code{steer} & Rigid yaw rotation of the finished wave. & Bend, stretch, or reshape the wave. \\
 \code{position} & Rigid horizontal translation of the finished wave. & Change profile, strain field, or curl. \\
 display toggles & Surface, flat grid, cells, and X legs are display layers only. & Hide broken geometry or substitute a fake repair path. \\
 \bottomrule
 \end{tabular}
 }
-\caption{Visible control contract after removing manual profile editors and hidden shape sliders. The curated Moana-ocean target is the default shape; visible controls must preserve that shape unless their narrow role explicitly changes scale, morph, steer, position, or display layers.}
+\caption{Visible control contract after removing manual profile editors and hidden shape sliders. The supplied rounded target is the default shape; visible controls must preserve that shape unless their narrow role explicitly changes scale, morph, steer, position, or display layers.}
 \end{table}
 
 \section{Breaking-wave geometry}
@@ -739,12 +768,6 @@ The mechanism evidence from the earlier proof remains relevant as a warning agai
 \centering
 \includegraphics[width=0.93\linewidth]{constraint-contract-summary.png}
 \caption{Mechanism contract inherited from the constraint proof and updated in the current renderer. WaveVis should preserve exact shared contact, one-center cells, and two-cell connector joints on adjacent-center spans rather than hiding infeasible geometry behind filler surfaces or a connector-ID count.}
-\end{figure}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.93\linewidth]{simulator-evidence-plate.png}
-\caption{Simulator evidence for the linkage direction. The current architecture must keep this mechanism truth visible while the inverse target shape is improved.}
 \end{figure}
 
 \section{Rendering modes}
@@ -818,11 +841,11 @@ The current acceptance evidence expected from \code{scripts/check-inverse-sheet.
   \item connected X-cell bodies stay close to the sampled wave surface rather than becoming a detached fake mechanism;
   \item no bowl-pocket count is reported for default, compact-user, and breaking-wide presets;
   \item the literal readable side trace, side/isometric readable profile, startup default, user morph half-lip case, and slider sweeps all pass the terminal and readable side-profile cavity blockers before browser screenshots are treated as useful evidence;
-  \item \code{blockSurfaceBowlPockets} runs on the target grid before morphing and node emission, and the \(79\)-case slider sweep reports no side-cavity or surface-bowl bad cases;
+  \item \code{blockSurfaceBowlPockets} runs on the target grid before morphing and node emission, and the named \(79\)-case slider sweep reports empty \code{badCases} arrays for the side-cavity and surface-bowl gates;
   \item side-overhang aspect stays in the downturned-lip band after the supplied-line update: startup default aspect between \(1.35\) and \(3.05\), compact user morph case between \(1.45\) and \(3.15\), and both with reach-to-height between \(0.72\) and \(1.35\);
   \item broad open-curl lip stats keep open-throat, no-dimple, no-under-overhang-bite, no-backfold, and return-to-flat checks true;
   \item those lip stats allow a wide rounded cap and tucked nose instead of forcing the old vertical-chute proxy;
-  \item slider robustness reports no bad cases.
+  \item slider robustness exits cleanly for the named acceptance sweeps, while printed diagnostic subcases can still expose unsupported-resolution or terminal-angle failures that must not be described as accepted visual states.
 \end{itemize}
 
 These checks are designed around Alan's repeated failures. If a future change removes one of these cases because it is inconvenient, that is a regression unless the PDF and source explain an intentional replacement gate that still catches the same failure.
@@ -892,23 +915,30 @@ Progress does not automatically ingest every active Codex chat. If a future Wave
 
 This section is intentionally blunt so a future chat does not have to infer whether the system is finished.
 
-\textbf{Verified current facts on June 30, 2026:}
+\textbf{Verified current facts on July 1, 2026:}
 \begin{itemize}
   \item The reliable public route is \code{https://aolabs.io/wavevis/}; the preferred HTTPS subdomain remains a separate certificate/live-route check.
   \item The Inverse Sheet tab is the first/default option; Double-Layer Sarrus is secondary.
   \item The public PDF route is \code{/wavevis/proofs/wavevis-system-architecture.pdf}.
   \item Side, Front, Top, and 3D are product view modes. Side is a full three-dimensional sheet view, not a profile-only debug trace.
   \item The current source tree preserves the one-center four-leg X mechanism, black square cell bodies, spherical two-use connector nodes, and the geometry checker that measures those invariants.
-  \item Candidate795 passed the local \code{npm run check:geometry} command in this work cycle, producing \code{\_verification/candidate795/geometry.log}. That is necessary evidence, not acceptance.
-  \item The wrong internal reference-overlay figure has been removed from tracked paper/public figure assets.
+  \item Candidate867 passes the local inverse-sheet checker \pathcode{scripts/check-inverse-sheet.cjs}; the passing gate includes the rounded supplied side trace, flat perimeter, no bowl/dimple pocket, no skinny front fin, no full front wall, and visible one-center four-leg X-cell mechanism.
+  \item Candidate867 passes local \code{npm run build}; the built bundle is in \code{dist/}.
+  \item Candidate867 browser captures exist in:
+  \begin{quote}\footnotesize
+  \pathcode{_verification/}\\
+  \pathcode{browser-20260701-}\\
+  \pathcode{candidate867-sectioned-front-view/}
+  \end{quote}
+  The folder contains side, front, top, isometric, and forced mechanism-on views.
+  \item The wrong internal reference-overlay figure and irrelevant stills have been removed from tracked paper/public figure assets.
 \end{itemize}
 
 \textbf{Open state that blocks completion:}
 \begin{itemize}
-  \item Alan identified the under-overhang dimple/support-neck class as a hard fail in the rendered artifact. The current source is still under repair until rendered side, isometric, top, and forced mechanism-on URLs pass.
-  \item Candidate785 is not a final accepted state. Candidate795 is dirty and unaccepted until visual verification and public-route verification pass.
-  \item Candidate795 screenshots reduce some earlier failure modes but still do not prove the supplied reference match. The side view still has a sharp dangling lower terminal point, and the isometric/top views still read too much like a broad wall or mound instead of the supplied localized breaking-wave family.
-  \item Exact matching to the supplied breaking-wave line drawing, June 24 gridded reference, June 28 stage/cross-section reference, or photorealistic Moana-water frame is not proven.
+  \item Candidate867 is locally improved, not final proof. It still needs rebuilt-PDF inspection, public fallback verification, standalone-route verification, and Progress logging.
+  \item Candidate785 and Candidate841--Candidate866 are not final accepted states. They remain rejected diagnostics.
+  \item Exact matching to the supplied breaking-wave line drawing, June 24 gridded reference, June 28 stage/cross-section reference, or retained ocean-curl photographs is not proven.
   \item This is a simulator and architecture record. It is not evidence that a physical lattice prototype has been fabricated or experimentally validated.
   \item If the live app, source, screenshots, Progress, or this PDF disagree, the current rendered artifact and source tree must be inspected and reconciled before any completion claim.
 \end{itemize}
@@ -937,13 +967,13 @@ The solution direction is to simplify the target field while strengthening the g
 
 The implementation source is the WaveVis React and TypeScript app~\cite{wavevis_source_2026}. The main geometry source is \code{src/latticeGeometry.ts}. The primary render source is \code{src/LatticeViewer3D.tsx}. Controls are declared in \code{src/TargetShapeControls.tsx}. Regression checks are run through \code{scripts/check-inverse-sheet.cjs}.
 
-The model is deliberately written as an inspectable engineering simulator rather than a black-box optimizer. The validation style borrows from topology-optimization practice, where a compact code can still be valuable when its filters, constraints, and objective terms are explicit~\cite{sigmund_99line_2001}; from compliant-mechanism design, where target displacement is inseparable from manufacturable compliance and constraint choice~\cite{sigmund_compliant_1997}; and from mechanical metamaterials, where local cell rules can create global deformation modes but can also produce unintended instabilities if the cell rule is not made explicit~\cite{bertoldi_instability_2010,coulais_textured_2016,kadic_3d_metamaterials_2019}. WaveVis currently encodes those lessons as hard source gates rather than as a mature continuous optimizer.
+The model is deliberately written as an inspectable engineering simulator rather than a black-box optimizer. The validation style borrows from topology-optimization practice, where a compact code can still be valuable when its filters, constraints, and objective terms are explicit~\cite{sigmund_99line_2001}; from linkage and compliant-mechanism design, where target motion is inseparable from topology, joint placement, actuator choice, and manufacturable compliance~\cite{coros_mechanical_characters_2013,thomaszewski_linkage_characters_2014,megaro_compliant_mechanisms_2017,sigmund_compliant_1997}; from inflatable and auxetic inverse design, where a desired three-dimensional target must be produced by a planar pattern or cell field rather than by a decorative surface~\cite{skouras_designing_inflatable_2014,konakovic_auxetic_2016,panetta_surface_inflatables_2021}; and from mechanical metamaterials, where local cell rules can create global deformation modes but can also produce unintended instabilities if the cell rule is not made explicit~\cite{bertoldi_instability_2010,coulais_textured_2016,kadic_3d_metamaterials_2019}. WaveVis currently encodes those lessons as hard source gates rather than as a mature continuous optimizer.
 
 The public app serves a static build. The architecture PDF is placed in the public proofs directory as \code{wavevis-system-architecture.pdf} and linked from the WaveVis control headers. The old connector proof remains a source artifact for the mechanism decision, but the visible paper action now points to this architecture record because the current work is broader than connector assignment.
 
 \section{Discussion}
 
-The main design lesson is that WaveVis cannot be corrected by tuning only the side profile. The user-facing failure was three-dimensional: side walls, swept tubes, missing full-array linkages, broken side-view semantics, and zig-zag legs. The architecture therefore now uses a single curated target contract rather than a manual editor contract. The sheet generator is responsible for creating a localized Moana-like displacement field with lateral fade, boundary preservation, topology completeness, and a visible curled lip.
+The main design lesson is that WaveVis cannot be corrected by tuning only the side profile. The user-facing failure was three-dimensional: side walls, swept tubes, missing full-array linkages, broken side-view semantics, pointy front fins, and zig-zag legs. The architecture therefore now uses a single curated target contract rather than a manual editor contract. The sheet generator is responsible for creating a localized breaking-wave displacement field with lateral fade, boundary preservation, topology completeness, and a visible curled lip.
 
 This distinction also clarifies future work. If the simulator produces a good center profile but a bad side view, the profile is only evidence that the curve exists somewhere. The real artifact still fails if the full three-dimensional render hides the curl or reads as an extrusion. Similarly, if the mesh is clean but the wave looks like a low mound, the mechanism is not enough. Both the shape and the linkage must be correct.
 
@@ -967,7 +997,7 @@ The author declares no competing interests for this internal architecture record
 
 \section{Data availability}
 
-The source data for this record is the WaveVis source tree, the Alan-supplied Moana ocean reference images copied into the proof figure set, the local proof diagrams, and the current simulator behavior. The public PDF is served with the WaveVis static app.
+The source data for this record is the WaveVis source tree, the Alan-supplied rounded side-profile reference, the retained ocean-curl references copied into the proof figure set, the local proof diagrams, and the current simulator behavior. The public PDF is served with the WaveVis static app.
 
 \section{Code availability}
 
