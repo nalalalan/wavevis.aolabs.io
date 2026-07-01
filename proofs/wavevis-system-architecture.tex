@@ -113,6 +113,9 @@
 \newcolumntype{Y}[1]{>{\raggedright\arraybackslash}p{#1}}
 \newcommand{\code}[1]{\texttt{#1}}
 \newcommand{\R}{\mathbb{R}}
+\newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\clamp}{\operatorname{clamp}}
 
 \begin{document}
 \linenumbers
@@ -136,10 +139,10 @@
 \end{center}
 
 \vspace{0.35em}
-\noindent\textbf{WaveVis is an inverse simulator for a mostly flat rectangular linkage sheet with one localized plunging-wave deformation rising out of the sheet. The primary visual target is the supplied breaking-wave reference family: Moana-like water stills plus the June 23, 2026 line drawing with a broad outer arch, inward spiral curl, smooth downturned tapered tip, smooth inner throat, and long low return. The intended artifact is not an extruded ribbon, half-pipe, swept strip, roof, bridge, or hollow shell. It is a full array of linkage cells over a fixed flat perimeter: the center region ramps upward, forms a rounded crest, projects a lip forward and downward, curls into the tapered lip tip, and fades smoothly back into the surrounding sheet in all directions. The reference geometry is an acceptance target, not a success claim. A rendered state is still open if the human-facing render reads as a tunnel, wall-covered cavity, bowl, dimple, angular blob, missing curl, hooked or abrupt tip, or broken linkage even when code checks pass. A verification URL is also part of the artifact: if the page ignores URL slider parameters, the screenshot is not evidence for the state Alan requested. This paper replaces the earlier narrow constraint-proof PDF as the visible system record. It defines the reference geometry, coordinate systems, curated breaking-wave target, visible slider semantics, topology invariants, rendering views, failure modes, verification gates, deployment state, and handoff procedure required before WaveVis work can be called correct.}
+\noindent\textbf{WaveVis is an inverse computational-design record for a rectangular linkage sheet that is being driven toward one localized plunging-wave deformation while keeping the mechanism visible. This PDF is not allowed to be a decorative paper, a candidate gallery, or a misleading overlay. It is the reconstruction manual for the project: the target references, coordinate frames, source files, equations, topology constraints, render/display split, validation gates, failure ledger, deployment boundary, and next iteration protocol needed for a fresh engineer to continue from source truth. The accepted reference family is the supplied Moana-like breaking wave, the June 23 side drawing, the June 24 smooth gridded overview/sequence, and the June 28 stage/cross-section sheet. The rejected family is equally explicit: swept tunnels, side walls, bowls, dimples, dark pockets, under-overhang support necks, profile-only traces, hidden mechanisms, fake filler bridges, and any figure that makes the wrong geometry look authoritative. Current state is open: Candidate785 is only a previous recovery floor and Candidate795 is the current dirty, unaccepted local source attempt. Candidate795 removes the wrong overlay path, aligns the renderer and checker around the terminal sampler, broadens the lateral envelope, removes the premature terminal fade that made a foot, and changes the isometric camera to a reference-overview angle. It passes local geometry gates, but rendered visual review still rejects it because the side terminal remains too sharp and the isometric/top views still read as a broad wall or rounded mound rather than a localized open-throat breaking wave. Completion remains blocked until the rendered full mechanism passes side, isometric, top, forced-mechanism-on, paper/PDF, and public-route verification.}
 
 \vspace{0.65em}
-\noindent\textbf{Fresh-chat use.} This PDF is intended to be the first artifact a new WaveVis chat reads. It is not only a public paper. It is the continuation manual for the current simulator: what shape is being made, what failures were rejected, which files own the implementation, how each slider is allowed to behave, what tests must pass, what public route is verified, what remains unresolved, and how to continue without re-learning the same mistakes from chat history.
+\noindent\textbf{Fresh-chat use.} Read this PDF before changing WaveVis. Then inspect the current source, the live route, the latest handoff, and the rendered artifact. If any of those disagree, the live/source/rendered state wins over this prose until the PDF is rebuilt and reverified. A future chat should be able to reconstruct the model and the iteration state from this record without relying on old chat memory.
 
 \newpage
 \pagestyle{fancy}
@@ -148,15 +151,17 @@
 
 \section{Introduction}
 
-WaveVis exists to explore whether a cellular Sarrus-style linkage array can approximate visually meaningful three-dimensional sheet deformations while preserving mechanical readability. The simulator therefore has two simultaneous jobs. First, it must generate a target shape that resembles the supplied Moana ocean references rather than a generic height field. Second, it must keep the linkage graph legible: cells, nodes, connector pairs, and edges must remain visible and connected rather than being hidden under cosmetic surfaces or erased when the shape becomes difficult.
+WaveVis is an inverse-design simulator for a deployable mechanism. It takes a target surface intent, samples it on a rectangular sheet, and renders the resulting cell/connector mechanism rather than only a smooth mesh. That places it between several technical families: deformable-body, cloth, shell, and mass-spring simulation where surfaces are discretized, regularized, and advanced under mechanical constraints~\cite{terzopoulos_elastically_1987,baraff_witkin_1998,grinspun_discrete_shells_2003,liu_fast_mass_spring_2013}; spacetime, constraint-projection, and shape-regularization methods where feasibility is enforced by explicit objective terms or repeated local/global corrections~\cite{witkin_spacetime_1988,muller_position_based_2007,sorkine_arap_2007,bouaziz_projective_2014}; computational linkage design where motion and contact constraints are part of the design object~\cite{coros_mechanical_characters_2013,zhu_linkedit_2015,mccarthy_linkages_2000}; and inverse/topology design of mechanisms and metamaterials where a desired deformation field must be made compatible with a manufacturable structure~\cite{bendsoe_kikuchi_1988,sigmund_compliant_1997,coulais_textured_2016,kadic_3d_metamaterials_2019}. WaveVis is not a solved member of any of those literatures. It is an active reconstruction record for one specific mechanism question: can a rectangular linkage sheet be made to read as a localized plunging wave while keeping its full kinematic graph visible?
 
-The current design problem is stricter than drawing a pretty profile. A side outline can look acceptable while the actual three-dimensional sheet has a wall across the underside, a cavity where the lip should be open, an extruded barrel, or zig-zagging linkage legs that no longer read as a mechanism. Conversely, a mesh can satisfy a local numerical check while failing the human outcome: a full rectangular sheet with a localized plunging wave. WaveVis must therefore treat the visible artifact, the mechanism topology, the parameter semantics, and the regression checks as one architecture.
+The design problem is stricter than drawing a curve or matching a screenshot. A side outline can look acceptable while the actual three-dimensional sheet has a wall across the underside, a cavity where the lip should be open, an extruded barrel, or zig-zagging linkage legs that no longer read as a mechanism. Conversely, a mechanism can satisfy a local numerical check while failing the human outcome: a full rectangular sheet with a localized plunging wave. WaveVis must therefore treat the visible artifact, target field, kinematic topology, URL state, source checks, paper figures, and public deployment as one coupled system.
 
 The central correction captured here is that a breaking wave is not made by sweeping one two-dimensional profile sideways. A swept profile creates a tunnel, canopy, or half-pipe. The required object is a localized deformation field on a flat sheet:
 \[
   \Phi : (x,y) \mapsto \bigl(x + \Delta_x(x,y),\ y + \Delta_y(x,y),\ \Delta_z(x,y)\bigr),
 \]
 where the displacement is concentrated near the middle span, gradually fades toward the lateral sides, and is exactly zero on the perimeter. The curl must be strongest near the centerline and weaker toward the sides. This spatial falloff is part of the target shape, not a rendering trick.
+
+The current hard failure is not subtle. A rendered state showed an inward support neck and dimple below the curling lip. That shape class is banned because it means the simulator has built a local support column or bowl where the reference requires an open throat. No overlay, centerline plot, paper caption, or metric-only pass may convert that failure into evidence.
 
 \subsection{Reference geometry}
 
@@ -209,8 +214,12 @@ If this PDF is the only WaveVis context available, start with this section and t
   \item \textbf{Visible PDF action:} the WaveVis header links to the paper file under \code{/proofs/}. File: \code{wavevis-system-architecture.pdf}. The old connector proof remains a source artifact, not the primary user-facing paper action.
   \item \textbf{Current source root:} workspace path \code{\_apps/wavevis.aolabs.io/}.
   \item \textbf{Public fallback mirror:} workspace path \code{\_apps/aolabs-site/wavevis/}. A WaveVis deploy to its own \code{gh-pages} branch does not automatically update the \code{aolabs.io/wavevis/} fallback unless the built files are mirrored there and the hub site is pushed.
-  \item \textbf{Current architectural direction:} curated custom Moana-ocean profile localized into the inverse-sheet field. Manual \(xz\) and \(xy\) profile editors are not the active path.
-  \item \textbf{Current reference-match boundary:} the June 30, 2026 Candidate785 checkpoint is a no-under-lip-dimple recovery floor after Alan opened the public site and found a dark concave bite under the overhang. It targets the June 23 line drawing, the June 24 smooth gridded breaking-wave sequence, and the June 28 stage/cross-section reference, but it is not a completed reference match. The default product view shows the readable surface plus the connected X-cell mechanism: surface is on, \code{X legs} are on, and \code{cells} are on. Reference-mode URL gates remain addressable for inspection, but they cannot suppress the mechanism layer or make the controls imply that the mechanism is hidden: a request such as \code{surface=1\&connectors=0\&cells=0} is normalized back to a checked, locked full-mechanism state before public capture. Side is a full three-dimensional side camera with visible cells, legs, shared rods, and spherical connector joints, not a profile-only debug view, not a surface-only silhouette, and not a side outline that hides the mechanism. Candidate785 preserves the no-cavity tapered-body acceptance, terminal taper acceptance, perimeter-strip acceptance, full-mechanism visibility acceptance, and adds a side/isometric under-overhang throat blocker: any concave bite, dark pocket, hooked notch, dimple, or pinched underside beneath the overhang rejects the candidate before screenshots, figures, paper language, deployment, or Progress can call the state improved. Candidate785 uses a dedicated side/isometric readable profile, \code{readableSideProfileCavityBlock}, a stronger open-throat lift, and a more localized lateral envelope so the underside advances into the flat return instead of folding into the dimple Alan caught. Top and Front keep the safer rounded proof profile so the plan proof does not inherit a side-only curl opening. The target grid still runs \code{blockSurfaceBowlPockets} before morphing and node emission; any forbidden local low point is lifted out of the model before browser screenshots, figure export, or deployment can use it. The current hard mechanism gate is exact cell-level X geometry: every interior cell is one black square body with four straight legs, opposite leg pairs are equal length and collinear through the cell center, the cell center bisects both bars, the two pair lengths and included angle may differ, and every spherical connector node is a physical two-cell joint with exactly two attached leg uses. The current X mechanism reports \(4928\) black square cells, \(19400\) rendered center-to-connector legs, \(19400\) shared-joint arms, \(9700\) spherical physical connector nodes, \(9544\) checked opposite pairs, interior leg-count range \(4\)--\(4\), zero connector endpoint gap, zero opposite-pair length spread, zero opposite-pair collinearity error, zero opposite-center residual, physical connector use count \(2\)--\(2\), and \(0\) over-occupied physical connectors. Connector corridor drift is now a bounded diagnostic, not the pass condition. The default dense wave remains \(44\times112\), while URLs may reduce columns to \(12\) or more for X-cell inspection. The checkpoint is guarded mechanism/readability progress, not a completed reference match: the under-overhang dimple Alan saw is blocked in source checks and absent in the refreshed live side/isometric captures, the perimeter-lift and broader cavity/dimple families are blocked in source checks, the \(79\)-state slider sweep reports no bad cases, the terminal taper gate passes, the top view no longer collapses into a triangular fan, and all product cameras keep the full mechanism visible, but the shape still reads as a simplified rounded mechanism floor rather than an exact Moana-like curled-tube identity.
+  \item \textbf{Current architectural direction:} curated supplied-reference field localized into the inverse-sheet model, plus a separate readable display surface for visual inspection. Manual \(xz\) and \(xy\) profile editors are not the active path.
+  \item \textbf{Current branch state:} Candidate785 is the last committed recovery floor, but it is not the final accepted geometry. Candidate795 is the dirty local source attempt in \code{src/LatticeViewer3D.tsx} and \code{scripts/check-inverse-sheet.cjs}. It passed \code{npm run check:geometry} locally with log \code{\_verification/candidate795/geometry.log}. Browser captures exist under \code{\_verification/browser-20260630-candidate795/}. Those captures are diagnostic only, not accepted paper figures.
+  \item \textbf{Active hard fail:} Alan opened the rendered WaveVis state and identified an obvious under-overhang dimple/support-neck. Candidate795 removes the rejected paper overlay, keeps the mechanism on in reference mode, aligns several renderer/checker gates, and changes the isometric camera, but the rendered side/3D views still have an unaccepted sharp lower terminal connection and the overview still reads too much like a broad wall or mound. The defect remains open until source, screenshots, paper figures, public route, and fallback route all show a smooth open throat with the full mechanism visible.
+  \item \textbf{Correct acceptance target:} the supplied June 24 smooth breaking-wave reference family and June 28 stage/cross-section reference. The wrong target is any internal trace diagram, centerline overlay, profile-only silhouette, or helper contour that cannot reconstruct the mechanism.
+  \item \textbf{Current mechanism contract:} every interior cell is one black square body with four straight legs; opposite leg pairs are equal length and collinear through the cell center; every spherical connector node is a physical two-cell joint with exactly two attached leg uses; crossing diagonal families are separate joints rather than four-cell connector collisions.
+  \item \textbf{Do-not-claim boundary:} do not claim reference match, paper current, or public completion from a geometry log, a compiled PDF, a local screenshot, an internal overlay, or a smoother profile string. The rendered full mechanism is the acceptance object.
 \end{itemize}
 
 \subsection{What the next agent must not repeat}
@@ -229,65 +238,31 @@ The repeated failures that this document is meant to prevent are:
   \item Do not paste a mid-height contour, helper ellipse, bridge, or cross-section overlay into the product view to fake the June 28 cross-section row. Fix the surface projection and preserve the X-only proof path.
 \end{enumerate}
 
-\subsection{Current live-state evidence}
+\subsection{Current state ledger}
 
-Figures~\ref{fig:current-live-side}--\ref{fig:current-live-top-x-small-proof} record Candidate785 from the live fallback route. The default presentation is a readable gridded surface plus the connected X-cell mechanism inspired by the June 24 and June 28 references. Candidate785 separates the readable display profile by view: Side and 3D/isometric receive the no-under-lip-dimple side profile, while Top and Front keep the safer rounded proof profile so a side-shape repair does not turn the plan view into a triangular fan. The checker blocks the specific failures Alan named: perimeter lift, bowl, dimple, under-overhang throat bite, cavity, lower-branch rebound, lower-branch backtrack, hooked terminal descent, cliff-like terminal drop, surface-local bowl pockets, top-view triangular fan collapse, silhouette-only mechanism visibility, and controls that claim cells or X legs are off while the surface is visible. The source blocker runs before rendered evidence: \code{blockSurfaceBowlPockets} lifts forbidden local minima in the target grid; \code{readableSideProfileCavityBlock} rejects a side/isometric under-lip valley or pocket; the readable perimeter sampler rejects lifted edge lines, lifted perimeter border bands, footprint escape, terminal pinch, and non-straight terminal boundaries; the terminal taper sampler rejects hook/cliff finishes; and slider robustness checks \(79\) cases with no side-cavity or surface-bowl bad cases. Front remains a separate spanwise check with the same black-square cell and spherical-node rendering. Top keeps one square sheet panel, one continuous X-frame layer, a stronger reference-sheet grid, a top-only height-shadow derived from the readable surface, and a rounded footprint instead of inheriting the side-only curl opening. The mechanism is not deleted: \code{X legs} exposes the actual collinear equal-pair X cells, \code{surface=0\&connectors=1\&cells=1} exposes the X-only mechanism view, \code{surface=1\&connectors=0\&cells=0} is normalized to a checked, disabled mechanism-on surface request rather than a valid surface-only acceptance view, and \code{node scripts/check-inverse-sheet.cjs} verifies \(4928\) black square cells, \(19400\) rendered center-to-connector X legs, \(19400\) rendered shared-joint arms, \(9700\) spherical connector nodes, \(9544\) checked opposite pairs, interior leg-count range \(4\)--\(4\), zero connector endpoint gap, zero opposite-pair length spread, zero opposite-pair collinearity error, zero opposite-center residual, exactly two physical endpoint uses per connector, \(0\) over-occupied physical connectors, \code{maxEdgeZ=0}, \code{maxBorderBandZ=0}, \code{maxPlanXOvershoot=0}, \code{sourceUsesBlackSquareCells=true}, and \code{sourceUsesCollinearEqualPairConnectors=true}. Candidate785 keeps a \(12\times12\) proof route so the same four-leg, two-use connector contract is readable without the dense whole-array overplot. This paper therefore treats the current render as verified no-dimple/mechanism/perimeter progress with an open visual-match boundary: all public cameras show the mechanism, but the full reference match remains sparse and approximate.
+This subsection replaces the old Candidate785 figure gallery. Those screenshots are historical diagnostics, not final paper evidence. The paper must not show a stale candidate as if it were the correct geometry. The current ledger is:
 
-\begin{figure}[H]
+\begin{table}[H]
 \centering
-\includegraphics[width=0.98\linewidth]{current-live-side.png}
-\caption{Candidate785 browser-rendered Side view from the live fallback route. The view keeps the readable surface subordinate to the actual mechanism: a lighter surface skin, muted X-cell ink, one-center/four-leg cell bodies, spherical two-use connector nodes, and visible shared-joint rods remain readable without forming a black silhouette mass. Candidate785 removes the dark under-overhang dimple Alan found in the public render by using the no-dimple side/isometric readable profile and open-throat lift. The underside now returns into the flat sheet instead of folding into a pocket, while the perimeter border band stays source-gated flat. The reference-wave match is still open: this checkpoint repairs the under-lip dimple and full-mechanism visibility floor, but it remains sparse and approximate rather than a completed Moana-like plunge.}
-\label{fig:current-live-side}
-\end{figure}
+{\small
+\begin{tabular}{Y{0.23\linewidth}Y{0.34\linewidth}Y{0.33\linewidth}}
+\toprule
+Class & Current source & Paper/display rule \\
+\midrule
+Accepted references & Supplied Moana stills, June 23 side drawing, June 24 smooth gridded overview/sequence, June 28 stage/cross-section reference. & Keep as target figures and cite them as references, not as achieved WaveVis output. \\
+Rejected display asset & Profile-trace overlay image. & Removed from tracked proof and public figure assets; do not use internal trace overlays as paper figures. \\
+Rejected candidate state & Candidate785 live/fallback screenshots. & Historical floor only. Do not describe it as no-dimple verified after Alan identified the support-neck/dimple family. \\
+Dirty active attempt & Candidate795 viewer and geometry-checker changes: removed overlay evidence, aligned the terminal sampler with the checker, broadened lateral curl support, removed the premature terminal fade, kept reference-mode mechanism visibility locked, and changed the isometric camera toward the supplied overview angle. & Passed local geometry gate but remains unaccepted because rendered visual match is still open. Do not publish Candidate795 screenshots as accepted evidence. \\
+Mechanism invariant & One-center four-leg X cells with exact opposite-pair collinearity/equal length and physical two-use connector nodes. & Keep as a hard gate and cite source/checker values after each accepted candidate. \\
+Open defect & Under-overhang dimple/support-neck beneath the curl. & Blocks paper claims, proof figures, deployment claims, and Progress closure. \\
+\bottomrule
+\end{tabular}
+}
+\caption{WaveVis state ledger as of June 30, 2026. The paper tracks which information is reference truth, rejected history, active source state, and still-open defect state.}
+\label{tab:current-ledger}
+\end{table}
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.98\linewidth]{current-live-side-x-only.png}
-\caption{Candidate785 Side view with \code{surface=0\&connectors=1\&cells=1}. This X-only evidence removes the surface skin and shows the actual mechanism layer after the no-dimple side readable-profile split: each cell is one black square with four straight center-to-connector legs, opposite pairs are equal length and collinear through the cell center, and every connector is a spherical physical node with exactly two attached leg uses. Neighboring cells meet through visible connector nodes; no between-cell connector is allowed to become an X or a four-cell joint.}
-\label{fig:current-live-side-x-only}
-\end{figure}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.98\linewidth]{current-live-isometric.png}
-\caption{Candidate785 browser-rendered 3D/isometric view for the same default state. The default presentation retains the recovered geometry floor, a raised reference-overview isometric camera, no-dimple readable surface skin, pale wire grid, visible four-leg X cells, spherical two-use connector nodes, and pale grey mechanism ink tuned away from the rejected silhouette/seam pass. The 3D view is still a mechanism view, not a surface-only substitute. This figure remains an improved open visual-match boundary rather than an exact reference match.}
-\label{fig:current-live-isometric}
-\end{figure}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.98\linewidth]{current-live-front.png}
-\caption{Candidate785 browser-rendered Front view retained as the separate spanwise product camera. This view compresses front depth, bounds the terminal lip contribution, depth-tests the pale grid against the lip, keeps rounded terminal width, and shows the black-square X-cell linkage with spherical connector nodes through the projected cap rather than hiding mechanism state behind a pasted cap layer. The projection checkpoint remains open against the June 24 and June 28 references.}
-\label{fig:current-live-front}
-\end{figure}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.98\linewidth]{current-live-top.png}
-\caption{Candidate785 browser-rendered Top view for the same default state. The surface-plus-X view keeps the rounded proof profile rather than inheriting the side-only no-dimple profile, and it uses a stronger reference-sheet grid, one continuous black-square/four-leg X layer, real center-to-connector rods, spherical connector nodes, a guarded mid-section oval term, and a bounded height-shadow from the readable surface. Strict \code{surface=0\&connectors=1\&cells=1} top inspection still exposes the collinear equal-pair X-only mechanism rather than hiding it, and the top footprint remains an open visual-match target rather than a solved reference state.}
-\label{fig:current-live-top}
-\end{figure}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.98\linewidth]{current-live-top-surface-only.png}
-\caption{Candidate785 Top view after a \code{surface=1\&connectors=0\&cells=0} request. Reference mode does not allow a surface-only acceptance state: the readable surface request is still mechanism-locked, so the full X-cell sheet stays visible while the bounded height-shadow remains derived from the Top readable wave surface.}
-\label{fig:current-live-top-surface-only}
-\end{figure}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.98\linewidth]{current-live-top-x-only.png}
-\caption{Candidate785 Top view with \code{surface=0\&connectors=1\&cells=1}. This proof view is intentionally dense because it shows the whole array through the \code{X legs} and \code{cells} layers. Each visible black square cell is the body for four straight legs, each opposite pair remains collinear/equal through the center, and adjacent cells meet at spherical two-use connector nodes. This is the current hard mechanism acceptance test, not a decorative overlay.}
-\label{fig:current-live-top-x-only}
-\end{figure}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.68\linewidth]{current-live-top-x-small-proof.png}
-\caption{Candidate785 inspectable Top proof with \code{rows=12}, \code{columns=12}, \code{surface=0}, \code{connectors=1}, and \code{cells=1}. This low-density route exists so the hard cell contract can be inspected directly through the \code{X legs} and \code{cells} layers: a cell is not two nearby two-leg elements; it is one black square with four straight legs, opposite pairs are collinear and equal through the center, and each visible connector is a spherical node used by exactly two neighboring cells.}
-\label{fig:current-live-top-x-small-proof}
-\end{figure}
+The only current figures that belong in the paper by default are target references and mechanism-proof figures that still define the actual constraint. Candidate screenshots belong only when they are labeled as rejected or diagnostic and they help the next iteration avoid a known failure.
 
 \subsection{File map}
 
@@ -346,9 +321,9 @@ The current inverse-sheet default is intentionally taller and sharper than earli
 \code{overhangWidth}&=32,\\
 \code{overhangAngleDeg}&=120,&
 \code{overhangPosition}&=-0.15,&
-\code{profileScale}&=0.55,\\
+\code{profileScale}&=0.60,\\
 \code{smoothing}&=1,&
-\code{lipSharpness}&=0.88,&
+\code{lipSharpness}&=0.50,&
 \code{wallSmoothness}&=0.28,\\
 \code{flatContribution}&=0.35.
 \end{aligned}
@@ -378,6 +353,124 @@ The target function samples \(u\) along the wave field and \(v\) across span:
   v = \frac{y + S/2}{S}.
 \]
 The displacement is zero outside the support field and on the perimeter. The support field expands with \code{smoothing} and \code{flatContribution}, but the core wave must remain the same shape.
+
+\subsection{Reconstruction-grade mathematical model}
+
+Let the rest sheet be a rectangular lattice with \(R\) rows and \(C\) columns. In source, \(R=44\), \(C=112\), rest sheet length \(L_s=80\), rest sheet span \(S_s=80\), wave-field length \(L=43\), and wave-field span \(S=43\). A node is
+\[
+  p^0_{ij} =
+  \begin{bmatrix}
+    -L_s/2 + jL_s/(C-1)\\
+    -S_s/2 + iS_s/(R-1)\\
+    0
+  \end{bmatrix},
+  \qquad
+  0\le i<R,\quad 0\le j<C.
+\]
+Boundary nodes are hard pinned:
+\[
+  p^*_{ij}=p^0_{ij}\quad\text{if}\quad i\in\{0,R-1\}\ \text{or}\ j\in\{0,C-1\}.
+\]
+For interior nodes, WaveVis maps the world point into a canonical wave frame by removing user placement:
+\[
+\begin{aligned}
+  \tilde p &= R_z(-\psi)\left(p^0 - a - \delta_x e_x\right)+a,\\
+  \psi &= \frac{\pi}{4}\clamp(\code{steer},-1,1),\\
+  \delta_x &= 0.045L\clamp(\code{position},-1,1).
+\end{aligned}
+\]
+The canonical target is
+\[
+  \tilde p^* = \tilde p + D(\tilde x,\tilde y;\theta),
+\]
+and the world target is restored by applying the inverse rigid placement. This separation is required because inverse-design controls should not silently change the target surface. It follows the same general separation used in graphics simulators between state variables, constraints, and display transforms~\cite{muller_position_based_2007,bouaziz_projective_2014}.
+
+The active source contains two target/display paths that must not be confused:
+\begin{enumerate}
+  \item \textbf{Model target path,} owned by \code{src/latticeGeometry.ts}. It generates node targets, metrics, and the mechanism-check state.
+  \item \textbf{Readable display path,} owned by \code{src/LatticeViewer3D.tsx}. It draws a reference-like gridded surface and mechanism layer for visual inspection. It is not allowed to replace the model target or hide invalid mechanism state.
+\end{enumerate}
+
+\subsubsection{Custom profile path}
+
+When \code{profileMode='custom'}, the model source uses serialized control points. The current default centerline source is:
+\[
+\begin{split}
+&(0,0),(0.04,0.008),(0.095,0.033),(0.17,0.105),(0.275,0.305),\\
+&(0.385,0.58),(0.5,0.82),(0.61,0.965),(0.69,1),(0.78,0.965),\\
+&(0.858,0.86),(0.922,0.704),(0.967,0.528),(0.985,0.384),\\
+&(0.965,0.3),(0.937,0.228),(0.919,0.16),(0.934,0.092),\\
+&(0.971,0.037),(1,0).
+\end{split}
+\]
+Those are normalized \((x,z)\) anchors, not final mechanism coordinates. They are sampled, scaled, localized across the span, morph-interpolated, and then checked against the mechanism constraints. If a future candidate changes this profile, it must record the new point list, the reason for every moved anchor, and the visual failure it fixes.
+
+\subsubsection{Generated lip path}
+
+The generated path uses a ramp/crest/lip decomposition:
+\[
+  P(u)=
+  \begin{cases}
+    P_{\mathrm{ramp}}(u), & 0\le u<u_c,\\
+    P_{\mathrm{crest}}(u), & u_c\le u<u_l,\\
+    P_{\mathrm{lip}}(u), & u_l\le u\le1.
+  \end{cases}
+\]
+In source, \code{moanaReferenceLipPoints} builds a normalized list of lip anchors controlled by \code{dip} and \code{sharp}. The anchors are smoothed into cubic Bezier segments, then sampled by normalized arc length:
+\[
+  q(\alpha)=B_k(t)\quad\text{where}\quad
+  \sum_{\ell<k}\int_0^1\norm{B'_\ell(s)}\,\dd s+
+  \int_0^t\norm{B'_k(s)}\,\dd s
+  =\alpha\,\ell_{\mathrm{total}}.
+\]
+The source samples this curve numerically using 18 subdivisions per cubic segment. A future exact reconstruction should replace that sampling with an analytic or higher-resolution arc-length inversion only if the rendered mechanism improves and the validation gates still pass.
+
+\subsubsection{Span localization}
+
+The readable display path uses a lateral envelope
+\[
+  E(s)=\cos^{2.18}\left(\frac{\pi}{2}|s|\right), \qquad s\in[-1,1],
+\]
+then uses higher powers of \(E\) near the terminal lip to localize the curl. The source intentionally makes the lip narrower than the broad ramp; otherwise a centerline curl becomes a swept tunnel. In the model path, the same principle appears through \code{transverseSupportMask}, \code{lipAwareRimMask}, \code{terminalLipSpanMask}, \code{shapeMask}, and the post-core taper terms.
+
+\subsubsection{Bowl/dimple blocker}
+
+The source blocker \code{blockSurfaceBowlPockets} runs before node emission. For each interior node with active neighboring height, it replaces a local low point by the minimum of its four direct neighbors:
+\[
+  z_{ij}^{(k+1)} =
+  \max\left(z_{ij}^{(k)},\min(z_{i-1,j}^{(k)},z_{i+1,j}^{(k)},z_{i,j-1}^{(k)},z_{i,j+1}^{(k)})\right),
+\]
+for up to six passes. This is a pre-render invariant sweep, not a visual cleanup. It catches bowl-like local minima, but it is not sufficient for the under-overhang support-neck failure; that failure also requires side/isometric throat sampling and human-facing render inspection.
+
+\subsubsection{Connected X-cell equations}
+
+For each node center \(c_n\), the visible cell is one square body with four legs in directions \(\{\mathrm{NE},\mathrm{SW},\mathrm{NW},\mathrm{SE}\}\). For each opposite pair,
+\[
+  \norm{e_{\mathrm{NE}}-c_n}=\norm{e_{\mathrm{SW}}-c_n}, \qquad
+  e_{\mathrm{NE}}+e_{\mathrm{SW}}=2c_n,
+\]
+and similarly for \(\mathrm{NW}/\mathrm{SE}\). The same connector point \(g_{ab}\) is shared by exactly two adjacent cells:
+\[
+  e_{a,+}=g_{ab}=e_{b,-}, \qquad \#\{(n,d): e_{n,d}=g_{ab}\}=2.
+\]
+The current source solves connector chains by alternating signs along each row/column family:
+\[
+  g_0=f,\qquad
+  g_k=2c_k-g_{k-1}\quad(k>0),
+\]
+then chooses \(f\) by least-squares midpoint residual over the adjacent pair family. This preserves exact cell-level opposite-pair closure and exposes center-corridor drift as a diagnostic rather than hiding it. The checker then groups connector positions by physical coordinate, not only by id, so two connector ids occupying one point cannot create a silent four-cell joint.
+
+\subsubsection{Acceptance objective}
+
+WaveVis is not currently optimizing a single scalar objective. The useful mental model is a constrained inverse-design problem:
+\[
+  \min_{\theta,\mathcal{G}}\ 
+  w_r E_{\mathrm{ref}}(\Phi_\theta,\Phi_{\mathrm{ref}})
+  +w_s E_{\mathrm{smooth}}
+  +w_m E_{\mathrm{mechanism}}
+  +w_v E_{\mathrm{view}}
+\]
+subject to boundary pinning, topology completeness, connector occupancy, no bowl/dimple pockets, and public route verification. At this stage the objective is enforced as explicit gates rather than a continuous solver: reference match is judged on the rendered object; mechanism feasibility is checked in source; stale paper/public assets are treated as failures.
 
 \subsection{Rigid controls}
 
@@ -419,7 +512,7 @@ The old behavior \(\code{target}=\mathrm{lerp}(\code{deformed},\code{rest},\code
   \item the terminal slope is negative;
   \item the tip is forward of the crest and tucked under the shoulder by a bounded amount;
   \item the return advances toward the flat front instead of folding backward;
-  \item \code{terminalSideProfileCavityBlock.ok}, \code{noBackfoldCavity}, and \code{noVisibleDimplePocket} remain true.
+  \item the terminal cavity blocker, backfold blocker, and visible-dimple blocker remain true.
 \end{itemize}
 These checks are guards, not substitutes for the human-facing screenshot. A visible dimple, under-overhang pocket, side wall, or missing curl still means open work.
 
@@ -578,6 +671,7 @@ Boundary clamp & Keeps the perimeter flat. & Pulled sheet edges, non-flat perime
 Morph & Interpolates rest to target only. & Half-morph mangling, topology change while sliding. \\
 Topology & Keeps full node/edge/quad graph. & Missing grid, hidden cells, detached legs. \\
 Renderer & Shows the actual mechanism. & Fake shell, hidden wall, side view as profile-only debug output. \\
+Paper evidence & Includes only target references, accepted mechanism proofs, accepted current renders, or clearly labeled rejected diagnostics. & Stale candidate screenshots, misleading overlays, and internal trace diagrams appearing as authoritative figures. \\
 \bottomrule
 \end{tabular}
 }
@@ -625,7 +719,7 @@ The ramp rises from the sheet. The crest rounds over. The lip turns forward and 
 \[
   \frac{dz}{dx}\bigg|_{\mathrm{tip}} < 0.
 \]
-The final point is allowed to be lower than the farthest horizontal reach. In a real breaking wave, the maximum reach can occur at the shoulder while the lip tip turns down from that shoulder. The downturn must remain open and forward-readable from the side; it must not fold into a closed pucker, dimple, bowl, or side-wall pocket. Treating the farthest-right point as the tip is the mistake that produces a straight falling chute, while overcorrecting into an under-tucked return is the mistake that produces the rejected cavity. The underside return must also advance back into the flat sheet after the lowest lip sample; a backward floor point is disallowed because it reads as a small lower-lip dimple even when it does not trip a larger bowl metric. Candidate785 keeps the return lifted and advancing so the full side render remains a localized plunging sheet rather than a swept tube or under-overhang pocket.
+The final point is allowed to be lower than the farthest horizontal reach. In a real breaking wave, the maximum reach can occur at the shoulder while the lip tip turns down from that shoulder. The downturn must remain open and forward-readable from the side; it must not fold into a closed pucker, dimple, bowl, or side-wall pocket. Treating the farthest-right point as the tip is the mistake that produces a straight falling chute, while overcorrecting into an under-tucked return is the mistake that produces the rejected cavity. The underside return must also advance back into the flat sheet after the lowest lip sample; a backward floor point is disallowed because it reads as a small lower-lip dimple even when it does not trip a larger bowl metric. Candidate785 was the previous recovery floor for this idea, not the accepted answer; the current acceptance test is still the rendered full mechanism with an open throat and no support-neck pocket.
 
 The three-dimensional field must multiply this centerline motion by a span falloff:
 \[
@@ -635,9 +729,11 @@ with \(w(u)\) varying through the wave. The curl should have a smaller active wi
 
 \section{Mechanism topology}
 
-WaveVis uses a rectangular graph of nodes, horizontal profile edges, vertical span edges, and quads as the source lattice. The visible mechanism layer now derives a connected X cell at each lattice node. Each cell renders as a black square body with four visible legs that leave the same center. Opposite leg pairs are equal length and collinear through that center, so the center bisects both bars. Each leg terminates at a spherical connector node that is shared by exactly two adjacent cells. Crossing diagonal families are separated into distinct physical joints so a crossing point cannot become a four-cell connector. The graph is not allowed to become isolated crossed marks, two nearby two-leg pseudo-cells, or a set of isolated rows.
+WaveVis uses a rectangular graph of nodes, horizontal profile edges, vertical span edges, and quads as the source lattice. The visible mechanism layer then derives a connected X cell at each lattice node. This is a kinematic-design problem, not a drawing style: linkage synthesis and symbolic kinematics treat joints, bars, and closure equations as the object being designed~\cite{hunt_kinematic_geometry_1978,mccarthy_linkages_2000,zhu_linkedit_2015}. The WaveVis renderer must therefore show the constraint truth rather than draw a smoother surrogate.
 
-The mechanism evidence from the earlier proof remains relevant as a warning against fake filler surfaces and impossible all-four-equal closure. The current Candidate785 mechanism retains the cell-level X rule Alan selected at Candidate660: each cell has one square center and four straight legs, opposite pairs are collinear and equal length through that center, and each connector is still a spherical physical joint used by exactly two adjacent cells. The old center-pair corridor is now a drift diagnostic, not the hard pass condition~\cite{wavevis_constraint_2026}.
+Each cell renders as a black square body with four visible legs that leave the same center. Opposite leg pairs are equal length and collinear through that center, so the center bisects both bars. Each leg terminates at a spherical connector node that is shared by exactly two adjacent cells. Crossing diagonal families are separated into distinct physical joints so a crossing point cannot become a four-cell connector. The graph is not allowed to become isolated crossed marks, two nearby two-leg pseudo-cells, or a set of isolated rows.
+
+The mechanism evidence from the earlier proof remains relevant as a warning against fake filler surfaces and impossible all-four-equal closure. The current mechanism rule is cell-level, not candidate-level: each cell has one square center and four straight legs, opposite pairs are collinear and equal length through that center, and each connector is a spherical physical joint used by exactly two adjacent cells. The old center-pair corridor is a drift diagnostic, not the hard pass condition~\cite{wavevis_constraint_2026}.
 
 \begin{figure}[H]
 \centering
@@ -684,6 +780,7 @@ Visual side check & Browser side view screenshot or direct render inspection. & 
 Defect repair loop & Confirmed visible defects re-enter source repair. & Acknowledging dimples, pockets, walls, or missing curl is not a stopping state. \\
 Terminal side-profile gate & Literal readable profile and sampled model side trace. & Before visual QA, reject any lower-branch re-rise, under-lip valley rebound, lower-branch backtrack, abrupt terminal angle jump, or steep visible terminal descent. \\
 Startup URL parser & Covers all public and legacy slider aliases. & A shared verification URL cannot silently load a different height, overhang, lip dip, width, or smoothing state. \\
+Paper figure hygiene & Every figure is a target reference, accepted mechanism proof, current accepted render, or labeled rejected diagnostic. & Internal overlays, stale screenshots, and profile-only traces cannot become authoritative paper evidence. \\
 \bottomrule
 \end{tabular}
 }
@@ -795,25 +892,25 @@ Progress does not automatically ingest every active Codex chat. If a future Wave
 
 This section is intentionally blunt so a future chat does not have to infer whether the system is finished.
 
-\textbf{Verified current state on June 30, 2026:}
+\textbf{Verified current facts on June 30, 2026:}
 \begin{itemize}
-  \item The reliable public route is \code{https://aolabs.io/wavevis/}.
-  \item The public WaveVis page includes a clickable AO Labs home mark, an app identity mark, the \code{wavevis.aolabs.io} title, and a \code{System Architecture PDF} action.
+  \item The reliable public route is \code{https://aolabs.io/wavevis/}; the preferred HTTPS subdomain remains a separate certificate/live-route check.
   \item The Inverse Sheet tab is the first/default option; Double-Layer Sarrus is secondary.
-  \item The current PDF route is the WaveVis fallback paper route: \code{/wavevis/proofs/}, file \code{wavevis-system-architecture.pdf}.
-  \item Side, Front, Top, and 3D are the product view modes. Side is the full three-dimensional sheet seen from the side, not a profile-only debug view.
-  \item Current checks pass for the production build, mechanism geometry invariants, and the inverse-sheet regression suite.
-  \item The June 30 Candidate785 checkpoint uses a default surface-plus-X presentation across 3D, Side, Front, and Top, visible full-mechanism cell bodies, visible \code{X legs}, reference-mode mechanism locking, surface-on state normalization for \code{cells} and \code{X legs}, slider robustness, exact collinear equal-pair X-cell invariants, \code{blockSurfaceBowlPockets} before node emission, a raised reference-overview isometric camera, a no-under-lip-dimple side/isometric readable profile, a stronger open-throat lift, a more localized lateral envelope, a separate rounded Top/Front proof profile, a continuous top X overlay without the old terminal split, one-center four-leg X rendering, explicit spherical physical connector nodes, instanced shared-joint rods, a lower-opacity side surface skin, pale side/isometric mechanism ink with non-depth-writing side mechanism layers to prevent black-wedge stacking and a raised 3D camera to reduce seam-cut reads, a denser top grid, a bounded top height-shadow, a perimeter-strip clamp, a terminal taper gate, a 12-column minimum for inspectable X-cell proof routes, and visible-label guards that name \code{showNodes} as \code{cells} and \code{showEdges} as \code{X legs}.
-  \item The current side render uses a left-to-right side camera with a smooth rise, visible curled throat, downturned terminal branch, connector joints, overhang, an X-only verification path through \code{surface=0\&connectors=1\&cells=1}, and a mechanism-locked surface request path through \code{surface=1\&connectors=0\&cells=0}. The current 3D render keeps the sheet visible as a gridded surface with connected X cells and avoids the rejected hidden-line, bulb, hard-plateau, lit-oval, opacity-only smoothing branch, overstrong diagonal-crease transform, front-biased flattened camera, open-C cavity, forward/down vertical-insert profile, busier profile throat-smoothing branch, opposite-camera branches, and the candidate404 side-projection skirt. The side view no longer has the under-overhang dimple Alan saw on the public site and no longer reads as a surface-only silhouette; Candidate785 keeps the inner return lifted open, prevents the lower branch from biting back into a dark pocket, and uses inspectable rods, pivots, connector cores, and cell bodies so the mechanism remains visible in default desktop and mobile captures. It remains visibly short of exact June 24 or June 28 reference identity because the form is still a simplified rounded mechanism floor instead of a fully water-like plunging surface. The retained Front render is a spanwise check with pale grid lines, rounded terminal width, controlled cap contours, a front-only pale lit cap cue, a lower projection dome, and visible center X linkage, not a closed reference match. The top render keeps one square reference sheet, one continuous X layer, a stronger reference-sheet wire grid, a guarded mid-section oval projection term, and a height-shadow derived from actual surface height; it does not paste the rejected contour-helper branch into the product view or inherit the side-only profile.
-  \item Browser-rendered side, X-only side, side surface-request-with-mechanism-lock, isometric, front, top, top surface-request-with-mechanism-lock, dense top-X-only, and low-density top-X proof figures were refreshed from Candidate785 on the live fallback route. Current source metrics include \(4928\) black square cells, \(19400\) rendered center-to-connector X legs, \(19400\) rendered shared-joint arms, \(9700\) spherical physical connector nodes, \(9544\) checked opposite pairs, interior X-cell leg count range \(4\)--\(4\), zero X connector endpoint gap, zero opposite-pair length spread, zero opposite-pair collinearity error, zero opposite-center residual, exactly two physical endpoint uses for every connector, zero over-occupied physical connectors, sampled readable perimeter \(\code{maxEdgeZ}=0\), \(\code{maxBorderBandZ}=0\), \(\code{maxPlanXOvershoot}=0\), slider robustness \(79\) checked cases with no bad cases, and source guards requiring the view-aware readable frame, side/isometric no-dimple readable profile, separate rounded top/front proof profile, \code{readableSideProfileCavityBlock}, one-center/four-leg renderer, collinear equal-pair connector solver, black square cell layer, spherical connector-node layer, visible shared-joint rod layer, mechanism-forward visibility, surface-on config normalization, checked/disabled surface-on mechanism controls, perimeter-strip fade, top height-shadow branch, hidden axis helpers in X-only proof mode, the 12-column proof range, and the \code{cells}/\code{X legs} visible labels.
+  \item The public PDF route is \code{/wavevis/proofs/wavevis-system-architecture.pdf}.
+  \item Side, Front, Top, and 3D are product view modes. Side is a full three-dimensional sheet view, not a profile-only debug trace.
+  \item The current source tree preserves the one-center four-leg X mechanism, black square cell bodies, spherical two-use connector nodes, and the geometry checker that measures those invariants.
+  \item Candidate795 passed the local \code{npm run check:geometry} command in this work cycle, producing \code{\_verification/candidate795/geometry.log}. That is necessary evidence, not acceptance.
+  \item The wrong internal reference-overlay figure has been removed from tracked paper/public figure assets.
 \end{itemize}
 
-\textbf{Open state that must not be overstated:}
+\textbf{Open state that blocks completion:}
 \begin{itemize}
-  \item Exact matching to the supplied breaking-wave line drawing, June 24 gridded reference, June 28 stage/cross-section reference, or photorealistic Moana-water frame is not a proven completed result. The correct claim is that the simulator now preserves the hard collinear equal-pair X mechanism and exposes a clearer top-grid footprint while the full visible wave match remains open.
-  \item \code{https://wavevis.aolabs.io/} is still treated as blocked/stale unless a fresh certificate and body check passes.
+  \item Alan identified the under-overhang dimple/support-neck class as a hard fail in the rendered artifact. The current source is still under repair until rendered side, isometric, top, and forced mechanism-on URLs pass.
+  \item Candidate785 is not a final accepted state. Candidate795 is dirty and unaccepted until visual verification and public-route verification pass.
+  \item Candidate795 screenshots reduce some earlier failure modes but still do not prove the supplied reference match. The side view still has a sharp dangling lower terminal point, and the isometric/top views still read too much like a broad wall or mound instead of the supplied localized breaking-wave family.
+  \item Exact matching to the supplied breaking-wave line drawing, June 24 gridded reference, June 28 stage/cross-section reference, or photorealistic Moana-water frame is not proven.
   \item This is a simulator and architecture record. It is not evidence that a physical lattice prototype has been fabricated or experimentally validated.
-  \item If Alan reports a visible dimple, under-overhang bite, cavity, side wall, bowl, missing curl, zig-zag, disconnected cell, or profile/side confusion after this PDF ships, the live rendered artifact overrides this paper. Repair the source and update the validation gate.
+  \item If the live app, source, screenshots, Progress, or this PDF disagree, the current rendered artifact and source tree must be inspected and reconciled before any completion claim.
 \end{itemize}
 
 \section{Failure modes}
@@ -826,9 +923,11 @@ The most important failure classes are now explicit:
   \item \textbf{Blob or lump.} Excess smoothing or broad support creates a mound with no wave identity.
   \item \textbf{Top dent.} The outer crest has a kink or concave dent where a smooth radius is required.
   \item \textbf{Dimple, cavity, under-lip bite, or bowl.} The surface creates a pocket, pucker, enclosed hollow, under-overhang throat notch, or bowl-like depression rather than a plunging sheet.
+  \item \textbf{Dangling terminal connection.} The side view avoids the old dimple metric but leaves a visible lower terminal tongue or foot under the lip. This still fails because the reference curl has a smooth open throat and a flat sheet return, not a small support hook that visually wires the lip to the ground.
   \item \textbf{Stale URL state.} A browser URL contains height, overhang, width, lipDip, or smoothing values, but startup ignores them and renders a different state.
   \item \textbf{Zig-zag linkage.} Neighboring legs alternate direction or length erratically.
   \item \textbf{Hidden mechanism.} Broken topology is ghosted, clipped, or replaced by a cosmetic surface.
+  \item \textbf{Wrong paper evidence.} A stale overlay, profile trace, internal debug diagram, or rejected candidate screenshot appears as if it is a correct reference or accepted result.
   \item \textbf{Passive defect acknowledgement.} A visible problem is named in chat or recorded in this paper, but the generator and rendered artifact are not repaired and rechecked.
 \end{enumerate}
 
@@ -837,6 +936,8 @@ The solution direction is to simplify the target field while strengthening the g
 \section{Materials and Methods}
 
 The implementation source is the WaveVis React and TypeScript app~\cite{wavevis_source_2026}. The main geometry source is \code{src/latticeGeometry.ts}. The primary render source is \code{src/LatticeViewer3D.tsx}. Controls are declared in \code{src/TargetShapeControls.tsx}. Regression checks are run through \code{scripts/check-inverse-sheet.cjs}.
+
+The model is deliberately written as an inspectable engineering simulator rather than a black-box optimizer. The validation style borrows from topology-optimization practice, where a compact code can still be valuable when its filters, constraints, and objective terms are explicit~\cite{sigmund_99line_2001}; from compliant-mechanism design, where target displacement is inseparable from manufacturable compliance and constraint choice~\cite{sigmund_compliant_1997}; and from mechanical metamaterials, where local cell rules can create global deformation modes but can also produce unintended instabilities if the cell rule is not made explicit~\cite{bertoldi_instability_2010,coulais_textured_2016,kadic_3d_metamaterials_2019}. WaveVis currently encodes those lessons as hard source gates rather than as a mature continuous optimizer.
 
 The public app serves a static build. The architecture PDF is placed in the public proofs directory as \code{wavevis-system-architecture.pdf} and linked from the WaveVis control headers. The old connector proof remains a source artifact for the mechanism decision, but the visible paper action now points to this architecture record because the current work is broader than connector assignment.
 

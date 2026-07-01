@@ -44,7 +44,6 @@ type LatticeViewer3DProps = {
 
 export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequest, focusRequest, onEdgePick }: LatticeViewer3DProps) {
   void pickedEdges
-  const referenceProjectionVisible = false
   const surfaceReferenceOnly = readableSurfaceReferenceOnly(model)
 
   return (
@@ -66,130 +65,8 @@ export default function LatticeViewer3D({ model, selected, pickedEdges, viewRequ
         )}
         <CameraRig model={model} viewRequest={viewRequest} focusRequest={focusRequest} />
       </Canvas>
-      {referenceProjectionVisible && <ReferenceProjectionOverlay view={viewRequest.view as 'isometric' | 'side' | 'front'} />}
       {model.config.showHeatmap && <SceneColorBar model={model} />}
     </section>
-  )
-}
-
-function ReferenceProjectionOverlay({ view }: { view: 'isometric' | 'side' | 'front' }) {
-  const isoBaseGrid = [
-    'M178 466 L520 566',
-    'M260 430 L600 532',
-    'M342 394 L680 496',
-    'M424 358 L760 460',
-    'M506 322 L840 424',
-    'M178 466 L486 322',
-    'M258 490 L566 346',
-    'M338 514 L646 370',
-    'M418 538 L726 394',
-    'M498 562 L806 418',
-  ]
-  const isoWaveContours = [
-    'M248 438 C290 330 382 238 524 210 C648 186 768 238 824 330 C858 386 824 446 744 454',
-    'M292 452 C340 350 426 270 548 250 C662 232 758 278 800 354 C828 406 798 444 736 456',
-    'M344 466 C398 374 476 312 576 300 C674 290 750 328 784 386 C804 424 782 450 730 460',
-    'M404 482 C458 414 522 374 600 370 C678 366 734 396 768 438',
-    'M482 500 C536 454 590 430 652 432 C708 434 744 450 768 466',
-  ]
-  const isoWaveRibs = [
-    'M330 444 C378 340 452 246 544 210',
-    'M418 472 C452 360 518 258 618 222',
-    'M506 502 C526 388 584 292 704 262',
-    'M594 522 C602 426 650 346 776 326',
-    'M676 528 C684 454 718 404 806 396',
-    'M748 286 C704 330 676 390 674 456',
-    'M808 342 C760 372 720 420 704 474',
-  ]
-  const sideContourPaths = [
-    'M95 500 C240 498 330 450 404 350 C492 232 604 180 718 220 C814 254 858 356 822 432',
-    'M145 500 C282 492 374 430 448 330 C532 220 640 202 728 252 C800 292 832 360 806 422',
-    'M205 500 C330 482 430 414 510 326 C596 232 688 248 756 306 C812 354 828 394 806 422',
-    'M282 500 C394 474 492 420 578 350 C658 286 726 302 782 360 C814 392 820 410 806 422',
-    'M374 500 C470 464 560 414 642 372 C714 335 764 365 806 422',
-  ]
-  const sideRibPaths = [
-    'M330 500 C358 410 414 300 506 228',
-    'M410 500 C438 408 508 282 626 208',
-    'M500 500 C524 424 586 326 714 250',
-    'M594 500 C614 438 666 366 786 330',
-    'M692 500 C700 450 734 404 806 422',
-    'M758 236 C708 282 674 338 664 408',
-    'M810 294 C758 326 714 376 690 438',
-  ]
-  const frontContourPaths = [
-    'M164 500 C196 374 284 272 410 230 C514 196 642 210 742 276 C830 334 876 420 900 500',
-    'M230 500 C260 386 332 306 436 274 C532 246 638 258 720 318 C790 370 828 438 846 500',
-    'M310 500 C336 410 394 350 474 326 C552 304 634 316 700 366 C754 408 784 456 798 500',
-    'M404 500 C426 436 468 394 528 378 C588 362 652 374 706 418 C744 450 762 478 772 500',
-  ]
-  const frontRibPaths = [
-    'M500 500 C492 430 492 336 510 226',
-    'M410 500 C420 424 454 324 510 226',
-    'M590 500 C578 424 552 324 510 226',
-    'M314 500 C352 420 418 322 510 226',
-    'M702 500 C668 420 600 322 510 226',
-    'M210 500 C292 418 400 316 510 226',
-    'M852 500 C760 418 620 316 510 226',
-  ]
-
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 1000 620"
-      preserveAspectRatio="xMidYMid meet"
-      style={{
-        position: 'absolute',
-        inset: '0',
-        width: '100%',
-        height: '100%',
-        pointerEvents: 'none',
-        zIndex: 2,
-        background: '#f7f3ed',
-      }}
-    >
-      {view === 'isometric' ? (
-        <g fill="none" strokeLinecap="round" strokeLinejoin="round">
-          <g stroke="#d5d0c8" strokeWidth="1.05" strokeOpacity="0.72">
-            <path d="M96 496 L500 612 L916 430 L492 292 Z" />
-            {isoBaseGrid.map((path) => <path key={path} d={path} />)}
-          </g>
-          <g stroke="#c3beb6" strokeWidth="1.18" strokeOpacity="0.78">
-            {isoWaveContours.map((path) => <path key={path} d={path} />)}
-            {isoWaveRibs.map((path) => <path key={path} d={path} />)}
-          </g>
-          <g stroke="#746f67" strokeWidth="1.7" strokeOpacity="0.78">
-            <path d="M220 454 C270 316 390 202 550 174 C686 150 818 218 872 332 C902 396 872 462 790 486 C736 502 676 484 654 438 C636 400 662 366 710 368 C754 370 782 396 784 430" />
-            <path d="M784 430 C724 386 622 388 556 456 C506 506 402 528 250 492" />
-          </g>
-        </g>
-      ) : view === 'side' ? (
-        <g fill="none" strokeLinecap="round" strokeLinejoin="round">
-          <g stroke="#c8c2ba" strokeWidth="1.15" strokeOpacity="0.82">
-            {sideContourPaths.map((path) => <path key={path} d={path} />)}
-            {sideRibPaths.map((path) => <path key={path} d={path} />)}
-          </g>
-          <g stroke="#6f6a63" strokeWidth="1.75" strokeOpacity="0.84">
-            <path d="M80 500 C224 502 330 462 408 352 C500 222 628 150 746 210 C844 260 870 368 826 430 C804 462 754 458 748 430 C742 404 772 394 798 402" />
-            <path d="M798 402 C720 350 610 352 536 424 C470 488 358 502 80 500" />
-            <path d="M80 500 C304 504 600 502 920 500" />
-          </g>
-        </g>
-      ) : (
-        <g fill="none" strokeLinecap="round" strokeLinejoin="round">
-          <g stroke="#c8c2ba" strokeWidth="1.15" strokeOpacity="0.82">
-            {frontContourPaths.map((path) => <path key={path} d={path} />)}
-            {frontRibPaths.map((path) => <path key={path} d={path} />)}
-          </g>
-          <g stroke="#6f6a63" strokeWidth="1.75" strokeOpacity="0.82">
-            <path d="M140 500 C180 348 286 232 428 202 C542 178 674 206 770 296 C842 364 884 438 920 500" />
-            <path d="M422 242 C482 192 608 198 674 256 C682 332 620 374 540 360 C472 348 426 306 422 242" />
-            <path d="M456 304 C512 342 600 342 652 286" />
-            <path d="M140 500 C340 504 660 504 920 500" />
-          </g>
-        </g>
-      )}
-    </svg>
   )
 }
 
@@ -288,12 +165,6 @@ type ReadableWaveFrame = {
     totalDistance: number
     maxZ: number
   }
-  isometricProfile: {
-    points: ReadableWaveProfilePoint[]
-    distances: number[]
-    totalDistance: number
-    maxZ: number
-  }
   minX: number
   maxX: number
   centerY: number
@@ -307,9 +178,7 @@ const readableWaveVSegments = 54
 const readableReferenceProfilePoints =
   '0,0;0.04,0.014;0.09,0.052;0.15,0.138;0.22,0.302;0.31,0.514;0.42,0.724;0.54,0.882;0.64,0.966;0.72,0.99;0.798,0.93;0.862,0.802;0.912,0.63;0.942,0.49;0.966,0.33;0.978,0.29;0.988,0.25;0.996,0.21;0.999,0.02;1,0'
 const readableSideReferenceProfilePoints =
-  '0,0;0.07,0.025;0.16,0.095;0.27,0.255;0.4,0.51;0.53,0.765;0.645,0.94;0.72,1;0.802,0.965;0.875,0.862;0.93,0.705;0.952,0.545;0.932,0.39;0.885,0.265;0.835,0.155;0.875,0.096;0.94,0.045;1,0'
-const readableIsometricProfilePoints =
-  readableSideReferenceProfilePoints
+  '0,0;0.055,0.012;0.13,0.055;0.24,0.205;0.37,0.47;0.51,0.75;0.63,0.94;0.715,1;0.8,0.968;0.87,0.852;0.925,0.68;0.962,0.515;0.955,0.448;0.928,0.375;0.895,0.315;0.872,0.258;0.872,0.205;0.898,0.148;0.94,0.083;0.982,0.025;1,0'
 
 function readableSurfaceReferenceOnly(model: LatticeModel): boolean {
   return model.config.showSurface && readableWaveReferenceDisplay(model)
@@ -428,7 +297,7 @@ function buildReadableWaveWireGeometry(model: LatticeModel, view: CameraViewRequ
 
 function readableWaveSpanParameter(_view: CameraViewRequest['view'], amount: number): number {
   const centered = -1 + clampUnit(amount) * 2
-  return centered
+  return _view === 'side' ? centered * 0.2 : centered
 }
 
 function buildReadableWaveTopHeightShadowGeometry(model: LatticeModel): THREE.BufferGeometry {
@@ -543,7 +412,6 @@ function sampleOuterSideProfileLine(frame: ReadableWaveFrame, samples: number): 
 
 function readableWaveFrame(model: LatticeModel, _view: CameraViewRequest['view'] = 'side'): ReadableWaveFrame {
   const profile = buildReadableWaveProfile((_view === 'side' || _view === 'isometric') ? readableSideReferenceProfilePoints : readableReferenceProfilePoints)
-  const isometricProfile = buildReadableWaveProfile(readableIsometricProfilePoints)
   const sideBounds = activeSideProfileBounds(model)
   const height = Math.max(model.summary.maxHeight * 1.42, model.config.height * Math.max(model.config.profileScale, 1.14), model.config.spacing * 12.8)
   const waveWidth = Math.min(sideBounds.span[0] * 0.82, height * 2.03)
@@ -553,7 +421,6 @@ function readableWaveFrame(model: LatticeModel, _view: CameraViewRequest['view']
 
   return {
     profile,
-    isometricProfile,
     minX,
     maxX,
     centerY: model.bounds.center[1],
@@ -604,8 +471,9 @@ function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number, _view
   const liftBlend = Math.pow(envelope, 1.08)
   const growth = Math.sin(frame.progress * Math.PI * 0.5)
   const curlBlend = smoothStep(0.22, 1, frame.progress)
-  const profilePoint = sampleReadableWaveProfile(frame.profile, t)
-  const lateralCurlBlend = curlBlend * Math.pow(envelope, 1.45)
+  const profileT = readableTerminalProfileParameter(t)
+  const profilePoint = sampleReadableWaveProfile(frame.profile, profileT)
+  const lateralCurlBlend = curlBlend * Math.pow(envelope, 1.18)
   const baseX = lerpNumber(frame.minX, frame.maxX, t)
   const baseY = frame.centerY + s * frame.halfSpan
   const moundLift = Math.sin(Math.PI * t) ** 1.18
@@ -615,26 +483,42 @@ function readableWavePoint(frame: ReadableWaveFrame, t: number, s: number, _view
   const curledZ = frame.height * (profilePoint.z / frame.profile.maxZ)
   const centerX = lerpNumber(moundX, curledX, lateralCurlBlend)
   const offCenterCurlRelief = smoothStep(0.36, 0.92, t) * frame.progress * (1 - Math.pow(envelope, 0.32)) * 0.75
-  const centerZ = lerpNumber(moundZ, curledZ, lateralCurlBlend) * growth * (1 - offCenterCurlRelief)
+  const longitudinalHeightFade = smoothStep(0.04, 0.12, t)
+  const longitudinalPlanFade = smoothStep(0.04, 0.12, t)
+  const lateralPerimeterFade = smoothStep(0.04, 0.12, 1 - Math.abs(s))
+  const perimeterHeightFade = longitudinalHeightFade * lateralPerimeterFade
+  const perimeterPlanFade = longitudinalPlanFade * lateralPerimeterFade
+  const centerZ = lerpNumber(moundZ, curledZ, lateralCurlBlend) *
+    growth *
+    (1 - offCenterCurlRelief) *
+    perimeterHeightFade
   const curlShoulder = smoothStep(0.44, 0.72, t) * (1 - smoothStep(0.88, 1, t))
   const lipTip = smoothStep(0.7, 1, t)
   const lipBody = smoothStep(0.62, 0.94, t)
   const capLocalization = frame.progress * smoothStep(0.44, 0.82, t)
-  const shoulderFoldBlend = lerpNumber(baseFoldBlend, Math.pow(envelope, 3.4), capLocalization * curlShoulder * 0.72)
+  const shoulderFoldBlend = lerpNumber(baseFoldBlend, Math.pow(envelope, 1.35), capLocalization * curlShoulder * 0.68)
   const terminalLocalization = frame.progress * lipTip
-  const foldBlend = lerpNumber(shoulderFoldBlend, Math.pow(envelope, 5.8), terminalLocalization * 0.86)
-  const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.2), Math.pow(envelope, 8), terminalLocalization * 0.9)
-  const crestLiftBlend = lerpNumber(liftBlend, Math.pow(envelope, 5.2), capLocalization * curlShoulder * 0.7)
+  const foldBlend = lerpNumber(shoulderFoldBlend, Math.pow(envelope, 0.55), terminalLocalization * 0.48)
+  const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.22), Math.pow(envelope, 2.4), terminalLocalization * 0.48)
+  const crestLiftBlend = lerpNumber(liftBlend, Math.pow(envelope, 2.2), capLocalization * curlShoulder * 0.7)
   const lipLiftBlend = lerpNumber(crestLiftBlend, terminalLipEnvelope, frame.progress * lipBody * 0.82)
   const pinchEnvelope = Math.pow(envelope, 0.42)
-  const curlPinch = Math.min(0.44, frame.progress * pinchEnvelope * (0.028 * curlShoulder + 0.34 * lipTip))
-  const yPinch = s * frame.halfSpan * curlPinch
+  const curlPinch = Math.min(0.075, frame.progress * pinchEnvelope * (0.004 * curlShoulder + 0.036 * lipTip))
+  const yPinch = s * frame.halfSpan * curlPinch * perimeterPlanFade
+  const foldedX = lerpNumber(baseX, centerX, foldBlend)
 
   return [
-    lerpNumber(baseX, centerX, foldBlend),
+    lerpNumber(baseX, foldedX, perimeterPlanFade),
     baseY - yPinch,
     Math.max(0, centerZ * lipLiftBlend),
   ]
+}
+
+function readableTerminalProfileParameter(t: number): number {
+  const amount = clampUnit(t)
+  const terminalAmount = smoothStep(0.68, 1, amount)
+  const midTerminalSlowdown = Math.sin(terminalAmount * Math.PI) * 0.028
+  return clampUnit(amount - midTerminalSlowdown)
 }
 
 function readableWaveDisplayPoint(frame: ReadableWaveFrame, view: CameraViewRequest['view'], t: number, s: number): Vec3 {
@@ -655,39 +539,39 @@ function readableWaveIsometricPoint(frame: ReadableWaveFrame, t: number, s: numb
   const lipAdvance = frame.progress *
     smoothStep(0.46, 0.82, t) *
     (1 - smoothStep(0.92, 0.995, t)) *
-    Math.pow(envelope, 1.32) *
-    0.052
+    Math.pow(envelope, 1.18) *
+    0.045
   const profileT = clampUnit(t + lipAdvance)
   const point = readableWavePoint(frame, profileT, s)
-  const center = Math.pow(envelope, 2.22)
+  const center = Math.pow(envelope, 1.42)
   const lipFace = smoothStep(0.62, 0.8, t) * (1 - smoothStep(0.92, 0.985, t))
   const lowerLip = smoothStep(0.7, 0.88, t) * (1 - smoothStep(0.94, 0.995, t))
   const throat = smoothStep(0.52, 0.66, t) * (1 - smoothStep(0.78, 0.9, t))
   const openThroat = frame.progress * center
   const facePinch = smoothStep(0.6, 0.82, t) * (1 - smoothStep(0.93, 0.995, t)) * Math.pow(envelope, 0.36)
-  const roundedProfilePoint = sampleReadableWaveProfile(frame.isometricProfile, profileT)
+  const roundedProfilePoint = sampleReadableWaveProfile(frame.profile, profileT)
   const roundedLipBlend = frame.progress *
     smoothStep(0.5, 0.82, t) *
     (1 - smoothStep(0.92, 0.995, t)) *
-    Math.pow(envelope, 2.45) *
-    0.18
-  const roundedHeightFade = lerpNumber(0.26, 1, Math.pow(envelope, 2.32))
+    Math.pow(envelope, 1.8) *
+    0.12
+  const roundedHeightFade = lerpNumber(0.52, 1, Math.pow(envelope, 1.55))
   const displayPoint: Vec3 = [
     lerpNumber(point[0], frame.minX + waveWidth * roundedProfilePoint.x, roundedLipBlend),
     point[1],
     lerpNumber(
       point[2],
-      frame.height * (roundedProfilePoint.z / frame.isometricProfile.maxZ) * roundedHeightFade,
+      frame.height * (roundedProfilePoint.z / frame.profile.maxZ) * roundedHeightFade,
       roundedLipBlend,
     ),
   ]
   const heightFocusBand = frame.progress *
     smoothStep(0.24, 0.78, t) *
     (1 - smoothStep(0.93, 0.995, t)) *
-    0.62
-  const lateralHeightFocus = lerpNumber(0.38, 1, Math.pow(envelope, 1.12))
+    0.3
+  const lateralHeightFocus = lerpNumber(0.62, 1, Math.pow(envelope, 0.9))
   const focusedZ = lerpNumber(displayPoint[2], displayPoint[2] * lateralHeightFocus, heightFocusBand)
-  const roundedThroatLift = frame.height * openThroat * throat * 0.22
+  const roundedThroatLift = frame.height * openThroat * throat * 0.055
   const undersideRelease = smoothStep(0.66, 0.86, t) * (1 - smoothStep(0.92, 0.995, t))
   const terminalTipTaper = frame.progress *
     smoothStep(0.62, 0.9, t) *
@@ -695,9 +579,9 @@ function readableWaveIsometricPoint(frame: ReadableWaveFrame, t: number, s: numb
     (1 - Math.pow(envelope, 0.9)) *
     0.055
   return [
-    displayPoint[0] + waveWidth * openThroat * (0.056 * lipFace + 0.012 * lowerLip + 0.008 * throat - 0.004 * facePinch) - waveWidth * terminalTipTaper * 0.38,
+    displayPoint[0] + waveWidth * openThroat * (0.052 * lipFace + 0.026 * undersideRelease + 0.014 * lowerLip + 0.01 * throat - 0.006 * facePinch) - waveWidth * terminalTipTaper * 0.38,
     displayPoint[1],
-    Math.max(0, focusedZ + roundedThroatLift + frame.height * openThroat * (0.11 * undersideRelease + 0.075 * lowerLip - 0.004 * facePinch)),
+    Math.max(0, focusedZ + roundedThroatLift + frame.height * openThroat * (0.028 * undersideRelease + 0.014 * lowerLip + 0.01 * throat - 0.006 * facePinch)),
   ]
 }
 
@@ -800,7 +684,7 @@ function buildReadableWaveXCellCenterOverrides(model: LatticeModel, view: Camera
 
 function readableLateralEnvelope(s: number): number {
   const absolute = clampUnit(Math.abs(s))
-  return Math.pow(Math.cos(absolute * Math.PI * 0.5), 3.2)
+  return Math.pow(Math.cos(absolute * Math.PI * 0.5), 2.18)
 }
 
 function sampleReadableWaveProfile(profile: ReadableWaveFrame['profile'], t: number): ReadableWaveProfilePoint {
@@ -1298,19 +1182,21 @@ function StraightEdgeSegments({
   }, [model, nodes, readableReferenceMode, scope.edges, scope.topView, splitIsometricEdges, splitSideEdges, view])
 
   if (splitIsometricEdges && geometries.profileActive && geometries.profileFlat && geometries.spanActive && geometries.spanFlat) {
+    const isometricMechanismDepthTest = readableSurfaceMode
+
     return (
       <>
         <lineSegments geometry={geometries.spanFlat} renderOrder={0}>
-          <lineBasicMaterial color="#6f695f" transparent opacity={readableSurfaceMode ? 0.018 : 0.018} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#6f695f" transparent opacity={readableSurfaceMode ? 0.018 : 0.018} depthTest={isometricMechanismDepthTest} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileFlat} renderOrder={1}>
-          <lineBasicMaterial color="#69635a" transparent opacity={readableSurfaceMode ? 0.03 : 0.052} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color="#69635a" transparent opacity={readableSurfaceMode ? 0.03 : 0.052} depthTest={isometricMechanismDepthTest} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.spanActive} renderOrder={2}>
-          <lineBasicMaterial color={readableSurfaceMode ? '#746d63' : inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.035 : 0.052} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color={readableSurfaceMode ? '#746d63' : inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.035 : 0.052} depthTest={isometricMechanismDepthTest} depthWrite={false} />
         </lineSegments>
         <lineSegments geometry={geometries.profileActive} renderOrder={3}>
-          <lineBasicMaterial color={readableSurfaceMode ? '#5f594f' : inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.06 : 0.18} depthTest={false} depthWrite={false} />
+          <lineBasicMaterial color={readableSurfaceMode ? '#5f594f' : inverseLinkageColor} transparent opacity={readableSurfaceMode ? 0.06 : 0.18} depthTest={isometricMechanismDepthTest} depthWrite={false} />
         </lineSegments>
       </>
     )
@@ -1436,7 +1322,7 @@ function XCellSharedJointArms({
   const opacity = readableSurfaceMode
     ? scope.topView ? 0.038 : scope.sideView ? 0.045 : scope.isometricView ? 0.034 : 0.034
     : scope.topView ? 0.44 : scope.sideView ? 0.34 : 0.31
-  const depthTest = readableSurfaceMode ? scope.sideView : !scope.topView
+  const depthTest = readableSurfaceMode ? (scope.sideView || scope.isometricView) : !scope.topView
   const rodRadius = Math.max(
     model.config.spacing * (readableSurfaceMode
       ? scope.topView ? 0.0052 : scope.sideView ? 0.008 : scope.isometricView ? 0.0078 : 0.0078
@@ -1534,7 +1420,7 @@ function XCellConnectorJoints({
   const coreOpacity = readableSurfaceMode
     ? scope.topView ? 0.27 : scope.sideView ? 0.2 : scope.isometricView ? 0.18 : 0.18
     : scope.topView ? 0.72 : scope.sideView ? 0.88 : 0.86
-  const jointDepthTest = readableSurfaceMode ? scope.sideView : !scope.topView
+  const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.isometricView) : !scope.topView
   const pinRadius = Math.max(
     model.config.spacing * (readableSurfaceMode
       ? scope.topView ? 0.034 : scope.sideView ? 0.026 : scope.isometricView ? 0.025 : 0.025
@@ -1616,7 +1502,7 @@ function XCellSquareCells({
     return mechanism.frames.map((frame) => frame.center)
   }, [model, readableReferenceMode, view])
 
-  const cellDepthTest = readableSurfaceMode ? scope.sideView : !scope.topView
+  const cellDepthTest = readableSurfaceMode ? (scope.sideView || scope.isometricView) : !scope.topView
   const cellHalfSize = Math.max(
     model.config.spacing * (readableSurfaceMode
       ? scope.topView ? 0.045 : scope.sideView ? 0.04 : scope.isometricView ? 0.032 : 0.032
@@ -1973,7 +1859,7 @@ function positionCamera(
     : view === 'front'
       ? new THREE.Vector3(target.x + distance, target.y, target.z)
     : view === 'isometric'
-        ? new THREE.Vector3(target.x + distance * 0.68, target.y - distance * 0.58, target.z + distance * 0.46)
+        ? new THREE.Vector3(target.x + distance * 0.38, target.y - distance * 0.86, target.z + distance * 0.48)
       : new THREE.Vector3(target.x + distance * 0.82, target.y - distance * 0.92, target.z + distance * 0.78)
 
   camera.position.copy(position)

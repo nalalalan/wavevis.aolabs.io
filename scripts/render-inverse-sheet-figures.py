@@ -20,44 +20,7 @@ MUTED = (118, 109, 97)
 GRID = (197, 188, 174)
 CENTER = (42, 40, 36)
 LIP = (168, 66, 54)
-REFERENCE = (11, 136, 151)
 FILL = (237, 231, 221)
-
-REFERENCE_TRACE = [
-    (0.0, 0.0),
-    (0.035, 0.02),
-    (0.075, 0.07),
-    (0.118, 0.17),
-    (0.17, 0.32),
-    (0.225, 0.5),
-    (0.295, 0.68),
-    (0.375, 0.82),
-    (0.47, 0.92),
-    (0.565, 0.97),
-    (0.66, 0.96),
-    (0.74, 0.88),
-    (0.805, 0.74),
-    (0.85, 0.56),
-    (0.855, 0.43),
-    (0.828, 0.39),
-    (0.792, 0.4),
-    (0.772, 0.43),
-    (0.79, 0.47),
-    (0.825, 0.48),
-    (0.79, 0.58),
-    (0.725, 0.68),
-    (0.65, 0.73),
-    (0.58, 0.72),
-    (0.525, 0.64),
-    (0.5, 0.52),
-    (0.505, 0.4),
-    (0.55, 0.27),
-    (0.625, 0.17),
-    (0.73, 0.09),
-    (0.85, 0.045),
-    (0.96, 0.018),
-    (1.0, 0.0),
-]
 
 
 def font(size: int, bold: bool = False) -> ImageFont.ImageFont:
@@ -223,7 +186,7 @@ def plan_displacement(node: dict) -> float:
     return math.hypot(point[0] - rest[0], point[1] - rest[1])
 
 
-def render_lattice(model: dict, filename: str, title: str, subtitle: str, projection_name: str, projector: Callable[[tuple[float, float, float]], tuple[float, float]], center_only: bool = False) -> None:
+def render_lattice(model: dict, filename: str, title: str, subtitle: str, projection_name: str, projector: Callable[[tuple[float, float, float]], tuple[float, float]], center_only: bool = False, publish: bool = True) -> None:
     size = (1800, 1120)
     img = Image.new("RGB", size, PAPER)
     draw = ImageDraw.Draw(img, "RGBA")
@@ -301,36 +264,9 @@ def render_lattice(model: dict, filename: str, title: str, subtitle: str, projec
             x, y = to_canvas(projector(current(node)))
             draw.ellipse((x - 2, y - 2, x + 2, y + 2), fill=(*INK, 90))
 
-    img.save(FIGURES / filename)
+    if publish:
+        img.save(FIGURES / filename)
     img.save(VERIFY / filename.replace(".png", "-verification.png"))
-
-
-def centerline_side_points(model: dict) -> list[tuple[float, float]]:
-    center_row = model["config"]["rows"] // 2
-    center_nodes = sorted((node for node in model["nodes"] if node["row"] == center_row), key=lambda node: node["col"])
-    return [(current(node)[0], current(node)[2]) for node in side_silhouette_nodes(center_nodes)]
-
-
-def normalize_wave_profile(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
-    max_z = max((point[1] for point in points), default=1)
-    active = [index for index, point in enumerate(points) if point[1] > max_z * 0.018]
-    if not active:
-        return []
-    start = max(0, active[0] - 2)
-    end = min(len(points) - 1, active[-1] + 1)
-    section = points[start:end + 1]
-    min_x = min(point[0] for point in section)
-    max_x = max(point[0] for point in section)
-    span_x = max(max_x - min_x, 0.000001)
-    span_z = max(max_z, 0.000001)
-    return [((point[0] - min_x) / span_x, max(0, point[1]) / span_z) for point in section]
-
-
-def draw_polyline(draw: ImageDraw.ImageDraw, points: list[tuple[float, float]], to_canvas: Callable[[tuple[float, float]], tuple[float, float]], color: tuple[int, int, int], width: int) -> None:
-    if len(points) < 2:
-        return
-    canvas_points = [to_canvas(point) for point in points]
-    draw.line(canvas_points, fill=(*color, 235), width=width, joint="curve")
 
 
 def smooth_canvas_polyline(points: list[tuple[float, float]], passes: int = 2) -> list[tuple[float, float]]:
@@ -450,70 +386,37 @@ def terminal_local_minimum_index(center_nodes: list[dict], first_low_index: int,
     return tip_index
 
 
-def render_reference_overlay(model: dict) -> None:
-    size = (1500, 980)
-    img = Image.new("RGB", size, PAPER)
-    draw = ImageDraw.Draw(img, "RGBA")
-    current_profile = normalize_wave_profile(centerline_side_points(model))
-    reference_trace = REFERENCE_TRACE
-    all_points = current_profile + reference_trace
-    to_canvas = make_mapper(all_points, size, margin=150)
-
-    draw_header(
-        draw,
-        "Reference trace against current side silhouette",
-        "Teal is the curated custom Moana-ocean target; red/black is the centerline extracted from the full linkage.",
-        summarize(model),
-    )
-    draw.rounded_rectangle((54, 154, size[0] - 54, size[1] - 72), radius=18, fill=(255, 253, 248, 255), outline=(224, 216, 204, 255), width=2)
-
-    ground_left = to_canvas((0, 0))
-    ground_right = to_canvas((1, 0))
-    draw.line((*ground_left, *ground_right), fill=(*MUTED, 95), width=2)
-    draw_polyline(draw, reference_trace, to_canvas, REFERENCE, 9)
-    draw_polyline(draw, current_profile, to_canvas, CENTER, 4)
-    lip_start = max(0, int(len(current_profile) * 0.56))
-    draw_polyline(draw, current_profile[lip_start:], to_canvas, LIP, 6)
-
-    draw.text((84, size[1] - 116), "target trace", fill=REFERENCE, font=SMALL)
-    draw.line((206, size[1] - 105, 282, size[1] - 105), fill=(*REFERENCE, 235), width=7)
-    draw.text((322, size[1] - 116), "current centerline", fill=CENTER, font=SMALL)
-    draw.line((506, size[1] - 105, 582, size[1] - 105), fill=(*CENTER, 235), width=5)
-
-    filename = "current-live-reference-overlay.png"
-    img.save(FIGURES / filename)
-    img.save(VERIFY / filename.replace(".png", "-verification.png"))
-
-
 def main() -> None:
     FIGURES.mkdir(parents=True, exist_ok=True)
     VERIFY.mkdir(parents=True, exist_ok=True)
     model = compile_model()
     render_lattice(
         model,
-        "current-live-side.png",
-        "Current inverse-sheet side linkage",
-        "Full source model; side view uses the mesh itself rather than a center trace overlay.",
+        "candidate-diagnostic-side.png",
+        "Diagnostic inverse-sheet side linkage",
+        "Full source model diagnostic; not paper evidence until the rendered mechanism passes acceptance.",
         "side",
         side_project,
+        publish=False,
     )
     render_lattice(
         model,
-        "current-live-isometric.png",
-        "Current inverse-sheet isometric linkage",
-        "Three-quarter 3D view; full sheet retained while the center curl and lip stay readable.",
+        "candidate-diagnostic-isometric.png",
+        "Diagnostic inverse-sheet isometric linkage",
+        "Three-quarter 3D diagnostic; not paper evidence until the rendered mechanism passes acceptance.",
         "iso",
         iso_project,
+        publish=False,
     )
     render_lattice(
         model,
-        "current-live-top.png",
-        "Current inverse-sheet top linkage",
-        "Full source model from above; the footprint stays rounded instead of collapsing into a triangular fan.",
+        "candidate-diagnostic-top.png",
+        "Diagnostic inverse-sheet top linkage",
+        "Top diagnostic; not paper evidence until the rendered mechanism passes acceptance.",
         "top",
         top_project,
+        publish=False,
     )
-    render_reference_overlay(model)
 
 
 if __name__ == "__main__":
