@@ -140,7 +140,7 @@
 \end{center}
 
 \vspace{0.35em}
-\noindent\textbf{WaveVis is an inverse computational-design record for a rectangular linkage sheet that is being driven toward one localized plunging-wave deformation while keeping the mechanism visible. This PDF is not allowed to be a decorative paper, a candidate gallery, or a misleading overlay. It is the reconstruction manual for the project: the target references, coordinate frames, source files, equations, topology constraints, render/display split, validation gates, failure ledger, deployment boundary, and next iteration protocol needed for a fresh engineer to continue from source truth. The accepted reference family is the latest supplied rounded breaking-wave side line, the June 24 smooth gridded overview/sequence, the June 28 stage/cross-section sheet, and the two retained ocean-curl photographs used only as secondary water-form references. The rejected family is equally explicit: swept tunnels, side walls, skinny center-strip sails, triangular cuts, pointy side profiles, bowls, dimples, dark pockets, under-overhang support necks, profile-only traces, hidden mechanisms, fake filler bridges, old candidate screenshots, wrong or irrelevant stills, and any figure that makes the wrong geometry look authoritative. Current local state is Candidate867: the readable side reference has been replaced by the rounded supplied line; the crest-cap span has been widened so the front does not collapse into a point; \code{view=front} now samples a crest-section window from the same three-dimensional reference field instead of projecting the entire side trace into a fin; \pathcode{scripts/check-inverse-sheet.cjs} passes the rounded-cap, flat-perimeter, no-dimple, no-wall, and full visible X-mechanism gates; and browser screenshots exist in the Candidate867 sectioned-front capture folder. This is still not a public completion claim. Public route verification, PDF rebuild verification, fallback parity, and exact reference-family acceptance remain required before WaveVis can be called current.}
+\noindent\textbf{WaveVis is an inverse computational-design record for a rectangular linkage sheet that is being driven toward one localized plunging-wave deformation while keeping the mechanism visible. This PDF is not allowed to be a decorative paper, a candidate gallery, or a misleading overlay. It is the reconstruction manual for the project: the target references, coordinate frames, source files, equations, topology constraints, render/display split, validation gates, failure ledger, deployment boundary, and next iteration protocol needed for a fresh engineer to continue from source truth. The accepted reference family is the latest supplied rounded breaking-wave side line, the June 24 smooth gridded overview/sequence, the June 28 stage/cross-section sheet, and the two retained ocean-curl photographs used only as secondary water-form references. The rejected family is equally explicit: swept tunnels, side walls, skinny center-strip sails, triangular cuts, pointy side profiles, bowls, dimples, dark pockets, under-overhang support necks, profile-only traces, hidden mechanisms, fake filler bridges, old candidate screenshots, wrong or irrelevant stills, and any figure that makes the wrong geometry look authoritative. Current local state is Candidate876: the readable side reference is the segmented rounded supplied line; the terminal sampler slows the lip return so the lower curl remains inside the rounded hook before releasing to the flat tail; the terminal fold/lift envelopes were broadened to reduce the support-cone tendency without passing the broad-wall blockers; \code{view=front} samples a crest-section window from the same three-dimensional reference field; \pathcode{scripts/check-inverse-sheet.cjs} passes the rounded-cap, flat-perimeter, no-dimple, no-wall, terminal-taper, tunnel-localization, and full visible X-mechanism gates; and browser screenshots exist in the Candidate876 rounded-terminal capture folder. This is still not a public completion claim. The side profile is no longer the rejected pointy profile, but the 3D support-cone read remains an open visual-match boundary until a future rendered candidate removes it. Public route verification, PDF rebuild verification, fallback parity, and exact reference-family acceptance remain required before WaveVis can be called current.}
 
 \vspace{0.65em}
 \noindent\textbf{Fresh-chat use.} Read this PDF before changing WaveVis. Then inspect the current source, the live route, the latest handoff, and the rendered artifact. If any of those disagree, the live/source/rendered state wins over this prose until the PDF is rebuilt and reverified. A future chat should be able to reconstruct the model and the iteration state from this record without relying on old chat memory.
@@ -223,14 +223,14 @@ If this PDF is the only WaveVis context available, start with this section and t
   \item \textbf{Current source root:} workspace path \code{\_apps/wavevis.aolabs.io/}.
   \item \textbf{Public fallback mirror:} workspace path \code{\_apps/aolabs-site/wavevis/}. A WaveVis deploy to its own \code{gh-pages} branch does not automatically update the \code{aolabs.io/wavevis/} fallback unless the built files are mirrored there and the hub site is pushed.
   \item \textbf{Current architectural direction:} curated supplied-reference field localized into the inverse-sheet model, plus a separate readable display surface for visual inspection. Manual \(xz\) and \(xy\) profile editors are not the active path.
-  \item \textbf{Current branch state:} Candidate867 is the active local source state. It changes \pathcode{src/LatticeViewer3D.tsx} and \pathcode{scripts/check-inverse-sheet.cjs}: rounded side trace, broadened crest-cap height span, sectioned front view, and updated no-point/no-wall gates. Candidate841--Candidate866 are rejected diagnostics that explain the failures being blocked: support-neck dimples, broad roof/curtain, triangular cut/fin, side-wall tunnel, pointy side profile, and full-length front projection.
+  \item \textbf{Current branch state:} Candidate876 is the active local source state. It changes \pathcode{src/LatticeViewer3D.tsx} and \pathcode{scripts/check-inverse-sheet.cjs}: segmented rounded side trace, rounded lip-tip control points, slower terminal profile sampler, broadened terminal fold/lift envelopes, sectioned front view, and updated no-point/no-wall/no-terminal-foot gates. Candidate841--Candidate875 are rejected or superseded diagnostics that explain the failures being blocked: support-neck dimples, broad roof/curtain, triangular cut/fin, side-wall tunnel, pointy side profile, full-length front projection, and squared terminal foot.
   \item \textbf{Current verification state:} the local inverse-sheet checker \pathcode{scripts/check-inverse-sheet.cjs} passes; \code{npm run build} passes; browser screenshots exist in:
   \begin{quote}\footnotesize
   \pathcode{_verification/}\\
   \pathcode{browser-20260701-}\\
-  \pathcode{candidate867-sectioned-front-view/}
+  \pathcode{candidate876-broader-terminal/}
   \end{quote}
-  The side view now follows the rounded supplied profile and the front view is a rounded crest-section rather than a spike. This is local verification only until the PDF and public routes are rebuilt and checked.
+  The side view now follows the rounded supplied profile instead of the rejected pointy profile, and the front view remains a rounded crest-section rather than a spike. This is local verification only until the PDF and public routes are rebuilt and checked. The isometric support-cone read is still open visual debt.
   \item \textbf{Correct acceptance target:} the supplied June 24 smooth breaking-wave reference family and June 28 stage/cross-section reference. The wrong target is any internal trace diagram, centerline overlay, profile-only silhouette, or helper contour that cannot reconstruct the mechanism.
   \item \textbf{Current mechanism contract:} every interior cell is one black square body with four straight legs; opposite leg pairs are equal length and collinear through the cell center; every spherical connector node is a physical two-cell joint with exactly two attached leg uses; crossing diagonal families are separate joints rather than four-cell connector collisions.
   \item \textbf{Do-not-claim boundary:} do not claim reference match, paper current, or public completion from a geometry log, a compiled PDF, a local screenshot, an internal overlay, or a smoother profile string. The rendered full mechanism is the acceptance object.
@@ -265,8 +265,8 @@ Class & Current source & Paper/display rule \\
 \midrule
 Accepted references & Latest supplied rounded side drawing, June 24 smooth gridded overview/sequence, June 28 stage/cross-section reference, and retained ocean-curl photos used only for water-form context. & Keep as target figures and cite them as references, not as achieved WaveVis output. \\
 Rejected display asset & Profile-trace overlay image and non-target stills. & Removed from tracked proof and public figure assets; do not use internal trace overlays or visually irrelevant stills as paper figures. \\
-Rejected candidate states & Candidate785 and Candidate841--Candidate866 screenshots. & Historical diagnostics only. Do not describe them as accepted renders after Alan identified support-neck, pointy-profile, front-fin, wall, and blob families. \\
-Active local candidate & Candidate867 viewer and checker changes: supplied rounded side trace, broadened crest-cap span, sectioned front view from the shared 3D reference field, no-point/no-wall front gates, flat perimeter, and visible mechanism locks. & Local geometry/build/browser verification exists, but do not publish it as final accepted evidence until the PDF and public routes are rebuilt and checked. \\
+Rejected candidate states & Candidate785 and Candidate841--Candidate875 screenshots. & Historical diagnostics only. Do not describe them as accepted renders after Alan identified support-neck, pointy-profile, front-fin, wall, blob, cone, and terminal-foot families. \\
+Active local candidate & Candidate876 viewer and checker changes: segmented rounded side trace, rounded lip-tip anchors, terminal sampler slowdown \(0.064\), broadened terminal fold/lift envelopes, sectioned front view from the shared 3D reference field, no-point/no-wall/no-terminal-foot gates, flat perimeter, and visible mechanism locks. & Local geometry/build/browser verification exists, but do not publish it as final accepted evidence until the PDF and public routes are rebuilt and checked. The side profile is improved; exact 3D reference match is still open. \\
 Mechanism invariant & One-center four-leg X cells with exact opposite-pair collinearity/equal length and physical two-use connector nodes. & Keep as a hard gate and cite source/checker values after each accepted candidate. \\
 Open boundary & Exact reference-family match and public/fallback route parity. & Blocks final paper claims, deployment claims, and Progress closure until live routes and PDF renders are verified. \\
 \bottomrule
@@ -456,7 +456,17 @@ The readable display path uses a lateral envelope
 \[
   E(s)=\cos^{1.42}\left(\frac{\pi}{2}|s|\right), \qquad s\in[-1,1],
 \]
-then uses higher powers of \(E\) near the terminal lip to localize the curl. The source intentionally makes the lip narrower than the broad ramp; otherwise a centerline curl becomes a swept tunnel. Candidate867 adds a crest-cap exception around the rounded lip:
+then uses powers of \(E\) near the terminal lip to localize the curl. The source intentionally makes the lip narrower than the broad ramp; otherwise a centerline curl becomes a swept tunnel. Candidate876 keeps the terminal localization bounded, but lowers the powers from the old center-spike setting so the lip does not collapse into a support cone:
+\[
+  \tau(t)=\operatorname{clamp}_{[0,1]}\left(t-0.064\sin\left[\pi S(0.68,1,t)\right]\right),
+\]
+\[
+  F_{\mathrm{fold}}(s,t)=\operatorname{lerp}\left(F_{\mathrm{shoulder}},E(s)^{1.78},0.58\,S(0.70,1,t)\right),
+\]
+\[
+  F_{\mathrm{lip}}(s,t)=\operatorname{lerp}\left(E(s)^{1.18},E(s)^{1.90},0.68\,S(0.70,1,t)\right).
+\]
+The sampler \(\tau(t)\) keeps the lower curl inside the rounded hook before releasing to the flat tail. This repairs the pointy/squared side profile without authorizing a full-width tunnel. Candidate876 also keeps the crest-cap exception around the rounded lip:
 \[
   C(t)=S(0.54,0.66,t)\,[1-S(0.82,0.94,t)],
 \]
@@ -529,7 +539,7 @@ Every new geometry candidate must be traceable. The minimum record is:
   \mathcal{R}_k=
   \{\text{candidate id},\text{source diff},\text{intended defect},\text{metrics},\text{render captures},\text{accept/reject reason}\}.
 \]
-The accept/reject reason must name the rendered shape, not only the code change. A valid note says, for example, ``rejected: side open throat improved but top became a broad terminal blob.'' An invalid note says only ``geometry check passed.'' Candidate848--Candidate866 are examples of why this record matters: some local gates passed, but browser renders still showed support ridges, broad top blobs, front-wall reads, or pointy fin profiles. Candidate867 is the first local candidate in this sequence whose side view follows the rounded supplied line and whose front view is a rounded crest-section, but it remains local until public/PDF verification closes.
+The accept/reject reason must name the rendered shape, not only the code change. A valid note says, for example, ``rejected: side open throat improved but top became a broad terminal blob.'' An invalid note says only ``geometry check passed.'' Candidate848--Candidate875 are examples of why this record matters: some local gates passed, but browser renders still showed support ridges, broad top blobs, front-wall reads, pointy fin profiles, squared terminal feet, or support-cone reads. Candidate876 is the current local candidate: its side view follows the rounded supplied line and its checker/build pass, but the isometric cone/support-neck read is still open visual debt rather than accepted reference match.
 
 \subsection{Rigid controls}
 
@@ -922,13 +932,13 @@ This section is intentionally blunt so a future chat does not have to infer whet
   \item The public PDF route is \code{/wavevis/proofs/wavevis-system-architecture.pdf}.
   \item Side, Front, Top, and 3D are product view modes. Side is a full three-dimensional sheet view, not a profile-only debug trace.
   \item The current source tree preserves the one-center four-leg X mechanism, black square cell bodies, spherical two-use connector nodes, and the geometry checker that measures those invariants.
-  \item Candidate867 passes the local inverse-sheet checker \pathcode{scripts/check-inverse-sheet.cjs}; the passing gate includes the rounded supplied side trace, flat perimeter, no bowl/dimple pocket, no skinny front fin, no full front wall, and visible one-center four-leg X-cell mechanism.
-  \item Candidate867 passes local \code{npm run build}; the built bundle is in \code{dist/}.
-  \item Candidate867 browser captures exist in:
+  \item Candidate876 passes the local inverse-sheet checker \pathcode{scripts/check-inverse-sheet.cjs}; the passing gate includes the segmented rounded supplied side trace, terminal taper, lower-curl return, flat perimeter, no bowl/dimple pocket, no skinny front fin, no full front wall, and visible one-center four-leg X-cell mechanism.
+  \item Candidate876 passes local \code{npm run build}; the built bundle is in \code{dist/}.
+  \item Candidate876 browser captures exist in:
   \begin{quote}\footnotesize
   \pathcode{_verification/}\\
   \pathcode{browser-20260701-}\\
-  \pathcode{candidate867-sectioned-front-view/}
+  \pathcode{candidate876-broader-terminal/}
   \end{quote}
   The folder contains side, front, top, isometric, and forced mechanism-on views.
   \item The wrong internal reference-overlay figure and irrelevant stills have been removed from tracked paper/public figure assets.
@@ -936,8 +946,9 @@ This section is intentionally blunt so a future chat does not have to infer whet
 
 \textbf{Open state that blocks completion:}
 \begin{itemize}
-  \item Candidate867 is locally improved, not final proof. It still needs rebuilt-PDF inspection, public fallback verification, standalone-route verification, and Progress logging.
-  \item Candidate785 and Candidate841--Candidate866 are not final accepted states. They remain rejected diagnostics.
+  \item Candidate876 is locally improved, not final proof. It still needs rebuilt-PDF inspection, public fallback verification, standalone-route verification, and Progress logging.
+  \item Candidate785 and Candidate841--Candidate875 are not final accepted states. They remain rejected or superseded diagnostics.
+  \item The side profile has moved away from the rejected pointy profile, but the current isometric support-cone read still blocks an exact reference-match claim.
   \item Exact matching to the supplied breaking-wave line drawing, June 24 gridded reference, June 28 stage/cross-section reference, or retained ocean-curl photographs is not proven.
   \item This is a simulator and architecture record. It is not evidence that a physical lattice prototype has been fabricated or experimentally validated.
   \item If the live app, source, screenshots, Progress, or this PDF disagree, the current rendered artifact and source tree must be inspected and reconciled before any completion claim.

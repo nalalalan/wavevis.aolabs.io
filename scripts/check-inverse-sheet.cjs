@@ -66,9 +66,12 @@ const CORE_PROFILE_END = 1
 const SOURCE_BREAKING_WAVE_TRACE = '0,0;0.04,0.04;0.1,0.12;0.17,0.28;0.25,0.5;0.34,0.72;0.44,0.88;0.53,0.97;0.62,1;0.71,0.995;0.8,0.9;0.86,0.72;0.89,0.56;0.895,0.43;0.875,0.34;0.825,0.29;0.775,0.31;0.755,0.36;0.77,0.41;0.815,0.43;0.84,0.48;0.82,0.58;0.755,0.66;0.66,0.7;0.57,0.68;0.5,0.58;0.47,0.45;0.485,0.33;0.555,0.22;0.67,0.13;0.805,0.07;0.925,0.035;1,0'
 const readableEnvelopeExponentMatch = latticeViewerSource.match(/return Math\.pow\(Math\.cos\(absolute \* Math\.PI \* 0\.5\), ([0-9.]+)\)/)
 const READABLE_LATERAL_ENVELOPE_EXPONENT = readableEnvelopeExponentMatch ? Number(readableEnvelopeExponentMatch[1]) : 1.42
-const READABLE_REFERENCE_TRACE = extractSourceConstString(latticeViewerSource, 'readableReferenceProfilePoints') || SOURCE_BREAKING_WAVE_TRACE
-const READABLE_SIDE_REFERENCE_TRACE = extractSourceConstString(latticeViewerSource, 'readableSideReferenceProfilePoints') || READABLE_REFERENCE_TRACE
-const READABLE_ISOMETRIC_REFERENCE_TRACE = extractSourceConstString(latticeViewerSource, 'readableIsometricReferenceProfilePoints') || READABLE_SIDE_REFERENCE_TRACE || READABLE_REFERENCE_TRACE
+const EXTRACTED_READABLE_REFERENCE_TRACE = extractSourceConstString(latticeViewerSource, 'readableReferenceProfilePoints')
+const EXTRACTED_READABLE_SIDE_REFERENCE_TRACE = extractSourceConstString(latticeViewerSource, 'readableSideReferenceProfilePoints')
+const EXTRACTED_READABLE_ISOMETRIC_REFERENCE_TRACE = extractSourceConstString(latticeViewerSource, 'readableIsometricReferenceProfilePoints')
+const READABLE_REFERENCE_TRACE = EXTRACTED_READABLE_REFERENCE_TRACE || SOURCE_BREAKING_WAVE_TRACE
+const READABLE_SIDE_REFERENCE_TRACE = EXTRACTED_READABLE_SIDE_REFERENCE_TRACE || READABLE_REFERENCE_TRACE
+const READABLE_ISOMETRIC_REFERENCE_TRACE = EXTRACTED_READABLE_ISOMETRIC_REFERENCE_TRACE || READABLE_SIDE_REFERENCE_TRACE || READABLE_REFERENCE_TRACE
 const READABLE_LIP_REFERENCE_TRACE = READABLE_SIDE_REFERENCE_TRACE
 const READABLE_ISOMETRIC_LIP_REFERENCE_TRACE = READABLE_ISOMETRIC_REFERENCE_TRACE
 
@@ -1046,7 +1049,20 @@ function terminalTraceLocalMinimumIndex(points, firstLowIndex, maxZ) {
 
 function extractSourceConstString(source, constName) {
   const match = source.match(new RegExp(`const\\s+${constName}\\s*=\\s*\\n\\s*'([^']+)'`))
-  return match ? match[1] : null
+  if (match) return match[1]
+  const segmentMatch = source.match(new RegExp(`const\\s+${constName}\\s*=\\s*\\[([\\s\\S]*?)\\]\\s*\\.join\\(';'\\)`))
+  if (!segmentMatch) return null
+  const segments = [...segmentMatch[1].matchAll(/'([^']+)'/g)].map((entry) => entry[1])
+  return segments.length ? segments.join(';') : null
+}
+
+function sourceContainsReadableTrace(value) {
+  if (latticeViewerSource.includes(value)) return true
+  return [
+    EXTRACTED_READABLE_REFERENCE_TRACE,
+    EXTRACTED_READABLE_SIDE_REFERENCE_TRACE,
+    EXTRACTED_READABLE_ISOMETRIC_REFERENCE_TRACE,
+  ].some((trace) => trace === value)
 }
 
 function extractSourceNumber(pattern) {
@@ -1177,7 +1193,7 @@ function summarizeReadableProfileCavityBlock(value, options = {}) {
   if (options.blockDanglingTerminal && terminalFlatRunFromEightPercent < 0.035) {
     failures.push(`terminal lower return stays visibly diagonal until the endpoint, flat run ${round(terminalFlatRunFromEightPercent)}`)
   }
-  if (!latticeViewerSource.includes(value)) {
+  if (!sourceContainsReadableTrace(value)) {
     failures.push('checked profile is not the same literal profile used by the readable renderer')
   }
 
@@ -1387,13 +1403,15 @@ function summarizeReadableTerminalTaperBlock(value, options = {}) {
   const terminalRunFromThirtyFive = belowThirtyFive ? terminalPoint.x - belowThirtyFive.x : 0
 
   const requiredSourceFragments = [
-    ['renderer profile carries the dimple-free taper under the overhang', value],
     ['renderer samples the same rounded side reference for the lip profile', 'const lipProfileSource = readableSideReferenceProfilePoints'],
     ['renderer keeps any terminal blend bounded by the rounded side reference', 'const openCoreBlend = frame.progress *'],
   ]
   const missingSourceFragments = requiredSourceFragments
     .filter(([, fragment]) => !latticeViewerSource.includes(fragment))
     .map(([label]) => label)
+  if (!sourceContainsReadableTrace(value)) {
+    missingSourceFragments.push('renderer profile carries the dimple-free taper under the overhang')
+  }
 
   const terminalBacktrackLimit = options.allowReferenceCurl ? 0.56 : 0.04
   const backtrackRiseLimit = options.allowReferenceCurl ? maxZ * 0.16 : maxZ * 0.004
@@ -1702,8 +1720,8 @@ function readableWavePointForCheck(frame, t, s) {
   const capLocalization = frame.progress * smoothStep(0.44, 0.82, t)
   const shoulderFoldBlend = lerpNumber(baseFoldBlend, Math.pow(envelope, 1.08), capLocalization * curlShoulder * 0.46)
   const terminalLocalization = frame.progress * lipTip
-  const foldBlend = lerpNumber(shoulderFoldBlend, Math.pow(envelope, 3.55), terminalLocalization * 0.8)
-  const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.25), Math.pow(envelope, 4.4), terminalLocalization * 0.9)
+  const foldBlend = lerpNumber(shoulderFoldBlend, Math.pow(envelope, 1.78), terminalLocalization * 0.58)
+  const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.18), Math.pow(envelope, 1.9), terminalLocalization * 0.68)
   const crestLiftBlend = lerpNumber(liftBlend, Math.pow(envelope, 1.18), capLocalization * curlShoulder * 0.42)
   const lipLiftBlend = lerpNumber(crestLiftBlend, terminalLipEnvelope * lerpNumber(0.12, 1, lipSpan), frame.progress * lipBody * 0.94)
   const pinchEnvelope = Math.pow(envelope, 0.92)
@@ -1739,7 +1757,7 @@ function readableWaveReferencePointForCheck(frame, t, s) {
 function readableTerminalProfileParameterForCheck(t) {
   const amount = clampUnit(t)
   const terminalAmount = smoothStep(0.68, 1, amount)
-  const midTerminalSlowdown = Math.sin(terminalAmount * Math.PI) * 0.028
+  const midTerminalSlowdown = Math.sin(terminalAmount * Math.PI) * 0.064
   return clampUnit(amount - midTerminalSlowdown)
 }
 
@@ -2301,14 +2319,14 @@ function summarizeReadableSurfaceRenderContract() {
     ['surface geometry is keyed by view', 'buildReadableWaveSurfaceGeometry(model, view)', latticeViewerSource],
     ['geometry builder accepts view', "function buildReadableWaveSurfaceGeometry(model: LatticeModel, view: CameraViewRequest['view'])", latticeViewerSource],
     ['display point dispatches the selected readable surface', "function readableWaveDisplayPoint(frame: ReadableWaveFrame, view: CameraViewRequest['view'], t: number, s: number): Vec3", latticeViewerSource],
-    ['side projection narrows lateral span enough to avoid a full-depth tube wall while preserving visible mechanism depth', "return _view === 'side' ? centered * 0.08 : centered", latticeViewerSource],
+    ['side projection narrows lateral span enough to avoid a full-depth tube wall while preserving visible mechanism depth', "return _view === 'side' ? centered * 0.045 : centered", latticeViewerSource],
     ['top view uses the shared localized reference field instead of a separate plan surrogate', "if (view === 'top') return readableWaveReferencePoint(frame, t, s)", latticeViewerSource],
     ['isometric view uses the explicit localized 3D reference field instead of sweeping the side trace', "if (view === 'isometric') return readableWaveReferencePoint(frame, t, s)", latticeViewerSource],
     ['front view uses a sectioned sample of the shared localized reference field instead of projecting the whole side trace', "if (view === 'front') return readableWaveFrontSectionPoint(frame, t, s)", latticeViewerSource],
     ['front section samples the same readable 3D field instead of a separate arch surrogate', 'const sectionPoint = readableWaveReferencePoint(frame, sectionT, s)', latticeViewerSource],
     ['readable renderer uses the same terminal profile sampler as the validation model', 'const profileT = readableTerminalProfileParameter(t)', latticeViewerSource],
     ['readable renderer keeps terminal blending bounded by the rounded side reference before the flat endpoint', 'const openCoreBlend = frame.progress *', latticeViewerSource],
-    ['terminal profile sampler reaches the real flat endpoint instead of forcing a vertical wall', 'const midTerminalSlowdown = Math.sin(terminalAmount * Math.PI) * 0.028', latticeViewerSource],
+    ['terminal profile sampler keeps the lower curl inside the rounded reference return before releasing to the flat tail', 'const midTerminalSlowdown = Math.sin(terminalAmount * Math.PI) * 0.064', latticeViewerSource],
     ['readable renderer localizes terminal curl instead of sweeping it into a full-width tunnel', 'const lateralCurlBlend = curlBlend * curlSpan', latticeViewerSource],
     ['readable 3D field exists as the shared localized target for product views', 'function readableWaveReferencePoint(frame: ReadableWaveFrame, t: number, s: number): Vec3', latticeViewerSource],
     ['readable 3D field samples the localized wave-point model instead of a broad wall surrogate', 'const wavePoint = readableWavePoint(frame, t, s)', latticeViewerSource],
@@ -2317,8 +2335,8 @@ function summarizeReadableSurfaceRenderContract() {
     ['readable 3D field pulls the open throat toward camera without dragging a broad support ridge', 'const throatPullShape = smoothStep(0.04, 0.2, envelope) * Math.pow(envelope, 0.62)', latticeViewerSource],
     ['readable renderer fades height to the longitudinal and lateral perimeter', 'const perimeterHeightFade = longitudinalHeightFade * lateralPerimeterFade', latticeViewerSource],
     ['readable renderer fades plan displacement to the longitudinal and lateral perimeter', 'const perimeterPlanFade = longitudinalPlanFade * lateralPerimeterFade', latticeViewerSource],
-    ['terminal fold keeps the material sheet localized instead of building a full-width wall', 'const foldBlend = lerpNumber(shoulderFoldBlend, Math.pow(envelope, 3.55), terminalLocalization * 0.8)', latticeViewerSource],
-    ['terminal lip envelope fades off-center lip rows instead of rebuilding a base support', 'const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.25), Math.pow(envelope, 4.4), terminalLocalization * 0.9)', latticeViewerSource],
+    ['terminal fold keeps the material sheet localized without collapsing the lip into a support cone', 'const foldBlend = lerpNumber(shoulderFoldBlend, Math.pow(envelope, 1.78), terminalLocalization * 0.58)', latticeViewerSource],
+    ['terminal lip envelope fades off-center lip rows without pinching the reference curl into a foot', 'const terminalLipEnvelope = lerpNumber(Math.pow(envelope, 1.18), Math.pow(envelope, 1.9), terminalLocalization * 0.68)', latticeViewerSource],
     ['terminal curl pinch is low so the gridded sheet does not collapse into a vertical throat wall', 'const curlPinch = Math.min(0.018, frame.progress * pinchEnvelope * (0.001 * curlShoulder + 0.008 * lipTip))', latticeViewerSource],
     ['readable reference lateral envelope broadens the curl without becoming a full-width tube', 'return Math.pow(Math.cos(absolute * Math.PI * 0.5), 1.42)', latticeViewerSource],
     ['isometric split X lines depth-test against the readable surface instead of drawing a hidden support neck through it', 'const isometricMechanismDepthTest = readableSurfaceMode', latticeViewerSource],
@@ -3310,11 +3328,11 @@ function summarizeXCellRenderDirectLines(model) {
     latticeViewerSource.includes('<points geometry={geometry} renderOrder={20}>') &&
     latticeViewerSource.includes('color="#f7f3ed"') &&
     latticeViewerSource.includes('color={jointCoreInk}') &&
-    latticeViewerSource.includes('? scope.topView ? 2.8 : scope.sideView ? 2.9 : 2.7') &&
+    latticeViewerSource.includes('? scope.topView ? 2.8 : scope.sideView ? 2.15 : 2.7') &&
     latticeViewerSource.includes(': scope.topView ? 3.8 : scope.sideView ? 4.4 : 4.1') &&
-    latticeViewerSource.includes('scope.sideView ? 1.95 : scope.isometricView ? 1.55 : 1.5') &&
-    latticeViewerSource.includes('scope.sideView ? 0.2 : scope.isometricView ? 0.18 : 0.18') &&
-    latticeViewerSource.includes('scope.sideView ? 0.13 : scope.isometricView ? 0.11 : 0.11') &&
+    latticeViewerSource.includes('scope.sideView ? 1.16 : scope.isometricView ? 1.55 : 1.5') &&
+    latticeViewerSource.includes('scope.sideView ? 0.13 : scope.isometricView ? 0.18 : 0.18') &&
+    latticeViewerSource.includes('scope.sideView ? 0.08 : scope.isometricView ? 0.11 : 0.11') &&
     latticeViewerSource.includes('const jointDepthTest = readableSurfaceMode ? (scope.sideView || scope.isometricView) : !scope.topView') &&
     latticeViewerSource.includes('depthTest={jointDepthTest}') &&
     latticeViewerSource.includes('depthWrite={false}')
